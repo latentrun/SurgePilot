@@ -3,6 +3,9 @@ from fastapi import FastAPI
 app = FastAPI(
     title="SurgePilot API",
     version="0.1.0",
+    # Runtime routes carry the /api prefix. The exporter publishes the
+    # browser contract as server /api plus business paths rooted at /v1.
+    servers=[{"url": ""}],
     openapi_url="/api/openapi.json",
     docs_url="/api/docs",
     redoc_url=None,

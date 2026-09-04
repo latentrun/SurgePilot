@@ -1,0 +1,34 @@
+.env
+.env.local
+*.secret
+
+node_modules/
+.pnpm-store/
+docs/site/.vitepress/cache/
+dist/
+build/
+coverage/
+coverage.xml
+.coverage
+playwright-report/
+test-results/
+.tmp/
+tmp/
+
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+.DS_Store
+*.log
+
+# Local agent worktrees
+.worktrees/
+.surgepilot/
+
+# Local developer reference documents
+docs/reference/taurus/
+docs/superpowers/

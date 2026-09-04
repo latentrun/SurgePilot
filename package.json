@@ -1,0 +1,13 @@
+{
+  "name": "surgepilot",
+  "version": "0.1.0",
+  "private": true,
+  "packageManager": "pnpm@11.3.0",
+  "scripts": {
+    "generate:contracts": "pnpm --filter @surgepilot/contracts generate",
+    "typecheck": "pnpm -r typecheck"
+  },
+  "devDependencies": {
+    "typescript": "5.9.3"
+  }
+}

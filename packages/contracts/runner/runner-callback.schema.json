@@ -1,0 +1,15 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://surgepilot.local/contracts/runner/runner-callback.schema.json",
+  "title": "SurgePilot Runner Callback Placeholder",
+  "description": "R00 reserves a versioned Runner callback contract location. P0-04 defines callback event semantics and validation rules.",
+  "type": "object",
+  "additionalProperties": true,
+  "required": ["schemaVersion"],
+  "properties": {
+    "schemaVersion": {
+      "type": "string",
+      "const": "1"
+    }
+  }
+}
