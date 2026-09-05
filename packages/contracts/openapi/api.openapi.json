@@ -51,6 +51,145 @@
         "title": "CurrentUserResponse",
         "type": "object"
       },
+      "DependencyFileDetail": {
+        "properties": {
+          "contentType": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Contenttype"
+          },
+          "createdAt": {
+            "title": "Createdat",
+            "type": "string"
+          },
+          "createdBy": {
+            "title": "Createdby",
+            "type": "string"
+          },
+          "filename": {
+            "title": "Filename",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "inUse": {
+            "title": "Inuse",
+            "type": "boolean"
+          },
+          "sha256": {
+            "title": "Sha256",
+            "type": "string"
+          },
+          "sizeBytes": {
+            "title": "Sizebytes",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "filename",
+          "sizeBytes",
+          "sha256",
+          "inUse",
+          "createdBy",
+          "createdAt"
+        ],
+        "title": "DependencyFileDetail",
+        "type": "object"
+      },
+      "DependencyFileListResponse": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/DependencyFileSummary"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "page": {
+            "title": "Page",
+            "type": "integer"
+          },
+          "pageSize": {
+            "title": "Pagesize",
+            "type": "integer"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "page",
+          "pageSize",
+          "total"
+        ],
+        "title": "DependencyFileListResponse",
+        "type": "object"
+      },
+      "DependencyFileSummary": {
+        "properties": {
+          "contentType": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Contenttype"
+          },
+          "createdAt": {
+            "title": "Createdat",
+            "type": "string"
+          },
+          "createdBy": {
+            "title": "Createdby",
+            "type": "string"
+          },
+          "filename": {
+            "title": "Filename",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "inUse": {
+            "title": "Inuse",
+            "type": "boolean"
+          },
+          "sha256": {
+            "title": "Sha256",
+            "type": "string"
+          },
+          "sizeBytes": {
+            "title": "Sizebytes",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "filename",
+          "sizeBytes",
+          "sha256",
+          "inUse",
+          "createdBy",
+          "createdAt"
+        ],
+        "title": "DependencyFileSummary",
+        "type": "object"
+      },
       "EnvGroupCreateRequest": {
         "properties": {
           "description": {
@@ -483,7 +622,12 @@
     "version": "0.1.0",
     "x-surgepilot-error-codes": [
       "ENV_GROUP_NAME_CONFLICT",
-      "ENV_GROUP_IN_USE"
+      "ENV_GROUP_IN_USE",
+      "INVALID_FILENAME",
+      "DEPENDENCY_FILE_NAME_CONFLICT",
+      "PAYLOAD_TOO_LARGE",
+      "STORAGE_UNAVAILABLE",
+      "FILE_IN_USE"
     ]
   },
   "openapi": "3.1.0",
@@ -816,6 +960,691 @@
         "summary": "Register",
         "tags": [
           "auth"
+        ]
+      }
+    },
+    "/v1/dependency-files": {
+      "get": {
+        "operationId": "listDependencyFiles",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "x-workspace-id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Workspace-Id"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "surgepilot_session",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "SurgePilot Session"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "default": 1,
+              "minimum": 1,
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "pageSize",
+            "required": false,
+            "schema": {
+              "default": 20,
+              "maximum": 100,
+              "minimum": 1,
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "q",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 120,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          {
+            "in": "query",
+            "name": "sort",
+            "required": false,
+            "schema": {
+              "default": "-createdAt",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DependencyFileListResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          }
+        },
+        "summary": "List Dependency Files",
+        "tags": [
+          "dependency-files"
+        ]
+      },
+      "post": {
+        "operationId": "uploadDependencyFile",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "x-workspace-id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Workspace-Id"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-csrf-token",
+            "required": true,
+            "schema": {
+              "title": "X-Csrf-Token",
+              "type": "string"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "surgepilot_session",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "SurgePilot Session"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "properties": {
+                  "file": {
+                    "format": "binary",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "file"
+                ],
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DependencyFileDetail"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "code": "INVALID_FILENAME",
+                  "message": "Filename is invalid.",
+                  "requestId": "req_example"
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Invalid Dependency File filename."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "code": "DEPENDENCY_FILE_NAME_CONFLICT",
+                  "message": "Dependency File filename already exists.",
+                  "requestId": "req_example"
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Active Dependency File filename already exists in this Workspace."
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "code": "PAYLOAD_TOO_LARGE",
+                  "message": "Uploaded file is too large.",
+                  "requestId": "req_example"
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Uploaded Dependency File exceeds the configured size limit."
+          },
+          "415": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unsupported Media Type"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "code": "STORAGE_UNAVAILABLE",
+                  "message": "Storage is unavailable.",
+                  "requestId": "req_example"
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "MinIO storage is unavailable or the configured bucket is inaccessible."
+          }
+        },
+        "summary": "Upload Dependency File Route",
+        "tags": [
+          "dependency-files"
+        ]
+      }
+    },
+    "/v1/dependency-files/{dependencyFileId}": {
+      "delete": {
+        "operationId": "deleteDependencyFile",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "dependencyFileId",
+            "required": true,
+            "schema": {
+              "title": "Dependencyfileid",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-workspace-id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Workspace-Id"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-csrf-token",
+            "required": true,
+            "schema": {
+              "title": "X-Csrf-Token",
+              "type": "string"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "surgepilot_session",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "SurgePilot Session"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "code": "FILE_IN_USE",
+                  "message": "Dependency File is in use and cannot be deleted.",
+                  "requestId": "req_example"
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Dependency File is referenced and cannot be deleted."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          }
+        },
+        "summary": "Delete Dependency File Route",
+        "tags": [
+          "dependency-files"
+        ]
+      },
+      "get": {
+        "operationId": "getDependencyFile",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "dependencyFileId",
+            "required": true,
+            "schema": {
+              "title": "Dependencyfileid",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-workspace-id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Workspace-Id"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "surgepilot_session",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "SurgePilot Session"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DependencyFileDetail"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          }
+        },
+        "summary": "Get Dependency File Route",
+        "tags": [
+          "dependency-files"
+        ]
+      }
+    },
+    "/v1/dependency-files/{dependencyFileId}/download": {
+      "get": {
+        "operationId": "downloadDependencyFile",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "dependencyFileId",
+            "required": true,
+            "schema": {
+              "title": "Dependencyfileid",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-workspace-id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Workspace-Id"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "surgepilot_session",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "SurgePilot Session"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/octet-stream": {
+                "schema": {
+                  "format": "binary",
+                  "type": "string"
+                }
+              }
+            },
+            "description": "Dependency File bytes."
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "code": "STORAGE_UNAVAILABLE",
+                  "message": "Storage is unavailable.",
+                  "requestId": "req_example"
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "MinIO storage is unavailable or the configured bucket is inaccessible."
+          }
+        },
+        "summary": "Download Dependency File Route",
+        "tags": [
+          "dependency-files"
         ]
       }
     },
