@@ -12,6 +12,14 @@ export type SetupStatus = components["schemas"]["SetupStatusResponse"];
 export type UserSummary = components["schemas"]["UserSummary"];
 export type WorkspaceSummary = components["schemas"]["WorkspaceSummary"];
 
+export type EnvGroupCreateRequest =
+  components["schemas"]["EnvGroupCreateRequest"];
+export type EnvGroupDetail = components["schemas"]["EnvGroupDetail"];
+export type EnvGroupListResponse =
+  components["schemas"]["EnvGroupListResponse"];
+export type EnvGroupPatchRequest =
+  components["schemas"]["EnvGroupPatchRequest"];
+export type EnvGroupSummary = components["schemas"]["EnvGroupSummary"];
 
 export class ApiError extends Error {
   readonly body: ApiErrorBody;
@@ -95,4 +103,108 @@ export function logout(csrfToken: string) {
     method: "POST",
     headers: { "x-csrf-token": csrfToken },
   });
+}
+
+export function listEnvGroups(params: {
+  page?: number;
+  pageSize?: number;
+  q?: string;
+  sort?: string;
+  workspaceId: string;
+}) {
+  const searchParams = new URLSearchParams();
+  if (params.page !== undefined) {
+    searchParams.set("page", String(params.page));
+  }
+  if (params.pageSize !== undefined) {
+    searchParams.set("pageSize", String(params.pageSize));
+  }
+  if (params.q) {
+    searchParams.set("q", params.q);
+  }
+  if (params.sort) {
+    searchParams.set("sort", params.sort);
+  }
+  const queryStr = searchParams.toString();
+  const url = queryStr ? `/v1/env-groups?${queryStr}` : "/v1/env-groups";
+  return request<EnvGroupListResponse>(url, {
+    headers: { "x-workspace-id": params.workspaceId },
+  });
+}
+
+export function getEnvGroup(envGroupId: string, workspaceId: string) {
+  return request<EnvGroupDetail>(
+    `/v1/env-groups/${encodeURIComponent(envGroupId)}`,
+    {
+      headers: { "x-workspace-id": workspaceId },
+    },
+  );
+}
+
+export function createEnvGroup(
+  payload: EnvGroupCreateRequest,
+  workspaceId: string,
+  csrfToken: string,
+) {
+  return request<EnvGroupDetail>("/v1/env-groups", {
+    method: "POST",
+    headers: {
+      "x-csrf-token": csrfToken,
+      "x-workspace-id": workspaceId,
+    },
+    body: JSON.stringify(payload),
+  });
+}
+
+export function patchEnvGroup(
+  envGroupId: string,
+  payload: EnvGroupPatchRequest,
+  workspaceId: string,
+  csrfToken: string,
+) {
+  return request<EnvGroupDetail>(
+    `/v1/env-groups/${encodeURIComponent(envGroupId)}`,
+    {
+      method: "PATCH",
+      headers: {
+        "x-csrf-token": csrfToken,
+        "x-workspace-id": workspaceId,
+      },
+      body: JSON.stringify(payload),
+    },
+  );
+}
+
+export function duplicateEnvGroup(
+  envGroupId: string,
+  workspaceId: string,
+  csrfToken: string,
+) {
+  return request<EnvGroupDetail>(
+    `/v1/env-groups/${encodeURIComponent(envGroupId)}/duplicate`,
+    {
+      method: "POST",
+      headers: {
+        "x-csrf-token": csrfToken,
+        "x-workspace-id": workspaceId,
+      },
+    },
+  );
+}
+
+export function deleteEnvGroup(
+  envGroupId: string,
+  workspaceId: string,
+  csrfToken: string,
+) {
+  return request<void>(
+    `/v1/env-groups/${encodeURIComponent(envGroupId)}`,
+    {
+      method: "DELETE",
+      headers: {
+        "x-csrf-token": csrfToken,
+        "x-workspace-id": workspaceId,
+      },
+    },
+  );
 }

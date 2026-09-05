@@ -89,6 +89,60 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/env-groups": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Env Groups */
+        get: operations["listEnvGroups"];
+        put?: never;
+        /** Create Env Group Route */
+        post: operations["createEnvGroup"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/env-groups/{envGroupId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Env Group Route */
+        get: operations["getEnvGroup"];
+        put?: never;
+        post?: never;
+        /** Delete Env Group Route */
+        delete: operations["deleteEnvGroup"];
+        options?: never;
+        head?: never;
+        /** Patch Env Group Route */
+        patch: operations["patchEnvGroup"];
+        trace?: never;
+    };
+    "/v1/env-groups/{envGroupId}/duplicate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Duplicate Env Group Route */
+        post: operations["duplicateEnvGroup"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/setup/status": {
         parameters: {
             query?: never;
@@ -126,6 +180,85 @@ export interface components {
         CurrentUserResponse: {
             defaultWorkspace: components["schemas"]["WorkspaceSummary"];
             user: components["schemas"]["UserSummary"];
+        };
+        /** EnvGroupCreateRequest */
+        EnvGroupCreateRequest: {
+            /** Description */
+            description?: string | null;
+            /** Name */
+            name: string;
+            /** Variables */
+            variables?: {
+                [key: string]: string;
+            };
+        };
+        /** EnvGroupDetail */
+        EnvGroupDetail: {
+            /** Createdat */
+            createdAt: string;
+            /** Createdby */
+            createdBy: string;
+            /** Description */
+            description?: string | null;
+            /** Id */
+            id: string;
+            /** Inuse */
+            inUse: boolean;
+            /** Name */
+            name: string;
+            /** Updatedat */
+            updatedAt: string;
+            /** Updatedby */
+            updatedBy: string;
+            /** Variablecount */
+            variableCount: number;
+            /** Variables */
+            variables: {
+                [key: string]: string;
+            };
+        };
+        /** EnvGroupListResponse */
+        EnvGroupListResponse: {
+            /** Items */
+            items: components["schemas"]["EnvGroupSummary"][];
+            /** Page */
+            page: number;
+            /** Pagesize */
+            pageSize: number;
+            /** Total */
+            total: number;
+        };
+        /** EnvGroupPatchRequest */
+        EnvGroupPatchRequest: {
+            /** Description */
+            description?: string | null;
+            /** Name */
+            name?: string | null;
+            /** Variables */
+            variables?: {
+                [key: string]: string;
+            } | null;
+        };
+        /** EnvGroupSummary */
+        EnvGroupSummary: {
+            /** Createdat */
+            createdAt: string;
+            /** Createdby */
+            createdBy: string;
+            /** Description */
+            description?: string | null;
+            /** Id */
+            id: string;
+            /** Inuse */
+            inUse: boolean;
+            /** Name */
+            name: string;
+            /** Updatedat */
+            updatedAt: string;
+            /** Updatedby */
+            updatedBy: string;
+            /** Variablecount */
+            variableCount: number;
         };
         /** ErrorResponse */
         ErrorResponse: {
@@ -450,6 +583,443 @@ export interface operations {
             };
             /** @description Internal Server Error */
             500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    listEnvGroups: {
+        parameters: {
+            query?: {
+                page?: number;
+                pageSize?: number;
+                q?: string | null;
+                sort?: string;
+            };
+            header?: {
+                "x-workspace-id"?: string | null;
+            };
+            path?: never;
+            cookie?: {
+                surgepilot_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvGroupListResponse"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    createEnvGroup: {
+        parameters: {
+            query?: never;
+            header: {
+                "x-workspace-id"?: string | null;
+                "x-csrf-token": string;
+            };
+            path?: never;
+            cookie?: {
+                surgepilot_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["EnvGroupCreateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvGroupDetail"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    getEnvGroup: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-workspace-id"?: string | null;
+            };
+            path: {
+                envGroupId: string;
+            };
+            cookie?: {
+                surgepilot_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvGroupDetail"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    deleteEnvGroup: {
+        parameters: {
+            query?: never;
+            header: {
+                "x-workspace-id"?: string | null;
+                "x-csrf-token": string;
+            };
+            path: {
+                envGroupId: string;
+            };
+            cookie?: {
+                surgepilot_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    patchEnvGroup: {
+        parameters: {
+            query?: never;
+            header: {
+                "x-workspace-id"?: string | null;
+                "x-csrf-token": string;
+            };
+            path: {
+                envGroupId: string;
+            };
+            cookie?: {
+                surgepilot_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["EnvGroupPatchRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvGroupDetail"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    duplicateEnvGroup: {
+        parameters: {
+            query?: never;
+            header: {
+                "x-workspace-id"?: string | null;
+                "x-csrf-token": string;
+            };
+            path: {
+                envGroupId: string;
+            };
+            cookie?: {
+                surgepilot_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvGroupDetail"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
                 headers: {
                     [name: string]: unknown;
                 };
