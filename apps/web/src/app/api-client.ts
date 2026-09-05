@@ -21,6 +21,13 @@ export type EnvGroupPatchRequest =
   components["schemas"]["EnvGroupPatchRequest"];
 export type EnvGroupSummary = components["schemas"]["EnvGroupSummary"];
 
+export type DependencyFileDetail =
+  components["schemas"]["DependencyFileDetail"];
+export type DependencyFileListResponse =
+  components["schemas"]["DependencyFileListResponse"];
+export type DependencyFileSummary =
+  components["schemas"]["DependencyFileSummary"];
+
 export class ApiError extends Error {
   readonly body: ApiErrorBody;
   readonly status: number;
@@ -199,6 +206,141 @@ export function deleteEnvGroup(
 ) {
   return request<void>(
     `/v1/env-groups/${encodeURIComponent(envGroupId)}`,
+    {
+      method: "DELETE",
+      headers: {
+        "x-csrf-token": csrfToken,
+        "x-workspace-id": workspaceId,
+      },
+    },
+  );
+}
+
+export function listDependencyFiles(params: {
+  page?: number;
+  pageSize?: number;
+  q?: string;
+  sort?: string;
+  workspaceId: string;
+}) {
+  const searchParams = new URLSearchParams();
+  if (params.page !== undefined) {
+    searchParams.set("page", String(params.page));
+  }
+  if (params.pageSize !== undefined) {
+    searchParams.set("pageSize", String(params.pageSize));
+  }
+  if (params.q) {
+    searchParams.set("q", params.q);
+  }
+  if (params.sort) {
+    searchParams.set("sort", params.sort);
+  }
+  const queryStr = searchParams.toString();
+  const url = queryStr
+    ? `/v1/dependency-files?${queryStr}`
+    : "/v1/dependency-files";
+  return request<DependencyFileListResponse>(url, {
+    headers: { "x-workspace-id": params.workspaceId },
+  });
+}
+
+export function getDependencyFile(
+  dependencyFileId: string,
+  workspaceId: string,
+) {
+  return request<DependencyFileDetail>(
+    `/v1/dependency-files/${encodeURIComponent(dependencyFileId)}`,
+    {
+      headers: { "x-workspace-id": workspaceId },
+    },
+  );
+}
+
+export async function uploadDependencyFile(
+  file: File,
+  workspaceId: string,
+  csrfToken: string,
+): Promise<DependencyFileDetail> {
+  const formData = new FormData();
+  formData.append("file", file);
+  let response: Response;
+  try {
+    response = await fetch(apiUrl("/v1/dependency-files"), {
+      method: "POST",
+      credentials: "include",
+      headers: {
+        Accept: "application/json",
+        "x-csrf-token": csrfToken,
+        "x-workspace-id": workspaceId,
+      },
+      body: formData,
+    });
+  } catch {
+    throw new ApiError(0, {
+      code: "REQUEST_FAILED",
+      message: "Request failed.",
+    });
+  }
+
+  if (!response.ok) {
+    let body: ApiErrorBody;
+    try {
+      body = (await response.json()) as ApiErrorBody;
+    } catch {
+      body = { code: "REQUEST_FAILED", message: "Request failed." };
+    }
+    throw new ApiError(response.status, body);
+  }
+
+  return (await response.json()) as DependencyFileDetail;
+}
+
+export async function downloadDependencyFile(
+  dependencyFileId: string,
+  workspaceId: string,
+): Promise<Blob> {
+  let response: Response;
+  try {
+    response = await fetch(
+      apiUrl(
+        `/v1/dependency-files/${encodeURIComponent(dependencyFileId)}/download`,
+      ),
+      {
+        method: "GET",
+        credentials: "include",
+        headers: {
+          "x-workspace-id": workspaceId,
+        },
+      },
+    );
+  } catch {
+    throw new ApiError(0, {
+      code: "REQUEST_FAILED",
+      message: "Request failed.",
+    });
+  }
+
+  if (!response.ok) {
+    let body: ApiErrorBody;
+    try {
+      body = (await response.json()) as ApiErrorBody;
+    } catch {
+      body = { code: "REQUEST_FAILED", message: "Request failed." };
+    }
+    throw new ApiError(response.status, body);
+  }
+
+  return await response.blob();
+}
+
+export function deleteDependencyFile(
+  dependencyFileId: string,
+  workspaceId: string,
+  csrfToken: string,
+) {
+  return request<void>(
+    `/v1/dependency-files/${encodeURIComponent(dependencyFileId)}`,
     {
       method: "DELETE",
       headers: {
