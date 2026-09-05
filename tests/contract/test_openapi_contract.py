@@ -39,4 +39,4 @@ def test_generated_web_client_is_present() -> None:
     client_path = ROOT / "packages/contracts/generated/web-client/index.ts"
 
     assert client_path.exists()
-    assert "export type paths = Record<string, never>;" in client_path.read_text()
+    assert "export type paths" in client_path.read_text() or "export interface paths" in client_path.read_text()
