@@ -4,7 +4,7 @@ from fastapi.openapi.utils import get_openapi
 
 from app.core.errors import AppError, app_error_handler, validation_error_handler
 from app.core.middleware import request_context_middleware
-from app.routes import auth, setup
+from app.routes import auth, env_groups, setup
 
 app = FastAPI(
     title="SurgePilot API",
@@ -21,6 +21,7 @@ app.add_exception_handler(RequestValidationError, validation_error_handler)
 
 app.include_router(setup.router)
 app.include_router(auth.router)
+app.include_router(env_groups.router)
 
 
 def custom_openapi() -> dict:
@@ -33,13 +34,19 @@ def custom_openapi() -> dict:
         for operation in path_item.values():
             if not isinstance(operation, dict):
                 continue
-            if operation.get("operationId") in {"getSetupStatus"}:
+            if operation.get("operationId") in {"getSetupStatus", "listEnvGroups"}:
                 operation.get("responses", {}).pop("422", None)
             for parameter in operation.get("parameters", []):
                 if parameter.get("in") == "header" and parameter.get("name") == "x-csrf-token":
                     parameter["required"] = True
                     parameter["schema"] = {"type": "string", "title": "X-Csrf-Token"}
 
+    openapi_schema.setdefault("info", {}).setdefault("x-surgepilot-error-codes", []).extend(
+        [
+            "ENV_GROUP_NAME_CONFLICT",
+            "ENV_GROUP_IN_USE",
+        ]
+    )
     schemas = openapi_schema.get("components", {}).get("schemas", {})
     schemas.pop("HTTPValidationError", None)
     schemas.pop("ValidationError", None)
