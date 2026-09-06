@@ -9,6 +9,7 @@ from app.models.auth import DEFAULT_WORKSPACE_ID, Workspace
 import app.models.auth  # noqa: F401
 import app.models.dependency_files  # noqa: F401
 import app.models.env_groups  # noqa: F401
+import app.models.load_nodes  # noqa: F401
 
 
 def main() -> None:

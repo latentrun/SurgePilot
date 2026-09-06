@@ -1,12 +1,23 @@
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI
 from fastapi.exceptions import RequestValidationError
 from fastapi.openapi.utils import get_openapi
 from fastapi.responses import JSONResponse
 
+from app.core.config import validate_ssh_credential_encryption_key
 from app.core.errors import AppError, app_error_handler, validation_error_handler
 from app.core.middleware import request_context_middleware
-from app.routes import auth, dependency_files, env_groups, setup
+from app.routes import auth, dependency_files, env_groups, load_nodes, setup
 from app.services.storage import get_storage_client
+
+
+@asynccontextmanager
+async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
+    validate_ssh_credential_encryption_key()
+    yield
+
 
 app = FastAPI(
     title="SurgePilot API",
@@ -15,6 +26,7 @@ app = FastAPI(
     openapi_url="/api/openapi.json",
     docs_url="/api/docs",
     redoc_url=None,
+    lifespan=lifespan,
 )
 
 app.middleware("http")(request_context_middleware)
@@ -25,6 +37,7 @@ app.include_router(setup.router)
 app.include_router(auth.router)
 app.include_router(env_groups.router)
 app.include_router(dependency_files.router)
+app.include_router(load_nodes.router)
 
 
 def custom_openapi() -> dict:
@@ -57,6 +70,28 @@ def custom_openapi() -> dict:
             "PAYLOAD_TOO_LARGE",
             "STORAGE_UNAVAILABLE",
             "FILE_IN_USE",
+            "LOAD_NODE_PUBLIC_ADMIN_REQUIRED",
+            "LOAD_NODE_CONFLICT",
+            "LOAD_NODE_BUSY",
+            "LOAD_NODE_ACTION_NOT_ALLOWED",
+            "LOAD_NODE_CREDENTIAL_REQUIRED",
+            "LOAD_NODE_CREDENTIAL_INVALID",
+            "LOAD_NODE_HOST_INVALID",
+            "LOAD_NODE_RUNNER_HOME_INVALID",
+            "LOAD_NODE_SSH_TIMEOUT",
+            "LOAD_NODE_SSH_AUTH_FAILED",
+            "LOAD_NODE_SSH_HOST_KEY_SCAN_FAILED",
+            "LOAD_NODE_SSH_HOST_KEY_MISMATCH",
+            "LOAD_NODE_SSH_HOST_KEY_UNTRUSTED",
+            "LOAD_NODE_SSH_HOST_KEY_CHANGED",
+            "LOAD_NODE_SSH_UNREACHABLE",
+            "LOAD_NODE_RUNNER_HOME_UNWRITABLE",
+            "LOAD_NODE_PYTHON_MISSING",
+            "LOAD_NODE_JAVA_MISSING",
+            "LOAD_NODE_TAURUS_MISSING",
+            "LOAD_NODE_JMETER_MISSING",
+            "LOAD_NODE_INIT_FAILED",
+            "CREDENTIAL_DECRYPT_FAILED",
         ]
     )
     schemas = openapi_schema.get("components", {}).get("schemas", {})
