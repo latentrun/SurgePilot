@@ -34,6 +34,14 @@ class Settings:
     database_url: str
     allow_signup: bool
     default_workspace_name: str
+    minio_endpoint: str
+    minio_access_key: str
+    minio_secret_key: str
+    minio_bucket: str
+    minio_region: str | None
+    minio_secure: bool
+    dependency_file_max_bytes: int
+    dependency_file_allowed_extensions: str
 
 
 def get_settings() -> Settings:
@@ -49,4 +57,14 @@ def get_settings() -> Settings:
         ),
         allow_signup=_bool_from_env(os.environ.get("ALLOW_SIGNUP"), True),
         default_workspace_name=os.environ.get("DEFAULT_WORKSPACE_NAME", "Default Workspace"),
+        minio_endpoint=os.environ.get("MINIO_ENDPOINT", "http://localhost:9000"),
+        minio_access_key=os.environ.get("MINIO_ACCESS_KEY", "minioadmin"),
+        minio_secret_key=os.environ.get("MINIO_SECRET_KEY", "minioadmin"),
+        minio_bucket=os.environ.get("MINIO_BUCKET", "surgepilot"),
+        minio_region=os.environ.get("MINIO_REGION") or None,
+        minio_secure=_bool_from_env(os.environ.get("MINIO_SECURE"), False),
+        dependency_file_max_bytes=int(
+            os.environ.get("DEPENDENCY_FILE_MAX_BYTES", str(100 * 1024 * 1024))
+        ),
+        dependency_file_allowed_extensions=os.environ.get("DEPENDENCY_FILE_ALLOWED_EXTENSIONS", ""),
     )

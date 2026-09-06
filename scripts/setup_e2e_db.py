@@ -7,6 +7,7 @@ from app.core.config import get_settings
 from app.db.base import Base
 from app.models.auth import DEFAULT_WORKSPACE_ID, Workspace
 import app.models.auth  # noqa: F401
+import app.models.dependency_files  # noqa: F401
 import app.models.env_groups  # noqa: F401
 
 

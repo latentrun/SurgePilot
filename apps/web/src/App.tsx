@@ -8,6 +8,7 @@ import {
 import { LoginPage } from "./features/auth/pages/login-page";
 import { RegisterPage } from "./features/auth/pages/register-page";
 import { EnvGroupsPage } from "./features/env-groups/pages/env-groups-page";
+import { DependencyFilesPage } from "./features/dependency-files/pages/dependency-files-page";
 
 function LoadingPage() {
   return (
@@ -39,6 +40,7 @@ function OverviewPage() {
       <p>Workspace: {session.defaultWorkspace.name}</p>
       <nav>
         <a href="/assets/env-groups">Env Groups</a>
+        <a href="/assets/dependency-files">Dependency Files</a>
       </nav>
       <button onClick={() => void handleLogout()} type="button">
         Sign out
@@ -60,6 +62,7 @@ function AppRoutes() {
   if (isRestoring) return <LoadingPage />;
   if (!isAuthenticated) return pathname === "/register" ? <RegisterPage /> : <LoginPage />;
   if (pathname === "/assets/env-groups") return <EnvGroupsPage />;
+  if (pathname === "/assets/dependency-files") return <DependencyFilesPage />;
   return <OverviewPage />;
 }
 
