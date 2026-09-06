@@ -196,6 +196,179 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/load-nodes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Load Nodes */
+        get: operations["listLoadNodes"];
+        put?: never;
+        /** Create Load Node Route */
+        post: operations["createLoadNode"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/load-nodes/ssh-host-key/scan": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Scan Load Node Ssh Host Key Route */
+        post: operations["scanLoadNodeSshHostKey"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/load-nodes/{loadNodeId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Load Node Route */
+        get: operations["getLoadNode"];
+        put?: never;
+        post?: never;
+        /** Delete Load Node Route */
+        delete: operations["deleteLoadNode"];
+        options?: never;
+        head?: never;
+        /** Patch Load Node Route */
+        patch: operations["patchLoadNode"];
+        trace?: never;
+    };
+    "/v1/load-nodes/{loadNodeId}/credentials": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Update Load Node Credentials Route */
+        post: operations["updateLoadNodeCredentials"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/load-nodes/{loadNodeId}/disable": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Disable Load Node Route */
+        post: operations["disableLoadNode"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/load-nodes/{loadNodeId}/enable": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Enable Load Node Route */
+        post: operations["enableLoadNode"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/load-nodes/{loadNodeId}/init-attempts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Init Attempts Route */
+        get: operations["listLoadNodeInitAttempts"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/load-nodes/{loadNodeId}/init-attempts/{attemptId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Init Attempt Route */
+        get: operations["getLoadNodeInitAttempt"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/load-nodes/{loadNodeId}/initialize": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Initialize Load Node Route */
+        post: operations["initializeLoadNode"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/load-nodes/{loadNodeId}/ssh-host-key/trust": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Trust Load Node Ssh Host Key Route */
+        post: operations["trustLoadNodeSshHostKey"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/setup/status": {
         parameters: {
             query?: never;
@@ -282,6 +455,11 @@ export interface components {
             sha256: string;
             /** Sizebytes */
             sizeBytes: number;
+        };
+        /** DisableLoadNodeRequest */
+        DisableLoadNodeRequest: {
+            /** Reason */
+            reason?: string | null;
         };
         /** EnvGroupCreateRequest */
         EnvGroupCreateRequest: {
@@ -381,6 +559,366 @@ export interface components {
             field: string;
             /** Message */
             message: string;
+        };
+        /** InitializeLoadNodeRequest */
+        InitializeLoadNodeRequest: {
+            /**
+             * Force
+             * @default false
+             */
+            force: boolean;
+        };
+        /** LoadNodeCreateRequest */
+        LoadNodeCreateRequest: {
+            credential: components["schemas"]["LoadNodeCredentialInput"];
+            /** Host */
+            host: string;
+            /** Maintainer */
+            maintainer?: string | null;
+            /** Remark */
+            remark?: string | null;
+            /** Runnerhome */
+            runnerHome?: string;
+            /**
+             * Scope
+             * @enum {string}
+             */
+            scope: "public" | "workspace";
+            sshHostKey: components["schemas"]["LoadNodeSshHostKeyInput"];
+            /**
+             * Sshport
+             * @default 22
+             */
+            sshPort: number;
+            /** Sshuser */
+            sshUser: string;
+        };
+        /** LoadNodeCredentialInput */
+        LoadNodeCredentialInput: {
+            /**
+             * Authtype
+             * @enum {string}
+             */
+            authType: "password" | "private_key" | "generated_key";
+            /** Password */
+            password?: string | null;
+            /** Privatekey */
+            privateKey?: string | null;
+            /** Privatekeypassphrase */
+            privateKeyPassphrase?: string | null;
+        };
+        /** LoadNodeCredentialUpdateRequest */
+        LoadNodeCredentialUpdateRequest: {
+            credential: components["schemas"]["LoadNodeCredentialInput"];
+        };
+        /** LoadNodeDetail */
+        LoadNodeDetail: {
+            /**
+             * Authtype
+             * @enum {string}
+             */
+            authType: "password" | "private_key" | "generated_key";
+            /** Bundleversion */
+            bundleVersion?: string | null;
+            /** Createdat */
+            createdAt: string;
+            /** Credentialconfigured */
+            credentialConfigured: boolean;
+            /** Credentialfingerprint */
+            credentialFingerprint?: string | null;
+            /** Currentrunid */
+            currentRunId?: string | null;
+            /** Generatedpublickey */
+            generatedPublicKey?: string | null;
+            /** Host */
+            host: string;
+            /** Id */
+            id: string;
+            /** Lastcheckedat */
+            lastCheckedAt?: string | null;
+            /** Lastheartbeatat */
+            lastHeartbeatAt?: string | null;
+            /** Lastinitattemptid */
+            lastInitAttemptId?: string | null;
+            /** Lastinitializedat */
+            lastInitializedAt?: string | null;
+            /** Laststatusreason */
+            lastStatusReason?: string | null;
+            latestInitAttempt?: components["schemas"]["LoadNodeLatestInitAttempt"] | null;
+            /** Maintainer */
+            maintainer?: string | null;
+            /** Remark */
+            remark?: string | null;
+            /** Runnerhome */
+            runnerHome: string;
+            /** Runnerversion */
+            runnerVersion?: string | null;
+            /**
+             * Scope
+             * @enum {string}
+             */
+            scope: "public" | "workspace";
+            sshHostKey?: components["schemas"]["LoadNodeSshHostKeyResponse"] | null;
+            /** Sshport */
+            sshPort: number;
+            /** Sshuser */
+            sshUser: string;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "uninitialized" | "initializing" | "idle" | "busy" | "offline" | "quarantined" | "disabled";
+            /** Updatedat */
+            updatedAt: string;
+            /** Workspaceid */
+            workspaceId?: string | null;
+        };
+        /** LoadNodeInitAttemptDetail */
+        LoadNodeInitAttemptDetail: {
+            /** Bundleversion */
+            bundleVersion?: string | null;
+            /** Createdat */
+            createdAt: string;
+            /** Errorcode */
+            errorCode?: string | null;
+            /** Finishedat */
+            finishedAt?: string | null;
+            /** Id */
+            id: string;
+            /** Message */
+            message?: string | null;
+            /** Nodeid */
+            nodeId: string;
+            /** Runnerversion */
+            runnerVersion?: string | null;
+            /** Sanitizedlogtail */
+            sanitizedLogTail?: string | null;
+            /** Startedat */
+            startedAt?: string | null;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "queued" | "running" | "succeeded" | "failed";
+            /** Updatedat */
+            updatedAt: string;
+        };
+        /** LoadNodeInitAttemptListResponse */
+        LoadNodeInitAttemptListResponse: {
+            /** Items */
+            items: components["schemas"]["LoadNodeInitAttemptSummary"][];
+            /** Limit */
+            limit: number;
+            /** Offset */
+            offset: number;
+            /** Total */
+            total: number;
+        };
+        /** LoadNodeInitAttemptSummary */
+        LoadNodeInitAttemptSummary: {
+            /** Createdat */
+            createdAt: string;
+            /** Errorcode */
+            errorCode?: string | null;
+            /** Finishedat */
+            finishedAt?: string | null;
+            /** Id */
+            id: string;
+            /** Message */
+            message?: string | null;
+            /** Nodeid */
+            nodeId: string;
+            /** Startedat */
+            startedAt?: string | null;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "queued" | "running" | "succeeded" | "failed";
+        };
+        /** LoadNodeInitializeAttemptStatus */
+        LoadNodeInitializeAttemptStatus: {
+            /** Id */
+            id: string;
+            /** Message */
+            message?: string | null;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "queued" | "running" | "succeeded" | "failed";
+        };
+        /** LoadNodeInitializeNodeStatus */
+        LoadNodeInitializeNodeStatus: {
+            /** Id */
+            id: string;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "uninitialized" | "initializing" | "idle" | "busy" | "offline" | "quarantined" | "disabled";
+        };
+        /** LoadNodeInitializeResponse */
+        LoadNodeInitializeResponse: {
+            attempt: components["schemas"]["LoadNodeInitializeAttemptStatus"];
+            node: components["schemas"]["LoadNodeInitializeNodeStatus"];
+        };
+        /** LoadNodeLatestInitAttempt */
+        LoadNodeLatestInitAttempt: {
+            /** Errorcode */
+            errorCode?: string | null;
+            /** Finishedat */
+            finishedAt?: string | null;
+            /** Id */
+            id: string;
+            /** Message */
+            message?: string | null;
+            /** Startedat */
+            startedAt?: string | null;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "queued" | "running" | "succeeded" | "failed";
+        };
+        /** LoadNodeListResponse */
+        LoadNodeListResponse: {
+            /** Items */
+            items: components["schemas"]["LoadNodeSummary"][];
+            /** Limit */
+            limit: number;
+            /** Offset */
+            offset: number;
+            /** Total */
+            total: number;
+        };
+        /** LoadNodePatchRequest */
+        LoadNodePatchRequest: {
+            /** Host */
+            host?: string | null;
+            /** Maintainer */
+            maintainer?: string | null;
+            /** Remark */
+            remark?: string | null;
+            /** Runnerhome */
+            runnerHome?: string | null;
+            /** Sshport */
+            sshPort?: number | null;
+            /** Sshuser */
+            sshUser?: string | null;
+        };
+        /** LoadNodeSshHostKeyInput */
+        LoadNodeSshHostKeyInput: {
+            /** Algorithm */
+            algorithm: string;
+            /** Fingerprintsha256 */
+            fingerprintSha256: string;
+            /** Publickey */
+            publicKey: string;
+        };
+        /** LoadNodeSshHostKeyResponse */
+        LoadNodeSshHostKeyResponse: {
+            /** Algorithm */
+            algorithm: string;
+            /** Fingerprintsha256 */
+            fingerprintSha256: string;
+            /** Knownhostsline */
+            knownHostsLine: string;
+            /** Publickey */
+            publicKey: string;
+        };
+        /** LoadNodeSshHostKeyScanRequest */
+        LoadNodeSshHostKeyScanRequest: {
+            /** Host */
+            host: string;
+            /**
+             * Scope
+             * @enum {string}
+             */
+            scope: "public" | "workspace";
+            /**
+             * Sshport
+             * @default 22
+             */
+            sshPort: number;
+        };
+        /** LoadNodeSshHostKeyScanResponse */
+        LoadNodeSshHostKeyScanResponse: {
+            /** Algorithm */
+            algorithm: string;
+            /** Fingerprintsha256 */
+            fingerprintSha256: string;
+            /** Host */
+            host: string;
+            /** Knownhostsline */
+            knownHostsLine: string;
+            /** Publickey */
+            publicKey: string;
+            /** Scannedat */
+            scannedAt: string;
+            /** Sshport */
+            sshPort: number;
+        };
+        /** LoadNodeSummary */
+        LoadNodeSummary: {
+            /**
+             * Authtype
+             * @enum {string}
+             */
+            authType: "password" | "private_key" | "generated_key";
+            /** Bundleversion */
+            bundleVersion?: string | null;
+            /** Createdat */
+            createdAt: string;
+            /** Credentialconfigured */
+            credentialConfigured: boolean;
+            /** Credentialfingerprint */
+            credentialFingerprint?: string | null;
+            /** Currentrunid */
+            currentRunId?: string | null;
+            /** Generatedpublickey */
+            generatedPublicKey?: string | null;
+            /** Host */
+            host: string;
+            /** Id */
+            id: string;
+            /** Lastcheckedat */
+            lastCheckedAt?: string | null;
+            /** Lastheartbeatat */
+            lastHeartbeatAt?: string | null;
+            /** Lastinitattemptid */
+            lastInitAttemptId?: string | null;
+            /** Lastinitializedat */
+            lastInitializedAt?: string | null;
+            /** Laststatusreason */
+            lastStatusReason?: string | null;
+            /** Maintainer */
+            maintainer?: string | null;
+            /** Remark */
+            remark?: string | null;
+            /** Runnerhome */
+            runnerHome: string;
+            /** Runnerversion */
+            runnerVersion?: string | null;
+            /**
+             * Scope
+             * @enum {string}
+             */
+            scope: "public" | "workspace";
+            sshHostKey?: components["schemas"]["LoadNodeSshHostKeyResponse"] | null;
+            /** Sshport */
+            sshPort: number;
+            /** Sshuser */
+            sshUser: string;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "uninitialized" | "initializing" | "idle" | "busy" | "offline" | "quarantined" | "disabled";
+            /** Updatedat */
+            updatedAt: string;
+            /** Workspaceid */
+            workspaceId?: string | null;
         };
         /** LoginRequest */
         LoginRequest: {
@@ -1545,6 +2083,1033 @@ export interface operations {
             };
             /** @description Not Found */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    listLoadNodes: {
+        parameters: {
+            query?: {
+                scope?: "public" | "workspace";
+                status?: "busy" | "disabled" | "idle" | "initializing" | "offline" | "quarantined" | "uninitialized";
+                q?: string | null;
+                includeArchived?: boolean;
+                limit?: number;
+                offset?: number;
+                sort?: string;
+            };
+            header?: {
+                "x-workspace-id"?: string | null;
+            };
+            path?: never;
+            cookie?: {
+                surgepilot_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LoadNodeListResponse"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    createLoadNode: {
+        parameters: {
+            query?: never;
+            header: {
+                "x-workspace-id"?: string | null;
+                "x-csrf-token": string;
+            };
+            path?: never;
+            cookie?: {
+                surgepilot_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LoadNodeCreateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LoadNodeDetail"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    scanLoadNodeSshHostKey: {
+        parameters: {
+            query?: never;
+            header: {
+                "x-workspace-id"?: string | null;
+                "x-csrf-token": string;
+            };
+            path?: never;
+            cookie?: {
+                surgepilot_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LoadNodeSshHostKeyScanRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LoadNodeSshHostKeyScanResponse"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    getLoadNode: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-workspace-id"?: string | null;
+            };
+            path: {
+                loadNodeId: string;
+            };
+            cookie?: {
+                surgepilot_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LoadNodeDetail"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    deleteLoadNode: {
+        parameters: {
+            query?: never;
+            header: {
+                "x-workspace-id"?: string | null;
+                "x-csrf-token": string;
+            };
+            path: {
+                loadNodeId: string;
+            };
+            cookie?: {
+                surgepilot_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    patchLoadNode: {
+        parameters: {
+            query?: never;
+            header: {
+                "x-workspace-id"?: string | null;
+                "x-csrf-token": string;
+            };
+            path: {
+                loadNodeId: string;
+            };
+            cookie?: {
+                surgepilot_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LoadNodePatchRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LoadNodeDetail"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    updateLoadNodeCredentials: {
+        parameters: {
+            query?: never;
+            header: {
+                "x-workspace-id"?: string | null;
+                "x-csrf-token": string;
+            };
+            path: {
+                loadNodeId: string;
+            };
+            cookie?: {
+                surgepilot_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LoadNodeCredentialUpdateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LoadNodeDetail"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    disableLoadNode: {
+        parameters: {
+            query?: never;
+            header: {
+                "x-workspace-id"?: string | null;
+                "x-csrf-token": string;
+            };
+            path: {
+                loadNodeId: string;
+            };
+            cookie?: {
+                surgepilot_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DisableLoadNodeRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LoadNodeDetail"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    enableLoadNode: {
+        parameters: {
+            query?: never;
+            header: {
+                "x-workspace-id"?: string | null;
+                "x-csrf-token": string;
+            };
+            path: {
+                loadNodeId: string;
+            };
+            cookie?: {
+                surgepilot_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LoadNodeDetail"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    listLoadNodeInitAttempts: {
+        parameters: {
+            query?: {
+                limit?: number;
+                offset?: number;
+            };
+            header?: {
+                "x-workspace-id"?: string | null;
+            };
+            path: {
+                loadNodeId: string;
+            };
+            cookie?: {
+                surgepilot_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LoadNodeInitAttemptListResponse"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    getLoadNodeInitAttempt: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-workspace-id"?: string | null;
+            };
+            path: {
+                loadNodeId: string;
+                attemptId: string;
+            };
+            cookie?: {
+                surgepilot_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LoadNodeInitAttemptDetail"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    initializeLoadNode: {
+        parameters: {
+            query?: never;
+            header: {
+                "x-workspace-id"?: string | null;
+                "x-csrf-token": string;
+            };
+            path: {
+                loadNodeId: string;
+            };
+            cookie?: {
+                surgepilot_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["InitializeLoadNodeRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LoadNodeInitializeResponse"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    trustLoadNodeSshHostKey: {
+        parameters: {
+            query?: never;
+            header: {
+                "x-workspace-id"?: string | null;
+                "x-csrf-token": string;
+            };
+            path: {
+                loadNodeId: string;
+            };
+            cookie?: {
+                surgepilot_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LoadNodeSshHostKeyInput"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LoadNodeDetail"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
                 headers: {
                     [name: string]: unknown;
                 };

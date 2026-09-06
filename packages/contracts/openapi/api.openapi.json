@@ -190,6 +190,23 @@
         "title": "DependencyFileSummary",
         "type": "object"
       },
+      "DisableLoadNodeRequest": {
+        "properties": {
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          }
+        },
+        "title": "DisableLoadNodeRequest",
+        "type": "object"
+      },
       "EnvGroupCreateRequest": {
         "properties": {
           "description": {
@@ -480,6 +497,1228 @@
         "title": "FieldError",
         "type": "object"
       },
+      "InitializeLoadNodeRequest": {
+        "properties": {
+          "force": {
+            "default": false,
+            "title": "Force",
+            "type": "boolean"
+          }
+        },
+        "title": "InitializeLoadNodeRequest",
+        "type": "object"
+      },
+      "LoadNodeCreateRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "credential": {
+            "$ref": "#/components/schemas/LoadNodeCredentialInput"
+          },
+          "host": {
+            "title": "Host",
+            "type": "string"
+          },
+          "maintainer": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Maintainer"
+          },
+          "remark": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Remark"
+          },
+          "runnerHome": {
+            "title": "Runnerhome",
+            "type": "string"
+          },
+          "scope": {
+            "enum": [
+              "public",
+              "workspace"
+            ],
+            "title": "Scope",
+            "type": "string"
+          },
+          "sshHostKey": {
+            "$ref": "#/components/schemas/LoadNodeSshHostKeyInput"
+          },
+          "sshPort": {
+            "default": 22,
+            "title": "Sshport",
+            "type": "integer"
+          },
+          "sshUser": {
+            "title": "Sshuser",
+            "type": "string"
+          }
+        },
+        "required": [
+          "scope",
+          "host",
+          "sshUser",
+          "sshHostKey",
+          "credential"
+        ],
+        "title": "LoadNodeCreateRequest",
+        "type": "object"
+      },
+      "LoadNodeCredentialInput": {
+        "additionalProperties": false,
+        "properties": {
+          "authType": {
+            "enum": [
+              "password",
+              "private_key",
+              "generated_key"
+            ],
+            "title": "Authtype",
+            "type": "string"
+          },
+          "password": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Password",
+            "writeOnly": true
+          },
+          "privateKey": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Privatekey",
+            "writeOnly": true
+          },
+          "privateKeyPassphrase": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Privatekeypassphrase",
+            "writeOnly": true
+          }
+        },
+        "required": [
+          "authType"
+        ],
+        "title": "LoadNodeCredentialInput",
+        "type": "object"
+      },
+      "LoadNodeCredentialUpdateRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "credential": {
+            "$ref": "#/components/schemas/LoadNodeCredentialInput"
+          }
+        },
+        "required": [
+          "credential"
+        ],
+        "title": "LoadNodeCredentialUpdateRequest",
+        "type": "object"
+      },
+      "LoadNodeDetail": {
+        "properties": {
+          "authType": {
+            "enum": [
+              "password",
+              "private_key",
+              "generated_key"
+            ],
+            "title": "Authtype",
+            "type": "string"
+          },
+          "bundleVersion": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Bundleversion"
+          },
+          "createdAt": {
+            "title": "Createdat",
+            "type": "string"
+          },
+          "credentialConfigured": {
+            "title": "Credentialconfigured",
+            "type": "boolean"
+          },
+          "credentialFingerprint": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Credentialfingerprint"
+          },
+          "currentRunId": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Currentrunid"
+          },
+          "generatedPublicKey": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Generatedpublickey"
+          },
+          "host": {
+            "title": "Host",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "lastCheckedAt": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Lastcheckedat"
+          },
+          "lastHeartbeatAt": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Lastheartbeatat"
+          },
+          "lastInitAttemptId": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Lastinitattemptid"
+          },
+          "lastInitializedAt": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Lastinitializedat"
+          },
+          "lastStatusReason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Laststatusreason"
+          },
+          "latestInitAttempt": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/LoadNodeLatestInitAttempt"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "maintainer": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Maintainer"
+          },
+          "remark": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Remark"
+          },
+          "runnerHome": {
+            "title": "Runnerhome",
+            "type": "string"
+          },
+          "runnerVersion": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Runnerversion"
+          },
+          "scope": {
+            "enum": [
+              "public",
+              "workspace"
+            ],
+            "title": "Scope",
+            "type": "string"
+          },
+          "sshHostKey": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/LoadNodeSshHostKeyResponse"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "sshPort": {
+            "title": "Sshport",
+            "type": "integer"
+          },
+          "sshUser": {
+            "title": "Sshuser",
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "uninitialized",
+              "initializing",
+              "idle",
+              "busy",
+              "offline",
+              "quarantined",
+              "disabled"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "updatedAt": {
+            "title": "Updatedat",
+            "type": "string"
+          },
+          "workspaceId": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Workspaceid"
+          }
+        },
+        "required": [
+          "id",
+          "scope",
+          "host",
+          "sshPort",
+          "sshUser",
+          "runnerHome",
+          "authType",
+          "credentialConfigured",
+          "status",
+          "createdAt",
+          "updatedAt"
+        ],
+        "title": "LoadNodeDetail",
+        "type": "object"
+      },
+      "LoadNodeInitAttemptDetail": {
+        "properties": {
+          "bundleVersion": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Bundleversion"
+          },
+          "createdAt": {
+            "title": "Createdat",
+            "type": "string"
+          },
+          "errorCode": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Errorcode"
+          },
+          "finishedAt": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Finishedat"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "message": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Message"
+          },
+          "nodeId": {
+            "title": "Nodeid",
+            "type": "string"
+          },
+          "runnerVersion": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Runnerversion"
+          },
+          "sanitizedLogTail": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sanitizedlogtail"
+          },
+          "startedAt": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Startedat"
+          },
+          "status": {
+            "enum": [
+              "queued",
+              "running",
+              "succeeded",
+              "failed"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "updatedAt": {
+            "title": "Updatedat",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "nodeId",
+          "status",
+          "createdAt",
+          "updatedAt"
+        ],
+        "title": "LoadNodeInitAttemptDetail",
+        "type": "object"
+      },
+      "LoadNodeInitAttemptListResponse": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/LoadNodeInitAttemptSummary"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "limit": {
+            "title": "Limit",
+            "type": "integer"
+          },
+          "offset": {
+            "title": "Offset",
+            "type": "integer"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "limit",
+          "offset",
+          "total"
+        ],
+        "title": "LoadNodeInitAttemptListResponse",
+        "type": "object"
+      },
+      "LoadNodeInitAttemptSummary": {
+        "properties": {
+          "createdAt": {
+            "title": "Createdat",
+            "type": "string"
+          },
+          "errorCode": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Errorcode"
+          },
+          "finishedAt": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Finishedat"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "message": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Message"
+          },
+          "nodeId": {
+            "title": "Nodeid",
+            "type": "string"
+          },
+          "startedAt": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Startedat"
+          },
+          "status": {
+            "enum": [
+              "queued",
+              "running",
+              "succeeded",
+              "failed"
+            ],
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "nodeId",
+          "status",
+          "createdAt"
+        ],
+        "title": "LoadNodeInitAttemptSummary",
+        "type": "object"
+      },
+      "LoadNodeInitializeAttemptStatus": {
+        "properties": {
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "message": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Message"
+          },
+          "status": {
+            "enum": [
+              "queued",
+              "running",
+              "succeeded",
+              "failed"
+            ],
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "status"
+        ],
+        "title": "LoadNodeInitializeAttemptStatus",
+        "type": "object"
+      },
+      "LoadNodeInitializeNodeStatus": {
+        "properties": {
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "uninitialized",
+              "initializing",
+              "idle",
+              "busy",
+              "offline",
+              "quarantined",
+              "disabled"
+            ],
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "status"
+        ],
+        "title": "LoadNodeInitializeNodeStatus",
+        "type": "object"
+      },
+      "LoadNodeInitializeResponse": {
+        "properties": {
+          "attempt": {
+            "$ref": "#/components/schemas/LoadNodeInitializeAttemptStatus"
+          },
+          "node": {
+            "$ref": "#/components/schemas/LoadNodeInitializeNodeStatus"
+          }
+        },
+        "required": [
+          "node",
+          "attempt"
+        ],
+        "title": "LoadNodeInitializeResponse",
+        "type": "object"
+      },
+      "LoadNodeLatestInitAttempt": {
+        "properties": {
+          "errorCode": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Errorcode"
+          },
+          "finishedAt": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Finishedat"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "message": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Message"
+          },
+          "startedAt": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Startedat"
+          },
+          "status": {
+            "enum": [
+              "queued",
+              "running",
+              "succeeded",
+              "failed"
+            ],
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "status"
+        ],
+        "title": "LoadNodeLatestInitAttempt",
+        "type": "object"
+      },
+      "LoadNodeListResponse": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/LoadNodeSummary"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "limit": {
+            "title": "Limit",
+            "type": "integer"
+          },
+          "offset": {
+            "title": "Offset",
+            "type": "integer"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "limit",
+          "offset",
+          "total"
+        ],
+        "title": "LoadNodeListResponse",
+        "type": "object"
+      },
+      "LoadNodePatchRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "host": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Host"
+          },
+          "maintainer": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Maintainer"
+          },
+          "remark": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Remark"
+          },
+          "runnerHome": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Runnerhome"
+          },
+          "sshPort": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sshport"
+          },
+          "sshUser": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sshuser"
+          }
+        },
+        "title": "LoadNodePatchRequest",
+        "type": "object"
+      },
+      "LoadNodeSshHostKeyInput": {
+        "additionalProperties": false,
+        "properties": {
+          "algorithm": {
+            "title": "Algorithm",
+            "type": "string"
+          },
+          "fingerprintSha256": {
+            "title": "Fingerprintsha256",
+            "type": "string"
+          },
+          "publicKey": {
+            "title": "Publickey",
+            "type": "string"
+          }
+        },
+        "required": [
+          "algorithm",
+          "publicKey",
+          "fingerprintSha256"
+        ],
+        "title": "LoadNodeSshHostKeyInput",
+        "type": "object"
+      },
+      "LoadNodeSshHostKeyResponse": {
+        "properties": {
+          "algorithm": {
+            "title": "Algorithm",
+            "type": "string"
+          },
+          "fingerprintSha256": {
+            "title": "Fingerprintsha256",
+            "type": "string"
+          },
+          "knownHostsLine": {
+            "title": "Knownhostsline",
+            "type": "string"
+          },
+          "publicKey": {
+            "title": "Publickey",
+            "type": "string"
+          }
+        },
+        "required": [
+          "algorithm",
+          "publicKey",
+          "fingerprintSha256",
+          "knownHostsLine"
+        ],
+        "title": "LoadNodeSshHostKeyResponse",
+        "type": "object"
+      },
+      "LoadNodeSshHostKeyScanRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "host": {
+            "title": "Host",
+            "type": "string"
+          },
+          "scope": {
+            "enum": [
+              "public",
+              "workspace"
+            ],
+            "title": "Scope",
+            "type": "string"
+          },
+          "sshPort": {
+            "default": 22,
+            "title": "Sshport",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "scope",
+          "host"
+        ],
+        "title": "LoadNodeSshHostKeyScanRequest",
+        "type": "object"
+      },
+      "LoadNodeSshHostKeyScanResponse": {
+        "properties": {
+          "algorithm": {
+            "title": "Algorithm",
+            "type": "string"
+          },
+          "fingerprintSha256": {
+            "title": "Fingerprintsha256",
+            "type": "string"
+          },
+          "host": {
+            "title": "Host",
+            "type": "string"
+          },
+          "knownHostsLine": {
+            "title": "Knownhostsline",
+            "type": "string"
+          },
+          "publicKey": {
+            "title": "Publickey",
+            "type": "string"
+          },
+          "scannedAt": {
+            "title": "Scannedat",
+            "type": "string"
+          },
+          "sshPort": {
+            "title": "Sshport",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "algorithm",
+          "publicKey",
+          "fingerprintSha256",
+          "knownHostsLine",
+          "host",
+          "sshPort",
+          "scannedAt"
+        ],
+        "title": "LoadNodeSshHostKeyScanResponse",
+        "type": "object"
+      },
+      "LoadNodeSummary": {
+        "properties": {
+          "authType": {
+            "enum": [
+              "password",
+              "private_key",
+              "generated_key"
+            ],
+            "title": "Authtype",
+            "type": "string"
+          },
+          "bundleVersion": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Bundleversion"
+          },
+          "createdAt": {
+            "title": "Createdat",
+            "type": "string"
+          },
+          "credentialConfigured": {
+            "title": "Credentialconfigured",
+            "type": "boolean"
+          },
+          "credentialFingerprint": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Credentialfingerprint"
+          },
+          "currentRunId": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Currentrunid"
+          },
+          "generatedPublicKey": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Generatedpublickey"
+          },
+          "host": {
+            "title": "Host",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "lastCheckedAt": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Lastcheckedat"
+          },
+          "lastHeartbeatAt": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Lastheartbeatat"
+          },
+          "lastInitAttemptId": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Lastinitattemptid"
+          },
+          "lastInitializedAt": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Lastinitializedat"
+          },
+          "lastStatusReason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Laststatusreason"
+          },
+          "maintainer": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Maintainer"
+          },
+          "remark": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Remark"
+          },
+          "runnerHome": {
+            "title": "Runnerhome",
+            "type": "string"
+          },
+          "runnerVersion": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Runnerversion"
+          },
+          "scope": {
+            "enum": [
+              "public",
+              "workspace"
+            ],
+            "title": "Scope",
+            "type": "string"
+          },
+          "sshHostKey": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/LoadNodeSshHostKeyResponse"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "sshPort": {
+            "title": "Sshport",
+            "type": "integer"
+          },
+          "sshUser": {
+            "title": "Sshuser",
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "uninitialized",
+              "initializing",
+              "idle",
+              "busy",
+              "offline",
+              "quarantined",
+              "disabled"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "updatedAt": {
+            "title": "Updatedat",
+            "type": "string"
+          },
+          "workspaceId": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Workspaceid"
+          }
+        },
+        "required": [
+          "id",
+          "scope",
+          "host",
+          "sshPort",
+          "sshUser",
+          "runnerHome",
+          "authType",
+          "credentialConfigured",
+          "status",
+          "createdAt",
+          "updatedAt"
+        ],
+        "title": "LoadNodeSummary",
+        "type": "object"
+      },
       "LoginRequest": {
         "properties": {
           "email": {
@@ -627,7 +1866,29 @@
       "DEPENDENCY_FILE_NAME_CONFLICT",
       "PAYLOAD_TOO_LARGE",
       "STORAGE_UNAVAILABLE",
-      "FILE_IN_USE"
+      "FILE_IN_USE",
+      "LOAD_NODE_PUBLIC_ADMIN_REQUIRED",
+      "LOAD_NODE_CONFLICT",
+      "LOAD_NODE_BUSY",
+      "LOAD_NODE_ACTION_NOT_ALLOWED",
+      "LOAD_NODE_CREDENTIAL_REQUIRED",
+      "LOAD_NODE_CREDENTIAL_INVALID",
+      "LOAD_NODE_HOST_INVALID",
+      "LOAD_NODE_RUNNER_HOME_INVALID",
+      "LOAD_NODE_SSH_TIMEOUT",
+      "LOAD_NODE_SSH_AUTH_FAILED",
+      "LOAD_NODE_SSH_HOST_KEY_SCAN_FAILED",
+      "LOAD_NODE_SSH_HOST_KEY_MISMATCH",
+      "LOAD_NODE_SSH_HOST_KEY_UNTRUSTED",
+      "LOAD_NODE_SSH_HOST_KEY_CHANGED",
+      "LOAD_NODE_SSH_UNREACHABLE",
+      "LOAD_NODE_RUNNER_HOME_UNWRITABLE",
+      "LOAD_NODE_PYTHON_MISSING",
+      "LOAD_NODE_JAVA_MISSING",
+      "LOAD_NODE_TAURUS_MISSING",
+      "LOAD_NODE_JMETER_MISSING",
+      "LOAD_NODE_INIT_FAILED",
+      "CREDENTIAL_DECRYPT_FAILED"
     ]
   },
   "openapi": "3.1.0",
@@ -2400,6 +3661,1783 @@
         "summary": "Duplicate Env Group Route",
         "tags": [
           "env-groups"
+        ]
+      }
+    },
+    "/v1/load-nodes": {
+      "get": {
+        "operationId": "listLoadNodes",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "x-workspace-id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Workspace-Id"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "surgepilot_session",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "SurgePilot Session"
+            }
+          },
+          {
+            "in": "query",
+            "name": "scope",
+            "required": false,
+            "schema": {
+              "enum": [
+                "public",
+                "workspace"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "status",
+            "required": false,
+            "schema": {
+              "enum": [
+                "busy",
+                "disabled",
+                "idle",
+                "initializing",
+                "offline",
+                "quarantined",
+                "uninitialized"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "q",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 120,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          {
+            "in": "query",
+            "name": "includeArchived",
+            "required": false,
+            "schema": {
+              "default": false,
+              "type": "boolean"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 20,
+              "maximum": 100,
+              "minimum": 1,
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "sort",
+            "required": false,
+            "schema": {
+              "default": "-createdAt",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LoadNodeListResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          }
+        },
+        "summary": "List Load Nodes",
+        "tags": [
+          "load-nodes"
+        ]
+      },
+      "post": {
+        "operationId": "createLoadNode",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "x-workspace-id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Workspace-Id"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-csrf-token",
+            "required": true,
+            "schema": {
+              "title": "X-Csrf-Token",
+              "type": "string"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "surgepilot_session",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "SurgePilot Session"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LoadNodeCreateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LoadNodeDetail"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          }
+        },
+        "summary": "Create Load Node Route",
+        "tags": [
+          "load-nodes"
+        ]
+      }
+    },
+    "/v1/load-nodes/ssh-host-key/scan": {
+      "post": {
+        "operationId": "scanLoadNodeSshHostKey",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "x-workspace-id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Workspace-Id"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-csrf-token",
+            "required": true,
+            "schema": {
+              "title": "X-Csrf-Token",
+              "type": "string"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "surgepilot_session",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "SurgePilot Session"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LoadNodeSshHostKeyScanRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LoadNodeSshHostKeyScanResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          }
+        },
+        "summary": "Scan Load Node Ssh Host Key Route",
+        "tags": [
+          "load-nodes"
+        ]
+      }
+    },
+    "/v1/load-nodes/{loadNodeId}": {
+      "delete": {
+        "operationId": "deleteLoadNode",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "loadNodeId",
+            "required": true,
+            "schema": {
+              "title": "Loadnodeid",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-workspace-id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Workspace-Id"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-csrf-token",
+            "required": true,
+            "schema": {
+              "title": "X-Csrf-Token",
+              "type": "string"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "surgepilot_session",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "SurgePilot Session"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          }
+        },
+        "summary": "Delete Load Node Route",
+        "tags": [
+          "load-nodes"
+        ]
+      },
+      "get": {
+        "operationId": "getLoadNode",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "loadNodeId",
+            "required": true,
+            "schema": {
+              "title": "Loadnodeid",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-workspace-id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Workspace-Id"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "surgepilot_session",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "SurgePilot Session"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LoadNodeDetail"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          }
+        },
+        "summary": "Get Load Node Route",
+        "tags": [
+          "load-nodes"
+        ]
+      },
+      "patch": {
+        "operationId": "patchLoadNode",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "loadNodeId",
+            "required": true,
+            "schema": {
+              "title": "Loadnodeid",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-workspace-id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Workspace-Id"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-csrf-token",
+            "required": true,
+            "schema": {
+              "title": "X-Csrf-Token",
+              "type": "string"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "surgepilot_session",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "SurgePilot Session"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LoadNodePatchRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LoadNodeDetail"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          }
+        },
+        "summary": "Patch Load Node Route",
+        "tags": [
+          "load-nodes"
+        ]
+      }
+    },
+    "/v1/load-nodes/{loadNodeId}/credentials": {
+      "post": {
+        "operationId": "updateLoadNodeCredentials",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "loadNodeId",
+            "required": true,
+            "schema": {
+              "title": "Loadnodeid",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-workspace-id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Workspace-Id"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-csrf-token",
+            "required": true,
+            "schema": {
+              "title": "X-Csrf-Token",
+              "type": "string"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "surgepilot_session",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "SurgePilot Session"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LoadNodeCredentialUpdateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LoadNodeDetail"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          }
+        },
+        "summary": "Update Load Node Credentials Route",
+        "tags": [
+          "load-nodes"
+        ]
+      }
+    },
+    "/v1/load-nodes/{loadNodeId}/disable": {
+      "post": {
+        "operationId": "disableLoadNode",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "loadNodeId",
+            "required": true,
+            "schema": {
+              "title": "Loadnodeid",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-workspace-id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Workspace-Id"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-csrf-token",
+            "required": true,
+            "schema": {
+              "title": "X-Csrf-Token",
+              "type": "string"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "surgepilot_session",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "SurgePilot Session"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DisableLoadNodeRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LoadNodeDetail"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          }
+        },
+        "summary": "Disable Load Node Route",
+        "tags": [
+          "load-nodes"
+        ]
+      }
+    },
+    "/v1/load-nodes/{loadNodeId}/enable": {
+      "post": {
+        "operationId": "enableLoadNode",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "loadNodeId",
+            "required": true,
+            "schema": {
+              "title": "Loadnodeid",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-workspace-id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Workspace-Id"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-csrf-token",
+            "required": true,
+            "schema": {
+              "title": "X-Csrf-Token",
+              "type": "string"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "surgepilot_session",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "SurgePilot Session"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LoadNodeDetail"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          }
+        },
+        "summary": "Enable Load Node Route",
+        "tags": [
+          "load-nodes"
+        ]
+      }
+    },
+    "/v1/load-nodes/{loadNodeId}/init-attempts": {
+      "get": {
+        "operationId": "listLoadNodeInitAttempts",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "loadNodeId",
+            "required": true,
+            "schema": {
+              "title": "Loadnodeid",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-workspace-id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Workspace-Id"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "surgepilot_session",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "SurgePilot Session"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 20,
+              "maximum": 100,
+              "minimum": 1,
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "minimum": 0,
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LoadNodeInitAttemptListResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          }
+        },
+        "summary": "List Init Attempts Route",
+        "tags": [
+          "load-nodes"
+        ]
+      }
+    },
+    "/v1/load-nodes/{loadNodeId}/init-attempts/{attemptId}": {
+      "get": {
+        "operationId": "getLoadNodeInitAttempt",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "loadNodeId",
+            "required": true,
+            "schema": {
+              "title": "Loadnodeid",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "attemptId",
+            "required": true,
+            "schema": {
+              "title": "Attemptid",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-workspace-id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Workspace-Id"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "surgepilot_session",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "SurgePilot Session"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LoadNodeInitAttemptDetail"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          }
+        },
+        "summary": "Get Init Attempt Route",
+        "tags": [
+          "load-nodes"
+        ]
+      }
+    },
+    "/v1/load-nodes/{loadNodeId}/initialize": {
+      "post": {
+        "operationId": "initializeLoadNode",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "loadNodeId",
+            "required": true,
+            "schema": {
+              "title": "Loadnodeid",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-workspace-id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Workspace-Id"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-csrf-token",
+            "required": true,
+            "schema": {
+              "title": "X-Csrf-Token",
+              "type": "string"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "surgepilot_session",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "SurgePilot Session"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/InitializeLoadNodeRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LoadNodeInitializeResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          }
+        },
+        "summary": "Initialize Load Node Route",
+        "tags": [
+          "load-nodes"
+        ]
+      }
+    },
+    "/v1/load-nodes/{loadNodeId}/ssh-host-key/trust": {
+      "post": {
+        "operationId": "trustLoadNodeSshHostKey",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "loadNodeId",
+            "required": true,
+            "schema": {
+              "title": "Loadnodeid",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-workspace-id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Workspace-Id"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-csrf-token",
+            "required": true,
+            "schema": {
+              "title": "X-Csrf-Token",
+              "type": "string"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "surgepilot_session",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "SurgePilot Session"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LoadNodeSshHostKeyInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LoadNodeDetail"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          }
+        },
+        "summary": "Trust Load Node Ssh Host Key Route",
+        "tags": [
+          "load-nodes"
         ]
       }
     },
