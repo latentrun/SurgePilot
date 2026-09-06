@@ -38,6 +38,7 @@ class RunnerCallbackRequest(ApiSchema):
     event_id: str = Field(min_length=26, max_length=26)
     run_id: str = Field(min_length=26, max_length=26)
     node_id: str = Field(min_length=26, max_length=26)
+    runtime_version: str = Field(min_length=1, max_length=200)
     event_type: CallbackEventType
     seq: int = Field(ge=0)
     event_time: str

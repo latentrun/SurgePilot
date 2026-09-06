@@ -9,7 +9,15 @@ from fastapi.responses import JSONResponse
 from app.core.config import validate_ssh_credential_encryption_key
 from app.core.errors import AppError, app_error_handler, validation_error_handler
 from app.core.middleware import request_context_middleware
-from app.routes import auth, dependency_files, env_groups, load_nodes, setup
+from app.routes import (
+    auth,
+    dependency_files,
+    env_groups,
+    load_nodes,
+    runner_internal,
+    runs,
+    setup,
+)
 from app.services.storage import get_storage_client
 
 
@@ -38,6 +46,8 @@ app.include_router(auth.router)
 app.include_router(env_groups.router)
 app.include_router(dependency_files.router)
 app.include_router(load_nodes.router)
+app.include_router(runs.router)
+app.include_router(runner_internal.router)
 
 
 def custom_openapi() -> dict:
@@ -92,6 +102,19 @@ def custom_openapi() -> dict:
             "LOAD_NODE_JMETER_MISSING",
             "LOAD_NODE_INIT_FAILED",
             "CREDENTIAL_DECRYPT_FAILED",
+            "RUN_STOP_NOT_ALLOWED",
+            "RUN_TERMINAL_STATE",
+            "RUNNER_UNAUTHORIZED",
+            "RUNNER_FORBIDDEN",
+            "RUNNER_CALLBACK_INVALID",
+            "RUNNER_CALLBACK_CONFLICT",
+            "INVALID_ARTIFACT_PATH",
+            "INVALID_ARTIFACT_TYPE",
+            "ARTIFACT_SIZE_MISMATCH",
+            "ARTIFACT_HASH_MISMATCH",
+            "ARTIFACT_PATH_CONFLICT",
+            "ARTIFACT_NOT_READY",
+            "RUN_CONTROL_CONFLICT",
         ]
     )
     schemas = openapi_schema.get("components", {}).get("schemas", {})

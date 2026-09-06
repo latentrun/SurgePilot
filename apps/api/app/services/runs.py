@@ -23,6 +23,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 import hashlib
+import hmac
 import json
 import logging
 import re
@@ -34,7 +35,7 @@ from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
 from app.core.errors import AppError
-from app.core.ids import new_ulid
+from app.core.ids import is_ulid, new_ulid
 from app.core.time import as_utc, utc_now
 from app.models.auth import User
 from app.models.load_nodes import LoadNode
@@ -80,6 +81,7 @@ SENSITIVE_VALUE_PATTERN = re.compile(
     r"(?i)\b(bearer\s+[A-Za-z0-9._~+/=-]+|basic\s+[A-Za-z0-9+/=-]+|token[:=]\S+|password[:=]\S+)"
 )
 logger = logging.getLogger(__name__)
+NODE_BOUND_TOKEN_PREFIX = "node:"
 
 
 @dataclass(frozen=True)
@@ -106,6 +108,7 @@ class RunnerCallbackInput:
     event_id: str
     run_id: str
     node_id: str
+    runtime_version: str
     event_type: str
     seq: int
     event_time: datetime
@@ -463,6 +466,7 @@ def _callback_event_payload(callback: RunnerCallbackInput) -> tuple[dict[str, An
         "eventId": callback.event_id,
         "runId": callback.run_id,
         "nodeId": callback.node_id,
+        "runtimeVersion": callback.runtime_version,
         "eventType": callback.event_type,
         "seq": callback.seq,
         "eventTime": callback.event_time.isoformat().replace("+00:00", "Z"),
@@ -736,6 +740,35 @@ def cancel_run_control_request(
     request.last_error_code = error_code
     request.last_error_message = _safe_message(message, "Run control request is obsolete.")
     request.updated_at = at
+
+
+def sign_runner_node_token(node_id: str, *, secret: str | None = None) -> str:
+    master = secret if secret is not None else get_settings().runner_internal_token
+    if not master or not is_ulid(node_id):
+        raise AppError("RUNNER_UNAUTHORIZED", "Runner token is invalid.", 401)
+    signature = hmac.new(master.encode(), node_id.encode(), hashlib.sha256).hexdigest()
+    return f"{NODE_BOUND_TOKEN_PREFIX}{node_id}:{signature}"
+
+
+def validate_runner_token(token: str | None, *, node_id: str | None = None) -> str | None:
+    expected = get_settings().runner_internal_token
+    if not expected or not token:
+        raise AppError("RUNNER_UNAUTHORIZED", "Runner token is invalid.", 401)
+    if token.startswith(NODE_BOUND_TOKEN_PREFIX):
+        parts = token.split(":", 2)
+        if len(parts) != 3 or parts[0] != "node":
+            raise AppError("RUNNER_UNAUTHORIZED", "Runner token is invalid.", 401)
+        authenticated_node_id = parts[1]
+        signature = parts[2]
+        if not authenticated_node_id or not is_ulid(authenticated_node_id) or not signature:
+            raise AppError("RUNNER_UNAUTHORIZED", "Runner token is invalid.", 401)
+        expected_token = sign_runner_node_token(authenticated_node_id, secret=expected)
+        if not hmac.compare_digest(token, expected_token):
+            raise AppError("RUNNER_UNAUTHORIZED", "Runner token is invalid.", 401)
+        if node_id is not None and authenticated_node_id != node_id:
+            raise AppError("RUNNER_FORBIDDEN", "Runner is not allowed to report this node.", 403)
+        return authenticated_node_id
+    raise AppError("RUNNER_UNAUTHORIZED", "Runner token is invalid.", 401)
 
 
 def validate_artifact_relative_path(path: str) -> str:

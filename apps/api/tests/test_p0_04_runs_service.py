@@ -95,6 +95,7 @@ def callback(
     node_id: str | None = None,
     runner_pid: int | None = None,
     details: dict | None = None,
+    runtime_version: str = "runtime-test-v1",
 ) -> RunnerCallbackInput:
     payload_node_id = node_id or run.selected_node_id
     return RunnerCallbackInput(
@@ -102,6 +103,7 @@ def callback(
         event_id=event_id,
         run_id=run.id,
         node_id=payload_node_id,
+        runtime_version=runtime_version,
         event_type=event_type,
         seq=1,
         event_time=datetime.now(UTC),
@@ -113,6 +115,7 @@ def callback(
             "eventId": event_id,
             "runId": run.id,
             "nodeId": payload_node_id,
+            "runtimeVersion": runtime_version,
             "eventType": event_type,
             "seq": 1,
             "eventTime": "2030-06-01T10:00:00.000Z",

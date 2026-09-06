@@ -51,6 +51,7 @@ class Settings:
     load_node_init_timeout_seconds: int
     load_node_init_log_tail_bytes: int
     load_node_generated_key_type: str
+    runner_internal_token: str | None
     enable_protocol_smoke_runs: bool
     node_cooldown_seconds: int
     run_artifact_max_bytes: int
@@ -94,6 +95,7 @@ def get_settings() -> Settings:
         load_node_init_timeout_seconds=int(os.environ.get("LOAD_NODE_INIT_TIMEOUT_SECONDS", "120")),
         load_node_init_log_tail_bytes=int(os.environ.get("LOAD_NODE_INIT_LOG_TAIL_BYTES", "65536")),
         load_node_generated_key_type=os.environ.get("LOAD_NODE_GENERATED_KEY_TYPE", "ed25519"),
+        runner_internal_token=os.environ.get("RUNNER_INTERNAL_TOKEN") or None,
         enable_protocol_smoke_runs=_bool_from_env(
             os.environ.get("SURGEPILOT_ENABLE_PROTOCOL_SMOKE_RUNS"), False
         ),
