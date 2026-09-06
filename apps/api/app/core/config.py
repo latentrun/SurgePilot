@@ -1,4 +1,6 @@
 from dataclasses import dataclass
+import base64
+import binascii
 import os
 
 
@@ -42,6 +44,13 @@ class Settings:
     minio_secure: bool
     dependency_file_max_bytes: int
     dependency_file_allowed_extensions: str
+    ssh_credential_encryption_key: str | None
+    load_node_default_runner_home: str
+    load_node_ssh_connect_timeout_seconds: int
+    load_node_init_command_timeout_seconds: int
+    load_node_init_timeout_seconds: int
+    load_node_init_log_tail_bytes: int
+    load_node_generated_key_type: str
 
 
 def get_settings() -> Settings:
@@ -67,4 +76,37 @@ def get_settings() -> Settings:
             os.environ.get("DEPENDENCY_FILE_MAX_BYTES", str(100 * 1024 * 1024))
         ),
         dependency_file_allowed_extensions=os.environ.get("DEPENDENCY_FILE_ALLOWED_EXTENSIONS", ""),
+        ssh_credential_encryption_key=os.environ.get("SSH_CREDENTIAL_ENCRYPTION_KEY") or None,
+        load_node_default_runner_home=os.environ.get(
+            "LOAD_NODE_DEFAULT_RUNNER_HOME", "/opt/surgepilot/runner"
+        ),
+        load_node_ssh_connect_timeout_seconds=int(
+            os.environ.get("LOAD_NODE_SSH_CONNECT_TIMEOUT_SECONDS", "15")
+        ),
+        load_node_init_command_timeout_seconds=int(
+            os.environ.get("LOAD_NODE_INIT_COMMAND_TIMEOUT_SECONDS", "30")
+        ),
+        load_node_init_timeout_seconds=int(os.environ.get("LOAD_NODE_INIT_TIMEOUT_SECONDS", "120")),
+        load_node_init_log_tail_bytes=int(os.environ.get("LOAD_NODE_INIT_LOG_TAIL_BYTES", "65536")),
+        load_node_generated_key_type=os.environ.get("LOAD_NODE_GENERATED_KEY_TYPE", "ed25519"),
     )
+
+
+def decode_ssh_credential_encryption_key(value: str | None) -> bytes:
+    if not value:
+        raise ValueError(
+            "SSH_CREDENTIAL_ENCRYPTION_KEY is required and must be base64-encoded 32 bytes."
+        )
+    try:
+        decoded = base64.b64decode(value, validate=True)
+    except (binascii.Error, ValueError) as exc:
+        raise ValueError(
+            "SSH_CREDENTIAL_ENCRYPTION_KEY must be valid base64 encoding for 32 bytes."
+        ) from exc
+    if len(decoded) != 32:
+        raise ValueError("SSH_CREDENTIAL_ENCRYPTION_KEY must decode to exactly 32 bytes.")
+    return decoded
+
+
+def validate_ssh_credential_encryption_key() -> None:
+    decode_ssh_credential_encryption_key(get_settings().ssh_credential_encryption_key)
