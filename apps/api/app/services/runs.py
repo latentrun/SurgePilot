@@ -12,6 +12,9 @@ This module implements the single-node P0 Run execution contract from
   cleanup outcomes.
 - Runner artifact upload metadata and MinIO write path without exposing MinIO
   credentials or object keys to the Runner.
+- Worker-facing run-control job processing (claim, command build, and
+  completion), timeout sweeps, stale lease recovery, and Runner callback
+  retention cleanup driven by the ``api-worker``.
 
 State transitions are applied in the caller's transaction through conditional
 updates: the Run row is locked with ``FOR UPDATE`` first, so late, duplicate, or
@@ -29,7 +32,7 @@ import logging
 import re
 from typing import Any, BinaryIO
 
-from sqlalchemy import select
+from sqlalchemy import and_, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -133,6 +136,62 @@ class RunExecutionInput:
     source_type: str
     source_id: str | None
     snapshot_payload: dict[str, Any]
+
+
+@dataclass(frozen=True)
+class RunControlCommand:
+    """One remote command the ``api-worker`` executes on the bound Load Node."""
+
+    request_id: str
+    action: str
+    run_id: str
+    node_id: str
+    reason: str | None
+    source_type: str
+    host: str
+    ssh_port: int
+    ssh_user: str
+    runner_home: str
+    trusted_host_key_algorithm: str
+    trusted_host_key_public_key: str
+    trusted_host_key_fingerprint_sha256: str
+    argv: tuple[str, ...]
+
+
+@dataclass(frozen=True)
+class RunControlExecutionResult:
+    """Outcome of one remote run-control execution."""
+
+    ok: bool
+    error_code: str | None = None
+    message: str | None = None
+    stderr_preview: str | None = None
+    timed_out: bool = False
+    quarantine_node: bool = True
+    cleanup_required: bool = False
+
+
+class RunControlExecutor:
+    """Boundary implemented by the ``api-worker`` remote SSH executor."""
+
+    def execute(self, command: RunControlCommand) -> RunControlExecutionResult:
+        raise NotImplementedError
+
+
+class FakeRunControlExecutor(RunControlExecutor):
+    def execute(self, command: RunControlCommand) -> RunControlExecutionResult:
+        _ = command
+        return RunControlExecutionResult(ok=True)
+
+
+def _runner_command_argv(
+    *, runner_home: str, action: str, run_id: str, use_fake_runner: bool = False
+) -> tuple[str, ...]:
+    command = "kill" if action == "force_kill" else action
+    argv = ("python3", f"{runner_home.rstrip('/')}/runner.py", command, "--run-id", run_id)
+    if action == "start" and use_fake_runner:
+        return (*argv, "--fake")
+    return argv
 
 
 def _canonical_hash(payload: dict[str, Any]) -> str:
@@ -740,6 +799,476 @@ def cancel_run_control_request(
     request.last_error_code = error_code
     request.last_error_message = _safe_message(message, "Run control request is obsolete.")
     request.updated_at = at
+
+
+def _has_active_force_kill_request(
+    db: Session, *, run_id: str, node_id: str | None = None
+) -> bool:
+    conditions = [
+        RunControlRequest.run_id == run_id,
+        RunControlRequest.action == "force_kill",
+        RunControlRequest.status.in_(list(ACTIVE_CONTROL_STATUSES)),
+    ]
+    if node_id is not None:
+        conditions.append(RunControlRequest.node_id == node_id)
+    return db.scalar(select(RunControlRequest.id).where(*conditions).limit(1)) is not None
+
+
+def claim_next_run_control_request(
+    db: Session, *, worker_id: str = "api-worker"
+) -> RunControlRequest | None:
+    """Claim the next due ``run_control_requests`` row for the api-worker.
+
+    Row-level ``FOR UPDATE SKIP LOCKED`` claiming means more than one worker
+    process can never execute the same request.
+    """
+    now = utc_now()
+    request = db.scalar(
+        select(RunControlRequest)
+        .where(RunControlRequest.status == "pending", RunControlRequest.run_after <= now)
+        .order_by(RunControlRequest.created_at.asc(), RunControlRequest.id.asc())
+        .with_for_update(skip_locked=True)
+        .limit(1)
+    )
+    if request is None:
+        return None
+    request.status = "running"
+    request.claimed_at = now
+    request.claimed_by = worker_id
+    request.attempt_count += 1
+    request.updated_at = now
+    db.flush()
+    return request
+
+
+def build_run_control_command(
+    db: Session, *, request: RunControlRequest
+) -> RunControlCommand | None:
+    """Re-validate a claimed request and build the remote command to execute.
+
+    The worker only executes a command after this validation commits. An
+    obsolete request (Run already converged, or its node lease is gone) is
+    cancelled here so a remote action is never run against a stale target.
+    """
+    current = db.scalar(
+        select(RunControlRequest)
+        .where(RunControlRequest.id == request.id)
+        .with_for_update()
+        .execution_options(populate_existing=True)
+    )
+    if current is None or current.status != "running":
+        return None
+    run = db.scalar(
+        select(Run)
+        .where(Run.id == current.run_id)
+        .with_for_update()
+        .execution_options(populate_existing=True)
+    )
+    if run is None:
+        return None
+    if current.action == "start" and (
+        run.state not in {"initializing", "running"}
+        or _active_lease(db, run_id=run.id) is None
+    ):
+        cancel_run_control_request(current)
+        db.flush()
+        return None
+    if current.action == "stop" and run.state != "stopping":
+        cancel_run_control_request(current)
+        db.flush()
+        return None
+    node = db.scalar(
+        select(LoadNode)
+        .where(LoadNode.id == current.node_id)
+        .with_for_update()
+        .execution_options(populate_existing=True)
+    )
+    if node is None:
+        return None
+    return RunControlCommand(
+        request_id=current.id,
+        action=current.action,
+        run_id=current.run_id,
+        node_id=current.node_id,
+        reason=current.reason,
+        source_type=run.source_type,
+        host=node.host,
+        ssh_port=node.ssh_port,
+        ssh_user=node.ssh_user,
+        runner_home=node.runner_home,
+        trusted_host_key_algorithm=node.ssh_host_key_algorithm or "",
+        trusted_host_key_public_key=node.ssh_host_key_public_key or "",
+        trusted_host_key_fingerprint_sha256=node.ssh_host_key_fingerprint_sha256 or "",
+        argv=_runner_command_argv(
+            runner_home=node.runner_home,
+            action=current.action,
+            run_id=current.run_id,
+            use_fake_runner=current.action == "start"
+            and run.source_type == "protocol_smoke",
+        ),
+    )
+
+
+def complete_run_control_request(
+    db: Session,
+    *,
+    request: RunControlRequest,
+    success: bool = True,
+    error_code: str | None = None,
+    error_message: str | None = None,
+    stderr_preview: str | None = None,
+    timed_out: bool = False,
+    quarantine_node: bool = True,
+    cleanup_required: bool = False,
+) -> None:
+    """Apply one finished run-control request to the Run and its node lease.
+
+    A successful ``start`` only records the remote-start completion window; the
+    Run stays ``initializing`` until the Runner reports ``accepted``/``running``
+    callbacks. A failed ``start`` converges the Run to ``failed`` with reason
+    ``runner_start_failed``. If the remote start result is uncertain
+    (``cleanup_required``), the node stays Busy under its lease until a shared
+    ``force_kill`` request reports the cleanup result; otherwise the lease is
+    released immediately subject to the quarantine decision. A finished
+    ``force_kill`` releases the lease with the node Idle on success or
+    Quarantined on failure.
+    """
+    now = utc_now()
+    effective_error_code = error_code or "RUN_CONTROL_FAILED"
+    request.status = "succeeded" if success else "failed"
+    request.finished_at = now
+    request.last_error_code = None if success else effective_error_code
+    request.last_error_message = (
+        None if success else _safe_message(error_message, "Run control request failed.")
+    )
+    request.updated_at = now
+    run = db.get(Run, request.run_id)
+    if run is not None and request.action == "start" and success:
+        run.remote_start_attempted_at = run.remote_start_attempted_at or now
+        run.remote_start_completed_at = now
+    if (
+        run is not None
+        and request.action == "start"
+        and not success
+        and run.state not in TERMINAL_STATES
+    ):
+        terminal_message = _safe_message(error_message, "Runner start failed.")
+        _apply_transition(
+            db,
+            run=run,
+            new_state="failed",
+            reason="runner_start_failed",
+            message=terminal_message,
+            now=now,
+        )
+        if cleanup_required:
+            # Uncertain remote start: keep the node unavailable under its lease
+            # until the shared force-kill cleanup reports a result.
+            enqueue_control_request(
+                db,
+                run=run,
+                action="force_kill",
+                reason="runner_start_failed",
+                run_after=now,
+            )
+        else:
+            release_run_lease(
+                db,
+                run=run,
+                reason="runner_start_failed",
+                quarantine=quarantine_node,
+                now=now,
+            )
+    if run is not None and request.action == "force_kill":
+        quarantine_required = request.reason == "stale_process_detected" or not success
+        release_reason = (
+            request.reason
+            if success and request.reason == "stale_process_detected"
+            else "force_kill_success"
+            if success
+            else "force_kill_failed"
+        )
+        if success:
+            run.last_force_kill_at = now
+        node = db.get(LoadNode, request.node_id)
+        if success and node is not None:
+            node.last_force_kill_at = now
+            node.updated_at = now
+        write_audit_event(
+            db,
+            event_type="run.force_kill",
+            actor_user_id=None,
+            workspace_id=request.workspace_id,
+            target_type="run",
+            target_id=request.run_id,
+            details={
+                "runId": request.run_id,
+                "nodeId": request.node_id,
+                "reason": request.reason,
+                "success": success,
+                "timedOut": timed_out,
+                "stderrPreview": (
+                    _safe_message(stderr_preview, "") if stderr_preview else None
+                ),
+            },
+        )
+        release_run_lease(
+            db,
+            run=run,
+            reason=release_reason,
+            quarantine=quarantine_required,
+            now=now,
+            node_id=request.node_id,
+        )
+    db.flush()
+
+
+def _force_converge_run(
+    db: Session,
+    *,
+    run: Run,
+    target_state: str,
+    reason: str,
+    forced: bool,
+    now: datetime,
+) -> bool:
+    """Force-converge one single-node Run to a terminal state and enqueue cleanup.
+
+    The Run only converges while its node lease is still active; the worker
+    keeps the node unavailable until the shared force-kill cleanup reports a
+    result.
+    """
+    if run.state in TERMINAL_STATES:
+        return False
+    if target_state == "failed" and run.state not in {"initializing", "running", "stopping"}:
+        return False
+    if target_state == "aborted" and run.state != "stopping":
+        return False
+    if _active_lease(db, run_id=run.id) is None:
+        return False
+    run.state = target_state
+    run.ended_at = now
+    run.failure_reason = reason
+    run.failure_message = _safe_message(None, "Run was force-converged by SurgePilot.")
+    run.forced_convergence = forced
+    run.updated_at = now
+    enqueue_control_request(db, run=run, action="force_kill", reason=reason, run_after=now)
+    db.flush()
+    return True
+
+
+def sweep_accepted_timeouts(
+    db: Session, *, now: datetime | None = None, timeout_seconds: int | None = None
+) -> int:
+    """Fail Runs that never received an ``accepted`` callback after remote start."""
+    at = now or utc_now()
+    cutoff = at - timedelta(
+        seconds=timeout_seconds or get_settings().runner_accepted_timeout_seconds
+    )
+    runs = db.scalars(
+        select(Run)
+        .where(
+            Run.state.in_(("initializing", "running")),
+            Run.remote_start_requested_at.is_not(None),
+            Run.remote_start_requested_at < cutoff,
+            Run.accepted_at.is_(None),
+        )
+        .with_for_update(skip_locked=True)
+    ).all()
+    converged = 0
+    for run in runs:
+        if _force_converge_run(
+            db,
+            run=run,
+            target_state="failed",
+            reason="runner_accept_timeout",
+            forced=False,
+            now=at,
+        ):
+            converged += 1
+    return converged
+
+
+def sweep_heartbeat_timeouts(
+    db: Session, *, now: datetime | None = None, timeout_seconds: int | None = None
+) -> int:
+    """Fail accepted-but-not-started and heart-beat-less active Runs.
+
+    An ``initializing`` Run that was accepted but never reported ``running``
+    converges with ``runner_start_timeout``; a ``running`` Run whose heartbeat
+    went stale converges with ``heartbeat_timeout``.
+    """
+    at = now or utc_now()
+    cutoff = at - timedelta(
+        seconds=timeout_seconds or get_settings().runner_heartbeat_timeout_seconds
+    )
+    runs = db.scalars(
+        select(Run)
+        .where(
+            Run.state.in_(("initializing", "running")),
+            or_(
+                and_(
+                    Run.state == "initializing",
+                    Run.accepted_at.is_not(None),
+                    Run.accepted_at < cutoff,
+                    Run.started_at.is_(None),
+                ),
+                and_(
+                    Run.state == "running",
+                    or_(
+                        Run.last_heartbeat_at < cutoff,
+                        and_(
+                            Run.last_heartbeat_at.is_(None),
+                            Run.started_at.is_not(None),
+                            Run.started_at < cutoff,
+                        ),
+                    ),
+                ),
+            ),
+        )
+        .with_for_update(skip_locked=True)
+    ).all()
+    converged = 0
+    for run in runs:
+        reason = "runner_start_timeout" if run.state == "initializing" else "heartbeat_timeout"
+        if _force_converge_run(
+            db, run=run, target_state="failed", reason=reason, forced=False, now=at
+        ):
+            converged += 1
+    return converged
+
+
+def sweep_stop_grace_timeouts(
+    db: Session, *, now: datetime | None = None, timeout_seconds: int | None = None
+) -> int:
+    """Force-converge ``stopping`` Runs that exceeded their Stop grace window."""
+    at = now or utc_now()
+    cutoff = at - timedelta(seconds=timeout_seconds or get_settings().runner_stop_grace_seconds)
+    runs = db.scalars(
+        select(Run)
+        .where(
+            Run.state == "stopping",
+            Run.stop_requested_at.is_not(None),
+            Run.stop_requested_at < cutoff,
+        )
+        .with_for_update(skip_locked=True)
+    ).all()
+    return sum(
+        1
+        for run in runs
+        if _force_converge_run(
+            db,
+            run=run,
+            target_state="aborted",
+            reason="stop_grace_timeout",
+            forced=True,
+            now=at,
+        )
+    )
+
+
+def recover_stale_leases(db: Session) -> int:
+    """Enqueue one force-kill cleanup for terminal Runs whose lease is open.
+
+    A worker crash after the terminal transition but before lease release is
+    recovered here: the node stays unavailable until cleanup reports a result.
+    """
+    leases = db.scalars(
+        select(NodeLease).where(NodeLease.released_at.is_(None)).with_for_update(skip_locked=True)
+    ).all()
+    count = 0
+    for lease in leases:
+        run = db.get(Run, lease.run_id)
+        if (
+            run is not None
+            and run.state in TERMINAL_STATES
+            and not _has_active_force_kill_request(db, run_id=run.id, node_id=lease.node_id)
+        ):
+            enqueue_control_request(
+                db,
+                run=run,
+                action="force_kill",
+                reason="stale_recovery",
+                run_after=utc_now(),
+            )
+            count += 1
+    return count
+
+
+def _reset_run_control_request_for_retry(
+    request: RunControlRequest,
+    *,
+    now: datetime,
+    error_code: str = "RUN_CONTROL_STALE_RETRY",
+    message: str = "Run control request was reclaimed after a stale worker claim.",
+) -> None:
+    request.status = "pending"
+    request.claimed_at = None
+    request.claimed_by = None
+    request.finished_at = None
+    request.last_error_code = error_code
+    request.last_error_message = _safe_message(message, "Run control request was reclaimed.")
+    request.updated_at = now
+
+
+def recover_stale_run_control_requests(
+    db: Session, *, now: datetime | None = None, stale_seconds: int | None = None
+) -> int:
+    """Reset or cancel run-control requests claimed by a dead worker.
+
+    Requests whose target Run already converged are cancelled; still-valid
+    requests return to ``pending`` for another worker claim.
+    """
+    at = now or utc_now()
+    cutoff = at - timedelta(seconds=stale_seconds or get_settings().run_control_stale_seconds)
+    requests = db.scalars(
+        select(RunControlRequest)
+        .where(
+            RunControlRequest.status == "running",
+            RunControlRequest.claimed_at.is_not(None),
+            RunControlRequest.claimed_at < cutoff,
+        )
+        .with_for_update(skip_locked=True)
+    ).all()
+    recovered = 0
+    for request in requests:
+        run = db.get(Run, request.run_id)
+        if run is None:
+            cancel_run_control_request(
+                request,
+                error_code="RUN_CONTROL_TARGET_MISSING",
+                message="Run control target was not found.",
+                now=at,
+            )
+            recovered += 1
+            continue
+        if request.action == "start" and (
+            run.state not in {"initializing", "running"}
+            or _active_lease(db, run_id=run.id) is None
+        ):
+            cancel_run_control_request(request, now=at)
+            recovered += 1
+            continue
+        if request.action == "stop" and run.state != "stopping":
+            cancel_run_control_request(request, now=at)
+            recovered += 1
+            continue
+        _reset_run_control_request_for_retry(request, now=at)
+        recovered += 1
+    db.flush()
+    return recovered
+
+
+def cleanup_callback_retention(db: Session, *, older_than: datetime) -> int:
+    """Delete Runner callback events older than the retention window."""
+    events = db.scalars(
+        select(RunnerCallbackEvent).where(RunnerCallbackEvent.created_at < older_than)
+    ).all()
+    count = len(events)
+    for event in events:
+        db.delete(event)
+    db.flush()
+    return count
 
 
 def sign_runner_node_token(node_id: str, *, secret: str | None = None) -> str:
