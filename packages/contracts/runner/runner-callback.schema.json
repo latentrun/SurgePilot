@@ -1,15 +1,256 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://surgepilot.local/contracts/runner/runner-callback.schema.json",
-  "title": "SurgePilot Runner Callback Placeholder",
-  "description": "R00 reserves a versioned Runner callback contract location. P0-04 defines callback event semantics and validation rules.",
+  "title": "SurgePilot Runner Callback",
   "type": "object",
-  "additionalProperties": true,
-  "required": ["schemaVersion"],
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "eventType",
+    "eventId",
+    "runId",
+    "nodeId",
+    "runtimeVersion",
+    "seq",
+    "eventTime"
+  ],
   "properties": {
     "schemaVersion": {
       "type": "string",
       "const": "1"
+    },
+    "eventType": {
+      "type": "string",
+      "enum": [
+        "accepted",
+        "running",
+        "heartbeat",
+        "artifact",
+        "finished",
+        "failed",
+        "aborted"
+      ]
+    },
+    "eventId": {
+      "type": "string",
+      "minLength": 26,
+      "maxLength": 26,
+      "pattern": "^[0-9A-HJKMNP-TV-Z]{26}$"
+    },
+    "runId": {
+      "type": "string",
+      "minLength": 26,
+      "maxLength": 26,
+      "pattern": "^[0-9A-HJKMNP-TV-Z]{26}$"
+    },
+    "nodeId": {
+      "type": "string",
+      "minLength": 26,
+      "maxLength": 26,
+      "pattern": "^[0-9A-HJKMNP-TV-Z]{26}$"
+    },
+    "runtimeVersion": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 200
+    },
+    "seq": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "eventTime": {
+      "type": "string",
+      "format": "date-time",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d{1,6})?Z$"
+    },
+    "message": {
+      "type": "string",
+      "maxLength": 500
+    },
+    "runnerPid": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "details": {
+      "type": "object",
+      "additionalProperties": true,
+      "maxProperties": 20
     }
-  }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "eventType": {
+            "const": "accepted"
+          }
+        },
+        "required": [
+          "eventType"
+        ]
+      },
+      "then": {
+        "required": [
+          "runnerPid"
+        ]
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "eventType": {
+            "const": "finished"
+          }
+        },
+        "required": [
+          "eventType"
+        ]
+      },
+      "then": {
+        "required": [
+          "details"
+        ],
+        "properties": {
+          "details": {
+            "type": "object",
+            "required": [
+              "processGroupExited"
+            ],
+            "properties": {
+              "processGroupExited": {
+                "type": "boolean"
+              },
+              "reason": {
+                "type": "string",
+                "maxLength": 120,
+                "pattern": "^[a-z][a-z0-9]*(?:_[a-z0-9]+)*$"
+              },
+              "exitCode": {
+                "type": "integer"
+              },
+              "slaResult": {
+                "type": "string",
+                "enum": [
+                  "passed",
+                  "failed"
+                ]
+              }
+            },
+            "additionalProperties": true
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "eventType": {
+            "enum": [
+              "failed",
+              "aborted"
+            ]
+          }
+        },
+        "required": [
+          "eventType"
+        ]
+      },
+      "then": {
+        "required": [
+          "details"
+        ],
+        "properties": {
+          "details": {
+            "type": "object",
+            "required": [
+              "processGroupExited",
+              "reason"
+            ],
+            "properties": {
+              "processGroupExited": {
+                "type": "boolean"
+              },
+              "reason": {
+                "type": "string",
+                "maxLength": 120,
+                "pattern": "^[a-z][a-z0-9]*(?:_[a-z0-9]+)*$"
+              },
+              "exitCode": {
+                "type": "integer"
+              },
+              "slaResult": {
+                "type": "string",
+                "enum": [
+                  "passed",
+                  "failed"
+                ]
+              }
+            },
+            "additionalProperties": true
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "eventType": {
+            "const": "artifact"
+          }
+        },
+        "required": [
+          "eventType"
+        ]
+      },
+      "then": {
+        "required": [
+          "details"
+        ],
+        "properties": {
+          "details": {
+            "type": "object",
+            "required": [
+              "artifactId",
+              "artifactType",
+              "relativePath",
+              "sizeBytes",
+              "sha256"
+            ],
+            "properties": {
+              "artifactId": {
+                "type": "string",
+                "minLength": 26,
+                "maxLength": 26,
+                "pattern": "^[0-9A-HJKMNP-TV-Z]{26}$"
+              },
+              "artifactType": {
+                "type": "string",
+                "enum": [
+                  "taurus_log",
+                  "jmeter_log",
+                  "final_stats_csv",
+                  "run_log",
+                  "artifacts_zip"
+                ]
+              },
+              "relativePath": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 500
+              },
+              "sizeBytes": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "sha256": {
+                "type": "string",
+                "pattern": "^[a-fA-F0-9]{64}$"
+              }
+            },
+            "additionalProperties": false
+          }
+        }
+      }
+    }
+  ]
 }
