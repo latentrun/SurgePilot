@@ -9,6 +9,8 @@ import { LoginPage } from "./features/auth/pages/login-page";
 import { RegisterPage } from "./features/auth/pages/register-page";
 import { EnvGroupsPage } from "./features/env-groups/pages/env-groups-page";
 import { DependencyFilesPage } from "./features/dependency-files/pages/dependency-files-page";
+import { LoadNodesPage } from "./features/load-nodes/pages/load-nodes-page";
+import { RegisterLoadNodePage } from "./features/load-nodes/pages/register-load-node-page";
 
 function LoadingPage() {
   return (
@@ -41,6 +43,7 @@ function OverviewPage() {
       <nav>
         <a href="/assets/env-groups">Env Groups</a>
         <a href="/assets/dependency-files">Dependency Files</a>
+        <a href="/resources/load-nodes">Load Nodes</a>
       </nav>
       <button onClick={() => void handleLogout()} type="button">
         Sign out
@@ -63,6 +66,10 @@ function AppRoutes() {
   if (!isAuthenticated) return pathname === "/register" ? <RegisterPage /> : <LoginPage />;
   if (pathname === "/assets/env-groups") return <EnvGroupsPage />;
   if (pathname === "/assets/dependency-files") return <DependencyFilesPage />;
+  if (pathname === "/resources/load-nodes/new") {
+    return <RegisterLoadNodePage />;
+  }
+  if (pathname === "/resources/load-nodes") return <LoadNodesPage />;
   return <OverviewPage />;
 }
 

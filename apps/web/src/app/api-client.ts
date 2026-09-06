@@ -28,6 +28,39 @@ export type DependencyFileListResponse =
 export type DependencyFileSummary =
   components["schemas"]["DependencyFileSummary"];
 
+export type LoadNodeCreateRequest =
+  components["schemas"]["LoadNodeCreateRequest"];
+export type LoadNodeCredentialUpdateRequest =
+  components["schemas"]["LoadNodeCredentialUpdateRequest"];
+export type LoadNodeDetail = components["schemas"]["LoadNodeDetail"];
+export type LoadNodeInitAttemptDetail =
+  components["schemas"]["LoadNodeInitAttemptDetail"];
+export type LoadNodeInitAttemptListResponse =
+  components["schemas"]["LoadNodeInitAttemptListResponse"];
+export type LoadNodeInitAttemptSummary =
+  components["schemas"]["LoadNodeInitAttemptSummary"];
+export type LoadNodeInitializeResponse =
+  components["schemas"]["LoadNodeInitializeResponse"];
+export type LoadNodeListResponse =
+  components["schemas"]["LoadNodeListResponse"];
+export type LoadNodePatchRequest =
+  components["schemas"]["LoadNodePatchRequest"];
+export type LoadNodeScope =
+  components["schemas"]["LoadNodeSummary"]["scope"];
+export type LoadNodeStatus =
+  components["schemas"]["LoadNodeSummary"]["status"];
+export type LoadNodeAuthType =
+  components["schemas"]["LoadNodeSummary"]["authType"];
+export type LoadNodeSshHostKeyInput =
+  components["schemas"]["LoadNodeSshHostKeyInput"];
+export type LoadNodeSshHostKeyResponse =
+  components["schemas"]["LoadNodeSshHostKeyResponse"];
+export type LoadNodeSshHostKeyScanRequest =
+  components["schemas"]["LoadNodeSshHostKeyScanRequest"];
+export type LoadNodeSshHostKeyScanResponse =
+  components["schemas"]["LoadNodeSshHostKeyScanResponse"];
+export type LoadNodeSummary = components["schemas"]["LoadNodeSummary"];
+
 export class ApiError extends Error {
   readonly body: ApiErrorBody;
   readonly status: number;
@@ -349,4 +382,232 @@ export function deleteDependencyFile(
       },
     },
   );
+}
+
+export function listLoadNodes(params: {
+  includeArchived?: boolean;
+  limit?: number;
+  offset?: number;
+  q?: string;
+  scope?: LoadNodeScope | "";
+  sort?: string;
+  status?: LoadNodeStatus | "";
+  workspaceId: string;
+}) {
+  const searchParams = new URLSearchParams();
+  if (params.limit !== undefined) {
+    searchParams.set("limit", String(params.limit));
+  }
+  if (params.offset !== undefined) {
+    searchParams.set("offset", String(params.offset));
+  }
+  if (params.q) {
+    searchParams.set("q", params.q);
+  }
+  if (params.scope) {
+    searchParams.set("scope", params.scope);
+  }
+  if (params.status) {
+    searchParams.set("status", params.status);
+  }
+  if (params.sort) {
+    searchParams.set("sort", params.sort);
+  }
+  if (params.includeArchived !== undefined) {
+    searchParams.set("includeArchived", String(params.includeArchived));
+  }
+  const queryStr = searchParams.toString();
+  const url = queryStr ? `/v1/load-nodes?${queryStr}` : "/v1/load-nodes";
+  return request<LoadNodeListResponse>(url, {
+    headers: { "x-workspace-id": params.workspaceId },
+  });
+}
+
+export function createLoadNode(
+  payload: LoadNodeCreateRequest,
+  workspaceId: string,
+  csrfToken: string,
+) {
+  return request<LoadNodeDetail>("/v1/load-nodes", {
+    method: "POST",
+    headers: {
+      "x-csrf-token": csrfToken,
+      "x-workspace-id": workspaceId,
+    },
+    body: JSON.stringify(payload),
+  });
+}
+
+export function scanLoadNodeSshHostKey(
+  payload: LoadNodeSshHostKeyScanRequest,
+  workspaceId: string,
+  csrfToken: string,
+) {
+  return request<LoadNodeSshHostKeyScanResponse>(
+    "/v1/load-nodes/ssh-host-key/scan",
+    {
+      method: "POST",
+      headers: {
+        "x-csrf-token": csrfToken,
+        "x-workspace-id": workspaceId,
+      },
+      body: JSON.stringify(payload),
+    },
+  );
+}
+
+export function patchLoadNode(
+  loadNodeId: string,
+  payload: LoadNodePatchRequest,
+  workspaceId: string,
+  csrfToken: string,
+) {
+  return request<LoadNodeDetail>(
+    `/v1/load-nodes/${encodeURIComponent(loadNodeId)}`,
+    {
+      method: "PATCH",
+      headers: {
+        "x-csrf-token": csrfToken,
+        "x-workspace-id": workspaceId,
+      },
+      body: JSON.stringify(payload),
+    },
+  );
+}
+
+export function trustLoadNodeSshHostKey(
+  loadNodeId: string,
+  payload: LoadNodeSshHostKeyInput,
+  workspaceId: string,
+  csrfToken: string,
+) {
+  return request<LoadNodeDetail>(
+    `/v1/load-nodes/${encodeURIComponent(loadNodeId)}/ssh-host-key/trust`,
+    {
+      method: "POST",
+      headers: {
+        "x-csrf-token": csrfToken,
+        "x-workspace-id": workspaceId,
+      },
+      body: JSON.stringify(payload),
+    },
+  );
+}
+
+export function updateLoadNodeCredentials(
+  loadNodeId: string,
+  payload: LoadNodeCredentialUpdateRequest,
+  workspaceId: string,
+  csrfToken: string,
+) {
+  return request<LoadNodeDetail>(
+    `/v1/load-nodes/${encodeURIComponent(loadNodeId)}/credentials`,
+    {
+      method: "POST",
+      headers: {
+        "x-csrf-token": csrfToken,
+        "x-workspace-id": workspaceId,
+      },
+      body: JSON.stringify(payload),
+    },
+  );
+}
+
+export function initializeLoadNode(
+  loadNodeId: string,
+  workspaceId: string,
+  csrfToken: string,
+  force = false,
+) {
+  return request<LoadNodeInitializeResponse>(
+    `/v1/load-nodes/${encodeURIComponent(loadNodeId)}/initialize`,
+    {
+      method: "POST",
+      headers: {
+        "x-csrf-token": csrfToken,
+        "x-workspace-id": workspaceId,
+      },
+      body: JSON.stringify({ force }),
+    },
+  );
+}
+
+export function listLoadNodeInitAttempts(
+  loadNodeId: string,
+  workspaceId: string,
+  limit = 20,
+  offset = 0,
+) {
+  const searchParams = new URLSearchParams();
+  searchParams.set("limit", String(limit));
+  searchParams.set("offset", String(offset));
+  return request<LoadNodeInitAttemptListResponse>(
+    `/v1/load-nodes/${encodeURIComponent(loadNodeId)}/init-attempts?${searchParams.toString()}`,
+    {
+      headers: { "x-workspace-id": workspaceId },
+    },
+  );
+}
+
+export function getLoadNodeInitAttempt(
+  loadNodeId: string,
+  attemptId: string,
+  workspaceId: string,
+) {
+  return request<LoadNodeInitAttemptDetail>(
+    `/v1/load-nodes/${encodeURIComponent(loadNodeId)}/init-attempts/${encodeURIComponent(attemptId)}`,
+    {
+      headers: { "x-workspace-id": workspaceId },
+    },
+  );
+}
+
+export function disableLoadNode(
+  loadNodeId: string,
+  workspaceId: string,
+  csrfToken: string,
+  reason?: string,
+) {
+  return request<LoadNodeDetail>(
+    `/v1/load-nodes/${encodeURIComponent(loadNodeId)}/disable`,
+    {
+      method: "POST",
+      headers: {
+        "x-csrf-token": csrfToken,
+        "x-workspace-id": workspaceId,
+      },
+      body: JSON.stringify(reason ? { reason } : {}),
+    },
+  );
+}
+
+export function enableLoadNode(
+  loadNodeId: string,
+  workspaceId: string,
+  csrfToken: string,
+) {
+  return request<LoadNodeDetail>(
+    `/v1/load-nodes/${encodeURIComponent(loadNodeId)}/enable`,
+    {
+      method: "POST",
+      headers: {
+        "x-csrf-token": csrfToken,
+        "x-workspace-id": workspaceId,
+      },
+    },
+  );
+}
+
+export function deleteLoadNode(
+  loadNodeId: string,
+  workspaceId: string,
+  csrfToken: string,
+) {
+  return request<void>(`/v1/load-nodes/${encodeURIComponent(loadNodeId)}`, {
+    method: "DELETE",
+    headers: {
+      "x-csrf-token": csrfToken,
+      "x-workspace-id": workspaceId,
+    },
+  });
 }
