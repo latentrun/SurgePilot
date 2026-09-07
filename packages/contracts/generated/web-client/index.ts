@@ -369,6 +369,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/runs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        put?: never;
+        /** Create Run */
+        post: operations["createRun"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/runs/{runId}/stop": {
         parameters: {
             query?: never;
@@ -384,6 +400,46 @@ export interface paths {
         options?: never;
         head?: never;
         patch?: never;
+        trace?: never;
+    };
+    "/v1/scenarios": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Scenarios */
+        get: operations["listScenarios"];
+        put?: never;
+        /** Create Scenario */
+        post: operations["createScenario"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/scenarios/{scenarioId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Scenario */
+        get: operations["getScenario"];
+        put?: never;
+        post?: never;
+        /**
+         * Archive Scenario
+         * @description Archive a Scenario through the DELETE transport. Archived Scenarios are hidden from active lists; historical Run Reports keep their saved snapshots.
+         */
+        delete: operations["deleteScenario"];
+        options?: never;
+        head?: never;
+        /** Patch Scenario */
+        patch: operations["patchScenario"];
         trace?: never;
     };
     "/v1/setup/status": {
@@ -956,6 +1012,51 @@ export interface components {
             /** Password */
             password: string;
         };
+        /** RunCreateRequest */
+        RunCreateRequest: {
+            /** Envgroupid */
+            envGroupId?: string | null;
+            /** Expectedsourcerevision */
+            expectedSourceRevision: number;
+            /**
+             * Runtype
+             * @constant
+             */
+            runType: "debug";
+            /** Selectednodeid */
+            selectedNodeId?: string | null;
+            /** Sourceid */
+            sourceId: string;
+            /**
+             * Sourcetype
+             * @constant
+             */
+            sourceType: "debug_scenario";
+        };
+        /** RunCreateResponse */
+        RunCreateResponse: {
+            /** Createdat */
+            createdAt: string;
+            /** Deduplicated */
+            deduplicated: boolean;
+            /** Id */
+            id: string;
+            /**
+             * Runtype
+             * @constant
+             */
+            runType: "debug";
+            /** Selectednodeid */
+            selectedNodeId: string;
+            /** Sourceid */
+            sourceId?: string | null;
+            /**
+             * Sourcetype
+             * @constant
+             */
+            sourceType: "debug_scenario";
+            state: components["schemas"]["RunState"];
+        };
         /**
          * RunState
          * @enum {string}
@@ -970,6 +1071,389 @@ export interface components {
             state: components["schemas"]["RunState"];
             /** Stoprequestedat */
             stopRequestedAt?: string | null;
+        };
+        /** ScenarioAssertion */
+        ScenarioAssertion: {
+            /** Contains */
+            contains?: string | null;
+            /**
+             * Enabled
+             * @default true
+             */
+            enabled: boolean;
+            /** Expectedstatus */
+            expectedStatus?: number | null;
+            /** Expectedvalue */
+            expectedValue?: string | null;
+            /** Id */
+            id: string;
+            /** Jsonpath */
+            jsonpath?: string | null;
+            /**
+             * Not
+             * @default false
+             */
+            not: boolean;
+            /**
+             * Regexp
+             * @default false
+             */
+            regexp: boolean;
+            /**
+             * Type
+             * @enum {string}
+             */
+            type: "status_code" | "body_contains" | "jsonpath_exists" | "jsonpath_equals";
+        };
+        /** ScenarioBody */
+        ScenarioBody: {
+            /** Contenttype */
+            contentType?: string | null;
+            /** Formfields */
+            formFields?: components["schemas"]["ScenarioFormField"][];
+            /** Rawtext */
+            rawText?: string | null;
+            /**
+             * Type
+             * @default none
+             * @enum {string}
+             */
+            type: "none" | "raw" | "form";
+        };
+        /** ScenarioCreateRequest */
+        ScenarioCreateRequest: {
+            /**
+             * Baseurlexpression
+             * @default ${base_url}
+             */
+            baseUrlExpression: string;
+            /** Datasources */
+            dataSources?: components["schemas"]["ScenarioDataSource"][];
+            defaultSettings?: components["schemas"]["ScenarioDefaultSettings"];
+            /** Description */
+            description?: string | null;
+            /** Name */
+            name: string;
+            /** Steps */
+            steps?: components["schemas"]["ScenarioStep"][];
+            /** Tags */
+            tags?: string[];
+        };
+        /** ScenarioDataSource */
+        ScenarioDataSource: {
+            /** Delimiter */
+            delimiter?: string | null;
+            /** Dependencyfileid */
+            dependencyFileId: string;
+            /** Displayname */
+            displayName: string;
+            /**
+             * Enabled
+             * @default true
+             */
+            enabled: boolean;
+            /** Id */
+            id: string;
+            /**
+             * Loop
+             * @default true
+             */
+            loop: boolean;
+            /** Quoted */
+            quoted?: boolean | null;
+            /**
+             * Randomorder
+             * @default false
+             */
+            randomOrder: boolean;
+            /** Variablenames */
+            variableNames?: string[];
+        };
+        /** ScenarioDefaultSettings */
+        ScenarioDefaultSettings: {
+            /**
+             * Followredirects
+             * @default true
+             */
+            followRedirects: boolean;
+            /**
+             * Keepalive
+             * @default true
+             */
+            keepAlive: boolean;
+            /**
+             * Retrieveresources
+             * @default false
+             */
+            retrieveResources: boolean;
+            /**
+             * Storecache
+             * @default true
+             */
+            storeCache: boolean;
+            /**
+             * Storecookie
+             * @default true
+             */
+            storeCookie: boolean;
+            /**
+             * Thinktimems
+             * @default 0
+             */
+            thinkTimeMs: number;
+            /**
+             * Timeoutms
+             * @default 30000
+             */
+            timeoutMs: number;
+        };
+        /** ScenarioDetail */
+        ScenarioDetail: {
+            /** Baseurlexpression */
+            baseUrlExpression: string;
+            /** Createdat */
+            createdAt: string;
+            /** Datasources */
+            dataSources: components["schemas"]["ScenarioDataSource"][];
+            defaultSettings: components["schemas"]["ScenarioDefaultSettings"];
+            /** Dependencyfilecount */
+            dependencyFileCount: number;
+            /** Description */
+            description?: string | null;
+            /** Enabledstepcount */
+            enabledStepCount: number;
+            /** Id */
+            id: string;
+            /** Name */
+            name: string;
+            /** Revision */
+            revision: number;
+            /**
+             * Scenariotype
+             * @constant
+             */
+            scenarioType: "visual";
+            /** Stepcount */
+            stepCount: number;
+            /** Steps */
+            steps: components["schemas"]["ScenarioStep"][];
+            /** Tags */
+            tags: string[];
+            /** Updatedat */
+            updatedAt: string;
+        };
+        /** ScenarioExtractor */
+        ScenarioExtractor: {
+            /**
+             * Defaultvalue
+             * @default
+             */
+            defaultValue: string | null;
+            /**
+             * Enabled
+             * @default true
+             */
+            enabled: boolean;
+            /** Expression */
+            expression: string;
+            /** Id */
+            id: string;
+            /**
+             * Matchno
+             * @default 1
+             */
+            matchNo: number;
+            /**
+             * Subject
+             * @default body
+             */
+            subject: string | null;
+            /** Template */
+            template?: string | null;
+            /**
+             * Type
+             * @enum {string}
+             */
+            type: "jsonpath" | "regexp";
+            /** Variablename */
+            variableName: string;
+        };
+        /** ScenarioFormField */
+        ScenarioFormField: {
+            /**
+             * Enabled
+             * @default true
+             */
+            enabled: boolean;
+            /** Id */
+            id: string;
+            /** Name */
+            name: string;
+            /**
+             * Value
+             * @default
+             */
+            value: string;
+        };
+        /** ScenarioListResponse */
+        ScenarioListResponse: {
+            /** Items */
+            items: components["schemas"]["ScenarioSummary"][];
+            /** Page */
+            page: number;
+            /** Pagesize */
+            pageSize: number;
+            /** Total */
+            total: number;
+        };
+        /** ScenarioNamedValue */
+        ScenarioNamedValue: {
+            /**
+             * Enabled
+             * @default true
+             */
+            enabled: boolean;
+            /** Id */
+            id: string;
+            /** Name */
+            name: string;
+            /**
+             * Value
+             * @default
+             */
+            value: string;
+        };
+        /** ScenarioPatchRequest */
+        ScenarioPatchRequest: {
+            /**
+             * Baseurlexpression
+             * @default ${base_url}
+             */
+            baseUrlExpression: string;
+            /** Datasources */
+            dataSources?: components["schemas"]["ScenarioDataSource"][];
+            defaultSettings?: components["schemas"]["ScenarioDefaultSettings"];
+            /** Description */
+            description?: string | null;
+            /** Expectedrevision */
+            expectedRevision: number;
+            /** Name */
+            name: string;
+            /** Steps */
+            steps?: components["schemas"]["ScenarioStep"][];
+            /** Tags */
+            tags?: string[];
+        };
+        /** ScenarioScript */
+        ScenarioScript: {
+            /**
+             * Enabled
+             * @default true
+             */
+            enabled: boolean;
+            /**
+             * Execute
+             * @enum {string}
+             */
+            execute: "before" | "after";
+            /** Id */
+            id: string;
+            /**
+             * Language
+             * @default groovy
+             * @constant
+             */
+            language: "groovy";
+            /** Scripttext */
+            scriptText?: string | null;
+        };
+        /** ScenarioStep */
+        ScenarioStep: {
+            /** Assertions */
+            assertions?: components["schemas"]["ScenarioAssertion"][];
+            body?: components["schemas"]["ScenarioBody"];
+            /**
+             * Enabled
+             * @default true
+             */
+            enabled: boolean;
+            /** Extractors */
+            extractors?: components["schemas"]["ScenarioExtractor"][];
+            /** Headers */
+            headers?: components["schemas"]["ScenarioNamedValue"][];
+            /** Id */
+            id: string;
+            /**
+             * Method
+             * @enum {string}
+             */
+            method: "GET" | "POST" | "PUT" | "PATCH" | "DELETE" | "HEAD" | "OPTIONS";
+            /** Name */
+            name: string;
+            /** Path */
+            path: string;
+            /** Queryparams */
+            queryParams?: components["schemas"]["ScenarioNamedValue"][];
+            /** Scripts */
+            scripts?: components["schemas"]["ScenarioScript"][];
+            settings?: components["schemas"]["ScenarioStepSettings"];
+            /** Uploadfiles */
+            uploadFiles?: components["schemas"]["ScenarioUploadFile"][];
+        };
+        /** ScenarioStepSettings */
+        ScenarioStepSettings: {
+            /** Followredirects */
+            followRedirects?: boolean | null;
+            /** Keepalive */
+            keepAlive?: boolean | null;
+            /** Thinktimems */
+            thinkTimeMs?: number | null;
+            /** Timeoutms */
+            timeoutMs?: number | null;
+        };
+        /** ScenarioSummary */
+        ScenarioSummary: {
+            /** Createdat */
+            createdAt: string;
+            /** Dependencyfilecount */
+            dependencyFileCount: number;
+            /** Description */
+            description?: string | null;
+            /** Enabledstepcount */
+            enabledStepCount: number;
+            /** Id */
+            id: string;
+            /** Name */
+            name: string;
+            /** Revision */
+            revision: number;
+            /**
+             * Scenariotype
+             * @constant
+             */
+            scenarioType: "visual";
+            /** Stepcount */
+            stepCount: number;
+            /** Tags */
+            tags: string[];
+            /** Updatedat */
+            updatedAt: string;
+        };
+        /** ScenarioUploadFile */
+        ScenarioUploadFile: {
+            /** Dependencyfileid */
+            dependencyFileId: string;
+            /**
+             * Enabled
+             * @default true
+             */
+            enabled: boolean;
+            /** Fieldname */
+            fieldName: string;
+            /** Id */
+            id: string;
+            /** Mimetype */
+            mimeType?: string | null;
         };
         /** SetupStatusResponse */
         SetupStatusResponse: {
@@ -3160,6 +3644,98 @@ export interface operations {
             };
         };
     };
+    createRun: {
+        parameters: {
+            query?: never;
+            header: {
+                "x-workspace-id"?: string | null;
+                "x-csrf-token": string;
+            };
+            path?: never;
+            cookie?: {
+                surgepilot_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RunCreateRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RunCreateResponse"];
+                };
+            };
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RunCreateResponse"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
     stopRun: {
         parameters: {
             query?: never;
@@ -3192,6 +3768,381 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["RunStopResponse"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    listScenarios: {
+        parameters: {
+            query?: {
+                page?: number;
+                pageSize?: number;
+                search?: string | null;
+                tag?: string[] | null;
+                sort?: "-updatedAt" | "updatedAt" | "name" | "-name";
+            };
+            header?: {
+                "x-workspace-id"?: string | null;
+            };
+            path?: never;
+            cookie?: {
+                surgepilot_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ScenarioListResponse"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    createScenario: {
+        parameters: {
+            query?: never;
+            header: {
+                "x-workspace-id"?: string | null;
+                "x-csrf-token": string;
+            };
+            path?: never;
+            cookie?: {
+                surgepilot_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ScenarioCreateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ScenarioDetail"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    getScenario: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-workspace-id"?: string | null;
+            };
+            path: {
+                scenarioId: string;
+            };
+            cookie?: {
+                surgepilot_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ScenarioDetail"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    deleteScenario: {
+        parameters: {
+            query?: never;
+            header: {
+                "x-workspace-id"?: string | null;
+                "x-csrf-token": string;
+            };
+            path: {
+                scenarioId: string;
+            };
+            cookie?: {
+                surgepilot_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    patchScenario: {
+        parameters: {
+            query?: never;
+            header: {
+                "x-workspace-id"?: string | null;
+                "x-csrf-token": string;
+            };
+            path: {
+                scenarioId: string;
+            };
+            cookie?: {
+                surgepilot_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ScenarioPatchRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ScenarioDetail"];
                 };
             };
             /** @description Bad Request */
