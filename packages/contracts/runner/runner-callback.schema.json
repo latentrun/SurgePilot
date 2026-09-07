@@ -229,8 +229,7 @@
                   "taurus_log",
                   "jmeter_log",
                   "final_stats_csv",
-                  "run_log",
-                  "artifacts_zip"
+                  "run_log"
                 ]
               },
               "relativePath": {

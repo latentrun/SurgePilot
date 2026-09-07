@@ -551,7 +551,7 @@ Constraints and indexes:
 
 1. Unique `(run_id, event_id)`.
 2. Unique `(run_id, relative_path)` for available artifacts.
-3. `artifact_type in ('taurus_log', 'jmeter_log', 'final_stats_csv', 'run_log', 'artifacts_zip')`.
+3. `artifact_type in ('taurus_log', 'jmeter_log', 'final_stats_csv', 'failed_requests_csv', 'run_log')`.
 4. `status in ('available', 'failed')`.
 5. Index `(workspace_id, run_id, created_at desc, id desc)`.
 
@@ -988,8 +988,7 @@ Rules:
    - `taurus_log`;
    - `jmeter_log`;
    - `final_stats_csv`;
-   - `run_log`;
-   - `artifacts_zip`.
+   - `run_log`.
 5. `failed_requests_csv` is deferred to P1 because it depends on a JMeter plugin output contract.
 6. Runner does not upload large logs inside callback payloads.
 7. Runner does not delete useful artifacts during Stop.

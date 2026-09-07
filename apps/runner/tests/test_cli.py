@@ -7,7 +7,6 @@ import subprocess
 import sys
 import time
 import urllib.error
-import zipfile
 
 from click.testing import CliRunner
 from jsonschema import Draft202012Validator
@@ -80,7 +79,6 @@ def write_fake_bzt(tmp_path: Path, *, exit_code: int = 0, sleep_seconds: float =
                 "artifacts.joinpath('bzt.log').write_text('taurus log\\n')",
                 "artifacts.joinpath('jmeter.log').write_text('jmeter log\\n')",
                 "artifacts.joinpath('final_stats.csv').write_text('label,throughput,succ,fail,avg_rt\\n,1,1,0,0.1\\n')",
-                "artifacts.joinpath('artifacts.zip').write_bytes(b'PK\\x05\\x06' + (b'\\x00' * 18))",
                 "artifacts.joinpath('error.jtl').write_text('timeStamp,elapsed,label,responseCode\\n')",
                 f"raise SystemExit({exit_code})",
             ]
@@ -850,135 +848,14 @@ def test_managed_runner_executes_bzt_bundle_and_uploads_artifacts(
     assert events[0]["runnerPid"] > 0
     assert events[-1]["details"]["processGroupExited"] is True
     assert {upload["artifact_type"] for upload in uploads} >= {
-        "artifacts_zip",
         "final_stats_csv",
         "taurus_log",
         "jmeter_log",
+        "run_log",
     }
     upload_types = [upload["artifact_type"] for upload in uploads]
-    assert upload_types.index("artifacts_zip") < upload_types.index("final_stats_csv")
+    assert "artifacts_zip" not in set(upload_types)
     assert "failed_requests_csv" not in set(upload_types)
-
-
-def test_diagnostic_archive_contains_only_safe_allowlisted_members(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
-) -> None:
-    monkeypatch.setenv("RUNNER_HOME", str(tmp_path))
-    root = runner_cli.run_dir("run_01")
-    artifacts_dir = root / "bundle" / "artifacts"
-    (root / "logs").mkdir()
-    (root / "logs" / "runner.log").write_text("runner log\n")
-    (artifacts_dir / "bzt.log").write_text("taurus log\n")
-    (artifacts_dir / "jmeter.log").write_text("jmeter log\n")
-    (artifacts_dir / "final_stats.csv").write_text("label,throughput\n")
-    (artifacts_dir / "finalstats.csv").write_text("label,throughput\n")
-    (artifacts_dir / "errors.jtl").write_text("timeStamp,elapsed\n")
-    (artifacts_dir / ".hidden.jtl").write_text("hidden\n")
-    (artifacts_dir / ".tmp-artifacts.zip").write_bytes(b"tmp")
-    (artifacts_dir / "artifacts.zip").write_bytes(b"old archive")
-    (root / "secrets").mkdir()
-    (root / "secrets" / "runner-token").write_text("secret")
-    try:
-        (artifacts_dir / "linked.jtl").symlink_to(root / "logs" / "runner.log")
-    except OSError:
-        pass
-
-    members = runner_cli.iter_diagnostic_archive_members("run_01")
-
-    assert [relative_path for relative_path, _path in members] == [
-        "logs/runner.log",
-        "artifacts/bzt.log",
-        "artifacts/jmeter.log",
-        "artifacts/final_stats.csv",
-        "artifacts/finalstats.csv",
-        "artifacts/errors.jtl",
-    ]
-
-    result = runner_cli.build_diagnostic_archive("run_01", max_bytes=1024 * 1024)
-
-    assert result.status == "uploaded"
-    assert result.artifact_type == "artifacts_zip"
-    assert result.relative_path == "artifacts/artifacts.zip"
-    assert result.path == artifacts_dir / "artifacts.zip"
-    with zipfile.ZipFile(result.path) as archive:
-        assert archive.namelist() == [relative_path for relative_path, _path in members]
-        assert "secrets/runner-token" not in archive.namelist()
-        assert "artifacts/.hidden.jtl" not in archive.namelist()
-        assert "artifacts/.tmp-artifacts.zip" not in archive.namelist()
-        assert "artifacts/linked.jtl" not in archive.namelist()
-
-
-def test_diagnostic_archive_oversize_is_skipped_and_temp_file_removed(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
-) -> None:
-    monkeypatch.setenv("RUNNER_HOME", str(tmp_path))
-    root = runner_cli.run_dir("run_01")
-    (root / "logs").mkdir(parents=True)
-    (root / "logs" / "runner.log").write_text("runner log\n")
-    artifacts_dir = root / "bundle" / "artifacts"
-
-    result = runner_cli.build_diagnostic_archive("run_01", max_bytes=1)
-
-    assert result.status == "skipped_oversize"
-    assert result.artifact_type == "artifacts_zip"
-    assert result.relative_path == "artifacts/artifacts.zip"
-    assert not (artifacts_dir / "artifacts.zip").exists()
-    assert list(artifacts_dir.glob(".artifacts.zip.tmp.*")) == []
-
-
-def test_diagnostic_archive_oversize_preflight_does_not_write_zip_member(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
-) -> None:
-    monkeypatch.setenv("RUNNER_HOME", str(tmp_path))
-    root = runner_cli.run_dir("run_01")
-    (root / "logs").mkdir(parents=True)
-    (root / "logs" / "runner.log").write_bytes(b"x" * 32)
-
-    def fail_if_called(self, filename, arcname=None, compress_type=None, compresslevel=None):
-        pytest.fail("oversized archive source should be skipped before writing ZIP members")
-
-    monkeypatch.setattr(zipfile.ZipFile, "write", fail_if_called)
-
-    result = runner_cli.build_diagnostic_archive("run_01", max_bytes=1)
-
-    assert result.status == "skipped_oversize"
-    assert not (root / "bundle" / "artifacts" / "artifacts.zip").exists()
-
-
-def test_runner_skips_archive_upload_above_safe_threshold(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
-) -> None:
-    uploads: list[dict] = []
-    bundle = write_run_bundle(tmp_path, "run_01")
-    artifacts_dir = bundle / "artifacts"
-    artifacts_dir.mkdir()
-    (artifacts_dir / "artifacts.zip").write_bytes(b"x" * 11)
-    (artifacts_dir / "final_stats.csv").write_text("label,throughput,succ,fail\n,1,1,0\n")
-    monkeypatch.setenv("RUNNER_HOME", str(tmp_path))
-    monkeypatch.setenv("SURGEPILOT_RUNNER_ARCHIVE_MAX_BYTES", "10")
-    monkeypatch.setattr(
-        "surgepilot_runner.cli.upload_artifact",
-        lambda **kwargs: (
-            uploads.append(kwargs)
-            or {
-                "artifactId": "01HZX3Y9M0E9W7Z6M5QK9S8P7C",
-                "sizeBytes": kwargs["path"].stat().st_size,
-                "sha256": "a" * 64,
-            }
-        ),
-    )
-
-    result = runner_cli.upload_run_artifacts("run_01", NODE_ID, 10, runtime_version=RUNTIME_VERSION)
-
-    assert result.next_seq == 11
-    assert [upload["artifact_type"] for upload in uploads] == ["final_stats_csv"]
-    assert [
-        (artifact.artifact_type, artifact.relative_path, artifact.status)
-        for artifact in result.results
-    ] == [
-        ("artifacts_zip", "artifacts/artifacts.zip", "skipped_oversize"),
-        ("final_stats_csv", "artifacts/final_stats.csv", "uploaded"),
-    ]
 
 
 def test_managed_runner_deletes_run_directory_after_terminal_ack_and_safe_uploads(
@@ -1021,10 +898,10 @@ def test_cleanup_gate_keeps_run_directory_when_terminal_callback_is_not_acked(
         terminal_callback_ack=False,
         artifact_results=[
             runner_cli.ArtifactUploadResult(
-                artifact_type="artifacts_zip",
-                relative_path="artifacts/artifacts.zip",
+                artifact_type="run_log",
+                relative_path="logs/runner.log",
                 status="uploaded",
-                path=root / "bundle" / "artifacts" / "artifacts.zip",
+                path=root / "logs" / "runner.log",
             )
         ],
         supervisor=runner_cli.ManagedPid(pid=os.getpid(), starttime=None),
@@ -1047,10 +924,10 @@ def test_cleanup_gate_keeps_run_directory_when_artifact_upload_failed(
         terminal_callback_ack=True,
         artifact_results=[
             runner_cli.ArtifactUploadResult(
-                artifact_type="artifacts_zip",
-                relative_path="artifacts/artifacts.zip",
+                artifact_type="final_stats_csv",
+                relative_path="artifacts/final_stats.csv",
                 status="uploaded",
-                path=root / "bundle" / "artifacts" / "artifacts.zip",
+                path=root / "bundle" / "artifacts" / "final_stats.csv",
             ),
             runner_cli.ArtifactUploadResult(
                 artifact_type="run_log",
@@ -1081,10 +958,10 @@ def test_cleanup_gate_keeps_run_directory_when_workload_group_is_live(
         terminal_callback_ack=True,
         artifact_results=[
             runner_cli.ArtifactUploadResult(
-                artifact_type="artifacts_zip",
-                relative_path="artifacts/artifacts.zip",
+                artifact_type="run_log",
+                relative_path="logs/runner.log",
                 status="uploaded",
-                path=root / "bundle" / "artifacts" / "artifacts.zip",
+                path=root / "logs" / "runner.log",
             )
         ],
         supervisor=runner_cli.ManagedPid(pid=os.getpid(), starttime=None),
@@ -1113,10 +990,10 @@ def test_cleanup_gate_keeps_run_directory_when_pidfile_is_uncertain(
         terminal_callback_ack=True,
         artifact_results=[
             runner_cli.ArtifactUploadResult(
-                artifact_type="artifacts_zip",
-                relative_path="artifacts/artifacts.zip",
+                artifact_type="run_log",
+                relative_path="logs/runner.log",
                 status="uploaded",
-                path=root / "bundle" / "artifacts" / "artifacts.zip",
+                path=root / "logs" / "runner.log",
             )
         ],
         supervisor=runner_cli.ManagedPid(pid=os.getpid(), starttime=None),
@@ -1586,7 +1463,7 @@ def test_stale_process_failure_callback_validates_against_shared_schema(
         process.wait(timeout=5)
 
 
-def test_runner_callback_schema_accepts_artifacts_zip_and_sla_result() -> None:
+def test_runner_callback_schema_accepts_runner_artifact_types_and_sla_result() -> None:
     artifact_payload = {
         "schemaVersion": "1",
         "eventType": "artifact",
@@ -1598,8 +1475,8 @@ def test_runner_callback_schema_accepts_artifacts_zip_and_sla_result() -> None:
         "eventTime": "2030-06-01T10:00:00.000Z",
         "details": {
             "artifactId": "01HZX3Y9M0E9W7Z6M5QK9S8P7D",
-            "artifactType": "artifacts_zip",
-            "relativePath": "artifacts/artifacts.zip",
+            "artifactType": "run_log",
+            "relativePath": "logs/runner.log",
             "sizeBytes": 12,
             "sha256": "a" * 64,
         },
@@ -1615,13 +1492,25 @@ def test_runner_callback_schema_accepts_artifacts_zip_and_sla_result() -> None:
         "eventTime": "2030-06-01T10:00:01.000Z",
         "details": {"processGroupExited": True, "exitCode": 0, "slaResult": "passed"},
     }
+    artifacts_zip_payload = {
+        **artifact_payload,
+        "eventId": "01HZX3Y9M0E9W7Z6M5QK9S8P7F",
+        "details": {**artifact_payload["details"], "artifactType": "artifacts_zip"},
+    }
     failed_requests_payload = {
         **artifact_payload,
         "eventId": "01HZX3Y9M0E9W7Z6M5QK9S8P7G",
         "details": {**artifact_payload["details"], "artifactType": "failed_requests_csv"},
     }
 
-    CALLBACK_VALIDATOR.validate(artifact_payload)
+    for artifact_type in ["taurus_log", "jmeter_log", "final_stats_csv", "run_log"]:
+        accepted_payload = {
+            **artifact_payload,
+            "details": {**artifact_payload["details"], "artifactType": artifact_type},
+        }
+        CALLBACK_VALIDATOR.validate(accepted_payload)
     CALLBACK_VALIDATOR.validate(finished_payload)
+    with pytest.raises(Exception):
+        CALLBACK_VALIDATOR.validate(artifacts_zip_payload)
     with pytest.raises(Exception):
         CALLBACK_VALIDATOR.validate(failed_requests_payload)
