@@ -1776,6 +1776,11 @@
       "RunCreateRequest": {
         "additionalProperties": false,
         "properties": {
+          "confirmHighConcurrency": {
+            "default": false,
+            "title": "Confirmhighconcurrency",
+            "type": "boolean"
+          },
           "envGroupId": {
             "anyOf": [
               {
@@ -1795,7 +1800,10 @@
             "type": "integer"
           },
           "runType": {
-            "const": "debug",
+            "enum": [
+              "debug",
+              "standard"
+            ],
             "title": "Runtype",
             "type": "string"
           },
@@ -1819,7 +1827,10 @@
             "type": "string"
           },
           "sourceType": {
-            "const": "debug_scenario",
+            "enum": [
+              "debug_scenario",
+              "test_plan"
+            ],
             "title": "Sourcetype",
             "type": "string"
           }
@@ -1848,7 +1859,10 @@
             "type": "string"
           },
           "runType": {
-            "const": "debug",
+            "enum": [
+              "debug",
+              "standard"
+            ],
             "title": "Runtype",
             "type": "string"
           },
@@ -1868,12 +1882,26 @@
             "title": "Sourceid"
           },
           "sourceType": {
-            "const": "debug_scenario",
+            "enum": [
+              "debug_scenario",
+              "test_plan"
+            ],
             "title": "Sourcetype",
             "type": "string"
           },
           "state": {
             "$ref": "#/components/schemas/RunState"
+          },
+          "validity": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Validity"
           }
         },
         "required": [
@@ -2024,7 +2052,6 @@
         "title": "ScenarioAssertion",
         "type": "object"
       },
-
       "ScenarioBody": {
         "additionalProperties": false,
         "properties": {
@@ -2074,7 +2101,6 @@
         "title": "ScenarioBody",
         "type": "object"
       },
-
       "ScenarioCreateRequest": {
         "additionalProperties": false,
         "properties": {
@@ -2138,7 +2164,6 @@
         "title": "ScenarioCreateRequest",
         "type": "object"
       },
-
       "ScenarioDataSource": {
         "additionalProperties": false,
         "properties": {
@@ -2216,7 +2241,6 @@
         "title": "ScenarioDataSource",
         "type": "object"
       },
-
       "ScenarioDefaultSettings": {
         "additionalProperties": false,
         "properties": {
@@ -2263,7 +2287,6 @@
         "title": "ScenarioDefaultSettings",
         "type": "object"
       },
-
       "ScenarioDetail": {
         "properties": {
           "baseUrlExpression": {
@@ -2362,7 +2385,6 @@
         "title": "ScenarioDetail",
         "type": "object"
       },
-
       "ScenarioExtractor": {
         "additionalProperties": false,
         "properties": {
@@ -2452,7 +2474,6 @@
         "title": "ScenarioExtractor",
         "type": "object"
       },
-
       "ScenarioFormField": {
         "additionalProperties": false,
         "properties": {
@@ -2487,7 +2508,6 @@
         "title": "ScenarioFormField",
         "type": "object"
       },
-
       "ScenarioListResponse": {
         "properties": {
           "items": {
@@ -2519,7 +2539,6 @@
         "title": "ScenarioListResponse",
         "type": "object"
       },
-
       "ScenarioNamedValue": {
         "additionalProperties": false,
         "properties": {
@@ -2554,7 +2573,6 @@
         "title": "ScenarioNamedValue",
         "type": "object"
       },
-
       "ScenarioPatchRequest": {
         "additionalProperties": false,
         "properties": {
@@ -2624,7 +2642,6 @@
         "title": "ScenarioPatchRequest",
         "type": "object"
       },
-
       "ScenarioScript": {
         "additionalProperties": false,
         "properties": {
@@ -2673,7 +2690,6 @@
         "title": "ScenarioScript",
         "type": "object"
       },
-
       "ScenarioStep": {
         "additionalProperties": false,
         "properties": {
@@ -2777,7 +2793,6 @@
         "title": "ScenarioStep",
         "type": "object"
       },
-
       "ScenarioStepSettings": {
         "additionalProperties": false,
         "properties": {
@@ -2833,7 +2848,6 @@
         "title": "ScenarioStepSettings",
         "type": "object"
       },
-
       "ScenarioSummary": {
         "properties": {
           "createdAt": {
@@ -2907,7 +2921,6 @@
         "title": "ScenarioSummary",
         "type": "object"
       },
-
       "ScenarioUploadFile": {
         "additionalProperties": false,
         "properties": {
@@ -2955,7 +2968,6 @@
         "title": "ScenarioUploadFile",
         "type": "object"
       },
-
       "SetupStatusResponse": {
         "properties": {
           "allowSignup": {
@@ -2977,6 +2989,1023 @@
           "hasDefaultWorkspace"
         ],
         "title": "SetupStatusResponse",
+        "type": "object"
+      },
+      "TestPlanCreateRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "description": {
+            "anyOf": [
+              {
+                "maxLength": 1000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "envGroupId": {
+            "anyOf": [
+              {
+                "maxLength": 26,
+                "minLength": 26,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Envgroupid"
+          },
+          "name": {
+            "maxLength": 120,
+            "minLength": 1,
+            "pattern": ".*\\S.*",
+            "title": "Name",
+            "type": "string"
+          },
+          "resource": {
+            "$ref": "#/components/schemas/TestPlanResourceConfig"
+          },
+          "runMode": {
+            "default": "sequential",
+            "enum": [
+              "sequential",
+              "parallel"
+            ],
+            "title": "Runmode",
+            "type": "string"
+          },
+          "scenarioItems": {
+            "items": {
+              "$ref": "#/components/schemas/TestPlanScenarioItemInput"
+            },
+            "maxItems": 20,
+            "title": "Scenarioitems",
+            "type": "array"
+          },
+          "slaRules": {
+            "items": {
+              "$ref": "#/components/schemas/TestPlanSlaRuleInput"
+            },
+            "maxItems": 10,
+            "title": "Slarules",
+            "type": "array"
+          },
+          "tags": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 10,
+            "title": "Tags",
+            "type": "array"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "title": "TestPlanCreateRequest",
+        "type": "object"
+      },
+      "TestPlanDetail": {
+        "properties": {
+          "createdAt": {
+            "title": "Createdat",
+            "type": "string"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "envGroupId": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Envgroupid"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "notRunnableReasons": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Notrunnablereasons",
+            "type": "array"
+          },
+          "resource": {
+            "$ref": "#/components/schemas/TestPlanResourceConfig"
+          },
+          "revision": {
+            "title": "Revision",
+            "type": "integer"
+          },
+          "runGuard": {
+            "$ref": "#/components/schemas/TestPlanRunGuard"
+          },
+          "runMode": {
+            "enum": [
+              "sequential",
+              "parallel"
+            ],
+            "title": "Runmode",
+            "type": "string"
+          },
+          "runnable": {
+            "title": "Runnable",
+            "type": "boolean"
+          },
+          "scenarioItems": {
+            "items": {
+              "$ref": "#/components/schemas/TestPlanScenarioItemDetail"
+            },
+            "title": "Scenarioitems",
+            "type": "array"
+          },
+          "slaRules": {
+            "items": {
+              "$ref": "#/components/schemas/TestPlanSlaRuleDetail"
+            },
+            "title": "Slarules",
+            "type": "array"
+          },
+          "tags": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Tags",
+            "type": "array"
+          },
+          "updatedAt": {
+            "title": "Updatedat",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "tags",
+          "runMode",
+          "resource",
+          "scenarioItems",
+          "slaRules",
+          "runGuard",
+          "runnable",
+          "notRunnableReasons",
+          "revision",
+          "createdAt",
+          "updatedAt"
+        ],
+        "title": "TestPlanDetail",
+        "type": "object"
+      },
+      "TestPlanEnvGroupRef": {
+        "properties": {
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name"
+        ],
+        "title": "TestPlanEnvGroupRef",
+        "type": "object"
+      },
+      "TestPlanListResponse": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/TestPlanSummary"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "page": {
+            "title": "Page",
+            "type": "integer"
+          },
+          "pageSize": {
+            "title": "Pagesize",
+            "type": "integer"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "page",
+          "pageSize",
+          "total"
+        ],
+        "title": "TestPlanListResponse",
+        "type": "object"
+      },
+      "TestPlanLoadSettings": {
+        "properties": {
+          "concurrencyPerNode": {
+            "default": 1,
+            "minimum": 1.0,
+            "title": "Concurrencypernode",
+            "type": "integer"
+          },
+          "delaySeconds": {
+            "default": 0,
+            "minimum": 0.0,
+            "title": "Delayseconds",
+            "type": "integer"
+          },
+          "holdForSeconds": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": 60,
+            "title": "Holdforseconds"
+          },
+          "iterations": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Iterations"
+          },
+          "rampUpSeconds": {
+            "default": 0,
+            "minimum": 0.0,
+            "title": "Rampupseconds",
+            "type": "integer"
+          },
+          "steps": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Steps"
+          },
+          "targetRps": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Targetrps"
+          }
+        },
+        "title": "TestPlanLoadSettings",
+        "type": "object"
+      },
+      "TestPlanPatchRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "description": {
+            "anyOf": [
+              {
+                "maxLength": 1000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "envGroupId": {
+            "anyOf": [
+              {
+                "maxLength": 26,
+                "minLength": 26,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Envgroupid"
+          },
+          "expectedRevision": {
+            "minimum": 1.0,
+            "title": "Expectedrevision",
+            "type": "integer"
+          },
+          "name": {
+            "maxLength": 120,
+            "minLength": 1,
+            "pattern": ".*\\S.*",
+            "title": "Name",
+            "type": "string"
+          },
+          "resource": {
+            "$ref": "#/components/schemas/TestPlanResourceConfig"
+          },
+          "runMode": {
+            "default": "sequential",
+            "enum": [
+              "sequential",
+              "parallel"
+            ],
+            "title": "Runmode",
+            "type": "string"
+          },
+          "scenarioItems": {
+            "items": {
+              "$ref": "#/components/schemas/TestPlanScenarioItemInput"
+            },
+            "maxItems": 20,
+            "title": "Scenarioitems",
+            "type": "array"
+          },
+          "slaRules": {
+            "items": {
+              "$ref": "#/components/schemas/TestPlanSlaRuleInput"
+            },
+            "maxItems": 10,
+            "title": "Slarules",
+            "type": "array"
+          },
+          "tags": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 10,
+            "title": "Tags",
+            "type": "array"
+          }
+        },
+        "required": [
+          "name",
+          "expectedRevision"
+        ],
+        "title": "TestPlanPatchRequest",
+        "type": "object"
+      },
+      "TestPlanResourceConfig": {
+        "properties": {
+          "poolType": {
+            "anyOf": [
+              {
+                "enum": [
+                  "public",
+                  "private"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pooltype"
+          },
+          "selectedNodeId": {
+            "anyOf": [
+              {
+                "maxLength": 26,
+                "minLength": 26,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Selectednodeid"
+          }
+        },
+        "title": "TestPlanResourceConfig",
+        "type": "object"
+      },
+      "TestPlanResourceSummary": {
+        "properties": {
+          "poolType": {
+            "anyOf": [
+              {
+                "enum": [
+                  "public",
+                  "private"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pooltype"
+          },
+          "selectedNodeId": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Selectednodeid"
+          },
+          "selectedNodeName": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Selectednodename"
+          },
+          "selectedNodeStatus": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Selectednodestatus"
+          }
+        },
+        "title": "TestPlanResourceSummary",
+        "type": "object"
+      },
+      "TestPlanRunGuard": {
+        "properties": {
+          "expectedConcurrencyPerNode": {
+            "title": "Expectedconcurrencypernode",
+            "type": "integer"
+          },
+          "hardConcurrencyPerNodeLimit": {
+            "title": "Hardconcurrencypernodelimit",
+            "type": "integer"
+          },
+          "requiresHighConcurrencyConfirmation": {
+            "title": "Requireshighconcurrencyconfirmation",
+            "type": "boolean"
+          },
+          "softConcurrencyPerNodeLimit": {
+            "title": "Softconcurrencypernodelimit",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "expectedConcurrencyPerNode",
+          "softConcurrencyPerNodeLimit",
+          "hardConcurrencyPerNodeLimit",
+          "requiresHighConcurrencyConfirmation"
+        ],
+        "title": "TestPlanRunGuard",
+        "type": "object"
+      },
+      "TestPlanScenarioItemDetail": {
+        "properties": {
+          "enabled": {
+            "default": true,
+            "title": "Enabled",
+            "type": "boolean"
+          },
+          "enabledStepCount": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Enabledstepcount"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "loadSettings": {
+            "$ref": "#/components/schemas/TestPlanLoadSettings"
+          },
+          "order": {
+            "default": 0,
+            "minimum": 0.0,
+            "title": "Order",
+            "type": "integer"
+          },
+          "scenarioId": {
+            "maxLength": 26,
+            "minLength": 26,
+            "title": "Scenarioid",
+            "type": "string"
+          },
+          "scenarioName": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Scenarioname"
+          },
+          "scenarioRevision": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Scenariorevision"
+          },
+          "updatedAt": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Updatedat"
+          }
+        },
+        "required": [
+          "id",
+          "scenarioId"
+        ],
+        "title": "TestPlanScenarioItemDetail",
+        "type": "object"
+      },
+      "TestPlanScenarioItemInput": {
+        "properties": {
+          "enabled": {
+            "default": true,
+            "title": "Enabled",
+            "type": "boolean"
+          },
+          "id": {
+            "anyOf": [
+              {
+                "maxLength": 26,
+                "minLength": 26,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Id"
+          },
+          "loadSettings": {
+            "$ref": "#/components/schemas/TestPlanLoadSettings"
+          },
+          "order": {
+            "default": 0,
+            "minimum": 0.0,
+            "title": "Order",
+            "type": "integer"
+          },
+          "scenarioId": {
+            "maxLength": 26,
+            "minLength": 26,
+            "title": "Scenarioid",
+            "type": "string"
+          }
+        },
+        "required": [
+          "scenarioId"
+        ],
+        "title": "TestPlanScenarioItemInput",
+        "type": "object"
+      },
+      "TestPlanSlaRuleDetail": {
+        "properties": {
+          "action": {
+            "default": "continue",
+            "enum": [
+              "continue",
+              "stop"
+            ],
+            "title": "Action",
+            "type": "string"
+          },
+          "condition": {
+            "enum": [
+              "gt",
+              "gte",
+              "lt",
+              "lte",
+              "eq"
+            ],
+            "title": "Condition",
+            "type": "string"
+          },
+          "enabled": {
+            "default": true,
+            "title": "Enabled",
+            "type": "boolean"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "label": {
+            "anyOf": [
+              {
+                "maxLength": 200,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Exact generated sampler label; leave empty to evaluate the whole run.",
+            "title": "Label"
+          },
+          "subject": {
+            "description": "Supported SLA subjects: avg_rt, p90, p95, p99, fail, succ, hits, bytes, or response-code subjects such as rc500, rc4??, and rc*.",
+            "maxLength": 32,
+            "minLength": 1,
+            "oneOf": [
+              {
+                "enum": [
+                  "avg_rt",
+                  "p90",
+                  "p95",
+                  "p99",
+                  "fail",
+                  "succ",
+                  "hits",
+                  "bytes"
+                ]
+              },
+              {
+                "pattern": "^rc(?:\\d{3}|\\d\\?\\?|\\*)$"
+              }
+            ],
+            "title": "Subject",
+            "type": "string"
+          },
+          "threshold": {
+            "$ref": "#/components/schemas/TestPlanSlaThreshold"
+          },
+          "timeframeLogic": {
+            "anyOf": [
+              {
+                "enum": [
+                  "for",
+                  "within"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Timeframelogic"
+          },
+          "timeframeSeconds": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Timeframeseconds"
+          }
+        },
+        "required": [
+          "id",
+          "subject",
+          "condition",
+          "threshold"
+        ],
+        "title": "TestPlanSlaRuleDetail",
+        "type": "object"
+      },
+      "TestPlanSlaRuleInput": {
+        "properties": {
+          "action": {
+            "default": "continue",
+            "enum": [
+              "continue",
+              "stop"
+            ],
+            "title": "Action",
+            "type": "string"
+          },
+          "condition": {
+            "enum": [
+              "gt",
+              "gte",
+              "lt",
+              "lte",
+              "eq"
+            ],
+            "title": "Condition",
+            "type": "string"
+          },
+          "enabled": {
+            "default": true,
+            "title": "Enabled",
+            "type": "boolean"
+          },
+          "id": {
+            "anyOf": [
+              {
+                "maxLength": 26,
+                "minLength": 26,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Id"
+          },
+          "label": {
+            "anyOf": [
+              {
+                "maxLength": 200,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Exact generated sampler label; leave empty to evaluate the whole run.",
+            "title": "Label"
+          },
+          "subject": {
+            "description": "Supported SLA subjects: avg_rt, p90, p95, p99, fail, succ, hits, bytes, or response-code subjects such as rc500, rc4??, and rc*.",
+            "maxLength": 32,
+            "minLength": 1,
+            "oneOf": [
+              {
+                "enum": [
+                  "avg_rt",
+                  "p90",
+                  "p95",
+                  "p99",
+                  "fail",
+                  "succ",
+                  "hits",
+                  "bytes"
+                ]
+              },
+              {
+                "pattern": "^rc(?:\\d{3}|\\d\\?\\?|\\*)$"
+              }
+            ],
+            "title": "Subject",
+            "type": "string"
+          },
+          "threshold": {
+            "$ref": "#/components/schemas/TestPlanSlaThreshold"
+          },
+          "timeframeLogic": {
+            "anyOf": [
+              {
+                "enum": [
+                  "for",
+                  "within"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Timeframelogic"
+          },
+          "timeframeSeconds": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Timeframeseconds"
+          }
+        },
+        "required": [
+          "subject",
+          "condition",
+          "threshold"
+        ],
+        "title": "TestPlanSlaRuleInput",
+        "type": "object"
+      },
+      "TestPlanSlaThreshold": {
+        "properties": {
+          "unit": {
+            "enum": [
+              "ms",
+              "s",
+              "percent",
+              "count",
+              "b",
+              "kb",
+              "mb"
+            ],
+            "title": "Unit",
+            "type": "string"
+          },
+          "value": {
+            "minimum": 0.0,
+            "title": "Value",
+            "type": "number"
+          }
+        },
+        "required": [
+          "value",
+          "unit"
+        ],
+        "title": "TestPlanSlaThreshold",
+        "type": "object"
+      },
+      "TestPlanSummary": {
+        "properties": {
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "enabledScenarioItemCount": {
+            "title": "Enabledscenarioitemcount",
+            "type": "integer"
+          },
+          "envGroup": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TestPlanEnvGroupRef"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "expectedConcurrencyPerNode": {
+            "title": "Expectedconcurrencypernode",
+            "type": "integer"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "notRunnableReasons": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Notrunnablereasons",
+            "type": "array"
+          },
+          "requiresHighConcurrencyConfirmation": {
+            "title": "Requireshighconcurrencyconfirmation",
+            "type": "boolean"
+          },
+          "resource": {
+            "$ref": "#/components/schemas/TestPlanResourceSummary"
+          },
+          "revision": {
+            "title": "Revision",
+            "type": "integer"
+          },
+          "runMode": {
+            "enum": [
+              "sequential",
+              "parallel"
+            ],
+            "title": "Runmode",
+            "type": "string"
+          },
+          "runnable": {
+            "title": "Runnable",
+            "type": "boolean"
+          },
+          "scenarioItemCount": {
+            "title": "Scenarioitemcount",
+            "type": "integer"
+          },
+          "slaRuleCount": {
+            "title": "Slarulecount",
+            "type": "integer"
+          },
+          "tags": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Tags",
+            "type": "array"
+          },
+          "updatedAt": {
+            "title": "Updatedat",
+            "type": "string"
+          },
+          "updatedBy": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TestPlanUpdatedBy"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "tags",
+          "runMode",
+          "resource",
+          "scenarioItemCount",
+          "enabledScenarioItemCount",
+          "slaRuleCount",
+          "expectedConcurrencyPerNode",
+          "requiresHighConcurrencyConfirmation",
+          "runnable",
+          "notRunnableReasons",
+          "revision",
+          "updatedAt"
+        ],
+        "title": "TestPlanSummary",
+        "type": "object"
+      },
+      "TestPlanUpdatedBy": {
+        "properties": {
+          "displayName": {
+            "title": "Displayname",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "displayName"
+        ],
+        "title": "TestPlanUpdatedBy",
         "type": "object"
       },
       "UserSummary": {
@@ -3072,7 +4101,24 @@
       "LOAD_NODE_JMETER_MISSING",
       "LOAD_NODE_INIT_FAILED",
       "CREDENTIAL_DECRYPT_FAILED",
-      "SCENARIO_REVISION_CONFLICT"
+      "SCENARIO_REVISION_CONFLICT",
+      "RESOURCE_REQUEST_INVALID",
+      "RUN_STOP_NOT_ALLOWED",
+      "RUN_TERMINAL_STATE",
+      "RUNNER_UNAUTHORIZED",
+      "RUNNER_FORBIDDEN",
+      "RUNNER_CALLBACK_INVALID",
+      "RUNNER_CALLBACK_CONFLICT",
+      "INVALID_ARTIFACT_PATH",
+      "INVALID_ARTIFACT_TYPE",
+      "ARTIFACT_SIZE_MISMATCH",
+      "ARTIFACT_HASH_MISMATCH",
+      "ARTIFACT_PATH_CONFLICT",
+      "ARTIFACT_NOT_READY",
+      "RUN_CONTROL_CONFLICT",
+      "TEST_PLAN_REVISION_CONFLICT",
+      "TEST_PLAN_NOT_RUNNABLE",
+      "LOAD_SOFT_LIMIT_CONFIRMATION_REQUIRED"
     ]
   },
   "openapi": "3.1.0",
@@ -7602,6 +8648,655 @@
         "summary": "Get Setup Status",
         "tags": [
           "setup"
+        ]
+      }
+    },
+    "/v1/test-plans": {
+      "get": {
+        "operationId": "listTestPlans",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "x-workspace-id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Workspace-Id"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "surgepilot_session",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "SurgePilot Session"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "default": 1,
+              "minimum": 1,
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "pageSize",
+            "required": false,
+            "schema": {
+              "default": 20,
+              "maximum": 100,
+              "minimum": 1,
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "search",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 120,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          {
+            "in": "query",
+            "name": "tag",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 32,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          {
+            "in": "query",
+            "name": "sort",
+            "required": false,
+            "schema": {
+              "default": "-updatedAt",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TestPlanListResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          }
+        },
+        "summary": "List Test Plans",
+        "tags": [
+          "test-plans"
+        ]
+      },
+      "post": {
+        "operationId": "createTestPlan",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "x-workspace-id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Workspace-Id"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-csrf-token",
+            "required": true,
+            "schema": {
+              "title": "X-Csrf-Token",
+              "type": "string"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "surgepilot_session",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "SurgePilot Session"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TestPlanCreateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TestPlanDetail"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          }
+        },
+        "summary": "Create Test Plan",
+        "tags": [
+          "test-plans"
+        ]
+      }
+    },
+    "/v1/test-plans/{testPlanId}": {
+      "delete": {
+        "description": "Soft-delete a Test Plan. Deleted Test Plans are hidden from active lists; historical Run Reports keep their saved snapshots.",
+        "operationId": "deleteTestPlan",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "testPlanId",
+            "required": true,
+            "schema": {
+              "title": "Testplanid",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-workspace-id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Workspace-Id"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-csrf-token",
+            "required": true,
+            "schema": {
+              "title": "X-Csrf-Token",
+              "type": "string"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "surgepilot_session",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "SurgePilot Session"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          }
+        },
+        "summary": "Delete Test Plan",
+        "tags": [
+          "test-plans"
+        ]
+      },
+      "get": {
+        "operationId": "getTestPlan",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "testPlanId",
+            "required": true,
+            "schema": {
+              "title": "Testplanid",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-workspace-id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Workspace-Id"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "surgepilot_session",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "SurgePilot Session"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TestPlanDetail"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          }
+        },
+        "summary": "Get Test Plan",
+        "tags": [
+          "test-plans"
+        ]
+      },
+      "patch": {
+        "operationId": "patchTestPlan",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "testPlanId",
+            "required": true,
+            "schema": {
+              "title": "Testplanid",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-workspace-id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Workspace-Id"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-csrf-token",
+            "required": true,
+            "schema": {
+              "title": "X-Csrf-Token",
+              "type": "string"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "surgepilot_session",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "SurgePilot Session"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TestPlanPatchRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TestPlanDetail"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          }
+        },
+        "summary": "Patch Test Plan",
+        "tags": [
+          "test-plans"
         ]
       }
     }
