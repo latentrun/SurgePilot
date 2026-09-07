@@ -11,6 +11,7 @@ from app.core.errors import AppError
 from app.core.ids import is_ulid, new_ulid
 from app.core.time import utc_now
 from app.models.dependency_files import DependencyFile
+from app.models.scenarios import Scenario, ScenarioDependencyFileRef
 from app.services.audit import write_audit_event_in_new_transaction
 from app.services.storage import PutResult, StorageClient
 
@@ -121,7 +122,20 @@ class DependencyFileReferenceChecker:
         self.db = db
 
     def is_in_use(self, dependency_file_id: str) -> bool:
-        return False
+        if self.db is None:
+            return False
+        return (
+            self.db.scalar(
+                select(ScenarioDependencyFileRef.id)
+                .join(Scenario, Scenario.id == ScenarioDependencyFileRef.scenario_id)
+                .where(
+                    ScenarioDependencyFileRef.dependency_file_id == dependency_file_id,
+                    Scenario.deleted_at.is_(None),
+                )
+                .limit(1)
+            )
+            is not None
+        )
 
 
 def create_dependency_file_metadata(

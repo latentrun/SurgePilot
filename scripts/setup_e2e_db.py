@@ -10,6 +10,7 @@ import app.models.auth  # noqa: F401
 import app.models.dependency_files  # noqa: F401
 import app.models.env_groups  # noqa: F401
 import app.models.load_nodes  # noqa: F401
+import app.models.scenarios  # noqa: F401
 
 
 def main() -> None:

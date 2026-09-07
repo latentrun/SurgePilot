@@ -11,11 +11,29 @@ import { EnvGroupsPage } from "./features/env-groups/pages/env-groups-page";
 import { DependencyFilesPage } from "./features/dependency-files/pages/dependency-files-page";
 import { LoadNodesPage } from "./features/load-nodes/pages/load-nodes-page";
 import { RegisterLoadNodePage } from "./features/load-nodes/pages/register-load-node-page";
+import { ScenarioListPage } from "./features/scenarios/pages/scenario-list-page";
+import { ScenarioDesignerPage } from "./features/scenarios/pages/scenario-designer-page";
 
 function LoadingPage() {
   return (
     <main>
       <p>Loading SurgePilot…</p>
+    </main>
+  );
+}
+
+function RunCreatedPage({ runId }: { runId: string }) {
+  return (
+    <main>
+      <h1>Debug Run started</h1>
+      <p>
+        Run <code>{runId}</code> is being prepared on the selected Load Node.
+        The full Run Report UI is delivered in a later milestone.
+      </p>
+      <nav>
+        <a href="/scenarios">Scenarios</a>
+        <a href="/assets/env-groups">Env Groups</a>
+      </nav>
     </main>
   );
 }
@@ -44,6 +62,7 @@ function OverviewPage() {
         <a href="/assets/env-groups">Env Groups</a>
         <a href="/assets/dependency-files">Dependency Files</a>
         <a href="/resources/load-nodes">Load Nodes</a>
+        <a href="/scenarios">Scenarios</a>
       </nav>
       <button onClick={() => void handleLogout()} type="button">
         Sign out
@@ -70,6 +89,12 @@ function AppRoutes() {
     return <RegisterLoadNodePage />;
   }
   if (pathname === "/resources/load-nodes") return <LoadNodesPage />;
+  if (pathname.startsWith("/scenarios/")) return <ScenarioDesignerPage />;
+  if (pathname === "/scenarios") return <ScenarioListPage />;
+  if (pathname.startsWith("/runs/")) {
+    const runId = decodeURIComponent(pathname.slice("/runs/".length));
+    return <RunCreatedPage runId={runId} />;
+  }
   return <OverviewPage />;
 }
 

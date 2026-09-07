@@ -16,6 +16,7 @@ from app.routes import (
     load_nodes,
     runner_internal,
     runs,
+    scenarios,
     setup,
 )
 from app.services.storage import get_storage_client
@@ -47,6 +48,7 @@ app.include_router(env_groups.router)
 app.include_router(dependency_files.router)
 app.include_router(load_nodes.router)
 app.include_router(runs.router)
+app.include_router(scenarios.router)
 app.include_router(runner_internal.router)
 
 
@@ -102,6 +104,7 @@ def custom_openapi() -> dict:
             "LOAD_NODE_JMETER_MISSING",
             "LOAD_NODE_INIT_FAILED",
             "CREDENTIAL_DECRYPT_FAILED",
+            "SCENARIO_REVISION_CONFLICT",
             "RUN_STOP_NOT_ALLOWED",
             "RUN_TERMINAL_STATE",
             "RUNNER_UNAUTHORIZED",
