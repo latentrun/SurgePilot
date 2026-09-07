@@ -19,16 +19,20 @@ CallbackEventType = Literal[
     "accepted", "running", "heartbeat", "artifact", "finished", "failed", "aborted"
 ]
 
-RunCreateType = Literal["debug"]
-RunCreateSourceType = Literal["debug_scenario"]
+RunCreateType = Literal["debug", "standard"]
+RunCreateSourceType = Literal["debug_scenario", "test_plan"]
 
 
 class RunCreateRequest(ApiSchema):
-    """Public ``POST /api/v1/runs`` payload for a Scenario Debug Run.
+    """Public ``POST /api/v1/runs`` payload for Scenario Debug Runs and
+    Test Plan Runs.
 
     P0-05 activates public Run creation for ``runType=debug`` with
-    ``sourceType=debug_scenario`` only; other Run sources are rejected until a
-    later slice extends public Run creation.
+    ``sourceType=debug_scenario``. P0-06 extends public Run creation to
+    ``runType=standard|debug`` with ``sourceType=test_plan``. Test Plan Runs
+    use the saved Env Group and Load Node settings and reject overrides;
+    ``confirmHighConcurrency`` acknowledges the soft single-node concurrency
+    limit.
     """
 
     model_config = ConfigDict(
@@ -43,6 +47,7 @@ class RunCreateRequest(ApiSchema):
     expected_source_revision: int = Field(ge=1)
     env_group_id: str | None = Field(default=None, min_length=26, max_length=26)
     selected_node_id: str | None = Field(default=None, min_length=26, max_length=26)
+    confirm_high_concurrency: bool = False
 
 
 class RunCreateResponse(ApiSchema):
@@ -52,6 +57,7 @@ class RunCreateResponse(ApiSchema):
     source_type: RunCreateSourceType
     source_id: str | None = None
     selected_node_id: str
+    validity: str | None = None
     created_at: str
     deduplicated: bool
 

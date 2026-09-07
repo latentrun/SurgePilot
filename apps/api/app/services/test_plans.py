@@ -1,10 +1,17 @@
 from __future__ import annotations
 
+from dataclasses import dataclass
+from datetime import timedelta
 from decimal import Decimal
+import hashlib
+import json
 import re
 from typing import Any
 
+import yaml
+from fastapi import Request
 from sqlalchemy import func, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.core.config import Settings, get_settings
@@ -15,10 +22,17 @@ from app.models.auth import User
 from app.models.env_groups import EnvGroup
 from app.models.load_nodes import LoadNode
 from app.models.runs import Run
-from app.models.scenarios import Scenario
+from app.models.scenarios import RunCreationDedupKey, Scenario
 from app.models.test_plans import TestPlan, TestPlanScenarioItem, TestPlanSlaRule
+from app.services.audit import write_audit_event
+from app.services.env_groups import env_group_runtime_values
+from app.services.runs import RunExecutionInput, create_run_execution
 from app.services.scenarios import (
     ACTIVE_RUN_STATES,
+    DEFAULT_DEDUP_WINDOW_SECONDS,
+    SCENARIO_ALIAS,
+    _enabled_dependency_files,
+    build_debug_taurus_document_from_content,
     field_error,
     request_label,
     validation_error,
@@ -38,6 +52,11 @@ TAURUS_MODULE_CLASS_ALIASES = {
     "console": "bzt.modules.console.ConsoleStatusReporter",
     "passfail": "bzt.modules.passfail.PassFailStatus",
 }
+# P0-03/P0-05 runtime baseline: the Load Node's configured Apache JMeter
+# deployment is the source of truth for ``modules.jmeter.path``/``version``.
+# P0-06 must not redefine the JMeter runtime independently.
+JMETER_RUNTIME_PATH = "/opt/surgepilot/apache-jmeter/bin/jmeter"
+JMETER_RUNTIME_VERSION = "5.6.3"
 
 
 def _num(value: Any) -> int | float | None:
@@ -928,3 +947,537 @@ def build_test_plan_taurus_document_from_snapshot(
     if criteria:
         document["reporting"].append({"module": "passfail", "criteria": criteria})
     return document
+
+
+def iso_z(value) -> str:
+    return value.isoformat().replace("+00:00", "Z")
+
+
+def _canonical_hash(payload: dict[str, Any]) -> str:
+    encoded = json.dumps(payload, sort_keys=True, separators=(",", ":"), default=str).encode()
+    return hashlib.sha256(encoded).hexdigest()
+
+
+def debug_load_settings() -> dict[str, Any]:
+    """Fixed low-risk load profile applied to every enabled Scenario item."""
+    return {
+        "concurrencyPerNode": 1,
+        "rampUpSeconds": 0,
+        "holdForSeconds": None,
+        "iterations": 1,
+        "targetRps": None,
+        "steps": None,
+        "delaySeconds": 0,
+    }
+
+
+@dataclass(frozen=True)
+class TestPlanRunResult:
+    """Outcome of a Test Plan Run Now / Debug creation request.
+
+    ``deduplicated`` is ``True`` when the request hit the short-window dedup
+    key and the already-created Run is returned with status 200 instead of 201.
+    """
+
+    run: Run
+    deduplicated: bool
+    status_code: int
+
+
+@dataclass(frozen=True)
+class ValidatedPlanContext:
+    test_plan: TestPlan
+    env_group: EnvGroup | None
+    env_variables: dict[str, str]
+    scenario_rows: dict[str, Scenario]
+    scenario_taurus_docs: dict[str, dict[str, Any]]
+    dependency_files: list[dict[str, Any]]
+    enabled_items: list[TestPlanScenarioItem]
+    expected_concurrency: int
+    standard_load_settings_by_item_id: dict[str, dict[str, Any]]
+    debug_load_settings_by_item_id: dict[str, dict[str, Any]]
+    jmeter_memory_xmx: str
+
+
+def detail_payload(db: Session, plan: TestPlan) -> dict[str, Any]:
+    items, rules = _rows_for_plan(db, plan_id=plan.id)
+    scenarios = _scenario_map(db, workspace_id=plan.workspace_id, items=items)
+    reasons = not_runnable_reasons(db, plan, items, rules)
+    scenario_items: list[dict[str, Any]] = []
+    for item in items:
+        scenario = scenarios.get(item.scenario_id)
+        scenario_items.append(
+            {
+                "id": item.id,
+                "scenarioId": item.scenario_id,
+                "scenarioName": scenario.name if scenario else None,
+                "scenarioRevision": scenario.revision if scenario else None,
+                "enabledStepCount": len(
+                    [
+                        step
+                        for step in (scenario.steps_json if scenario else [])
+                        if step.get("enabled", True)
+                    ]
+                ),
+                "updatedAt": iso_z(scenario.updated_at) if scenario else None,
+                "enabled": item.enabled,
+                "order": item.position,
+                "loadSettings": _load_settings_dict(item),
+            }
+        )
+    return {
+        "id": plan.id,
+        "name": plan.name,
+        "description": plan.description,
+        "tags": plan.tags_json or [],
+        "envGroupId": plan.env_group_id,
+        "runMode": plan.run_mode,
+        "resource": {
+            "poolType": plan.pool_type,
+            "selectedNodeId": plan.selected_node_id,
+        },
+        "scenarioItems": scenario_items,
+        "slaRules": [_sla_rule_dict(rule) for rule in rules],
+        "runGuard": _guard(db, plan, items),
+        "runnable": not reasons,
+        "notRunnableReasons": reasons,
+        "revision": plan.revision,
+        "createdAt": iso_z(plan.created_at),
+        "updatedAt": iso_z(plan.updated_at),
+    }
+
+
+def summary_payload(db: Session, plan: TestPlan) -> dict[str, Any]:
+    items, rules = _rows_for_plan(db, plan_id=plan.id)
+    env = _env_for_plan(db, plan)
+    node = _node_for_plan(db, plan)
+    reasons = not_runnable_reasons(db, plan, items, rules)
+    expected = _expected_concurrency_for_rows(plan.run_mode, items)
+    settings = get_settings()
+    updated_by = db.get(User, plan.updated_by)
+    return {
+        "id": plan.id,
+        "name": plan.name,
+        "description": plan.description,
+        "tags": plan.tags_json or [],
+        "runMode": plan.run_mode,
+        "envGroup": {"id": env.id, "name": env.name} if env else None,
+        "resource": {
+            "poolType": plan.pool_type,
+            "selectedNodeId": plan.selected_node_id,
+            "selectedNodeName": node.host if node else None,
+            "selectedNodeStatus": node.status if node else None,
+        },
+        "scenarioItemCount": len(items),
+        "enabledScenarioItemCount": len([item for item in items if item.enabled]),
+        "slaRuleCount": len([rule for rule in rules if rule.enabled]),
+        "expectedConcurrencyPerNode": expected,
+        "requiresHighConcurrencyConfirmation": expected
+        > settings.single_node_concurrency_soft_limit,
+        "runnable": not reasons,
+        "notRunnableReasons": reasons,
+        "revision": plan.revision,
+        "updatedAt": iso_z(plan.updated_at),
+        "updatedBy": {"id": updated_by.id, "displayName": updated_by.display_name}
+        if updated_by
+        else None,
+    }
+
+
+def summary_payloads(
+    db: Session, *, workspace_id: str, plans: list[TestPlan]
+) -> list[dict[str, Any]]:
+    _ = workspace_id
+    return [summary_payload(db, plan) for plan in plans]
+
+
+def _validate_run_context(
+    db: Session,
+    *,
+    plan: TestPlan,
+    run_type: str,
+    settings: Settings,
+    confirm_high_concurrency: bool,
+) -> ValidatedPlanContext:
+    items, rules = _rows_for_plan(db, plan_id=plan.id)
+    enabled_items = [item for item in items if item.enabled]
+    if not enabled_items:
+        raise AppError("TEST_PLAN_NOT_RUNNABLE", "Test Plan is not runnable.", 409)
+    if len(enabled_items) > settings.max_scenario_items_per_test_plan:
+        raise validation_error(
+            [field_error("scenarioItems", "Too many enabled Scenario items.", "too_many_scenarios")]
+        )
+    enabled_rules = [rule for rule in rules if rule.enabled]
+    if run_type == "standard" and len(enabled_rules) > settings.max_sla_rules_per_test_plan:
+        raise validation_error(
+            [field_error("slaRules", "Too many enabled SLA Rules.", "too_many_sla_rules")]
+        )
+    if plan.pool_type is None:
+        raise AppError("TEST_PLAN_NOT_RUNNABLE", "Test Plan is missing Load Node resources.", 409)
+    if plan.selected_node_id is None:
+        raise AppError(
+            "TEST_PLAN_NOT_RUNNABLE", "Test Plan is missing a selected Load Node.", 409
+        )
+    node = _node_for_plan(db, plan)
+    if node is None or node.archived_at is not None:
+        raise AppError("TEST_PLAN_NOT_RUNNABLE", "Selected Load Node is unavailable.", 409)
+    if plan.pool_type == "public" and node.scope != "public":
+        raise AppError("TEST_PLAN_NOT_RUNNABLE", "Selected Load Node is unavailable.", 409)
+    if plan.pool_type == "private" and not (
+        node.scope == "workspace" and node.workspace_id == plan.workspace_id
+    ):
+        raise AppError("TEST_PLAN_NOT_RUNNABLE", "Selected Load Node is unavailable.", 409)
+    env_group = _env_for_plan(db, plan)
+    if plan.env_group_id is not None and env_group is None:
+        raise AppError("RESOURCE_NOT_FOUND", "Resource was not found.", 404)
+    env_variables = env_group_runtime_values(env_group)
+    scenarios = _scenario_map(db, workspace_id=plan.workspace_id, items=enabled_items)
+    if any(item.scenario_id not in scenarios for item in enabled_items):
+        raise AppError("TEST_PLAN_NOT_RUNNABLE", "Referenced Scenario is unavailable.", 409)
+    expected = _expected_concurrency_for_rows(plan.run_mode, enabled_items)
+    if (
+        run_type == "standard"
+        and expected > settings.single_node_concurrency_hard_limit
+    ):
+        raise validation_error(
+            [
+                field_error(
+                    "scenarioItems",
+                    "Expected concurrency exceeds the hard limit.",
+                    "single_node_concurrency_hard_limit",
+                )
+            ]
+        )
+    if (
+        run_type == "standard"
+        and expected > settings.single_node_concurrency_soft_limit
+        and not confirm_high_concurrency
+    ):
+        raise AppError(
+            "LOAD_SOFT_LIMIT_CONFIRMATION_REQUIRED",
+            "Expected single-node concurrency exceeds the configured soft limit.",
+            409,
+            [
+                {
+                    "field": "scenarioItems",
+                    "code": "single_node_concurrency_soft_limit",
+                    "message": "Confirm that this run should start with high single-node concurrency.",
+                    "meta": {
+                        "expectedConcurrencyPerNode": expected,
+                        "softLimit": settings.single_node_concurrency_soft_limit,
+                    },
+                }
+            ],
+        )
+    dependency_files: list[dict[str, Any]] = []
+    seen_dependency_ids: set[str] = set()
+    scenario_taurus_docs: dict[str, dict[str, Any]] = {}
+    for item in enabled_items:
+        scenario = scenarios[item.scenario_id]
+        dependency_rows = _enabled_dependency_files(db, scenario=scenario)
+        dependency_models = [file for _ref, file in dependency_rows]
+        content = {
+            "name": scenario.name,
+            "baseUrlExpression": scenario.base_url_expression,
+            "defaultSettings": scenario.default_settings_json,
+            "dataSources": scenario.data_sources_json,
+            "steps": scenario.steps_json,
+        }
+        doc = build_debug_taurus_document_from_content(
+            scenario_content=content,
+            env_variables=env_variables,
+            dependency_files=dependency_models,
+            jmeter_path=JMETER_RUNTIME_PATH,
+            jmeter_version=JMETER_RUNTIME_VERSION,
+        )
+        scenario_taurus_docs[item.id] = doc["scenarios"][SCENARIO_ALIAS]
+        for ref, file in dependency_rows:
+            if file.id in seen_dependency_ids:
+                continue
+            seen_dependency_ids.add(file.id)
+            dependency_files.append(
+                {
+                    "id": file.id,
+                    "filename": file.filename,
+                    "sizeBytes": file.size_bytes,
+                    "sha256": file.sha256,
+                    "refType": ref.ref_type,
+                    "stepId": ref.step_id,
+                    "scenarioId": ref.scenario_id,
+                }
+            )
+    standard_load_settings_by_item_id = {
+        item.id: _load_settings_dict(item) for item in enabled_items
+    }
+    for index, item in enumerate(enabled_items):
+        settings_payload = (
+            standard_load_settings_by_item_id[item.id]
+            if run_type == "standard"
+            else debug_load_settings()
+        )
+        _validate_load_settings(
+            settings_payload,
+            field_prefix=f"scenarioItems[{index}].loadSettings",
+            settings=settings,
+        )
+    for index, rule in enumerate(enabled_rules):
+        _validate_sla_rule(_sla_rule_dict(rule), field_prefix=f"slaRules[{index}]")
+    _validate_sla_rule_labels(
+        [_sla_rule_dict(rule) for rule in enabled_rules],
+        {
+            request["label"]
+            for scenario_document in scenario_taurus_docs.values()
+            for request in scenario_document.get("requests", [])
+            if request.get("label")
+        },
+    )
+    return ValidatedPlanContext(
+        test_plan=plan,
+        env_group=env_group,
+        env_variables=env_variables,
+        scenario_rows=scenarios,
+        scenario_taurus_docs=scenario_taurus_docs,
+        dependency_files=dependency_files,
+        enabled_items=enabled_items,
+        expected_concurrency=expected,
+        standard_load_settings_by_item_id=standard_load_settings_by_item_id,
+        debug_load_settings_by_item_id={item.id: debug_load_settings() for item in enabled_items},
+        jmeter_memory_xmx=settings.jmeter_memory_xmx,
+    )
+
+
+def _snapshot_payload(
+    ctx: ValidatedPlanContext, *, run_type: str, rules: list[TestPlanSlaRule]
+) -> dict[str, Any]:
+    plan = ctx.test_plan
+    env_snapshot = None
+    if ctx.env_group is not None:
+        env_snapshot = {
+            "id": ctx.env_group.id,
+            "name": ctx.env_group.name,
+            "variables": ctx.env_variables,
+        }
+    enabled_rules = [_sla_rule_dict(rule) for rule in rules if rule.enabled]
+    if run_type == "debug":
+        sla_mode = "not_evaluated"
+        rule_snapshot: list[dict[str, Any]] = []
+    elif enabled_rules:
+        sla_mode = "passfail"
+        rule_snapshot = enabled_rules
+    else:
+        sla_mode = "not_configured"
+        rule_snapshot = []
+    scenario_items: list[dict[str, Any]] = []
+    for item in ctx.enabled_items:
+        scenario = ctx.scenario_rows[item.scenario_id]
+        scenario_items.append(
+            {
+                "itemId": item.id,
+                "order": item.position,
+                "scenarioId": scenario.id,
+                "scenarioRevision": scenario.revision,
+                "scenarioName": scenario.name,
+                "loadSettings": (
+                    ctx.debug_load_settings_by_item_id
+                    if run_type == "debug"
+                    else ctx.standard_load_settings_by_item_id
+                )[item.id],
+                "visualScenario": ctx.scenario_taurus_docs[item.id],
+            }
+        )
+    snapshot: dict[str, Any] = {
+        "schemaVersion": 1,
+        "runType": run_type,
+        "sourceType": "test_plan",
+        "sourceId": plan.id,
+        "sourceRevision": plan.revision,
+        "validityDefault": "invalid" if run_type == "debug" else "valid",
+        "slaEvaluationMode": sla_mode,
+        "testPlan": {
+            "id": plan.id,
+            "name": plan.name,
+            "description": plan.description,
+            "tags": plan.tags_json or [],
+            "revision": plan.revision,
+            "runMode": "sequential" if run_type == "debug" else plan.run_mode,
+        },
+        "envGroup": env_snapshot,
+        "resourceRequest": {
+            "mode": "manual",
+            "poolType": plan.pool_type,
+            "selectedNodeId": plan.selected_node_id,
+            "expectedConcurrencyPerNode": ctx.expected_concurrency
+            if run_type == "standard"
+            else 1,
+        },
+        "scenarioItems": scenario_items,
+        "jmeterMemoryXmx": ctx.jmeter_memory_xmx,
+        "dependencyFiles": ctx.dependency_files,
+        "slaRules": rule_snapshot,
+    }
+    document = build_test_plan_taurus_document_from_snapshot(
+        snapshot,
+        jmeter_path=JMETER_RUNTIME_PATH,
+        jmeter_version=JMETER_RUNTIME_VERSION,
+    )
+    yaml_text = yaml.safe_dump(document, sort_keys=False, allow_unicode=False)
+    snapshot["generatedYaml"] = {
+        "artifactRelativePath": "execution/generated.yml",
+        "sha256": hashlib.sha256(yaml_text.encode()).hexdigest(),
+    }
+    return snapshot
+
+
+def _find_existing_dedup_run(
+    db: Session, *, workspace_id: str, dedup_hash: str, now
+) -> Run | None:
+    existing_dedup = db.scalar(
+        select(RunCreationDedupKey).where(
+            RunCreationDedupKey.workspace_id == workspace_id,
+            RunCreationDedupKey.dedup_key_hash == dedup_hash,
+            RunCreationDedupKey.expires_at > now,
+        )
+    )
+    if existing_dedup is None:
+        return None
+    return db.scalar(
+        select(Run).where(Run.id == existing_dedup.run_id, Run.workspace_id == workspace_id)
+    )
+
+
+def create_test_plan_run(
+    db: Session,
+    *,
+    workspace_id: str,
+    actor: User,
+    request: Request | None = None,
+    source_id: str,
+    expected_source_revision: int,
+    run_type: str,
+    confirm_high_concurrency: bool = False,
+    dedup_window_seconds: int = DEFAULT_DEDUP_WINDOW_SECONDS,
+) -> TestPlanRunResult:
+    """Create a Test Plan Standard Run Now or Debug Run.
+
+    The caller owns the transaction. This function validates the saved Test
+    Plan against the P0-06 run guardrails (single visible Idle Load Node, Env
+    Group and Scenario references, concurrency soft/hard limits and SLA
+    Rules), snapshots the immutable execution context, and atomically creates
+    the Run + Snapshot + node lease through ``create_run_execution``. A
+    short-window dedup key collapses repeated user retries onto the same Run.
+    """
+    if run_type not in {"debug", "standard"}:
+        raise validation_error(
+            [field_error("runType", "Run type is not supported.", "unsupported_run_type")]
+        )
+    plan = db.scalar(
+        select(TestPlan)
+        .where(
+            TestPlan.id == source_id,
+            TestPlan.workspace_id == workspace_id,
+            TestPlan.deleted_at.is_(None),
+        )
+        .with_for_update()
+        .execution_options(populate_existing=True)
+    )
+    if plan is None:
+        raise AppError("RESOURCE_NOT_FOUND", "Resource was not found.", 404)
+    if plan.revision != expected_source_revision:
+        raise AppError(
+            "TEST_PLAN_REVISION_CONFLICT",
+            "Test Plan was updated by another request. Reload and try again.",
+            409,
+        )
+    settings = get_settings()
+    _items, rules = _rows_for_plan(db, plan_id=plan.id)
+    ctx = _validate_run_context(
+        db,
+        plan=plan,
+        run_type=run_type,
+        settings=settings,
+        confirm_high_concurrency=confirm_high_concurrency,
+    )
+    snapshot_payload = _snapshot_payload(ctx, run_type=run_type, rules=rules)
+    snapshot_hash = _canonical_hash(snapshot_payload)
+    dedup_input = {
+        "workspaceId": workspace_id,
+        "triggeredByUserId": actor.id,
+        "runType": run_type,
+        "sourceType": "test_plan",
+        "sourceId": plan.id,
+        "sourceRevision": plan.revision,
+        "selectedNodeId": plan.selected_node_id,
+        "snapshotHash": snapshot_hash,
+    }
+    dedup_hash = _canonical_hash(dedup_input)
+    now = utc_now()
+    db.query(RunCreationDedupKey).filter(RunCreationDedupKey.expires_at <= now).delete(
+        synchronize_session=False
+    )
+    existing_run = _find_existing_dedup_run(
+        db, workspace_id=workspace_id, dedup_hash=dedup_hash, now=now
+    )
+    if existing_run is not None:
+        return TestPlanRunResult(existing_run, True, 200)
+    try:
+        run = create_run_execution(
+            db,
+            RunExecutionInput(
+                workspace_id=workspace_id,
+                actor=actor,
+                selected_node_id=plan.selected_node_id or "",
+                run_type=run_type,
+                source_type="test_plan",
+                source_id=plan.id,
+                snapshot_payload=snapshot_payload,
+            ),
+        )
+    except AppError as exc:
+        if exc.code == "LOAD_NODE_BUSY":
+            db.rollback()
+            existing_run = _find_existing_dedup_run(
+                db, workspace_id=workspace_id, dedup_hash=dedup_hash, now=now
+            )
+            if existing_run is not None:
+                return TestPlanRunResult(existing_run, True, 200)
+        raise
+    run.validity = "invalid" if run_type == "debug" else "valid"
+    write_audit_event(
+        db,
+        event_type="run.debug_requested" if run_type == "debug" else "run.standard_requested",
+        request=request,
+        actor_user_id=actor.id,
+        workspace_id=workspace_id,
+        target_type="run",
+        target_id=run.id,
+        details={
+            "runId": run.id,
+            "workspaceId": workspace_id,
+            "testPlanId": plan.id,
+            "testPlanRevision": plan.revision,
+            "nodeId": plan.selected_node_id,
+            "requestedBy": actor.id,
+            "expectedConcurrencyPerNode": ctx.expected_concurrency,
+        },
+    )
+    db.add(
+        RunCreationDedupKey(
+            id=new_ulid(),
+            workspace_id=workspace_id,
+            dedup_key_hash=dedup_hash,
+            run_id=run.id,
+            expires_at=now + timedelta(seconds=dedup_window_seconds),
+            created_at=now,
+        )
+    )
+    try:
+        db.flush()
+    except IntegrityError as exc:
+        db.rollback()
+        existing_run = _find_existing_dedup_run(
+            db, workspace_id=workspace_id, dedup_hash=dedup_hash, now=now
+        )
+        if existing_run is not None:
+            return TestPlanRunResult(existing_run, True, 200)
+        raise exc
+    return TestPlanRunResult(run, False, 201)

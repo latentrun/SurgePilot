@@ -9,6 +9,7 @@ from app.schemas.common import ErrorResponse
 from app.schemas.runs import RunCreateRequest, RunCreateResponse, RunStopResponse
 from app.services.runs import request_stop_by_id
 from app.services.scenarios import create_debug_run
+from app.services.test_plans import create_test_plan_run
 
 router = APIRouter(prefix="/api/v1/runs", tags=["runs"])
 ERROR_RESPONSE = {"model": ErrorResponse}
@@ -60,13 +61,64 @@ def create_run(
     workspace: CurrentWorkspaceDep,
     _csrf: CsrfDep,
 ) -> RunCreateResponse:
-    """Create a Scenario Debug Run.
+    """Create a Scenario Debug Run or a Test Plan Run Now / Debug Run.
 
     P0-05 accepts ``runType=debug`` with ``sourceType=debug_scenario`` only.
-    A short-window dedup hit returns the already-created Run with
-    ``deduplicated: true`` and status 200 instead of 201.
+    P0-06 extends public Run creation to ``runType=standard|debug`` with
+    ``sourceType=test_plan``. Test Plan Runs use the saved Env Group and Load
+    Node settings and reject overrides. A short-window dedup hit returns the
+    already-created Run with ``deduplicated: true`` and status 200 instead of
+    201.
     """
-    if payload.source_type != "debug_scenario":
+    if payload.source_type == "debug_scenario":
+        if payload.run_type != "debug" or payload.selected_node_id is None:
+            raise AppError(
+                "VALIDATION_ERROR",
+                "Validation failed.",
+                422,
+                [
+                    {
+                        "field": "sourceType",
+                        "code": "unsupported_run_source",
+                        "message": "Only Scenario Debug Runs are supported for this source.",
+                    }
+                ],
+            )
+        result = create_debug_run(
+            db,
+            workspace_id=workspace.id,
+            actor=user,
+            request=request,
+            source_id=payload.source_id,
+            expected_source_revision=payload.expected_source_revision,
+            env_group_id=payload.env_group_id,
+            selected_node_id=payload.selected_node_id,
+        )
+    elif payload.source_type == "test_plan":
+        if payload.env_group_id is not None or payload.selected_node_id is not None:
+            raise AppError(
+                "VALIDATION_ERROR",
+                "Validation failed.",
+                422,
+                [
+                    {
+                        "field": "sourceType",
+                        "code": "unsupported_run_override",
+                        "message": "Test Plan Runs use saved Env Group and Load Node settings.",
+                    }
+                ],
+            )
+        result = create_test_plan_run(
+            db,
+            workspace_id=workspace.id,
+            actor=user,
+            request=request,
+            source_id=payload.source_id,
+            expected_source_revision=payload.expected_source_revision,
+            run_type=payload.run_type,
+            confirm_high_concurrency=payload.confirm_high_concurrency,
+        )
+    else:
         raise AppError(
             "VALIDATION_ERROR",
             "Validation failed.",
@@ -79,29 +131,6 @@ def create_run(
                 }
             ],
         )
-    if payload.run_type != "debug" or payload.selected_node_id is None:
-        raise AppError(
-            "VALIDATION_ERROR",
-            "Validation failed.",
-            422,
-            [
-                {
-                    "field": "sourceType",
-                    "code": "unsupported_run_source",
-                    "message": "Only Scenario Debug Runs are supported for this source.",
-                }
-            ],
-        )
-    result = create_debug_run(
-        db,
-        workspace_id=workspace.id,
-        actor=user,
-        request=request,
-        source_id=payload.source_id,
-        expected_source_revision=payload.expected_source_revision,
-        env_group_id=payload.env_group_id,
-        selected_node_id=payload.selected_node_id,
-    )
     db.commit()
     response.status_code = result.status_code
     response.headers["x-workspace-id"] = workspace.id
@@ -112,6 +141,7 @@ def create_run(
         source_type=result.run.source_type,  # type: ignore[arg-type]
         source_id=result.run.source_id,
         selected_node_id=result.run.selected_node_id,
+        validity=result.run.validity,
         created_at=iso_z(result.run.created_at) or "",
         deduplicated=result.deduplicated,
     )
