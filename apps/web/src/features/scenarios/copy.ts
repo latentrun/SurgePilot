@@ -9,12 +9,12 @@ export const scenarioCopy = {
   renameInputLabel: "Scenario title",
   debugRun: "Debug Run",
   noEnvironment: "No environment",
-  archive: "Archive",
-  archiveTitle: "Archive Scenario",
-  archiveBody:
+  delete: "Delete",
+  deleteTitle: "Delete Scenario",
+  deleteBody:
     "This Scenario will be hidden from active lists. Historical Run Reports keep their saved snapshots.",
   resourceInUse:
-    "Scenario cannot be archived while it is referenced by active execution state or visible dependent resources.",
+    "Scenario cannot be deleted while it is referenced by active execution state or visible dependent resources.",
   noTags: "No tags",
   noNodes: "No idle Load Nodes are available.",
 };

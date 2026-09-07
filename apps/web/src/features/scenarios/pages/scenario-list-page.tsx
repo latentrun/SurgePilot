@@ -88,7 +88,7 @@ function Eye({ className }: { className?: string }) {
   );
 }
 
-function Archive({ className }: { className?: string }) {
+function Trash2({ className }: { className?: string }) {
   return (
     <svg
       aria-hidden="true"
@@ -102,9 +102,11 @@ function Archive({ className }: { className?: string }) {
       viewBox="0 0 24 24"
       width="16"
     >
-      <rect height="5" rx="2" width="20" x="2" y="3" />
-      <path d="M4 8v11a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8" />
-      <path d="M10 12h4" />
+      <path d="M3 6h18" />
+      <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6" />
+      <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2" />
+      <line x1="10" x2="10" y1="11" y2="17" />
+      <line x1="14" x2="14" y1="11" y2="17" />
     </svg>
   );
 }
@@ -210,11 +212,11 @@ export function ScenarioListPage() {
   const [createError, setCreateError] = useState<string | null>(null);
   const [isCreating, setIsCreating] = useState(false);
 
-  const [archiveTarget, setArchiveTarget] = useState<ScenarioSummary | null>(
+  const [deleteTarget, setDeleteTarget] = useState<ScenarioSummary | null>(
     null,
   );
-  const [archiveError, setArchiveError] = useState<string | null>(null);
-  const [isArchiving, setIsArchiving] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   const fetchList = useCallback(async () => {
     if (!workspaceId) return;
@@ -295,22 +297,22 @@ export function ScenarioListPage() {
     }
   }
 
-  async function handleArchive() {
-    if (!archiveTarget) return;
-    setIsArchiving(true);
-    setArchiveError(null);
+  async function handleDelete() {
+    if (!deleteTarget) return;
+    setIsDeleting(true);
+    setDeleteError(null);
     try {
       const token = await getWriteToken();
-      await deleteScenario(archiveTarget.id, workspaceId, token);
+      await deleteScenario(deleteTarget.id, workspaceId, token);
       if (items.length === 1 && page > 1) {
         setPage((current) => Math.max(1, current - 1));
       }
-      setArchiveTarget(null);
+      setDeleteTarget(null);
       await fetchList();
     } catch (error) {
-      setArchiveError(errorMessage(error));
+      setDeleteError(errorMessage(error));
     } finally {
-      setIsArchiving(false);
+      setIsDeleting(false);
     }
   }
 
@@ -491,13 +493,13 @@ export function ScenarioListPage() {
                           <Eye className="h-4 w-4" />
                         </a>
                         <button
-                          aria-label={`${scenarioCopy.archive} ${scenario.name}`}
+                          aria-label={`${scenarioCopy.delete} ${scenario.name}`}
                           className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-white/10 text-text-muted transition hover:border-error/30 hover:bg-white/5 hover:text-error"
-                          onClick={() => setArchiveTarget(scenario)}
-                          title={scenarioCopy.archive}
+                          onClick={() => setDeleteTarget(scenario)}
+                          title={scenarioCopy.delete}
                           type="button"
                         >
-                          <Archive className="h-4 w-4" />
+                          <Trash2 className="h-4 w-4" />
                         </button>
                       </div>
                     </td>
@@ -601,23 +603,23 @@ export function ScenarioListPage() {
         </div>
       ) : null}
 
-      {archiveTarget ? (
+      {deleteTarget ? (
         <div
-          aria-label={scenarioCopy.archiveTitle}
+          aria-label={scenarioCopy.deleteTitle}
           aria-modal="true"
           className="fixed inset-0 z-50 grid place-items-center bg-black/60 p-4"
           role="dialog"
         >
           <div className="w-[min(440px,calc(100vw-32px))] rounded-2xl border border-white/10 bg-surface-container-low p-6 shadow-2xl">
             <h2 className="text-lg font-semibold text-white">
-              {scenarioCopy.archiveTitle}
+              {scenarioCopy.deleteTitle}
             </h2>
             <p className="mt-2 text-sm leading-6 text-text-muted">
-              Archive {archiveTarget.name}? {scenarioCopy.archiveBody}
+              Delete {deleteTarget.name}? {scenarioCopy.deleteBody}
             </p>
-            {archiveError ? (
+            {deleteError ? (
               <p className="mt-4 rounded-lg border border-error/30 bg-error-container px-4 py-3 text-sm text-on-error-container">
-                {archiveError}
+                {deleteError}
               </p>
             ) : null}
             <div className="mt-6 flex justify-end gap-3">
@@ -626,8 +628,8 @@ export function ScenarioListPage() {
                   "rounded-lg border border-white/10 px-4 py-2 text-sm text-text-main transition hover:bg-white/5",
                 )}
                 onClick={() => {
-                  setArchiveTarget(null);
-                  setArchiveError(null);
+                  setDeleteTarget(null);
+                  setDeleteError(null);
                 }}
                 type="button"
               >
@@ -635,11 +637,11 @@ export function ScenarioListPage() {
               </button>
               <button
                 className="rounded-lg bg-error-container px-4 py-2 text-sm font-semibold text-on-error-container transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-60"
-                disabled={isArchiving}
-                onClick={() => void handleArchive()}
+                disabled={isDeleting}
+                onClick={() => void handleDelete()}
                 type="button"
               >
-                {isArchiving ? "Archiving..." : scenarioCopy.archive}
+                {isDeleting ? "Deleting..." : scenarioCopy.delete}
               </button>
             </div>
           </div>

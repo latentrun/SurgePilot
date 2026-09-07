@@ -231,10 +231,10 @@ def patch_scenario(
     "/{scenarioId}",
     operation_id="deleteScenario",
     status_code=status.HTTP_204_NO_CONTENT,
-    summary="Archive Scenario",
+    summary="Delete Scenario",
     description=(
-        "Archive a Scenario through the DELETE transport. Archived Scenarios are hidden "
-        "from active lists; historical Run Reports keep their saved snapshots."
+        "Soft-delete a Scenario. Deleted Scenarios are hidden from active lists; "
+        "historical Run Reports keep their saved snapshots."
     ),
     responses={
         400: ERROR_RESPONSE,

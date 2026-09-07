@@ -7206,7 +7206,7 @@
     },
     "/v1/scenarios/{scenarioId}": {
       "delete": {
-        "description": "Archive a Scenario through the DELETE transport. Archived Scenarios are hidden from active lists; historical Run Reports keep their saved snapshots.",
+        "description": "Soft-delete a Scenario. Deleted Scenarios are hidden from active lists; historical Run Reports keep their saved snapshots.",
         "operationId": "deleteScenario",
         "parameters": [
           {
@@ -7325,7 +7325,7 @@
             "description": "Unprocessable Entity"
           }
         },
-        "summary": "Archive Scenario",
+        "summary": "Delete Scenario",
         "tags": [
           "scenarios"
         ]

@@ -432,8 +432,8 @@ export interface paths {
         put?: never;
         post?: never;
         /**
-         * Archive Scenario
-         * @description Archive a Scenario through the DELETE transport. Archived Scenarios are hidden from active lists; historical Run Reports keep their saved snapshots.
+         * Delete Scenario
+         * @description Soft-delete a Scenario. Deleted Scenarios are hidden from active lists; historical Run Reports keep their saved snapshots.
          */
         delete: operations["deleteScenario"];
         options?: never;
