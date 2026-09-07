@@ -86,9 +86,15 @@ class LoadNode(Base):
     runner_version: Mapped[str | None] = mapped_column(Text)
     bundle_version: Mapped[str | None] = mapped_column(Text)
     last_initialized_at: Mapped[datetime | None] = mapped_column(nullable=True)
+    last_force_kill_at: Mapped[datetime | None] = mapped_column(nullable=True)
     last_checked_at: Mapped[datetime | None] = mapped_column(nullable=True)
     last_heartbeat_at: Mapped[datetime | None] = mapped_column(nullable=True)
-    current_run_id: Mapped[str | None] = mapped_column(String(26), nullable=True)
+    current_run_id: Mapped[str | None] = mapped_column(
+        String(26),
+        ForeignKey(
+            "runs.id", ondelete="SET NULL", use_alter=True, name="fk_load_nodes_current_run_id"
+        ),
+    )
     last_init_attempt_id: Mapped[str | None] = mapped_column(
         String(26),
         ForeignKey(
