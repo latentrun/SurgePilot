@@ -104,6 +104,7 @@ def custom_openapi() -> dict:
             "LOAD_NODE_JMETER_MISSING",
             "LOAD_NODE_INIT_FAILED",
             "CREDENTIAL_DECRYPT_FAILED",
+            "SCENARIO_REVISION_CONFLICT",
             "RUN_STOP_NOT_ALLOWED",
             "RUN_TERMINAL_STATE",
             "RUNNER_UNAUTHORIZED",

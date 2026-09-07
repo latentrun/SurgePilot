@@ -1,4 +1,6 @@
 from datetime import UTC, datetime
+import hashlib
+import hmac
 
 import pytest
 from httpx import AsyncClient
@@ -11,6 +13,11 @@ from app.models.runs import NodeLease, Run, RunSnapshot
 from app.schemas.load_nodes import LoadNodeCredentialInput
 from app.services.load_nodes import create_load_node
 from app.services.scenarios import bundle_file_path
+
+
+def node_bound_token(secret: str, node_id: str) -> str:
+    sig = hmac.new(secret.encode(), node_id.encode(), hashlib.sha256).hexdigest()
+    return f"node:{node_id}:{sig}"
 
 
 async def register(client: AsyncClient, email: str) -> tuple[str, str, str]:
@@ -104,6 +111,64 @@ def seed_idle_node(db_session: Session, *, user_id: str) -> LoadNode:
     node.runtime_version = "runtime-test-v1"
     db_session.flush()
     return node
+
+
+async def runner_callback(
+    client: AsyncClient,
+    node: LoadNode,
+    event_id: str,
+    run_id: str,
+    event_type: str,
+    seq: int,
+    details: dict[str, object],
+):
+    return await client.post(
+        "/api/internal/v1/runner/callbacks",
+        headers={"x-runner-token": node_bound_token("runner-secret", node.id)},
+        json={
+            "schemaVersion": "1",
+            "eventId": event_id,
+            "runId": run_id,
+            "nodeId": node.id,
+            "runtimeVersion": "runtime-test-v1",
+            "eventType": event_type,
+            "seq": seq,
+            "eventTime": "2030-06-01T10:00:00.000Z",
+            "details": details,
+        },
+    )
+
+
+async def create_debug_env_group(
+    client: AsyncClient, csrf: str, workspace_id: str, name: str
+) -> str:
+    env_response = await client.post(
+        "/api/v1/env-groups",
+        headers={"x-csrf-token": csrf, "x-workspace-id": workspace_id},
+        json={
+            "name": name,
+            "description": None,
+            "variables": {"base_url": "https://api.example.internal"},
+        },
+    )
+    assert env_response.status_code == 201
+    return env_response.json()["id"]
+
+
+async def create_debug_scenario(
+    client: AsyncClient,
+    csrf: str,
+    workspace_id: str,
+    name: str = "Checkout flow",
+) -> tuple[str, int]:
+    scenario_response = await client.post(
+        "/api/v1/scenarios",
+        headers={"x-csrf-token": csrf, "x-workspace-id": workspace_id},
+        json=scenario_payload(name),
+    )
+    assert scenario_response.status_code == 201
+    scenario = scenario_response.json()
+    return scenario["id"], scenario["revision"]
 
 
 @pytest.mark.anyio
@@ -303,3 +368,166 @@ async def test_debug_run_missing_variable_returns_field_validation(
 def test_bundle_file_path_uses_safe_relative_path(db_session: Session) -> None:
     file = type("File", (), {"id": "01HZX3Y9M0E9W7Z6M5QK9S8P7C", "filename": "users.csv"})()
     assert bundle_file_path(file) == "files/01HZX3Y9M0E9W7Z6M5QK9S8P7C/users.csv"
+
+
+@pytest.mark.anyio
+async def test_debug_run_fake_runner_smoke_happy_path_reaches_finished(
+    client: AsyncClient, db_session: Session, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    csrf, workspace_id, user_id = await register(
+        client, "scenario-fake-finished@example.com"
+    )
+    node = seed_idle_node(db_session, user_id=user_id)
+    monkeypatch.setenv("RUNNER_INTERNAL_TOKEN", "runner-secret")
+    env_group_id = await create_debug_env_group(
+        client, csrf, workspace_id, "Staging"
+    )
+    scenario_id, scenario_revision = await create_debug_scenario(
+        client, csrf, workspace_id
+    )
+
+    created = await client.post(
+        "/api/v1/runs",
+        headers={"x-csrf-token": csrf, "x-workspace-id": workspace_id},
+        json={
+            "runType": "debug",
+            "sourceType": "debug_scenario",
+            "sourceId": scenario_id,
+            "expectedSourceRevision": scenario_revision,
+            "envGroupId": env_group_id,
+            "selectedNodeId": node.id,
+        },
+    )
+    assert created.status_code == 201
+    run_id = created.json()["id"]
+    assert created.json()["state"] == "initializing"
+
+    running = await runner_callback(
+        client, node, "01HZX3Y9M0E9W7Z6M5QK9S8P9A", run_id, "running", 1, {}
+    )
+    assert running.status_code == 200
+    assert running.json()["stateChanged"] is True
+    assert running.json()["currentState"] == "running"
+
+    finished = await runner_callback(
+        client,
+        node,
+        "01HZX3Y9M0E9W7Z6M5QK9S8P9B",
+        run_id,
+        "finished",
+        2,
+        {"processGroupExited": True},
+    )
+    assert finished.status_code == 200
+    assert finished.json()["stateChanged"] is True
+    assert finished.json()["currentState"] == "finished"
+
+    run = db_session.get(Run, run_id)
+    assert run is not None
+    assert run.state == "finished"
+    lease = db_session.scalar(select(NodeLease).where(NodeLease.run_id == run.id))
+    assert lease is not None
+    assert lease.released_at is not None
+    assert db_session.get(LoadNode, node.id).status == "idle"
+
+
+@pytest.mark.anyio
+async def test_debug_run_fake_runner_smoke_failed_and_stop_paths(
+    client: AsyncClient, db_session: Session, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    csrf, workspace_id, user_id = await register(
+        client, "scenario-fake-failed-stop@example.com"
+    )
+    node = seed_idle_node(db_session, user_id=user_id)
+    monkeypatch.setenv("RUNNER_INTERNAL_TOKEN", "runner-secret")
+    env_group_id = await create_debug_env_group(
+        client, csrf, workspace_id, "Staging"
+    )
+    scenario_id, scenario_revision = await create_debug_scenario(
+        client, csrf, workspace_id
+    )
+
+    def debug_run_payload() -> dict:
+        return {
+            "runType": "debug",
+            "sourceType": "debug_scenario",
+            "sourceId": scenario_id,
+            "expectedSourceRevision": scenario_revision,
+            "envGroupId": env_group_id,
+            "selectedNodeId": node.id,
+        }
+
+    first = await client.post(
+        "/api/v1/runs",
+        headers={"x-csrf-token": csrf, "x-workspace-id": workspace_id},
+        json=debug_run_payload(),
+    )
+    assert first.status_code == 201
+    first_run_id = first.json()["id"]
+    failed = await runner_callback(
+        client,
+        node,
+        "01HZX3Y9M0E9W7Z6M5QK9S8P9C",
+        first_run_id,
+        "failed",
+        1,
+        {"processGroupExited": True, "reason": "runner_exit_nonzero"},
+    )
+    assert failed.status_code == 200
+    assert failed.json()["currentState"] == "failed"
+    run = db_session.get(Run, first_run_id)
+    assert run is not None
+    assert run.state == "failed"
+    assert run.failure_reason == "runner_exit_nonzero"
+    first_lease = db_session.scalar(
+        select(NodeLease).where(NodeLease.run_id == first_run_id)
+    )
+    assert first_lease is not None
+    assert first_lease.released_at is not None
+
+    second_scenario_id, second_revision = await create_debug_scenario(
+        client, csrf, workspace_id, name="Checkout stop"
+    )
+    second = await client.post(
+        "/api/v1/runs",
+        headers={"x-csrf-token": csrf, "x-workspace-id": workspace_id},
+        json={
+            **debug_run_payload(),
+            "sourceId": second_scenario_id,
+            "expectedSourceRevision": second_revision,
+        },
+    )
+    assert second.status_code == 201
+    second_run_id = second.json()["id"]
+    running = await runner_callback(
+        client, node, "01HZX3Y9M0E9W7Z6M5QK9S8P9D", second_run_id, "running", 1, {}
+    )
+    assert running.json()["currentState"] == "running"
+
+    stopped = await client.post(
+        f"/api/v1/runs/{second_run_id}/stop",
+        headers={"x-csrf-token": csrf, "x-workspace-id": workspace_id},
+    )
+    assert stopped.status_code == 202
+    assert stopped.json()["state"] == "stopping"
+
+    aborted = await runner_callback(
+        client,
+        node,
+        "01HZX3Y9M0E9W7Z6M5QK9S8P9E",
+        second_run_id,
+        "aborted",
+        2,
+        {"processGroupExited": True, "reason": "stopped_by_user"},
+    )
+    assert aborted.status_code == 200
+    assert aborted.json()["currentState"] == "aborted"
+    second_run = db_session.get(Run, second_run_id)
+    assert second_run is not None
+    assert second_run.state == "aborted"
+    second_lease = db_session.scalar(
+        select(NodeLease).where(NodeLease.run_id == second_run_id)
+    )
+    assert second_lease is not None
+    assert second_lease.released_at is not None
+    assert db_session.get(LoadNode, node.id).status == "idle"
