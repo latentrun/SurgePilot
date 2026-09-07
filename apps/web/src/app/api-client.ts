@@ -61,6 +61,32 @@ export type LoadNodeSshHostKeyScanResponse =
   components["schemas"]["LoadNodeSshHostKeyScanResponse"];
 export type LoadNodeSummary = components["schemas"]["LoadNodeSummary"];
 
+export type RunCreateRequest = components["schemas"]["RunCreateRequest"];
+export type RunCreateResponse = components["schemas"]["RunCreateResponse"];
+export type RunState = components["schemas"]["RunState"];
+export type ScenarioAssertion = components["schemas"]["ScenarioAssertion"];
+export type ScenarioBody = components["schemas"]["ScenarioBody"];
+export type ScenarioCreateRequest =
+  components["schemas"]["ScenarioCreateRequest"];
+export type ScenarioDataSource =
+  components["schemas"]["ScenarioDataSource"];
+export type ScenarioDefaultSettings =
+  components["schemas"]["ScenarioDefaultSettings"];
+export type ScenarioDetail = components["schemas"]["ScenarioDetail"];
+export type ScenarioExtractor = components["schemas"]["ScenarioExtractor"];
+export type ScenarioFormField = components["schemas"]["ScenarioFormField"];
+export type ScenarioListResponse =
+  components["schemas"]["ScenarioListResponse"];
+export type ScenarioNamedValue = components["schemas"]["ScenarioNamedValue"];
+export type ScenarioPatchRequest =
+  components["schemas"]["ScenarioPatchRequest"];
+export type ScenarioScript = components["schemas"]["ScenarioScript"];
+export type ScenarioStep = components["schemas"]["ScenarioStep"];
+export type ScenarioStepSettings =
+  components["schemas"]["ScenarioStepSettings"];
+export type ScenarioSummary = components["schemas"]["ScenarioSummary"];
+export type ScenarioUploadFile = components["schemas"]["ScenarioUploadFile"];
+
 export class ApiError extends Error {
   readonly body: ApiErrorBody;
   readonly status: number;
@@ -609,5 +635,107 @@ export function deleteLoadNode(
       "x-csrf-token": csrfToken,
       "x-workspace-id": workspaceId,
     },
+  });
+}
+
+export function listScenarios(params: {
+  page?: number;
+  pageSize?: number;
+  search?: string;
+  sort?: "-updatedAt" | "updatedAt" | "name" | "-name";
+  workspaceId: string;
+}) {
+  const searchParams = new URLSearchParams();
+  if (params.page !== undefined) {
+    searchParams.set("page", String(params.page));
+  }
+  if (params.pageSize !== undefined) {
+    searchParams.set("pageSize", String(params.pageSize));
+  }
+  if (params.search) {
+    searchParams.set("search", params.search);
+  }
+  if (params.sort) {
+    searchParams.set("sort", params.sort);
+  }
+  const queryStr = searchParams.toString();
+  const url = queryStr ? `/v1/scenarios?${queryStr}` : "/v1/scenarios";
+  return request<ScenarioListResponse>(url, {
+    headers: { "x-workspace-id": params.workspaceId },
+  });
+}
+
+export function getScenario(scenarioId: string, workspaceId: string) {
+  return request<ScenarioDetail>(
+    `/v1/scenarios/${encodeURIComponent(scenarioId)}`,
+    {
+      headers: { "x-workspace-id": workspaceId },
+    },
+  );
+}
+
+export function createScenario(
+  payload: ScenarioCreateRequest,
+  workspaceId: string,
+  csrfToken: string,
+) {
+  return request<ScenarioDetail>("/v1/scenarios", {
+    method: "POST",
+    headers: {
+      "x-csrf-token": csrfToken,
+      "x-workspace-id": workspaceId,
+    },
+    body: JSON.stringify(payload),
+  });
+}
+
+export function patchScenario(
+  scenarioId: string,
+  payload: ScenarioPatchRequest,
+  workspaceId: string,
+  csrfToken: string,
+) {
+  return request<ScenarioDetail>(
+    `/v1/scenarios/${encodeURIComponent(scenarioId)}`,
+    {
+      method: "PATCH",
+      headers: {
+        "x-csrf-token": csrfToken,
+        "x-workspace-id": workspaceId,
+      },
+      body: JSON.stringify(payload),
+    },
+  );
+}
+
+export function deleteScenario(
+  scenarioId: string,
+  workspaceId: string,
+  csrfToken: string,
+) {
+  return request<void>(
+    `/v1/scenarios/${encodeURIComponent(scenarioId)}`,
+    {
+      method: "DELETE",
+      headers: {
+        "x-csrf-token": csrfToken,
+        "x-workspace-id": workspaceId,
+      },
+    },
+  );
+}
+
+export function createRun(
+  payload: RunCreateRequest,
+  workspaceId: string,
+  csrfToken: string,
+) {
+  return request<RunCreateResponse>("/v1/runs", {
+    method: "POST",
+    headers: {
+      "x-csrf-token": csrfToken,
+      "x-workspace-id": workspaceId,
+    },
+    body: JSON.stringify(payload),
   });
 }
