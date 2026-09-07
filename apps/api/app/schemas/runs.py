@@ -19,6 +19,42 @@ CallbackEventType = Literal[
     "accepted", "running", "heartbeat", "artifact", "finished", "failed", "aborted"
 ]
 
+RunCreateType = Literal["debug"]
+RunCreateSourceType = Literal["debug_scenario"]
+
+
+class RunCreateRequest(ApiSchema):
+    """Public ``POST /api/v1/runs`` payload for a Scenario Debug Run.
+
+    P0-05 activates public Run creation for ``runType=debug`` with
+    ``sourceType=debug_scenario`` only; other Run sources are rejected until a
+    later slice extends public Run creation.
+    """
+
+    model_config = ConfigDict(
+        alias_generator=ApiSchema.model_config["alias_generator"],
+        populate_by_name=True,
+        extra="forbid",
+    )
+
+    run_type: RunCreateType
+    source_type: RunCreateSourceType
+    source_id: str = Field(min_length=26, max_length=26)
+    expected_source_revision: int = Field(ge=1)
+    env_group_id: str | None = Field(default=None, min_length=26, max_length=26)
+    selected_node_id: str | None = Field(default=None, min_length=26, max_length=26)
+
+
+class RunCreateResponse(ApiSchema):
+    id: str
+    state: RunState
+    run_type: RunCreateType
+    source_type: RunCreateSourceType
+    source_id: str | None = None
+    selected_node_id: str
+    created_at: str
+    deduplicated: bool
+
 
 class RunStopResponse(ApiSchema):
     id: str

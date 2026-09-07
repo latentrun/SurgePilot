@@ -26,6 +26,10 @@ introduced by a later migration and are intentionally absent here.
 from __future__ import annotations
 
 from collections.abc import Iterable
+from dataclasses import dataclass
+from datetime import timedelta
+import hashlib
+import json
 import re
 from typing import Any
 from urllib.parse import quote
@@ -33,6 +37,7 @@ from urllib.parse import unquote
 from urllib.parse import urlparse
 
 import yaml
+from fastapi import Request
 from pydantic import ValidationError
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
@@ -42,15 +47,20 @@ from app.core.ids import new_ulid
 from app.core.time import utc_now
 from app.models.auth import User
 from app.models.dependency_files import DependencyFile
+from app.models.env_groups import EnvGroup
 from app.models.runs import Run
-from app.models.scenarios import Scenario, ScenarioDependencyFileRef
+from app.models.scenarios import RunCreationDedupKey, Scenario, ScenarioDependencyFileRef
 from app.schemas.scenarios import ScenarioCreateRequest, ScenarioPatchRequest
+from app.services.audit import write_audit_event
+from app.services.env_groups import env_group_runtime_values
+from app.services.runs import RunExecutionInput, create_run_execution
 
 VARIABLE_PATTERN = re.compile(r"\$\{([A-Za-z_][A-Za-z0-9_]*)\}")
 VARIABLE_NAME_PATTERN = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 REGEXP_TEMPLATE_GROUP_PATTERN = re.compile(r"\$(\d+)\$")
 HTTP_TOKEN_PATTERN = re.compile(r"^[!#$%&'*+.^_`|~0-9A-Za-z-]+$")
 ACTIVE_RUN_STATES = {"initializing", "running", "stopping"}
+DEFAULT_DEDUP_WINDOW_SECONDS = 30
 SCENARIO_ALIAS = "surgepilot_scenario"
 UNSAFE_URL_CHAR_PATTERN = re.compile(r"[\x00-\x20\x7f]")
 
@@ -1030,3 +1040,257 @@ def build_debug_taurus_yaml(
         jmeter_version=jmeter_version,
     )
     return yaml.safe_dump(document, sort_keys=False, allow_unicode=False)
+
+
+@dataclass(frozen=True)
+class ScenarioRunResult:
+    """Outcome of a Scenario Debug Run creation request.
+
+    ``deduplicated`` is ``True`` when the request hit the short-window dedup
+    key and the already-created Run is returned with status 200 instead of 201.
+    """
+
+    run: Run
+    deduplicated: bool
+    status_code: int
+
+
+def _scenario_snapshot(scenario: Scenario) -> dict[str, Any]:
+    """Build the safe Scenario portion stored in a Debug Run snapshot."""
+    return {
+        "id": scenario.id,
+        "name": scenario.name,
+        "scenarioType": scenario.scenario_type,
+        "baseUrlExpression": scenario.base_url_expression,
+        "defaultSettings": scenario.default_settings_json,
+        "dataSources": _active_items(scenario.data_sources_json or []),
+        "steps": _active_items(scenario.steps_json or []),
+    }
+
+
+def _snapshot_hash(payload: dict[str, Any]) -> str:
+    encoded = json.dumps(payload, sort_keys=True, separators=(",", ":"), default=str).encode()
+    return hashlib.sha256(encoded).hexdigest()
+
+
+def _run_response_snapshot(
+    *,
+    scenario: Scenario,
+    env_group: EnvGroup | None,
+    dependency_rows: list[tuple[ScenarioDependencyFileRef, DependencyFile]],
+) -> dict[str, Any]:
+    """Build the Debug Run snapshot payload for the current Scenario revision.
+
+    Only enabled Scenario content and available Dependency Files are captured;
+    disabled Steps are excluded so a later edit never leaks into an old Run.
+    """
+    dependency_files = [
+        {
+            "id": file.id,
+            "filename": file.filename,
+            "sizeBytes": file.size_bytes,
+            "sha256": file.sha256,
+            "refType": ref.ref_type,
+            "stepId": ref.step_id,
+        }
+        for ref, file in dependency_rows
+    ]
+    env_snapshot = None
+    if env_group is not None:
+        env_snapshot = {
+            "id": env_group.id,
+            "name": env_group.name,
+            "variables": env_group_runtime_values(env_group),
+        }
+    return {
+        "snapshotVersion": 1,
+        "runType": "debug",
+        "sourceType": "debug_scenario",
+        "sourceId": scenario.id,
+        "sourceRevision": scenario.revision,
+        "debugProfile": {
+            "executor": "jmeter",
+            "concurrency": 1,
+            "iterations": 1,
+            "rampUp": None,
+            "holdFor": None,
+        },
+        "scenario": _scenario_snapshot(scenario),
+        "envGroup": env_snapshot,
+        "dependencyFiles": dependency_files,
+    }
+
+
+def _enabled_dependency_files(
+    db: Session, *, scenario: Scenario
+) -> list[tuple[ScenarioDependencyFileRef, DependencyFile]]:
+    rows = db.execute(
+        select(ScenarioDependencyFileRef, DependencyFile)
+        .join(DependencyFile, DependencyFile.id == ScenarioDependencyFileRef.dependency_file_id)
+        .where(
+            ScenarioDependencyFileRef.workspace_id == scenario.workspace_id,
+            ScenarioDependencyFileRef.scenario_id == scenario.id,
+            DependencyFile.status == "available",
+        )
+    ).all()
+    return [(row[0], row[1]) for row in rows]
+
+
+def _dedup_hash(payload: dict[str, Any]) -> str:
+    encoded = json.dumps(payload, sort_keys=True, separators=(",", ":"), default=str).encode()
+    return hashlib.sha256(encoded).hexdigest()
+
+
+def _find_existing_dedup_run(
+    db: Session, *, workspace_id: str, dedup_hash: str, now
+) -> Run | None:
+    existing_dedup = db.scalar(
+        select(RunCreationDedupKey).where(
+            RunCreationDedupKey.workspace_id == workspace_id,
+            RunCreationDedupKey.dedup_key_hash == dedup_hash,
+            RunCreationDedupKey.expires_at > now,
+        )
+    )
+    if existing_dedup is None:
+        return None
+    return db.scalar(
+        select(Run).where(Run.id == existing_dedup.run_id, Run.workspace_id == workspace_id)
+    )
+
+
+def create_debug_run(
+    db: Session,
+    *,
+    workspace_id: str,
+    actor: User,
+    request: Request | None = None,
+    source_id: str,
+    expected_source_revision: int,
+    env_group_id: str | None,
+    selected_node_id: str,
+    dedup_window_seconds: int = DEFAULT_DEDUP_WINDOW_SECONDS,
+) -> ScenarioRunResult:
+    """Create a Scenario Debug Run under the P0-05 public Run contract.
+
+    The caller owns the transaction. This function validates the Scenario
+    content for execution (at least one enabled Step, resolved variables and a
+    safe resolved Base URL), builds the Run Snapshot payload, and atomically
+    creates the Run + Snapshot + node lease through ``create_run_execution``.
+    A short-window dedup key collapses repeated user retries onto the same Run;
+    a non-dedup request against a busy Load Node raises ``LOAD_NODE_BUSY``.
+    """
+    scenario = db.scalar(
+        select(Scenario)
+        .where(
+            Scenario.id == source_id,
+            Scenario.workspace_id == workspace_id,
+            Scenario.deleted_at.is_(None),
+        )
+        .with_for_update()
+        .execution_options(populate_existing=True)
+    )
+    if scenario is None:
+        raise AppError("RESOURCE_NOT_FOUND", "Resource was not found.", 404)
+    if scenario.revision != expected_source_revision:
+        raise AppError(
+            "SCENARIO_REVISION_CONFLICT",
+            "Scenario was updated by another request. Reload and try again.",
+            409,
+        )
+    env_group = None
+    env_variables: dict[str, str] = {}
+    if env_group_id is not None:
+        env_group = db.scalar(
+            select(EnvGroup).where(
+                EnvGroup.id == env_group_id, EnvGroup.workspace_id == workspace_id
+            )
+        )
+        if env_group is None:
+            raise AppError("RESOURCE_NOT_FOUND", "Resource was not found.", 404)
+        env_variables = env_group_runtime_values(env_group)
+    dependency_rows = _enabled_dependency_files(db, scenario=scenario)
+    content = {
+        "name": scenario.name,
+        "baseUrlExpression": scenario.base_url_expression,
+        "defaultSettings": scenario.default_settings_json,
+        "dataSources": scenario.data_sources_json,
+        "steps": scenario.steps_json,
+    }
+    validate_scenario_content(content, require_enabled_step=True)
+    _validate_debug_variables(content, env_variables)
+    _validate_resolved_base_url(_resolve_expression(content["baseUrlExpression"], env_variables))
+    snapshot_payload = _run_response_snapshot(
+        scenario=scenario, env_group=env_group, dependency_rows=dependency_rows
+    )
+    snapshot_hash = _snapshot_hash(snapshot_payload)
+    dedup_input = {
+        "workspaceId": workspace_id,
+        "triggeredByUserId": actor.id,
+        "runType": "debug",
+        "sourceType": "debug_scenario",
+        "sourceId": source_id,
+        "scenarioRevision": scenario.revision,
+        "envGroupId": env_group_id,
+        "selectedNodeId": selected_node_id,
+        "snapshotHash": snapshot_hash,
+    }
+    dedup_hash = _dedup_hash(dedup_input)
+    now = utc_now()
+    db.query(RunCreationDedupKey).filter(RunCreationDedupKey.expires_at <= now).delete(
+        synchronize_session=False
+    )
+    existing_run = _find_existing_dedup_run(
+        db, workspace_id=workspace_id, dedup_hash=dedup_hash, now=now
+    )
+    if existing_run is not None:
+        return ScenarioRunResult(existing_run, True, 200)
+    try:
+        run = create_run_execution(
+            db,
+            RunExecutionInput(
+                workspace_id=workspace_id,
+                actor=actor,
+                selected_node_id=selected_node_id,
+                run_type="debug",
+                source_type="debug_scenario",
+                source_id=scenario.id,
+                snapshot_payload=snapshot_payload,
+            ),
+        )
+    except AppError as exc:
+        if exc.code == "LOAD_NODE_BUSY":
+            existing_run = _find_existing_dedup_run(
+                db, workspace_id=workspace_id, dedup_hash=dedup_hash, now=now
+            )
+            if existing_run is not None:
+                return ScenarioRunResult(existing_run, True, 200)
+        raise
+    write_audit_event(
+        db,
+        event_type="run.debug_requested",
+        request=request,
+        actor_user_id=actor.id,
+        workspace_id=workspace_id,
+        target_type="run",
+        target_id=run.id,
+        details={
+            "runId": run.id,
+            "workspaceId": workspace_id,
+            "scenarioId": scenario.id,
+            "scenarioRevision": scenario.revision,
+            "envGroupId": env_group_id,
+            "nodeId": selected_node_id,
+            "requestedBy": actor.id,
+        },
+    )
+    dedup = RunCreationDedupKey(
+        id=new_ulid(),
+        workspace_id=workspace_id,
+        dedup_key_hash=dedup_hash,
+        run_id=run.id,
+        expires_at=now + timedelta(seconds=dedup_window_seconds),
+        created_at=now,
+    )
+    db.add(dedup)
+    db.flush()
+    return ScenarioRunResult(run, False, 201)

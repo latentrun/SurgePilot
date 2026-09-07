@@ -16,6 +16,7 @@ from app.routes import (
     load_nodes,
     runner_internal,
     runs,
+    scenarios,
     setup,
 )
 from app.services.storage import get_storage_client
@@ -47,6 +48,7 @@ app.include_router(env_groups.router)
 app.include_router(dependency_files.router)
 app.include_router(load_nodes.router)
 app.include_router(runs.router)
+app.include_router(scenarios.router)
 app.include_router(runner_internal.router)
 
 
