@@ -14,9 +14,12 @@ RUN_ARTIFACT_TYPES = (
     "taurus_log",
     "jmeter_log",
     "final_stats_csv",
-    "failed_requests_csv",
     "run_log",
+    "artifacts_zip",
 )
+SLA_RESULTS = ("passed", "failed", "not_evaluated")
+REPORT_SUMMARY_STATUSES = ("pending", "parsed", "failed")
+REPORT_SUMMARY_TYPES = ("final_stats",)
 
 
 class Run(Base):
@@ -50,6 +53,14 @@ class Run(Base):
         ),
         CheckConstraint(
             "validity is null or validity in ('valid', 'invalid')", name="ck_runs_validity"
+        ),
+        CheckConstraint(
+            "sla_result in ('passed', 'failed', 'not_evaluated')",
+            name="ck_runs_sla_result",
+        ),
+        CheckConstraint(
+            "validity_updated_by_user_id is null or length(validity_updated_by_user_id) = 26",
+            name="ck_runs_validity_updated_by_user_id_len",
         ),
     )
 
@@ -85,6 +96,12 @@ class Run(Base):
     remote_start_completed_at: Mapped[datetime | None] = mapped_column(nullable=True)
     last_force_kill_at: Mapped[datetime | None] = mapped_column(nullable=True)
     validity: Mapped[str | None] = mapped_column(Text)
+    sla_result: Mapped[str] = mapped_column(Text, nullable=False, default="not_evaluated")
+    sla_result_reason: Mapped[str | None] = mapped_column(Text)
+    validity_updated_by_user_id: Mapped[str | None] = mapped_column(
+        String(26), ForeignKey("users.id", ondelete="RESTRICT")
+    )
+    validity_updated_at: Mapped[datetime | None] = mapped_column(nullable=True)
     created_at: Mapped[datetime] = mapped_column(nullable=False)
     updated_at: Mapped[datetime] = mapped_column(nullable=False)
 
@@ -286,7 +303,7 @@ class RunArtifact(Base):
         CheckConstraint("length(id) = 26", name="ck_run_artifacts_id_len"),
         CheckConstraint(
             "artifact_type in ('taurus_log', 'jmeter_log', 'final_stats_csv', "
-            "'failed_requests_csv', 'run_log')",
+            "'run_log', 'artifacts_zip')",
             name="ck_run_artifacts_artifact_type",
         ),
         CheckConstraint("status in ('available', 'failed')", name="ck_run_artifacts_status"),
@@ -331,4 +348,64 @@ Index(
     RunArtifact.run_id,
     RunArtifact.created_at.desc(),
     RunArtifact.id.desc(),
+)
+
+
+class RunReportSummary(Base):
+    __tablename__ = "run_report_summaries"
+    __table_args__ = (
+        CheckConstraint("length(id) = 26", name="ck_run_report_summaries_id_len"),
+        CheckConstraint(
+            "length(workspace_id) = 26", name="ck_run_report_summaries_workspace_id_len"
+        ),
+        CheckConstraint("length(run_id) = 26", name="ck_run_report_summaries_run_id_len"),
+        CheckConstraint(
+            "length(source_artifact_id) = 26",
+            name="ck_run_report_summaries_source_artifact_id_len",
+        ),
+        CheckConstraint("summary_type in ('final_stats')", name="ck_run_report_summaries_type"),
+        CheckConstraint(
+            "parse_status in ('pending', 'parsed', 'failed')",
+            name="ck_run_report_summaries_parse_status",
+        ),
+    )
+
+    id: Mapped[str] = mapped_column(String(26), primary_key=True)
+    workspace_id: Mapped[str] = mapped_column(
+        String(26), ForeignKey("workspaces.id", ondelete="CASCADE"), nullable=False
+    )
+    run_id: Mapped[str] = mapped_column(
+        String(26), ForeignKey("runs.id", ondelete="CASCADE"), nullable=False
+    )
+    source_artifact_id: Mapped[str] = mapped_column(
+        String(26), ForeignKey("run_artifacts.id", ondelete="CASCADE"), nullable=False
+    )
+    summary_type: Mapped[str] = mapped_column(Text, nullable=False)
+    summary_json: Mapped[dict[str, Any]] = mapped_column(
+        JSONB().with_variant(JSON(), "sqlite"), nullable=False
+    )
+    truncated: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    parse_status: Mapped[str] = mapped_column(Text, nullable=False)
+    parse_error_code: Mapped[str | None] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(nullable=False)
+
+
+Index(
+    "uq_run_report_summaries_run_artifact_type",
+    RunReportSummary.run_id,
+    RunReportSummary.source_artifact_id,
+    RunReportSummary.summary_type,
+    unique=True,
+)
+Index(
+    "ix_run_report_summaries_workspace_run_type",
+    RunReportSummary.workspace_id,
+    RunReportSummary.run_id,
+    RunReportSummary.summary_type,
+)
+Index(
+    "ix_run_report_summaries_status_created",
+    RunReportSummary.parse_status,
+    RunReportSummary.created_at,
 )
