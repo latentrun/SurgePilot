@@ -1,14 +1,17 @@
 from __future__ import annotations
 
 import csv
+import base64
+import binascii
+import json
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timedelta
 import io
 import math
 from typing import Any, BinaryIO
 
 from fastapi import Request
-from sqlalchemy import select
+from sqlalchemy import and_, func, or_, select
 from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
@@ -23,9 +26,14 @@ from app.schemas.runs import (
     FinalStatsPreview,
     FinalStatsPreviewRow,
     RunActor,
+    RunArtifactItem,
+    RunArtifactListResponse,
     RunArtifactsSummary,
     RunKpiSummary,
     RunReportDetail,
+    RunListItem,
+    RunListResponse,
+    RunSelectedNode,
     RunSnapshotResourceRequest,
     RunSnapshotSummary,
     RunValidityPatchResponse,
@@ -286,4 +294,110 @@ def update_run_validity(db: Session, *, workspace_id: str, run_id: str, validity
     return RunValidityPatchResponse(id=run.id, validity=validity, validity_updated_at=iso_z(now) or "", validity_updated_by=RunActor(id=actor.id, email=actor.email))
 
 
-__all__ = ["FINAL_STATS_TOTAL_ROW_MISSING", "parse_final_stats_csv", "parse_and_store_final_stats_summary", "create_pending_final_stats_summary", "process_next_pending_final_stats_summary", "get_run_report", "update_run_validity"]
+def _cursor_encode(created_at: datetime, item_id: str) -> str:
+    payload = json.dumps({"createdAt": iso_z(created_at), "id": item_id}, separators=(",", ":")).encode()
+    return base64.urlsafe_b64encode(payload).decode().rstrip("=")
+
+
+def _cursor_decode(cursor: str) -> tuple[datetime, str]:
+    try:
+        raw = base64.urlsafe_b64decode(cursor + "=" * (-len(cursor) % 4))
+        payload = json.loads(raw)
+        value = datetime.fromisoformat(str(payload["createdAt"]).replace("Z", "+00:00"))
+        item_id = str(payload["id"])
+        if not item_id:
+            raise ValueError
+        return value, item_id
+    except (ValueError, KeyError, TypeError, json.JSONDecodeError, binascii.Error):
+        raise AppError("VALIDATION_ERROR", "Validation failed.", 422) from None
+
+
+def _run_list_item(db: Session, run: Run, snapshot: RunSnapshot | None) -> RunListItem:
+    node = db.get(LoadNode, run.selected_node_id)
+    artifacts = db.scalars(select(RunArtifact).where(RunArtifact.run_id == run.id, RunArtifact.status == "available", RunArtifact.artifact_type.in_(PUBLIC_ARTIFACT_TYPES))).all()
+    snapshot_json = snapshot.snapshot_json if snapshot else {}
+    source = snapshot_json.get("testPlan") or snapshot_json.get("scenario") or {}
+    return RunListItem(
+        id=run.id, state=run.state, run_type=run.run_type, source_type=run.source_type,
+        source_id=run.source_id, source_name=source.get("name"), source_revision=snapshot_json.get("sourceRevision"),
+        tags=list(source.get("tags") or []), validity=run.validity or ("invalid" if run.run_type == "debug" else "valid"),
+        sla_result=run.sla_result or "not_evaluated", triggered_by=_actor(db, run.triggered_by_user_id),
+        selected_node=RunSelectedNode(id=run.selected_node_id, name=f"Load Node {run.selected_node_id[-6:]}", scope=node.scope if node else "unknown"),
+        allocated_node_count=1, created_at=iso_z(run.created_at) or "", started_at=iso_z(run.started_at), ended_at=iso_z(run.ended_at),
+        duration_ms=_duration_ms(run), artifact_count=len(artifacts), has_artifacts_zip=any(a.artifact_type == "artifacts_zip" for a in artifacts),
+    )
+
+
+def list_runs_report(db: Session, *, workspace_id: str, state: str | None = None, validity: str | None = None,
+                     run_type: str | None = None, source_type: str | None = None, q: str | None = None,
+                     tag: str | None = None, recent_hours: int | None = None, cursor: str | None = None,
+                     limit: int = 20, sort: str = "-createdAt") -> RunListResponse:
+    if sort != "-createdAt" or limit < 1 or limit > 100 or (recent_hours is not None and recent_hours <= 0):
+        raise AppError("VALIDATION_ERROR", "Validation failed.", 422)
+    conditions = [Run.workspace_id == workspace_id]
+    if state: conditions.append(Run.state == state)
+    if run_type: conditions.append(Run.run_type == run_type)
+    if source_type: conditions.append(Run.source_type == source_type)
+    if validity: conditions.append(or_(Run.validity == validity, and_(Run.validity.is_(None), Run.run_type == ("debug" if validity == "invalid" else "standard"))))
+    if recent_hours is not None: conditions.append(Run.created_at >= utc_now() - timedelta(hours=recent_hours))
+    cursor_value = _cursor_decode(cursor) if cursor else None
+    rows = db.execute(select(Run, RunSnapshot).join(RunSnapshot, RunSnapshot.run_id == Run.id, isouter=True).where(*conditions).order_by(Run.created_at.desc(), Run.id.desc())).all()
+    needle = (q or "").lower().strip()
+    tag_needle = (tag or "").lower().strip()
+    filtered: list[tuple[Run, RunSnapshot | None]] = []
+    for run, snapshot in rows:
+        if cursor_value and not (run.created_at < cursor_value[0] or (run.created_at == cursor_value[0] and run.id < cursor_value[1])):
+            continue
+        snapshot_json = snapshot.snapshot_json if snapshot else {}
+        source = snapshot_json.get("testPlan") or snapshot_json.get("scenario") or {}
+        if needle and needle not in run.id.lower() and needle not in str(source.get("name") or "").lower():
+            continue
+        if tag_needle and tag_needle not in [str(value).lower() for value in (source.get("tags") or [])]:
+            continue
+        filtered.append((run, snapshot))
+    page = filtered[:limit]
+    items = [_run_list_item(db, run, snapshot) for run, snapshot in page]
+    next_cursor = _cursor_encode(filtered[limit - 1][0].created_at, filtered[limit - 1][0].id) if len(filtered) > limit else None
+    return RunListResponse(items=items, next_cursor=next_cursor)
+
+
+def _artifact_item(artifact: RunArtifact) -> RunArtifactItem:
+    return RunArtifactItem(id=artifact.id, node_id=artifact.node_id, allocation_id=None, artifact_type=artifact.artifact_type,
+                           relative_path=artifact.relative_path, display_filename=artifact.display_filename, size_bytes=artifact.size_bytes,
+                           sha256=artifact.sha256, content_type=artifact.content_type, terminal_late=artifact.terminal_late,
+                           created_at=iso_z(artifact.created_at) or "", available_at=iso_z(artifact.created_at),
+                           download_url=f"/api/v1/runs/{artifact.run_id}/artifacts/{artifact.id}/download")
+
+
+def list_run_artifacts_report(db: Session, *, workspace_id: str, run_id: str, artifact_type: str | None = None,
+                              cursor: str | None = None, limit: int = 50, sort: str = "createdAt") -> RunArtifactListResponse:
+    if limit < 1 or limit > 100 or sort not in {"createdAt", "-createdAt"} or (artifact_type and artifact_type not in PUBLIC_ARTIFACT_TYPES):
+        raise AppError("VALIDATION_ERROR", "Validation failed.", 422)
+    if db.scalar(select(Run.id).where(Run.id == run_id, Run.workspace_id == workspace_id)) is None:
+        raise AppError("RESOURCE_NOT_FOUND", "Resource was not found.", 404)
+    conditions = [RunArtifact.workspace_id == workspace_id, RunArtifact.run_id == run_id, RunArtifact.status == "available", RunArtifact.artifact_type.in_(PUBLIC_ARTIFACT_TYPES)]
+    if artifact_type: conditions.append(RunArtifact.artifact_type == artifact_type)
+    if cursor:
+        created_at, item_id = _cursor_decode(cursor)
+        if sort == "-createdAt": conditions.append(or_(RunArtifact.created_at < created_at, and_(RunArtifact.created_at == created_at, RunArtifact.id < item_id)))
+        else: conditions.append(or_(RunArtifact.created_at > created_at, and_(RunArtifact.created_at == created_at, RunArtifact.id > item_id)))
+    order = (RunArtifact.created_at.desc(), RunArtifact.id.desc()) if sort == "-createdAt" else (RunArtifact.created_at.asc(), RunArtifact.id.asc())
+    artifacts = db.scalars(select(RunArtifact).where(*conditions).order_by(*order).limit(limit + 1)).all()
+    page = artifacts[:limit]
+    next_cursor = _cursor_encode(page[-1].created_at, page[-1].id) if len(artifacts) > limit else None
+    return RunArtifactListResponse(items=[_artifact_item(item) for item in page], next_cursor=next_cursor)
+
+
+def get_run_artifact_download(db: Session, *, workspace_id: str, run_id: str, artifact_id: str) -> ArtifactDownload:
+    if db.scalar(select(Run.id).where(Run.id == run_id, Run.workspace_id == workspace_id)) is None:
+        raise AppError("RESOURCE_NOT_FOUND", "Resource was not found.", 404)
+    artifact = db.scalar(select(RunArtifact).where(RunArtifact.id == artifact_id, RunArtifact.run_id == run_id, RunArtifact.workspace_id == workspace_id))
+    if artifact is None or artifact.artifact_type not in PUBLIC_ARTIFACT_TYPES:
+        raise AppError("RESOURCE_NOT_FOUND", "Resource was not found.", 404)
+    if artifact.status != "available":
+        raise AppError("ARTIFACT_NOT_READY", "Artifact is not ready.", 409)
+    stored = get_storage_client().get_stream(bucket=get_settings().minio_bucket, object_key=artifact.storage_key)
+    return ArtifactDownload(artifact=artifact, stored=stored)
+
+
+__all__ = ["FINAL_STATS_TOTAL_ROW_MISSING", "parse_final_stats_csv", "parse_and_store_final_stats_summary", "create_pending_final_stats_summary", "process_next_pending_final_stats_summary", "get_run_report", "list_runs_report", "list_run_artifacts_report", "get_run_artifact_download", "update_run_validity"]
