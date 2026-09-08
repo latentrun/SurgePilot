@@ -369,6 +369,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/overview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Overview Route */
+        get: operations["getOverview"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/runs": {
         parameters: {
             query?: never;
@@ -1119,6 +1136,112 @@ export interface components {
             email?: string | null;
             /** Password */
             password?: string | null;
+        };
+        OverviewActiveRuns: {
+            /** Initializing */
+            initializing: number;
+            /** Running */
+            running: number;
+            /** Stopping */
+            stopping: number;
+            /** Total */
+            total: number;
+        };
+        OverviewLoadNodeStatusCounts: {
+            /** Busy */
+            busy: number;
+            /** Disabled */
+            disabled: number;
+            /** Idle */
+            idle: number;
+            /** Initializing */
+            initializing: number;
+            /** Offline */
+            offline: number;
+            /** Quarantined */
+            quarantined: number;
+            /** Uninitialized */
+            uninitialized: number;
+        };
+        OverviewRecentRun: {
+            /** Artifactcount */
+            artifactCount: number;
+            /** Createdat */
+            createdAt: string;
+            /** Durationms */
+            durationMs?: number | null;
+            /** Endedat */
+            endedAt?: string | null;
+            /** Hasartifactszip */
+            hasArtifactsZip: boolean;
+            /** Id */
+            id: string;
+            runType: components["schemas"]["RunType"];
+            slaResult?: components["schemas"]["SlaResult"] | null;
+            /** Sourcename */
+            sourceName?: string | null;
+            sourceType: components["schemas"]["RunSourceType"];
+            /** Startedat */
+            startedAt?: string | null;
+            state: components["schemas"]["RunState"];
+            validity?: components["schemas"]["RunValidity"] | null;
+        };
+        OverviewResourceSummary: {
+            byStatus: components["schemas"]["OverviewLoadNodeStatusCounts"];
+            /** Totalvisiblenodes */
+            totalVisibleNodes: number;
+        };
+        OverviewResponse: {
+            /** Generatedat */
+            generatedAt: string;
+            /** Recentruns */
+            recentRuns: components["schemas"]["OverviewRecentRun"][];
+            resourceSummary: components["schemas"]["OverviewResourceSummary"];
+            runStats: components["schemas"]["OverviewRunStats"];
+            statsScope: components["schemas"]["OverviewStatsScope"];
+            workspace: components["schemas"]["OverviewWorkspace"];
+        };
+        OverviewResultRunScope: "valid_standard_terminal_runs";
+        OverviewResultRuns: {
+            bySlaResult: components["schemas"]["OverviewSlaResultCounts"];
+            byState: components["schemas"]["OverviewTerminalStateCounts"];
+            /** Total */
+            total: number;
+        };
+        OverviewRunStats: {
+            activeRuns: components["schemas"]["OverviewActiveRuns"];
+            resultRuns: components["schemas"]["OverviewResultRuns"];
+        };
+        OverviewSlaResultCounts: {
+            /** Failed */
+            failed: number;
+            /** Notevaluated */
+            notEvaluated: number;
+            /** Passed */
+            passed: number;
+        };
+        OverviewStatsScope: {
+            /** Recentrunlimit */
+            recentRunLimit: number;
+            resultRunScope: components["schemas"]["OverviewResultRunScope"];
+            /** Windowdays */
+            windowDays: number;
+            /** Windowstartedat */
+            windowStartedAt: string;
+        };
+        OverviewTerminalStateCounts: {
+            /** Aborted */
+            aborted: number;
+            /** Failed */
+            failed: number;
+            /** Finished */
+            finished: number;
+        };
+        OverviewWorkspace: {
+            /** Id */
+            id: string;
+            /** Name */
+            name: string;
         };
         RegisterRequest: {
             /** Displayname */
@@ -3719,6 +3842,68 @@ export interface operations {
             };
             /** @description Not Found */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    getOverview: {
+        parameters: {
+            query?: {
+                recentLimit?: number;
+            };
+            header?: {
+                "x-workspace-id"?: string | null;
+            };
+            path?: never;
+            cookie?: {
+                surgepilot_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OverviewResponse"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
                 headers: {
                     [name: string]: unknown;
                 };
