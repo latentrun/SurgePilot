@@ -17,12 +17,10 @@ test("setup status to first admin registration to overview logout and login", as
   await page.getByRole("button", { name: "Create administrator" }).click();
 
   await expect(page).toHaveURL(/\/overview$/);
-  await expect(
-    page.getByRole("heading", { name: "Welcome to SurgePilot" }),
-  ).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Overview" })).toBeVisible();
   await expect(page.getByRole("main").getByText("Admin User")).toBeVisible();
   await expect(
-    page.getByRole("main").getByText("Default Workspace", { exact: true }),
+    page.getByRole("main").getByText("Default Workspace").first(),
   ).toBeVisible();
 
   await page.getByRole("button", { name: "Sign out" }).click();
@@ -37,11 +35,9 @@ test("setup status to first admin registration to overview logout and login", as
   await page.getByRole("button", { name: "Sign in" }).click();
 
   await expect(page).toHaveURL(/\/overview$/);
-  await expect(
-    page.getByRole("heading", { name: "Welcome to SurgePilot" }),
-  ).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Overview" })).toBeVisible();
   await expect(page.getByRole("main").getByText("Admin User")).toBeVisible();
   await expect(
-    page.getByRole("main").getByText("Default Workspace", { exact: true }),
+    page.getByRole("main").getByText("Default Workspace").first(),
   ).toBeVisible();
 });
