@@ -14,6 +14,7 @@ from app.routes import (
     dependency_files,
     env_groups,
     load_nodes,
+    overview,
     runner_internal,
     runs,
     scenarios,
@@ -48,6 +49,7 @@ app.include_router(auth.router)
 app.include_router(env_groups.router)
 app.include_router(dependency_files.router)
 app.include_router(load_nodes.router)
+app.include_router(overview.router)
 app.include_router(runs.router)
 app.include_router(scenarios.router)
 app.include_router(test_plans.router)

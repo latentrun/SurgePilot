@@ -112,6 +112,14 @@ class Run(Base):
 
 Index("ix_runs_workspace_created", Run.workspace_id, Run.created_at.desc(), Run.id.desc())
 Index(
+    "ix_runs_workspace_type_validity_state_created",
+    Run.workspace_id,
+    Run.run_type,
+    Run.validity,
+    Run.state,
+    Run.created_at.desc(),
+)
+Index(
     "ix_runs_workspace_state_created",
     Run.workspace_id,
     Run.state,
