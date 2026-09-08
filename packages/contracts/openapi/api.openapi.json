@@ -1931,6 +1931,370 @@
         "title": "LoginRequest",
         "type": "object"
       },
+      "OverviewActiveRuns": {
+        "properties": {
+          "initializing": {
+            "title": "Initializing",
+            "type": "integer"
+          },
+          "running": {
+            "title": "Running",
+            "type": "integer"
+          },
+          "stopping": {
+            "title": "Stopping",
+            "type": "integer"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "total",
+          "initializing",
+          "running",
+          "stopping"
+        ],
+        "title": "OverviewActiveRuns",
+        "type": "object"
+      },
+      "OverviewLoadNodeStatusCounts": {
+        "properties": {
+          "busy": {
+            "title": "Busy",
+            "type": "integer"
+          },
+          "disabled": {
+            "title": "Disabled",
+            "type": "integer"
+          },
+          "idle": {
+            "title": "Idle",
+            "type": "integer"
+          },
+          "initializing": {
+            "title": "Initializing",
+            "type": "integer"
+          },
+          "offline": {
+            "title": "Offline",
+            "type": "integer"
+          },
+          "quarantined": {
+            "title": "Quarantined",
+            "type": "integer"
+          },
+          "uninitialized": {
+            "title": "Uninitialized",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "uninitialized",
+          "initializing",
+          "idle",
+          "busy",
+          "offline",
+          "quarantined",
+          "disabled"
+        ],
+        "title": "OverviewLoadNodeStatusCounts",
+        "type": "object"
+      },
+      "OverviewRecentRun": {
+        "properties": {
+          "artifactCount": {
+            "title": "Artifactcount",
+            "type": "integer"
+          },
+          "createdAt": {
+            "title": "Createdat",
+            "type": "string"
+          },
+          "durationMs": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Durationms"
+          },
+          "endedAt": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Endedat"
+          },
+          "hasArtifactsZip": {
+            "title": "Hasartifactszip",
+            "type": "boolean"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "runType": {
+            "$ref": "#/components/schemas/RunType"
+          },
+          "slaResult": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SlaResult"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "sourceName": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sourcename"
+          },
+          "sourceType": {
+            "$ref": "#/components/schemas/RunSourceType"
+          },
+          "startedAt": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Startedat"
+          },
+          "state": {
+            "$ref": "#/components/schemas/RunState"
+          },
+          "validity": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RunValidity"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "runType",
+          "sourceType",
+          "state",
+          "createdAt",
+          "artifactCount",
+          "hasArtifactsZip"
+        ],
+        "title": "OverviewRecentRun",
+        "type": "object"
+      },
+      "OverviewResourceSummary": {
+        "properties": {
+          "byStatus": {
+            "$ref": "#/components/schemas/OverviewLoadNodeStatusCounts"
+          },
+          "totalVisibleNodes": {
+            "title": "Totalvisiblenodes",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "totalVisibleNodes",
+          "byStatus"
+        ],
+        "title": "OverviewResourceSummary",
+        "type": "object"
+      },
+      "OverviewResponse": {
+        "properties": {
+          "generatedAt": {
+            "title": "Generatedat",
+            "type": "string"
+          },
+          "recentRuns": {
+            "items": {
+              "$ref": "#/components/schemas/OverviewRecentRun"
+            },
+            "title": "Recentruns",
+            "type": "array"
+          },
+          "resourceSummary": {
+            "$ref": "#/components/schemas/OverviewResourceSummary"
+          },
+          "runStats": {
+            "$ref": "#/components/schemas/OverviewRunStats"
+          },
+          "statsScope": {
+            "$ref": "#/components/schemas/OverviewStatsScope"
+          },
+          "workspace": {
+            "$ref": "#/components/schemas/OverviewWorkspace"
+          }
+        },
+        "required": [
+          "generatedAt",
+          "workspace",
+          "statsScope",
+          "runStats",
+          "recentRuns",
+          "resourceSummary"
+        ],
+        "title": "OverviewResponse",
+        "type": "object"
+      },
+      "OverviewResultRunScope": {
+        "enum": [
+          "valid_standard_terminal_runs"
+        ],
+        "title": "OverviewResultRunScope",
+        "type": "string"
+      },
+      "OverviewResultRuns": {
+        "properties": {
+          "bySlaResult": {
+            "$ref": "#/components/schemas/OverviewSlaResultCounts"
+          },
+          "byState": {
+            "$ref": "#/components/schemas/OverviewTerminalStateCounts"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "total",
+          "byState",
+          "bySlaResult"
+        ],
+        "title": "OverviewResultRuns",
+        "type": "object"
+      },
+      "OverviewRunStats": {
+        "properties": {
+          "activeRuns": {
+            "$ref": "#/components/schemas/OverviewActiveRuns"
+          },
+          "resultRuns": {
+            "$ref": "#/components/schemas/OverviewResultRuns"
+          }
+        },
+        "required": [
+          "resultRuns",
+          "activeRuns"
+        ],
+        "title": "OverviewRunStats",
+        "type": "object"
+      },
+      "OverviewSlaResultCounts": {
+        "properties": {
+          "failed": {
+            "title": "Failed",
+            "type": "integer"
+          },
+          "notEvaluated": {
+            "title": "Notevaluated",
+            "type": "integer"
+          },
+          "passed": {
+            "title": "Passed",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "passed",
+          "failed",
+          "notEvaluated"
+        ],
+        "title": "OverviewSlaResultCounts",
+        "type": "object"
+      },
+      "OverviewStatsScope": {
+        "properties": {
+          "recentRunLimit": {
+            "title": "Recentrunlimit",
+            "type": "integer"
+          },
+          "resultRunScope": {
+            "$ref": "#/components/schemas/OverviewResultRunScope"
+          },
+          "windowDays": {
+            "title": "Windowdays",
+            "type": "integer"
+          },
+          "windowStartedAt": {
+            "title": "Windowstartedat",
+            "type": "string"
+          }
+        },
+        "required": [
+          "windowDays",
+          "windowStartedAt",
+          "resultRunScope",
+          "recentRunLimit"
+        ],
+        "title": "OverviewStatsScope",
+        "type": "object"
+      },
+      "OverviewTerminalStateCounts": {
+        "properties": {
+          "aborted": {
+            "title": "Aborted",
+            "type": "integer"
+          },
+          "failed": {
+            "title": "Failed",
+            "type": "integer"
+          },
+          "finished": {
+            "title": "Finished",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "finished",
+          "failed",
+          "aborted"
+        ],
+        "title": "OverviewTerminalStateCounts",
+        "type": "object"
+      },
+      "OverviewWorkspace": {
+        "properties": {
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name"
+        ],
+        "title": "OverviewWorkspace",
+        "type": "object"
+      },
       "RegisterRequest": {
         "properties": {
           "displayName": {
@@ -5335,6 +5699,65 @@
   },
   "openapi": "3.1.0",
   "paths": {
+    "/v1/admin/setup-status": {
+      "get": {
+        "operationId": "getAdminSetupStatus",
+        "parameters": [
+          {
+            "in": "cookie",
+            "name": "surgepilot_session",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "SurgePilot Session"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SetupStatusResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          }
+        },
+        "summary": "Get Admin Setup Status",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
     "/v1/auth/csrf": {
       "get": {
         "operationId": "getCsrfToken",
@@ -8880,6 +9303,113 @@
         "summary": "Trust Load Node Ssh Host Key Route",
         "tags": [
           "load-nodes"
+        ]
+      }
+    },
+    "/v1/overview": {
+      "get": {
+        "operationId": "getOverview",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "recentLimit",
+            "required": false,
+            "schema": {
+              "default": 5,
+              "maximum": 10,
+              "minimum": 1,
+              "title": "Recentlimit",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-workspace-id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Workspace-Id"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "surgepilot_session",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "SurgePilot Session"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OverviewResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          }
+        },
+        "summary": "Get Overview Route",
+        "tags": [
+          "overview"
         ]
       }
     },

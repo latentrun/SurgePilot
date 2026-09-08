@@ -17,45 +17,14 @@ import { TestPlanListPage } from "./features/test-plans/pages/test-plan-list-pag
 import { TestPlanEditorPage } from "./features/test-plans/pages/test-plan-editor-page";
 import { RunListPage } from "./features/runs/pages/run-list-page";
 import { RunReportPage } from "./features/runs/pages/run-report-page";
+import { AppLayout } from "./app/layouts/app-layout";
+import { OverviewPage } from "./features/overview/pages/overview-page";
+import { AdminSetupStatusPage } from "./features/admin/pages/setup-status-page";
 
 function LoadingPage() {
   return (
     <main>
       <p>Loading SurgePilot…</p>
-    </main>
-  );
-}
-
-function OverviewPage() {
-  const { session, signOut } = useAuthSession();
-
-  async function handleLogout() {
-    try {
-      await signOut();
-      window.history.replaceState({}, "", "/login");
-      window.dispatchEvent(new PopStateEvent("popstate"));
-    } catch {
-      // Keep the authenticated view visible if the server could not complete logout.
-    }
-  }
-
-  if (!session) return null;
-  return (
-    <main>
-      <p>Overview</p>
-      <h1>Welcome to SurgePilot</h1>
-      <p>Signed in as {session.user.displayName} ({session.user.email}).</p>
-      <p>Workspace: {session.defaultWorkspace.name}</p>
-      <nav>
-        <a href="/assets/env-groups">Env Groups</a>
-        <a href="/assets/dependency-files">Dependency Files</a>
-        <a href="/resources/load-nodes">Load Nodes</a>
-        <a href="/scenarios">Scenarios</a>
-        <a href="/test-plans">Test Plans</a>
-      </nav>
-      <button onClick={() => void handleLogout()} type="button">
-        Sign out
-      </button>
     </main>
   );
 }
@@ -72,22 +41,35 @@ function AppRoutes() {
 
   if (isRestoring) return <LoadingPage />;
   if (!isAuthenticated) return pathname === "/register" ? <RegisterPage /> : <LoginPage />;
-  if (pathname === "/assets/env-groups") return <EnvGroupsPage />;
-  if (pathname === "/assets/dependency-files") return <DependencyFilesPage />;
-  if (pathname === "/resources/load-nodes/new") {
-    return <RegisterLoadNodePage />;
-  }
-  if (pathname === "/resources/load-nodes") return <LoadNodesPage />;
-  if (pathname.startsWith("/scenarios/")) return <ScenarioDesignerPage />;
-  if (pathname === "/scenarios") return <ScenarioListPage />;
-  if (pathname.startsWith("/test-plans/")) return <TestPlanEditorPage />;
-  if (pathname === "/test-plans") return <TestPlanListPage />;
-  if (pathname === "/runs") return <RunListPage />;
-  if (pathname.startsWith("/runs/")) {
+
+  let page: React.ReactNode;
+  if (pathname === "/assets/env-groups") {
+    page = <EnvGroupsPage />;
+  } else if (pathname === "/assets/dependency-files") {
+    page = <DependencyFilesPage />;
+  } else if (pathname === "/resources/load-nodes/new") {
+    page = <RegisterLoadNodePage />;
+  } else if (pathname === "/resources/load-nodes") {
+    page = <LoadNodesPage />;
+  } else if (pathname.startsWith("/scenarios/")) {
+    page = <ScenarioDesignerPage />;
+  } else if (pathname === "/scenarios") {
+    page = <ScenarioListPage />;
+  } else if (pathname.startsWith("/test-plans/")) {
+    page = <TestPlanEditorPage />;
+  } else if (pathname === "/test-plans") {
+    page = <TestPlanListPage />;
+  } else if (pathname === "/runs") {
+    page = <RunListPage />;
+  } else if (pathname.startsWith("/runs/")) {
     const runId = decodeURIComponent(pathname.slice("/runs/".length));
-    return <RunReportPage runId={runId} />;
+    page = <RunReportPage runId={runId} />;
+  } else if (pathname === "/admin/setup-status") {
+    page = <AdminSetupStatusPage />;
+  } else {
+    page = <OverviewPage />;
   }
-  return <OverviewPage />;
+  return <AppLayout pathname={pathname}>{page}</AppLayout>;
 }
 
 export function App() {

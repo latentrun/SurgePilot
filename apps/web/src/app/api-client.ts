@@ -112,6 +112,23 @@ export type TestPlanScenarioItem =
   components["schemas"]["TestPlanScenarioItemDetail"];
 export type TestPlanSlaRule = components["schemas"]["TestPlanSlaRuleDetail"];
 
+export type OverviewActiveRuns =
+  components["schemas"]["OverviewActiveRuns"];
+export type OverviewRecentRun =
+  components["schemas"]["OverviewRecentRun"];
+export type OverviewResourceSummary =
+  components["schemas"]["OverviewResourceSummary"];
+export type OverviewResponse =
+  components["schemas"]["OverviewResponse"];
+export type OverviewResultRunScope =
+  components["schemas"]["OverviewResultRunScope"];
+export type OverviewRunStats =
+  components["schemas"]["OverviewRunStats"];
+export type OverviewStatsScope =
+  components["schemas"]["OverviewStatsScope"];
+export type OverviewWorkspace =
+  components["schemas"]["OverviewWorkspace"];
+
 export class ApiError extends Error {
   readonly body: ApiErrorBody;
   readonly status: number;
@@ -165,6 +182,25 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 
 export function getSetupStatus() {
   return request<SetupStatus>("/v1/setup/status");
+}
+
+export function getAdminSetupStatus() {
+  return request<SetupStatus>("/v1/admin/setup-status");
+}
+
+export function getOverview(params: {
+  recentLimit?: number;
+  workspaceId: string;
+}) {
+  const query = new URLSearchParams();
+  if (params.recentLimit !== undefined) {
+    query.set("recentLimit", String(params.recentLimit));
+  }
+  const queryStr = query.toString();
+  const url = queryStr ? `/v1/overview?${queryStr}` : "/v1/overview";
+  return request<OverviewResponse>(url, {
+    headers: { "x-workspace-id": params.workspaceId },
+  });
 }
 
 export function getCurrentUser() {
