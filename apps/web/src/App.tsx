@@ -15,28 +15,13 @@ import { ScenarioListPage } from "./features/scenarios/pages/scenario-list-page"
 import { ScenarioDesignerPage } from "./features/scenarios/pages/scenario-designer-page";
 import { TestPlanListPage } from "./features/test-plans/pages/test-plan-list-page";
 import { TestPlanEditorPage } from "./features/test-plans/pages/test-plan-editor-page";
+import { RunListPage } from "./features/runs/pages/run-list-page";
+import { RunReportPage } from "./features/runs/pages/run-report-page";
 
 function LoadingPage() {
   return (
     <main>
       <p>Loading SurgePilot…</p>
-    </main>
-  );
-}
-
-function RunCreatedPage({ runId }: { runId: string }) {
-  return (
-    <main>
-      <h1>Debug Run started</h1>
-      <p>
-        Run <code>{runId}</code> is being prepared on the selected Load Node.
-        The full Run Report UI is delivered in a later milestone.
-      </p>
-      <nav>
-        <a href="/scenarios">Scenarios</a>
-        <a href="/test-plans">Test Plans</a>
-        <a href="/assets/env-groups">Env Groups</a>
-      </nav>
     </main>
   );
 }
@@ -97,9 +82,10 @@ function AppRoutes() {
   if (pathname === "/scenarios") return <ScenarioListPage />;
   if (pathname.startsWith("/test-plans/")) return <TestPlanEditorPage />;
   if (pathname === "/test-plans") return <TestPlanListPage />;
+  if (pathname === "/runs") return <RunListPage />;
   if (pathname.startsWith("/runs/")) {
     const runId = decodeURIComponent(pathname.slice("/runs/".length));
-    return <RunCreatedPage runId={runId} />;
+    return <RunReportPage runId={runId} />;
   }
   return <OverviewPage />;
 }
