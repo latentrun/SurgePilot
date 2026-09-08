@@ -474,6 +474,46 @@
         "title": "ErrorResponse",
         "type": "object"
       },
+      "FailureDiagnostics": {
+        "properties": {
+          "failureMessage": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Failuremessage"
+          },
+          "failureReason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Failurereason"
+          },
+          "hasFailedRequestsPreview": {
+            "default": false,
+            "title": "Hasfailedrequestspreview",
+            "type": "boolean"
+          },
+          "notes": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Notes",
+            "type": "array"
+          }
+        },
+        "title": "FailureDiagnostics",
+        "type": "object"
+      },
       "FieldError": {
         "properties": {
           "code": {
@@ -495,6 +535,150 @@
           "message"
         ],
         "title": "FieldError",
+        "type": "object"
+      },
+      "FinalStatsPreview": {
+        "properties": {
+          "rows": {
+            "items": {
+              "$ref": "#/components/schemas/FinalStatsPreviewRow"
+            },
+            "title": "Rows",
+            "type": "array"
+          },
+          "status": {
+            "$ref": "#/components/schemas/ReportSummaryStatus"
+          },
+          "truncated": {
+            "title": "Truncated",
+            "type": "boolean"
+          },
+          "warnings": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Warnings",
+            "type": "array"
+          }
+        },
+        "required": [
+          "status",
+          "truncated",
+          "rows"
+        ],
+        "title": "FinalStatsPreview",
+        "type": "object"
+      },
+      "FinalStatsPreviewRow": {
+        "properties": {
+          "averageResponseTimeMs": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Averageresponsetimems"
+          },
+          "errorRate": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Errorrate"
+          },
+          "failedRequests": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Failedrequests"
+          },
+          "label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Label"
+          },
+          "p90Ms": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "P90Ms"
+          },
+          "p95Ms": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "P95Ms"
+          },
+          "p99Ms": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "P99Ms"
+          },
+          "responseCodeCounts": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "title": "Responsecodecounts",
+            "type": "object"
+          },
+          "successRequests": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Successrequests"
+          },
+          "totalRequests": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Totalrequests"
+          }
+        },
+        "title": "FinalStatsPreviewRow",
         "type": "object"
       },
       "InitializeLoadNodeRequest": {
@@ -1773,6 +1957,185 @@
         "title": "RegisterRequest",
         "type": "object"
       },
+      "ReportSummaryStatus": {
+        "enum": [
+          "pending",
+          "parsed",
+          "failed",
+          "missing"
+        ],
+        "title": "ReportSummaryStatus",
+        "type": "string"
+      },
+      "RunActor": {
+        "properties": {
+          "email": {
+            "title": "Email",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "email"
+        ],
+        "title": "RunActor",
+        "type": "object"
+      },
+      "RunArtifactItem": {
+        "properties": {
+          "artifactType": {
+            "$ref": "#/components/schemas/RunArtifactType"
+          },
+          "availableAt": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Availableat"
+          },
+          "contentType": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Contenttype"
+          },
+          "createdAt": {
+            "title": "Createdat",
+            "type": "string"
+          },
+          "displayFilename": {
+            "title": "Displayfilename",
+            "type": "string"
+          },
+          "downloadUrl": {
+            "title": "Downloadurl",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "nodeId": {
+            "title": "Nodeid",
+            "type": "string"
+          },
+          "relativePath": {
+            "title": "Relativepath",
+            "type": "string"
+          },
+          "sha256": {
+            "title": "Sha256",
+            "type": "string"
+          },
+          "sizeBytes": {
+            "title": "Sizebytes",
+            "type": "integer"
+          },
+          "terminalLate": {
+            "title": "Terminallate",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "id",
+          "nodeId",
+          "artifactType",
+          "relativePath",
+          "displayFilename",
+          "sizeBytes",
+          "sha256",
+          "terminalLate",
+          "createdAt",
+          "downloadUrl"
+        ],
+        "title": "RunArtifactItem",
+        "type": "object"
+      },
+      "RunArtifactListResponse": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/RunArtifactItem"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "nextCursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Nextcursor"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "title": "RunArtifactListResponse",
+        "type": "object"
+      },
+      "RunArtifactType": {
+        "enum": [
+          "taurus_log",
+          "jmeter_log",
+          "final_stats_csv",
+          "run_log",
+          "artifacts_zip"
+        ],
+        "title": "RunArtifactType",
+        "type": "string"
+      },
+      "RunArtifactsSummary": {
+        "properties": {
+          "count": {
+            "title": "Count",
+            "type": "integer"
+          },
+          "hasArtifactsZip": {
+            "title": "Hasartifactszip",
+            "type": "boolean"
+          },
+          "hasFinalStatsCsv": {
+            "title": "Hasfinalstatscsv",
+            "type": "boolean"
+          },
+          "latestAvailableAt": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Latestavailableat"
+          }
+        },
+        "required": [
+          "count",
+          "hasArtifactsZip",
+          "hasFinalStatsCsv"
+        ],
+        "title": "RunArtifactsSummary",
+        "type": "object"
+      },
       "RunCreateRequest": {
         "additionalProperties": false,
         "properties": {
@@ -1916,6 +2279,655 @@
         "title": "RunCreateResponse",
         "type": "object"
       },
+      "RunKpiSummary": {
+        "properties": {
+          "averageResponseTimeMs": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Averageresponsetimems"
+          },
+          "errorRate": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Errorrate"
+          },
+          "failedRequests": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Failedrequests"
+          },
+          "missingReasons": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Missingreasons",
+            "type": "array"
+          },
+          "p90Ms": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "P90Ms"
+          },
+          "p95Ms": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "P95Ms"
+          },
+          "p99Ms": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "P99Ms"
+          },
+          "sourceArtifactId": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sourceartifactid"
+          },
+          "status": {
+            "$ref": "#/components/schemas/ReportSummaryStatus"
+          },
+          "throughputPerSecond": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Throughputpersecond"
+          },
+          "totalRequests": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Totalrequests"
+          }
+        },
+        "required": [
+          "status"
+        ],
+        "title": "RunKpiSummary",
+        "type": "object"
+      },
+      "RunListItem": {
+        "properties": {
+          "artifactCount": {
+            "title": "Artifactcount",
+            "type": "integer"
+          },
+          "createdAt": {
+            "title": "Createdat",
+            "type": "string"
+          },
+          "durationMs": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Durationms"
+          },
+          "endedAt": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Endedat"
+          },
+          "hasArtifactsZip": {
+            "title": "Hasartifactszip",
+            "type": "boolean"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "runType": {
+            "$ref": "#/components/schemas/RunType"
+          },
+          "selectedNode": {
+            "$ref": "#/components/schemas/RunSelectedNode"
+          },
+          "slaResult": {
+            "$ref": "#/components/schemas/SlaResult"
+          },
+          "sourceId": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sourceid"
+          },
+          "sourceName": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sourcename"
+          },
+          "sourceRevision": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sourcerevision"
+          },
+          "sourceType": {
+            "$ref": "#/components/schemas/RunSourceType"
+          },
+          "startedAt": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Startedat"
+          },
+          "state": {
+            "$ref": "#/components/schemas/RunState"
+          },
+          "tags": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Tags",
+            "type": "array"
+          },
+          "triggeredBy": {
+            "$ref": "#/components/schemas/RunActor"
+          },
+          "validity": {
+            "$ref": "#/components/schemas/RunValidity"
+          }
+        },
+        "required": [
+          "id",
+          "state",
+          "runType",
+          "sourceType",
+          "validity",
+          "slaResult",
+          "triggeredBy",
+          "selectedNode",
+          "createdAt",
+          "artifactCount",
+          "hasArtifactsZip"
+        ],
+        "title": "RunListItem",
+        "type": "object"
+      },
+      "RunListResponse": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/RunListItem"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "nextCursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Nextcursor"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "title": "RunListResponse",
+        "type": "object"
+      },
+      "RunReportDetail": {
+        "properties": {
+          "artifactsSummary": {
+            "$ref": "#/components/schemas/RunArtifactsSummary"
+          },
+          "failureDiagnostics": {
+            "$ref": "#/components/schemas/FailureDiagnostics"
+          },
+          "finalStatsPreview": {
+            "$ref": "#/components/schemas/FinalStatsPreview"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "kpiSummary": {
+            "$ref": "#/components/schemas/RunKpiSummary"
+          },
+          "snapshot": {
+            "$ref": "#/components/schemas/RunSnapshotSummary"
+          },
+          "verdict": {
+            "$ref": "#/components/schemas/RunVerdict"
+          }
+        },
+        "required": [
+          "id",
+          "verdict",
+          "kpiSummary",
+          "failureDiagnostics",
+          "finalStatsPreview",
+          "snapshot",
+          "artifactsSummary"
+        ],
+        "title": "RunReportDetail",
+        "type": "object"
+      },
+      "RunSelectedNode": {
+        "properties": {
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "scope": {
+            "title": "Scope",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "scope"
+        ],
+        "title": "RunSelectedNode",
+        "type": "object"
+      },
+      "RunSnapshotLoadSettings": {
+        "properties": {
+          "concurrencyPerNode": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Concurrencypernode"
+          },
+          "delaySeconds": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Delayseconds"
+          },
+          "holdForSeconds": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Holdforseconds"
+          },
+          "iterations": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Iterations"
+          },
+          "rampUpSeconds": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rampupseconds"
+          },
+          "steps": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Steps"
+          },
+          "targetRps": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Targetrps"
+          }
+        },
+        "title": "RunSnapshotLoadSettings",
+        "type": "object"
+      },
+      "RunSnapshotResourceRequest": {
+        "properties": {
+          "expectedConcurrencyPerNode": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expectedconcurrencypernode"
+          },
+          "mode": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mode"
+          },
+          "poolType": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pooltype"
+          },
+          "selectedNodeId": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Selectednodeid"
+          }
+        },
+        "title": "RunSnapshotResourceRequest",
+        "type": "object"
+      },
+      "RunSnapshotScenarioItem": {
+        "properties": {
+          "loadSettings": {
+            "$ref": "#/components/schemas/RunSnapshotLoadSettings"
+          },
+          "scenarioName": {
+            "title": "Scenarioname",
+            "type": "string"
+          }
+        },
+        "required": [
+          "scenarioName",
+          "loadSettings"
+        ],
+        "title": "RunSnapshotScenarioItem",
+        "type": "object"
+      },
+      "RunSnapshotSlaRule": {
+        "properties": {
+          "condition": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Condition"
+          },
+          "metric": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Metric"
+          },
+          "thresholdText": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Thresholdtext"
+          }
+        },
+        "title": "RunSnapshotSlaRule",
+        "type": "object"
+      },
+      "RunSnapshotSummary": {
+        "properties": {
+          "dependencyFileCount": {
+            "title": "Dependencyfilecount",
+            "type": "integer"
+          },
+          "dependencyFileNames": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Dependencyfilenames",
+            "type": "array"
+          },
+          "envGroupName": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Envgroupname"
+          },
+          "envGroupVariableKeys": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Envgroupvariablekeys",
+            "type": "array"
+          },
+          "resourceRequest": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RunSnapshotResourceRequest"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "runMode": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Runmode"
+          },
+          "scenarioCount": {
+            "title": "Scenariocount",
+            "type": "integer"
+          },
+          "scenarioItems": {
+            "items": {
+              "$ref": "#/components/schemas/RunSnapshotScenarioItem"
+            },
+            "title": "Scenarioitems",
+            "type": "array"
+          },
+          "scenarioNames": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Scenarionames",
+            "type": "array"
+          },
+          "schemaVersion": {
+            "title": "Schemaversion",
+            "type": "integer"
+          },
+          "slaRuleCount": {
+            "title": "Slarulecount",
+            "type": "integer"
+          },
+          "slaRules": {
+            "items": {
+              "$ref": "#/components/schemas/RunSnapshotSlaRule"
+            },
+            "title": "Slarules",
+            "type": "array"
+          },
+          "sourceName": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sourcename"
+          },
+          "sourceRevision": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sourcerevision"
+          }
+        },
+        "required": [
+          "schemaVersion",
+          "scenarioCount",
+          "slaRuleCount",
+          "dependencyFileCount"
+        ],
+        "title": "RunSnapshotSummary",
+        "type": "object"
+      },
+      "RunSourceType": {
+        "enum": [
+          "protocol_smoke",
+          "debug_scenario",
+          "test_plan"
+        ],
+        "title": "RunSourceType",
+        "type": "string"
+      },
       "RunState": {
         "enum": [
           "initializing",
@@ -1959,6 +2971,197 @@
           "duplicate"
         ],
         "title": "RunStopResponse",
+        "type": "object"
+      },
+      "RunType": {
+        "enum": [
+          "debug",
+          "standard"
+        ],
+        "title": "RunType",
+        "type": "string"
+      },
+      "RunValidity": {
+        "enum": [
+          "valid",
+          "invalid"
+        ],
+        "title": "RunValidity",
+        "type": "string"
+      },
+      "RunValidityPatchRequest": {
+        "properties": {
+          "validity": {
+            "$ref": "#/components/schemas/RunValidity"
+          }
+        },
+        "required": [
+          "validity"
+        ],
+        "title": "RunValidityPatchRequest",
+        "type": "object"
+      },
+      "RunValidityPatchResponse": {
+        "properties": {
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "validity": {
+            "$ref": "#/components/schemas/RunValidity"
+          },
+          "validityUpdatedAt": {
+            "title": "Validityupdatedat",
+            "type": "string"
+          },
+          "validityUpdatedBy": {
+            "$ref": "#/components/schemas/RunActor"
+          }
+        },
+        "required": [
+          "id",
+          "validity",
+          "validityUpdatedAt",
+          "validityUpdatedBy"
+        ],
+        "title": "RunValidityPatchResponse",
+        "type": "object"
+      },
+      "RunVerdict": {
+        "properties": {
+          "acceptedAt": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Acceptedat"
+          },
+          "createdAt": {
+            "title": "Createdat",
+            "type": "string"
+          },
+          "durationMs": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Durationms"
+          },
+          "endedAt": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Endedat"
+          },
+          "failureMessage": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Failuremessage"
+          },
+          "failureReason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Failurereason"
+          },
+          "forcedConvergence": {
+            "title": "Forcedconvergence",
+            "type": "boolean"
+          },
+          "lastHeartbeatAt": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Lastheartbeatat"
+          },
+          "runType": {
+            "$ref": "#/components/schemas/RunType"
+          },
+          "slaResult": {
+            "$ref": "#/components/schemas/SlaResult"
+          },
+          "slaResultReason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Slaresultreason"
+          },
+          "sourceType": {
+            "$ref": "#/components/schemas/RunSourceType"
+          },
+          "startedAt": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Startedat"
+          },
+          "state": {
+            "$ref": "#/components/schemas/RunState"
+          },
+          "triggeredBy": {
+            "$ref": "#/components/schemas/RunActor"
+          },
+          "validity": {
+            "$ref": "#/components/schemas/RunValidity"
+          },
+          "warnings": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Warnings",
+            "type": "array"
+          }
+        },
+        "required": [
+          "state",
+          "runType",
+          "sourceType",
+          "validity",
+          "slaResult",
+          "triggeredBy",
+          "createdAt",
+          "forcedConvergence"
+        ],
+        "title": "RunVerdict",
         "type": "object"
       },
       "ScenarioAssertion": {
@@ -2990,6 +4193,15 @@
         ],
         "title": "SetupStatusResponse",
         "type": "object"
+      },
+      "SlaResult": {
+        "enum": [
+          "passed",
+          "failed",
+          "not_evaluated"
+        ],
+        "title": "SlaResult",
+        "type": "string"
       },
       "TestPlanCreateRequest": {
         "additionalProperties": false,
@@ -7672,6 +8884,253 @@
       }
     },
     "/v1/runs": {
+      "get": {
+        "operationId": "listRuns",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "state",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/RunState"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "State"
+            }
+          },
+          {
+            "in": "query",
+            "name": "validity",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/RunValidity"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Validity"
+            }
+          },
+          {
+            "in": "query",
+            "name": "runType",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/RunType"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Runtype"
+            }
+          },
+          {
+            "in": "query",
+            "name": "sourceType",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/RunSourceType"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Sourcetype"
+            }
+          },
+          {
+            "in": "query",
+            "name": "q",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 120,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Q"
+            }
+          },
+          {
+            "in": "query",
+            "name": "tag",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 50,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tag"
+            }
+          },
+          {
+            "in": "query",
+            "name": "recentHours",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "exclusiveMinimum": 0,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Recenthours"
+            }
+          },
+          {
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Cursor"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 20,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "sort",
+            "required": false,
+            "schema": {
+              "const": "-createdAt",
+              "default": "-createdAt",
+              "title": "Sort",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-workspace-id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Workspace-Id"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "surgepilot_session",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "SurgePilot Session"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RunListResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          }
+        },
+        "summary": "List Runs",
+        "tags": [
+          "runs"
+        ]
+      },
       "post": {
         "operationId": "createRun",
         "parameters": [
@@ -7815,6 +9274,436 @@
         ]
       }
     },
+    "/v1/runs/{runId}": {
+      "get": {
+        "operationId": "getRunReport",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "runId",
+            "required": true,
+            "schema": {
+              "title": "Runid",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-workspace-id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Workspace-Id"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "surgepilot_session",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "SurgePilot Session"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RunReportDetail"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          }
+        },
+        "summary": "Get Run Report Route",
+        "tags": [
+          "runs"
+        ]
+      }
+    },
+    "/v1/runs/{runId}/artifacts": {
+      "get": {
+        "operationId": "listRunArtifacts",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "runId",
+            "required": true,
+            "schema": {
+              "title": "Runid",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "artifactType",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/RunArtifactType"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Artifacttype"
+            }
+          },
+          {
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Cursor"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "sort",
+            "required": false,
+            "schema": {
+              "default": "createdAt",
+              "enum": [
+                "createdAt",
+                "-createdAt"
+              ],
+              "title": "Sort",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-workspace-id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Workspace-Id"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "surgepilot_session",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "SurgePilot Session"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RunArtifactListResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          }
+        },
+        "summary": "List Run Artifacts",
+        "tags": [
+          "runs"
+        ]
+      }
+    },
+    "/v1/runs/{runId}/artifacts/{artifactId}/download": {
+      "get": {
+        "operationId": "downloadRunArtifact",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "runId",
+            "required": true,
+            "schema": {
+              "title": "Runid",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "artifactId",
+            "required": true,
+            "schema": {
+              "title": "Artifactid",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-workspace-id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Workspace-Id"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "surgepilot_session",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "SurgePilot Session"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/octet-stream": {
+                "schema": {
+                  "format": "binary",
+                  "type": "string"
+                }
+              }
+            },
+            "description": "Run artifact bytes."
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "Download Run Artifact",
+        "tags": [
+          "runs"
+        ]
+      }
+    },
     "/v1/runs/{runId}/stop": {
       "post": {
         "operationId": "stopRun",
@@ -7953,6 +9842,139 @@
           }
         },
         "summary": "Stop Run",
+        "tags": [
+          "runs"
+        ]
+      }
+    },
+    "/v1/runs/{runId}/validity": {
+      "patch": {
+        "operationId": "patchRunValidity",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "runId",
+            "required": true,
+            "schema": {
+              "title": "Runid",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-workspace-id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Workspace-Id"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-csrf-token",
+            "required": true,
+            "schema": {
+              "title": "X-Csrf-Token",
+              "type": "string"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "surgepilot_session",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "SurgePilot Session"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RunValidityPatchRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RunValidityPatchResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          }
+        },
+        "summary": "Patch Run Validity",
         "tags": [
           "runs"
         ]
