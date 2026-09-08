@@ -64,6 +64,17 @@ export type LoadNodeSummary = components["schemas"]["LoadNodeSummary"];
 export type RunCreateRequest = components["schemas"]["RunCreateRequest"];
 export type RunCreateResponse = components["schemas"]["RunCreateResponse"];
 export type RunState = components["schemas"]["RunState"];
+export type RunListResponse = components["schemas"]["RunListResponse"];
+export type RunListItem = components["schemas"]["RunListItem"];
+export type RunReportDetail = components["schemas"]["RunReportDetail"];
+export type RunArtifactListResponse = components["schemas"]["RunArtifactListResponse"];
+export type RunArtifactItem = components["schemas"]["RunArtifactItem"];
+export type RunArtifactType = components["schemas"]["RunArtifactType"];
+export type RunType = components["schemas"]["RunType"];
+export type RunSourceType = components["schemas"]["RunSourceType"];
+export type RunValidity = components["schemas"]["RunValidity"];
+export type RunValidityPatchResponse = components["schemas"]["RunValidityPatchResponse"];
+export type RunStopResponse = components["schemas"]["RunStopResponse"];
 export type ScenarioAssertion = components["schemas"]["ScenarioAssertion"];
 export type ScenarioBody = components["schemas"]["ScenarioBody"];
 export type ScenarioCreateRequest =
@@ -838,5 +849,84 @@ export function createRun(
       "x-workspace-id": workspaceId,
     },
     body: JSON.stringify(payload),
+  });
+}
+
+export function listRuns(params: {
+  cursor?: string | null;
+  limit?: number;
+  q?: string;
+  recentHours?: number;
+  runType?: RunType | "";
+  sourceType?: RunSourceType | "";
+  state?: RunState | "";
+  validity?: RunValidity | "";
+  workspaceId: string;
+}) {
+  const query = new URLSearchParams();
+  if (params.cursor) query.set("cursor", params.cursor);
+  query.set("limit", String(params.limit ?? 20));
+  if (params.q) query.set("q", params.q);
+  if (params.recentHours) query.set("recentHours", String(params.recentHours));
+  if (params.runType) query.set("runType", params.runType);
+  if (params.sourceType) query.set("sourceType", params.sourceType);
+  if (params.state) query.set("state", params.state);
+  if (params.validity) query.set("validity", params.validity);
+  query.set("sort", "-createdAt");
+  return request<RunListResponse>(`/v1/runs?${query.toString()}`, {
+    headers: { "x-workspace-id": params.workspaceId },
+  });
+}
+
+export function getRunReport(runId: string, workspaceId: string) {
+  return request<RunReportDetail>(`/v1/runs/${encodeURIComponent(runId)}`, {
+    headers: { "x-workspace-id": workspaceId },
+  });
+}
+
+export function listRunArtifacts(params: {
+  runId: string;
+  workspaceId: string;
+  cursor?: string | null;
+}) {
+  const query = new URLSearchParams({ limit: "50", sort: "createdAt" });
+  if (params.cursor) query.set("cursor", params.cursor);
+  return request<RunArtifactListResponse>(
+    `/v1/runs/${encodeURIComponent(params.runId)}/artifacts?${query.toString()}`,
+    { headers: { "x-workspace-id": params.workspaceId } },
+  );
+}
+
+export function downloadRunArtifact(
+  runId: string,
+  artifactId: string,
+  workspaceId: string,
+) {
+  return fetch(apiUrl(`/v1/runs/${encodeURIComponent(runId)}/artifacts/${encodeURIComponent(artifactId)}/download`), {
+    credentials: "include",
+    headers: { "x-workspace-id": workspaceId },
+  }).then(async (response) => {
+    if (!response.ok) throw new ApiError(response.status, await response.json());
+    return response.blob();
+  });
+}
+
+export function patchRunValidity(
+  runId: string,
+  validity: RunValidity,
+  workspaceId: string,
+  csrfToken: string,
+) {
+  return request<RunValidityPatchResponse>(`/v1/runs/${encodeURIComponent(runId)}/validity`, {
+    method: "PATCH",
+    headers: { "x-csrf-token": csrfToken, "x-workspace-id": workspaceId },
+    body: JSON.stringify({ validity }),
+  });
+}
+
+export function stopRun(runId: string, workspaceId: string, csrfToken: string) {
+  return request<RunStopResponse>(`/v1/runs/${encodeURIComponent(runId)}/stop`, {
+    method: "POST",
+    headers: { "x-csrf-token": csrfToken, "x-workspace-id": workspaceId },
   });
 }

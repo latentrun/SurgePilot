@@ -11,6 +11,7 @@ from sqlalchemy.orm import sessionmaker
 from app.core.config import get_settings, validate_ssh_credential_encryption_key
 from app.core.errors import AppError
 from app.core.time import utc_now
+from app.services.run_reports import process_next_pending_final_stats_summary
 from app.services.load_nodes import (
     claim_next_initialization_attempt,
     complete_initialization_attempt,
@@ -40,6 +41,7 @@ from app.services.runs import (
 logger = logging.getLogger(__name__)
 LOAD_NODE_INIT_ADVISORY_LOCK = 9303
 RUN_PROTOCOL_ADVISORY_LOCK = 9404
+RUN_REPORT_SUMMARY_ADVISORY_LOCK = 9505
 
 
 class _PrecomputedLoadNodeInitializer(LoadNodeInitializer):
@@ -131,6 +133,12 @@ def run_once(
                     older_than=utc_now()
                     - timedelta(days=getattr(get_settings(), "runner_callback_retention_days", 30)),
                 )
+                session.commit()
+        with _advisory_lock_section(session, RUN_REPORT_SUMMARY_ADVISORY_LOCK) as locked:
+            if locked:
+                while process_next_pending_final_stats_summary(session):
+                    completed += 1
+                    session.commit()
                 session.commit()
         while True:
             with session.begin():

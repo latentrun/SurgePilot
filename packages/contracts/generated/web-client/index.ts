@@ -385,6 +385,57 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/runs/{runId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Run Report Route */
+        get: operations["getRunReport"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/runs/{runId}/artifacts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Run Artifacts */
+        get: operations["listRunArtifacts"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/runs/{runId}/artifacts/{artifactId}/download": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Download Run Artifact */
+        get: operations["downloadRunArtifact"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/runs/{runId}/stop": {
         parameters: {
             query?: never;
@@ -400,6 +451,23 @@ export interface paths {
         options?: never;
         head?: never;
         patch?: never;
+        trace?: never;
+    };
+    "/v1/runs/{runId}/validity": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Patch Run Validity */
+        patch: operations["patchRunValidity"];
         trace?: never;
     };
     "/v1/scenarios": {
@@ -503,24 +571,20 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
-        /** AuthSessionResponse */
         AuthSessionResponse: {
             /** Csrftoken */
             csrfToken: string;
             defaultWorkspace: components["schemas"]["WorkspaceSummary"];
             user: components["schemas"]["UserSummary"];
         };
-        /** CsrfTokenResponse */
         CsrfTokenResponse: {
             /** Csrftoken */
             csrfToken: string;
         };
-        /** CurrentUserResponse */
         CurrentUserResponse: {
             defaultWorkspace: components["schemas"]["WorkspaceSummary"];
             user: components["schemas"]["UserSummary"];
         };
-        /** DependencyFileDetail */
         DependencyFileDetail: {
             /** Contenttype */
             contentType?: string | null;
@@ -539,7 +603,6 @@ export interface components {
             /** Sizebytes */
             sizeBytes: number;
         };
-        /** DependencyFileListResponse */
         DependencyFileListResponse: {
             /** Items */
             items: components["schemas"]["DependencyFileSummary"][];
@@ -550,7 +613,6 @@ export interface components {
             /** Total */
             total: number;
         };
-        /** DependencyFileSummary */
         DependencyFileSummary: {
             /** Contenttype */
             contentType?: string | null;
@@ -569,12 +631,10 @@ export interface components {
             /** Sizebytes */
             sizeBytes: number;
         };
-        /** DisableLoadNodeRequest */
         DisableLoadNodeRequest: {
             /** Reason */
             reason?: string | null;
         };
-        /** EnvGroupCreateRequest */
         EnvGroupCreateRequest: {
             /** Description */
             description?: string | null;
@@ -585,7 +645,6 @@ export interface components {
                 [key: string]: string;
             };
         };
-        /** EnvGroupDetail */
         EnvGroupDetail: {
             /** Createdat */
             createdAt: string;
@@ -610,7 +669,6 @@ export interface components {
                 [key: string]: string;
             };
         };
-        /** EnvGroupListResponse */
         EnvGroupListResponse: {
             /** Items */
             items: components["schemas"]["EnvGroupSummary"][];
@@ -621,7 +679,6 @@ export interface components {
             /** Total */
             total: number;
         };
-        /** EnvGroupPatchRequest */
         EnvGroupPatchRequest: {
             /** Description */
             description?: string | null;
@@ -632,7 +689,6 @@ export interface components {
                 [key: string]: string;
             } | null;
         };
-        /** EnvGroupSummary */
         EnvGroupSummary: {
             /** Createdat */
             createdAt: string;
@@ -653,7 +709,6 @@ export interface components {
             /** Variablecount */
             variableCount: number;
         };
-        /** ErrorResponse */
         ErrorResponse: {
             /** Code */
             code: string;
@@ -664,7 +719,19 @@ export interface components {
             /** Requestid */
             requestId: string;
         };
-        /** FieldError */
+        FailureDiagnostics: {
+            /** Failuremessage */
+            failureMessage?: string | null;
+            /** Failurereason */
+            failureReason?: string | null;
+            /**
+             * Hasfailedrequestspreview
+             * @default false
+             */
+            hasFailedRequestsPreview: boolean;
+            /** Notes */
+            notes?: string[];
+        };
         FieldError: {
             /** Code */
             code: string;
@@ -673,7 +740,39 @@ export interface components {
             /** Message */
             message: string;
         };
-        /** InitializeLoadNodeRequest */
+        FinalStatsPreview: {
+            /** Rows */
+            rows: components["schemas"]["FinalStatsPreviewRow"][];
+            status: components["schemas"]["ReportSummaryStatus"];
+            /** Truncated */
+            truncated: boolean;
+            /** Warnings */
+            warnings?: string[];
+        };
+        FinalStatsPreviewRow: {
+            /** Averageresponsetimems */
+            averageResponseTimeMs?: number | null;
+            /** Errorrate */
+            errorRate?: number | null;
+            /** Failedrequests */
+            failedRequests?: number | null;
+            /** Label */
+            label?: string | null;
+            /** P90Ms */
+            p90Ms?: number | null;
+            /** P95Ms */
+            p95Ms?: number | null;
+            /** P99Ms */
+            p99Ms?: number | null;
+            /** Responsecodecounts */
+            responseCodeCounts?: {
+                [key: string]: number;
+            };
+            /** Successrequests */
+            successRequests?: number | null;
+            /** Totalrequests */
+            totalRequests?: number | null;
+        };
         InitializeLoadNodeRequest: {
             /**
              * Force
@@ -681,7 +780,6 @@ export interface components {
              */
             force: boolean;
         };
-        /** LoadNodeCreateRequest */
         LoadNodeCreateRequest: {
             credential: components["schemas"]["LoadNodeCredentialInput"];
             /** Host */
@@ -706,7 +804,6 @@ export interface components {
             /** Sshuser */
             sshUser: string;
         };
-        /** LoadNodeCredentialInput */
         LoadNodeCredentialInput: {
             /**
              * Authtype
@@ -720,11 +817,9 @@ export interface components {
             /** Privatekeypassphrase */
             privateKeyPassphrase?: string | null;
         };
-        /** LoadNodeCredentialUpdateRequest */
         LoadNodeCredentialUpdateRequest: {
             credential: components["schemas"]["LoadNodeCredentialInput"];
         };
-        /** LoadNodeDetail */
         LoadNodeDetail: {
             /**
              * Authtype
@@ -786,7 +881,6 @@ export interface components {
             /** Workspaceid */
             workspaceId?: string | null;
         };
-        /** LoadNodeInitAttemptDetail */
         LoadNodeInitAttemptDetail: {
             /** Bundleversion */
             bundleVersion?: string | null;
@@ -816,7 +910,6 @@ export interface components {
             /** Updatedat */
             updatedAt: string;
         };
-        /** LoadNodeInitAttemptListResponse */
         LoadNodeInitAttemptListResponse: {
             /** Items */
             items: components["schemas"]["LoadNodeInitAttemptSummary"][];
@@ -827,7 +920,6 @@ export interface components {
             /** Total */
             total: number;
         };
-        /** LoadNodeInitAttemptSummary */
         LoadNodeInitAttemptSummary: {
             /** Createdat */
             createdAt: string;
@@ -849,7 +941,6 @@ export interface components {
              */
             status: "queued" | "running" | "succeeded" | "failed";
         };
-        /** LoadNodeInitializeAttemptStatus */
         LoadNodeInitializeAttemptStatus: {
             /** Id */
             id: string;
@@ -861,7 +952,6 @@ export interface components {
              */
             status: "queued" | "running" | "succeeded" | "failed";
         };
-        /** LoadNodeInitializeNodeStatus */
         LoadNodeInitializeNodeStatus: {
             /** Id */
             id: string;
@@ -871,12 +961,10 @@ export interface components {
              */
             status: "uninitialized" | "initializing" | "idle" | "busy" | "offline" | "quarantined" | "disabled";
         };
-        /** LoadNodeInitializeResponse */
         LoadNodeInitializeResponse: {
             attempt: components["schemas"]["LoadNodeInitializeAttemptStatus"];
             node: components["schemas"]["LoadNodeInitializeNodeStatus"];
         };
-        /** LoadNodeLatestInitAttempt */
         LoadNodeLatestInitAttempt: {
             /** Errorcode */
             errorCode?: string | null;
@@ -894,7 +982,6 @@ export interface components {
              */
             status: "queued" | "running" | "succeeded" | "failed";
         };
-        /** LoadNodeListResponse */
         LoadNodeListResponse: {
             /** Items */
             items: components["schemas"]["LoadNodeSummary"][];
@@ -905,7 +992,6 @@ export interface components {
             /** Total */
             total: number;
         };
-        /** LoadNodePatchRequest */
         LoadNodePatchRequest: {
             /** Host */
             host?: string | null;
@@ -920,7 +1006,6 @@ export interface components {
             /** Sshuser */
             sshUser?: string | null;
         };
-        /** LoadNodeSshHostKeyInput */
         LoadNodeSshHostKeyInput: {
             /** Algorithm */
             algorithm: string;
@@ -929,7 +1014,6 @@ export interface components {
             /** Publickey */
             publicKey: string;
         };
-        /** LoadNodeSshHostKeyResponse */
         LoadNodeSshHostKeyResponse: {
             /** Algorithm */
             algorithm: string;
@@ -940,7 +1024,6 @@ export interface components {
             /** Publickey */
             publicKey: string;
         };
-        /** LoadNodeSshHostKeyScanRequest */
         LoadNodeSshHostKeyScanRequest: {
             /** Host */
             host: string;
@@ -955,7 +1038,6 @@ export interface components {
              */
             sshPort: number;
         };
-        /** LoadNodeSshHostKeyScanResponse */
         LoadNodeSshHostKeyScanResponse: {
             /** Algorithm */
             algorithm: string;
@@ -972,7 +1054,6 @@ export interface components {
             /** Sshport */
             sshPort: number;
         };
-        /** LoadNodeSummary */
         LoadNodeSummary: {
             /**
              * Authtype
@@ -1033,14 +1114,12 @@ export interface components {
             /** Workspaceid */
             workspaceId?: string | null;
         };
-        /** LoginRequest */
         LoginRequest: {
             /** Email */
             email?: string | null;
             /** Password */
             password?: string | null;
         };
-        /** RegisterRequest */
         RegisterRequest: {
             /** Displayname */
             displayName: string;
@@ -1052,7 +1131,55 @@ export interface components {
             /** Password */
             password: string;
         };
-        /** RunCreateRequest */
+        ReportSummaryStatus: "pending" | "parsed" | "failed" | "missing";
+        RunActor: {
+            /** Email */
+            email: string;
+            /** Id */
+            id: string;
+        };
+        RunArtifactItem: {
+            artifactType: components["schemas"]["RunArtifactType"];
+            /** Availableat */
+            availableAt?: string | null;
+            /** Contenttype */
+            contentType?: string | null;
+            /** Createdat */
+            createdAt: string;
+            /** Displayfilename */
+            displayFilename: string;
+            /** Downloadurl */
+            downloadUrl: string;
+            /** Id */
+            id: string;
+            /** Nodeid */
+            nodeId: string;
+            /** Relativepath */
+            relativePath: string;
+            /** Sha256 */
+            sha256: string;
+            /** Sizebytes */
+            sizeBytes: number;
+            /** Terminallate */
+            terminalLate: boolean;
+        };
+        RunArtifactListResponse: {
+            /** Items */
+            items: components["schemas"]["RunArtifactItem"][];
+            /** Nextcursor */
+            nextCursor?: string | null;
+        };
+        RunArtifactType: "taurus_log" | "jmeter_log" | "final_stats_csv" | "run_log" | "artifacts_zip";
+        RunArtifactsSummary: {
+            /** Count */
+            count: number;
+            /** Hasartifactszip */
+            hasArtifactsZip: boolean;
+            /** Hasfinalstatscsv */
+            hasFinalStatsCsv: boolean;
+            /** Latestavailableat */
+            latestAvailableAt?: string | null;
+        };
         RunCreateRequest: {
             /**
              * Confirmhighconcurrency
@@ -1078,7 +1205,6 @@ export interface components {
              */
             sourceType: "debug_scenario" | "test_plan";
         };
-        /** RunCreateResponse */
         RunCreateResponse: {
             /** Createdat */
             createdAt: string;
@@ -1104,12 +1230,154 @@ export interface components {
             /** Validity */
             validity?: string | null;
         };
-        /**
-         * RunState
-         * @enum {string}
-         */
+        RunKpiSummary: {
+            /** Averageresponsetimems */
+            averageResponseTimeMs?: number | null;
+            /** Errorrate */
+            errorRate?: number | null;
+            /** Failedrequests */
+            failedRequests?: number | null;
+            /** Missingreasons */
+            missingReasons?: string[];
+            /** P90Ms */
+            p90Ms?: number | null;
+            /** P95Ms */
+            p95Ms?: number | null;
+            /** P99Ms */
+            p99Ms?: number | null;
+            /** Sourceartifactid */
+            sourceArtifactId?: string | null;
+            status: components["schemas"]["ReportSummaryStatus"];
+            /** Throughputpersecond */
+            throughputPerSecond?: number | null;
+            /** Totalrequests */
+            totalRequests?: number | null;
+        };
+        RunListItem: {
+            /** Artifactcount */
+            artifactCount: number;
+            /** Createdat */
+            createdAt: string;
+            /** Durationms */
+            durationMs?: number | null;
+            /** Endedat */
+            endedAt?: string | null;
+            /** Hasartifactszip */
+            hasArtifactsZip: boolean;
+            /** Id */
+            id: string;
+            runType: components["schemas"]["RunType"];
+            selectedNode: components["schemas"]["RunSelectedNode"];
+            slaResult: components["schemas"]["SlaResult"];
+            /** Sourceid */
+            sourceId?: string | null;
+            /** Sourcename */
+            sourceName?: string | null;
+            /** Sourcerevision */
+            sourceRevision?: number | null;
+            sourceType: components["schemas"]["RunSourceType"];
+            /** Startedat */
+            startedAt?: string | null;
+            state: components["schemas"]["RunState"];
+            /** Tags */
+            tags?: string[];
+            triggeredBy: components["schemas"]["RunActor"];
+            validity: components["schemas"]["RunValidity"];
+        };
+        RunListResponse: {
+            /** Items */
+            items: components["schemas"]["RunListItem"][];
+            /** Nextcursor */
+            nextCursor?: string | null;
+        };
+        RunReportDetail: {
+            artifactsSummary: components["schemas"]["RunArtifactsSummary"];
+            failureDiagnostics: components["schemas"]["FailureDiagnostics"];
+            finalStatsPreview: components["schemas"]["FinalStatsPreview"];
+            /** Id */
+            id: string;
+            kpiSummary: components["schemas"]["RunKpiSummary"];
+            snapshot: components["schemas"]["RunSnapshotSummary"];
+            verdict: components["schemas"]["RunVerdict"];
+        };
+        RunSelectedNode: {
+            /** Id */
+            id: string;
+            /** Name */
+            name: string;
+            /** Scope */
+            scope: string;
+        };
+        RunSnapshotLoadSettings: {
+            /** Concurrencypernode */
+            concurrencyPerNode?: number | null;
+            /** Delayseconds */
+            delaySeconds?: number | null;
+            /** Holdforseconds */
+            holdForSeconds?: number | null;
+            /** Iterations */
+            iterations?: number | null;
+            /** Rampupseconds */
+            rampUpSeconds?: number | null;
+            /** Steps */
+            steps?: number | null;
+            /** Targetrps */
+            targetRps?: number | null;
+        };
+        RunSnapshotResourceRequest: {
+            /** Expectedconcurrencypernode */
+            expectedConcurrencyPerNode?: number | null;
+            /** Mode */
+            mode?: string | null;
+            /** Pooltype */
+            poolType?: string | null;
+            /** Selectednodeid */
+            selectedNodeId?: string | null;
+        };
+        RunSnapshotScenarioItem: {
+            loadSettings: components["schemas"]["RunSnapshotLoadSettings"];
+            /** Scenarioname */
+            scenarioName: string;
+        };
+        RunSnapshotSlaRule: {
+            /** Condition */
+            condition?: string | null;
+            /** Metric */
+            metric?: string | null;
+            /** Thresholdtext */
+            thresholdText?: string | null;
+        };
+        RunSnapshotSummary: {
+            /** Dependencyfilecount */
+            dependencyFileCount: number;
+            /** Dependencyfilenames */
+            dependencyFileNames?: string[];
+            /** Envgroupname */
+            envGroupName?: string | null;
+            /** Envgroupvariablekeys */
+            envGroupVariableKeys?: string[];
+            resourceRequest?: components["schemas"]["RunSnapshotResourceRequest"] | null;
+            /** Runmode */
+            runMode?: string | null;
+            /** Scenariocount */
+            scenarioCount: number;
+            /** Scenarioitems */
+            scenarioItems?: components["schemas"]["RunSnapshotScenarioItem"][];
+            /** Scenarionames */
+            scenarioNames?: string[];
+            /** Schemaversion */
+            schemaVersion: number;
+            /** Slarulecount */
+            slaRuleCount: number;
+            /** Slarules */
+            slaRules?: components["schemas"]["RunSnapshotSlaRule"][];
+            /** Sourcename */
+            sourceName?: string | null;
+            /** Sourcerevision */
+            sourceRevision?: number | null;
+        };
+        RunSourceType: "protocol_smoke" | "debug_scenario" | "test_plan";
         RunState: "initializing" | "running" | "stopping" | "finished" | "failed" | "aborted";
-        /** RunStopResponse */
         RunStopResponse: {
             /** Duplicate */
             duplicate: boolean;
@@ -1119,7 +1387,49 @@ export interface components {
             /** Stoprequestedat */
             stopRequestedAt?: string | null;
         };
-        /** ScenarioAssertion */
+        RunType: "debug" | "standard";
+        RunValidity: "valid" | "invalid";
+        RunValidityPatchRequest: {
+            validity: components["schemas"]["RunValidity"];
+        };
+        RunValidityPatchResponse: {
+            /** Id */
+            id: string;
+            validity: components["schemas"]["RunValidity"];
+            /** Validityupdatedat */
+            validityUpdatedAt: string;
+            validityUpdatedBy: components["schemas"]["RunActor"];
+        };
+        RunVerdict: {
+            /** Acceptedat */
+            acceptedAt?: string | null;
+            /** Createdat */
+            createdAt: string;
+            /** Durationms */
+            durationMs?: number | null;
+            /** Endedat */
+            endedAt?: string | null;
+            /** Failuremessage */
+            failureMessage?: string | null;
+            /** Failurereason */
+            failureReason?: string | null;
+            /** Forcedconvergence */
+            forcedConvergence: boolean;
+            /** Lastheartbeatat */
+            lastHeartbeatAt?: string | null;
+            runType: components["schemas"]["RunType"];
+            slaResult: components["schemas"]["SlaResult"];
+            /** Slaresultreason */
+            slaResultReason?: string | null;
+            sourceType: components["schemas"]["RunSourceType"];
+            /** Startedat */
+            startedAt?: string | null;
+            state: components["schemas"]["RunState"];
+            triggeredBy: components["schemas"]["RunActor"];
+            validity: components["schemas"]["RunValidity"];
+            /** Warnings */
+            warnings?: string[];
+        };
         ScenarioAssertion: {
             /** Contains */
             contains?: string | null;
@@ -1152,7 +1462,6 @@ export interface components {
              */
             type: "status_code" | "body_contains" | "jsonpath_exists" | "jsonpath_equals";
         };
-        /** ScenarioBody */
         ScenarioBody: {
             /** Contenttype */
             contentType?: string | null;
@@ -1167,7 +1476,6 @@ export interface components {
              */
             type: "none" | "raw" | "form";
         };
-        /** ScenarioCreateRequest */
         ScenarioCreateRequest: {
             /**
              * Baseurlexpression
@@ -1186,7 +1494,6 @@ export interface components {
             /** Tags */
             tags?: string[];
         };
-        /** ScenarioDataSource */
         ScenarioDataSource: {
             /** Delimiter */
             delimiter?: string | null;
@@ -1216,7 +1523,6 @@ export interface components {
             /** Variablenames */
             variableNames?: string[];
         };
-        /** ScenarioDefaultSettings */
         ScenarioDefaultSettings: {
             /**
              * Followredirects
@@ -1254,7 +1560,6 @@ export interface components {
              */
             timeoutMs: number;
         };
-        /** ScenarioDetail */
         ScenarioDetail: {
             /** Baseurlexpression */
             baseUrlExpression: string;
@@ -1289,7 +1594,6 @@ export interface components {
             /** Updatedat */
             updatedAt: string;
         };
-        /** ScenarioExtractor */
         ScenarioExtractor: {
             /**
              * Defaultvalue
@@ -1325,7 +1629,6 @@ export interface components {
             /** Variablename */
             variableName: string;
         };
-        /** ScenarioFormField */
         ScenarioFormField: {
             /**
              * Enabled
@@ -1342,7 +1645,6 @@ export interface components {
              */
             value: string;
         };
-        /** ScenarioListResponse */
         ScenarioListResponse: {
             /** Items */
             items: components["schemas"]["ScenarioSummary"][];
@@ -1353,7 +1655,6 @@ export interface components {
             /** Total */
             total: number;
         };
-        /** ScenarioNamedValue */
         ScenarioNamedValue: {
             /**
              * Enabled
@@ -1370,7 +1671,6 @@ export interface components {
              */
             value: string;
         };
-        /** ScenarioPatchRequest */
         ScenarioPatchRequest: {
             /**
              * Baseurlexpression
@@ -1391,7 +1691,6 @@ export interface components {
             /** Tags */
             tags?: string[];
         };
-        /** ScenarioScript */
         ScenarioScript: {
             /**
              * Enabled
@@ -1414,7 +1713,6 @@ export interface components {
             /** Scripttext */
             scriptText?: string | null;
         };
-        /** ScenarioStep */
         ScenarioStep: {
             /** Assertions */
             assertions?: components["schemas"]["ScenarioAssertion"][];
@@ -1447,7 +1745,6 @@ export interface components {
             /** Uploadfiles */
             uploadFiles?: components["schemas"]["ScenarioUploadFile"][];
         };
-        /** ScenarioStepSettings */
         ScenarioStepSettings: {
             /** Followredirects */
             followRedirects?: boolean | null;
@@ -1458,7 +1755,6 @@ export interface components {
             /** Timeoutms */
             timeoutMs?: number | null;
         };
-        /** ScenarioSummary */
         ScenarioSummary: {
             /** Createdat */
             createdAt: string;
@@ -1486,7 +1782,6 @@ export interface components {
             /** Updatedat */
             updatedAt: string;
         };
-        /** ScenarioUploadFile */
         ScenarioUploadFile: {
             /** Dependencyfileid */
             dependencyFileId: string;
@@ -1502,7 +1797,6 @@ export interface components {
             /** Mimetype */
             mimeType?: string | null;
         };
-        /** SetupStatusResponse */
         SetupStatusResponse: {
             /** Allowsignup */
             allowSignup: boolean;
@@ -1511,7 +1805,7 @@ export interface components {
             /** Needsbootstrap */
             needsBootstrap: boolean;
         };
-        /** TestPlanCreateRequest */
+        SlaResult: "passed" | "failed" | "not_evaluated";
         TestPlanCreateRequest: {
             /** Description */
             description?: string | null;
@@ -1533,7 +1827,6 @@ export interface components {
             /** Tags */
             tags?: string[];
         };
-        /** TestPlanDetail */
         TestPlanDetail: {
             /** Createdat */
             createdAt: string;
@@ -1567,14 +1860,12 @@ export interface components {
             /** Updatedat */
             updatedAt: string;
         };
-        /** TestPlanEnvGroupRef */
         TestPlanEnvGroupRef: {
             /** Id */
             id: string;
             /** Name */
             name: string;
         };
-        /** TestPlanListResponse */
         TestPlanListResponse: {
             /** Items */
             items: components["schemas"]["TestPlanSummary"][];
@@ -1585,7 +1876,6 @@ export interface components {
             /** Total */
             total: number;
         };
-        /** TestPlanLoadSettings */
         TestPlanLoadSettings: {
             /**
              * Concurrencypernode
@@ -1614,7 +1904,6 @@ export interface components {
             /** Targetrps */
             targetRps?: number | null;
         };
-        /** TestPlanPatchRequest */
         TestPlanPatchRequest: {
             /** Description */
             description?: string | null;
@@ -1638,14 +1927,12 @@ export interface components {
             /** Tags */
             tags?: string[];
         };
-        /** TestPlanResourceConfig */
         TestPlanResourceConfig: {
             /** Pooltype */
             poolType?: ("public" | "private") | null;
             /** Selectednodeid */
             selectedNodeId?: string | null;
         };
-        /** TestPlanResourceSummary */
         TestPlanResourceSummary: {
             /** Pooltype */
             poolType?: ("public" | "private") | null;
@@ -1656,7 +1943,6 @@ export interface components {
             /** Selectednodestatus */
             selectedNodeStatus?: string | null;
         };
-        /** TestPlanRunGuard */
         TestPlanRunGuard: {
             /** Expectedconcurrencypernode */
             expectedConcurrencyPerNode: number;
@@ -1667,7 +1953,6 @@ export interface components {
             /** Softconcurrencypernodelimit */
             softConcurrencyPerNodeLimit: number;
         };
-        /** TestPlanScenarioItemDetail */
         TestPlanScenarioItemDetail: {
             /**
              * Enabled
@@ -1693,7 +1978,6 @@ export interface components {
             /** Updatedat */
             updatedAt?: string | null;
         };
-        /** TestPlanScenarioItemInput */
         TestPlanScenarioItemInput: {
             /**
              * Enabled
@@ -1711,7 +1995,6 @@ export interface components {
             /** Scenarioid */
             scenarioId: string;
         };
-        /** TestPlanSlaRuleDetail */
         TestPlanSlaRuleDetail: {
             /**
              * Action
@@ -1747,7 +2030,6 @@ export interface components {
             /** Timeframeseconds */
             timeframeSeconds?: number | null;
         };
-        /** TestPlanSlaRuleInput */
         TestPlanSlaRuleInput: {
             /**
              * Action
@@ -1783,7 +2065,6 @@ export interface components {
             /** Timeframeseconds */
             timeframeSeconds?: number | null;
         };
-        /** TestPlanSlaThreshold */
         TestPlanSlaThreshold: {
             /**
              * Unit
@@ -1793,7 +2074,6 @@ export interface components {
             /** Value */
             value: number;
         };
-        /** TestPlanSummary */
         TestPlanSummary: {
             /** Description */
             description?: string | null;
@@ -1830,14 +2110,12 @@ export interface components {
             updatedAt: string;
             updatedBy?: components["schemas"]["TestPlanUpdatedBy"] | null;
         };
-        /** TestPlanUpdatedBy */
         TestPlanUpdatedBy: {
             /** Displayname */
             displayName: string;
             /** Id */
             id: string;
         };
-        /** UserSummary */
         UserSummary: {
             /** Displayname */
             displayName: string;
@@ -1856,7 +2134,6 @@ export interface components {
              */
             status: "active";
         };
-        /** WorkspaceSummary */
         WorkspaceSummary: {
             /** Id */
             id: string;
@@ -1872,66 +2149,31 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
-    getCsrfToken: {
+    createEnvGroup: {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                "x-workspace-id"?: string | null;
+                "x-csrf-token": string;
+            };
             path?: never;
             cookie?: {
                 surgepilot_session?: string | null;
             };
         };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["CsrfTokenResponse"];
-                };
-            };
-            /** @description Unauthorized */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Unprocessable Entity */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-        };
-    };
-    login: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["LoginRequest"];
+                "application/json": components["schemas"]["EnvGroupCreateRequest"];
             };
         };
         responses: {
             /** @description Successful Response */
-            200: {
+            201: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["AuthSessionResponse"];
+                    "application/json": components["schemas"]["EnvGroupDetail"];
                 };
             };
             /** @description Bad Request */
@@ -1951,37 +2193,6 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
-            };
-            /** @description Unprocessable Entity */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-        };
-    };
-    logout: {
-        parameters: {
-            query?: never;
-            header: {
-                "x-csrf-token": string;
-            };
-            path?: never;
-            cookie?: {
-                surgepilot_session?: string | null;
-            };
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            204: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
             };
             /** @description Forbidden */
             403: {
@@ -1992,6 +2203,15 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
             /** @description Unprocessable Entity */
             422: {
                 headers: {
@@ -2003,24 +2223,31 @@ export interface operations {
             };
         };
     };
-    getCurrentUser: {
+    createLoadNode: {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                "x-workspace-id"?: string | null;
+                "x-csrf-token": string;
+            };
             path?: never;
             cookie?: {
                 surgepilot_session?: string | null;
             };
         };
-        requestBody?: never;
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LoadNodeCreateRequest"];
+            };
+        };
         responses: {
             /** @description Successful Response */
-            200: {
+            201: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["CurrentUserResponse"];
+                    "application/json": components["schemas"]["LoadNodeDetail"];
                 };
             };
             /** @description Bad Request */
@@ -2034,48 +2261,6 @@ export interface operations {
             };
             /** @description Unauthorized */
             401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Unprocessable Entity */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-        };
-    };
-    register: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["RegisterRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["AuthSessionResponse"];
-                };
-            };
-            /** @description Bad Request */
-            400: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -2121,31 +2306,40 @@ export interface operations {
             };
         };
     };
-    listDependencyFiles: {
+    createRun: {
         parameters: {
-            query?: {
-                page?: number;
-                pageSize?: number;
-                q?: string | null;
-                sort?: string;
-            };
-            header?: {
+            query?: never;
+            header: {
                 "x-workspace-id"?: string | null;
+                "x-csrf-token": string;
             };
             path?: never;
             cookie?: {
                 surgepilot_session?: string | null;
             };
         };
-        requestBody?: never;
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RunCreateRequest"];
+            };
+        };
         responses: {
-            /** @description Successful Response */
+            /** @description OK */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["DependencyFileListResponse"];
+                    "application/json": components["schemas"]["RunCreateResponse"];
+                };
+            };
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RunCreateResponse"];
                 };
             };
             /** @description Bad Request */
@@ -2175,9 +2369,36 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
         };
     };
-    uploadDependencyFile: {
+    createScenario: {
         parameters: {
             query?: never;
             header: {
@@ -2191,10 +2412,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "multipart/form-data": {
-                    /** Format: binary */
-                    file: string;
-                };
+                "application/json": components["schemas"]["ScenarioCreateRequest"];
             };
         };
         responses: {
@@ -2204,22 +2422,15 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["DependencyFileDetail"];
+                    "application/json": components["schemas"]["ScenarioDetail"];
                 };
             };
-            /** @description Invalid Dependency File filename. */
+            /** @description Bad Request */
             400: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    /**
-                     * @example {
-                     *       "code": "INVALID_FILENAME",
-                     *       "message": "Filename is invalid.",
-                     *       "requestId": "req_example"
-                     *     }
-                     */
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
@@ -2241,40 +2452,8 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
-            /** @description Active Dependency File filename already exists in this Workspace. */
-            409: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    /**
-                     * @example {
-                     *       "code": "DEPENDENCY_FILE_NAME_CONFLICT",
-                     *       "message": "Dependency File filename already exists.",
-                     *       "requestId": "req_example"
-                     *     }
-                     */
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Uploaded Dependency File exceeds the configured size limit. */
-            413: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    /**
-                     * @example {
-                     *       "code": "PAYLOAD_TOO_LARGE",
-                     *       "message": "Uploaded file is too large.",
-                     *       "requestId": "req_example"
-                     *     }
-                     */
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Unsupported Media Type */
-            415: {
+            /** @description Not Found */
+            404: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -2291,46 +2470,33 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
-            /** @description MinIO storage is unavailable or the configured bucket is inaccessible. */
-            503: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    /**
-                     * @example {
-                     *       "code": "STORAGE_UNAVAILABLE",
-                     *       "message": "Storage is unavailable.",
-                     *       "requestId": "req_example"
-                     *     }
-                     */
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
         };
     };
-    getDependencyFile: {
+    createTestPlan: {
         parameters: {
             query?: never;
-            header?: {
+            header: {
                 "x-workspace-id"?: string | null;
+                "x-csrf-token": string;
             };
-            path: {
-                dependencyFileId: string;
-            };
+            path?: never;
             cookie?: {
                 surgepilot_session?: string | null;
             };
         };
-        requestBody?: never;
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TestPlanCreateRequest"];
+            };
+        };
         responses: {
             /** @description Successful Response */
-            200: {
+            201: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["DependencyFileDetail"];
+                    "application/json": components["schemas"]["TestPlanDetail"];
                 };
             };
             /** @description Bad Request */
@@ -2466,6 +2632,407 @@ export interface operations {
             };
         };
     };
+    deleteEnvGroup: {
+        parameters: {
+            query?: never;
+            header: {
+                "x-workspace-id"?: string | null;
+                "x-csrf-token": string;
+            };
+            path: {
+                envGroupId: string;
+            };
+            cookie?: {
+                surgepilot_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    deleteLoadNode: {
+        parameters: {
+            query?: never;
+            header: {
+                "x-workspace-id"?: string | null;
+                "x-csrf-token": string;
+            };
+            path: {
+                loadNodeId: string;
+            };
+            cookie?: {
+                surgepilot_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    deleteScenario: {
+        parameters: {
+            query?: never;
+            header: {
+                "x-workspace-id"?: string | null;
+                "x-csrf-token": string;
+            };
+            path: {
+                scenarioId: string;
+            };
+            cookie?: {
+                surgepilot_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    deleteTestPlan: {
+        parameters: {
+            query?: never;
+            header: {
+                "x-workspace-id"?: string | null;
+                "x-csrf-token": string;
+            };
+            path: {
+                testPlanId: string;
+            };
+            cookie?: {
+                surgepilot_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    disableLoadNode: {
+        parameters: {
+            query?: never;
+            header: {
+                "x-workspace-id"?: string | null;
+                "x-csrf-token": string;
+            };
+            path: {
+                loadNodeId: string;
+            };
+            cookie?: {
+                surgepilot_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DisableLoadNodeRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LoadNodeDetail"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
     downloadDependencyFile: {
         parameters: {
             query?: never;
@@ -2553,31 +3120,29 @@ export interface operations {
             };
         };
     };
-    listEnvGroups: {
+    downloadRunArtifact: {
         parameters: {
-            query?: {
-                page?: number;
-                pageSize?: number;
-                q?: string | null;
-                sort?: string;
-            };
+            query?: never;
             header?: {
                 "x-workspace-id"?: string | null;
             };
-            path?: never;
+            path: {
+                runId: string;
+                artifactId: string;
+            };
             cookie?: {
                 surgepilot_session?: string | null;
             };
         };
         requestBody?: never;
         responses: {
-            /** @description Successful Response */
+            /** @description Run artifact bytes. */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["EnvGroupListResponse"];
+                    "application/octet-stream": string;
                 };
             };
             /** @description Bad Request */
@@ -2607,25 +3172,59 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
         };
     };
-    createEnvGroup: {
+    duplicateEnvGroup: {
         parameters: {
             query?: never;
             header: {
                 "x-workspace-id"?: string | null;
                 "x-csrf-token": string;
             };
-            path?: never;
+            path: {
+                envGroupId: string;
+            };
             cookie?: {
                 surgepilot_session?: string | null;
             };
         };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["EnvGroupCreateRequest"];
-            };
-        };
+        requestBody?: never;
         responses: {
             /** @description Successful Response */
             201: {
@@ -2663,8 +3262,249 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    enableLoadNode: {
+        parameters: {
+            query?: never;
+            header: {
+                "x-workspace-id"?: string | null;
+                "x-csrf-token": string;
+            };
+            path: {
+                loadNodeId: string;
+            };
+            cookie?: {
+                surgepilot_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LoadNodeDetail"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
             /** @description Conflict */
             409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    getCsrfToken: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                surgepilot_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CsrfTokenResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    getCurrentUser: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                surgepilot_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CurrentUserResponse"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    getDependencyFile: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-workspace-id"?: string | null;
+            };
+            path: {
+                dependencyFileId: string;
+            };
+            cookie?: {
+                surgepilot_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DependencyFileDetail"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -2754,104 +3594,20 @@ export interface operations {
             };
         };
     };
-    deleteEnvGroup: {
+    getLoadNode: {
         parameters: {
             query?: never;
-            header: {
+            header?: {
                 "x-workspace-id"?: string | null;
-                "x-csrf-token": string;
             };
             path: {
-                envGroupId: string;
+                loadNodeId: string;
             };
             cookie?: {
                 surgepilot_session?: string | null;
             };
         };
         requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            204: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Bad Request */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Unauthorized */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Forbidden */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Not Found */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Conflict */
-            409: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Unprocessable Entity */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-        };
-    };
-    patchEnvGroup: {
-        parameters: {
-            query?: never;
-            header: {
-                "x-workspace-id"?: string | null;
-                "x-csrf-token": string;
-            };
-            path: {
-                envGroupId: string;
-            };
-            cookie?: {
-                surgepilot_session?: string | null;
-            };
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["EnvGroupPatchRequest"];
-            };
-        };
         responses: {
             /** @description Successful Response */
             200: {
@@ -2859,7 +3615,388 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["EnvGroupDetail"];
+                    "application/json": components["schemas"]["LoadNodeDetail"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    getLoadNodeInitAttempt: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-workspace-id"?: string | null;
+            };
+            path: {
+                loadNodeId: string;
+                attemptId: string;
+            };
+            cookie?: {
+                surgepilot_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LoadNodeInitAttemptDetail"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    getRunReport: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-workspace-id"?: string | null;
+            };
+            path: {
+                runId: string;
+            };
+            cookie?: {
+                surgepilot_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RunReportDetail"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    getScenario: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-workspace-id"?: string | null;
+            };
+            path: {
+                scenarioId: string;
+            };
+            cookie?: {
+                surgepilot_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ScenarioDetail"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    getSetupStatus: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SetupStatusResponse"];
+                };
+            };
+        };
+    };
+    getTestPlan: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-workspace-id"?: string | null;
+            };
+            path: {
+                testPlanId: string;
+            };
+            cookie?: {
+                surgepilot_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TestPlanDetail"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    initializeLoadNode: {
+        parameters: {
+            query?: never;
+            header: {
+                "x-workspace-id"?: string | null;
+                "x-csrf-token": string;
+            };
+            path: {
+                loadNodeId: string;
+            };
+            cookie?: {
+                surgepilot_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["InitializeLoadNodeRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LoadNodeInitializeResponse"];
                 };
             };
             /** @description Bad Request */
@@ -2918,15 +4055,129 @@ export interface operations {
             };
         };
     };
-    duplicateEnvGroup: {
+    listDependencyFiles: {
         parameters: {
-            query?: never;
-            header: {
+            query?: {
+                page?: number;
+                pageSize?: number;
+                q?: string | null;
+                sort?: string;
+            };
+            header?: {
                 "x-workspace-id"?: string | null;
-                "x-csrf-token": string;
+            };
+            path?: never;
+            cookie?: {
+                surgepilot_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DependencyFileListResponse"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    listEnvGroups: {
+        parameters: {
+            query?: {
+                page?: number;
+                pageSize?: number;
+                q?: string | null;
+                sort?: string;
+            };
+            header?: {
+                "x-workspace-id"?: string | null;
+            };
+            path?: never;
+            cookie?: {
+                surgepilot_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvGroupListResponse"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    listLoadNodeInitAttempts: {
+        parameters: {
+            query?: {
+                limit?: number;
+                offset?: number;
+            };
+            header?: {
+                "x-workspace-id"?: string | null;
             };
             path: {
-                envGroupId: string;
+                loadNodeId: string;
             };
             cookie?: {
                 surgepilot_session?: string | null;
@@ -2935,12 +4186,12 @@ export interface operations {
         requestBody?: never;
         responses: {
             /** @description Successful Response */
-            201: {
+            200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["EnvGroupDetail"];
+                    "application/json": components["schemas"]["LoadNodeInitAttemptListResponse"];
                 };
             };
             /** @description Bad Request */
@@ -3058,11 +4309,331 @@ export interface operations {
             };
         };
     };
-    createLoadNode: {
+    listRunArtifacts: {
+        parameters: {
+            query?: {
+                artifactType?: components["schemas"]["RunArtifactType"] | null;
+                cursor?: string | null;
+                limit?: number;
+                sort?: "createdAt" | "-createdAt";
+            };
+            header?: {
+                "x-workspace-id"?: string | null;
+            };
+            path: {
+                runId: string;
+            };
+            cookie?: {
+                surgepilot_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RunArtifactListResponse"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    listRuns: {
+        parameters: {
+            query?: {
+                state?: components["schemas"]["RunState"] | null;
+                validity?: components["schemas"]["RunValidity"] | null;
+                runType?: components["schemas"]["RunType"] | null;
+                sourceType?: components["schemas"]["RunSourceType"] | null;
+                q?: string | null;
+                tag?: string | null;
+                recentHours?: number | null;
+                cursor?: string | null;
+                limit?: number;
+                sort?: "-createdAt";
+            };
+            header?: {
+                "x-workspace-id"?: string | null;
+            };
+            path?: never;
+            cookie?: {
+                surgepilot_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RunListResponse"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    listScenarios: {
+        parameters: {
+            query?: {
+                page?: number;
+                pageSize?: number;
+                search?: string | null;
+                tag?: string[] | null;
+                sort?: "-updatedAt" | "updatedAt" | "name" | "-name";
+            };
+            header?: {
+                "x-workspace-id"?: string | null;
+            };
+            path?: never;
+            cookie?: {
+                surgepilot_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ScenarioListResponse"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    listTestPlans: {
+        parameters: {
+            query?: {
+                page?: number;
+                pageSize?: number;
+                search?: string | null;
+                tag?: string | null;
+                sort?: string;
+            };
+            header?: {
+                "x-workspace-id"?: string | null;
+            };
+            path?: never;
+            cookie?: {
+                surgepilot_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TestPlanListResponse"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    login: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LoginRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthSessionResponse"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    logout: {
         parameters: {
             query?: never;
             header: {
-                "x-workspace-id"?: string | null;
                 "x-csrf-token": string;
             };
             path?: never;
@@ -3070,14 +4641,142 @@ export interface operations {
                 surgepilot_session?: string | null;
             };
         };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    patchEnvGroup: {
+        parameters: {
+            query?: never;
+            header: {
+                "x-workspace-id"?: string | null;
+                "x-csrf-token": string;
+            };
+            path: {
+                envGroupId: string;
+            };
+            cookie?: {
+                surgepilot_session?: string | null;
+            };
+        };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["LoadNodeCreateRequest"];
+                "application/json": components["schemas"]["EnvGroupPatchRequest"];
             };
         };
         responses: {
             /** @description Successful Response */
-            201: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvGroupDetail"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    patchLoadNode: {
+        parameters: {
+            query?: never;
+            header: {
+                "x-workspace-id"?: string | null;
+                "x-csrf-token": string;
+            };
+            path: {
+                loadNodeId: string;
+            };
+            cookie?: {
+                surgepilot_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LoadNodePatchRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -3096,6 +4795,321 @@ export interface operations {
             };
             /** @description Unauthorized */
             401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    patchRunValidity: {
+        parameters: {
+            query?: never;
+            header: {
+                "x-workspace-id"?: string | null;
+                "x-csrf-token": string;
+            };
+            path: {
+                runId: string;
+            };
+            cookie?: {
+                surgepilot_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RunValidityPatchRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RunValidityPatchResponse"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    patchScenario: {
+        parameters: {
+            query?: never;
+            header: {
+                "x-workspace-id"?: string | null;
+                "x-csrf-token": string;
+            };
+            path: {
+                scenarioId: string;
+            };
+            cookie?: {
+                surgepilot_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ScenarioPatchRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ScenarioDetail"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    patchTestPlan: {
+        parameters: {
+            query?: never;
+            header: {
+                "x-workspace-id"?: string | null;
+                "x-csrf-token": string;
+            };
+            path: {
+                testPlanId: string;
+            };
+            cookie?: {
+                surgepilot_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TestPlanPatchRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TestPlanDetail"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    register: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RegisterRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthSessionResponse"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -3206,78 +5220,7 @@ export interface operations {
             };
         };
     };
-    getLoadNode: {
-        parameters: {
-            query?: never;
-            header?: {
-                "x-workspace-id"?: string | null;
-            };
-            path: {
-                loadNodeId: string;
-            };
-            cookie?: {
-                surgepilot_session?: string | null;
-            };
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["LoadNodeDetail"];
-                };
-            };
-            /** @description Bad Request */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Unauthorized */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Forbidden */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Not Found */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Unprocessable Entity */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-        };
-    };
-    deleteLoadNode: {
+    stopRun: {
         parameters: {
             query?: never;
             header: {
@@ -3285,7 +5228,7 @@ export interface operations {
                 "x-csrf-token": string;
             };
             path: {
-                loadNodeId: string;
+                runId: string;
             };
             cookie?: {
                 surgepilot_session?: string | null;
@@ -3293,12 +5236,23 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Successful Response */
-            204: {
+            /** @description OK */
+            200: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["RunStopResponse"];
+                };
+            };
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RunStopResponse"];
+                };
             };
             /** @description Bad Request */
             400: {
@@ -3356,7 +5310,7 @@ export interface operations {
             };
         };
     };
-    patchLoadNode: {
+    trustLoadNodeSshHostKey: {
         parameters: {
             query?: never;
             header: {
@@ -3372,7 +5326,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["LoadNodePatchRequest"];
+                "application/json": components["schemas"]["LoadNodeSshHostKeyInput"];
             };
         };
         responses: {
@@ -3535,489 +5489,7 @@ export interface operations {
             };
         };
     };
-    disableLoadNode: {
-        parameters: {
-            query?: never;
-            header: {
-                "x-workspace-id"?: string | null;
-                "x-csrf-token": string;
-            };
-            path: {
-                loadNodeId: string;
-            };
-            cookie?: {
-                surgepilot_session?: string | null;
-            };
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["DisableLoadNodeRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["LoadNodeDetail"];
-                };
-            };
-            /** @description Bad Request */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Unauthorized */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Forbidden */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Not Found */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Conflict */
-            409: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Unprocessable Entity */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-        };
-    };
-    enableLoadNode: {
-        parameters: {
-            query?: never;
-            header: {
-                "x-workspace-id"?: string | null;
-                "x-csrf-token": string;
-            };
-            path: {
-                loadNodeId: string;
-            };
-            cookie?: {
-                surgepilot_session?: string | null;
-            };
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["LoadNodeDetail"];
-                };
-            };
-            /** @description Bad Request */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Unauthorized */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Forbidden */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Not Found */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Conflict */
-            409: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Unprocessable Entity */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-        };
-    };
-    listLoadNodeInitAttempts: {
-        parameters: {
-            query?: {
-                limit?: number;
-                offset?: number;
-            };
-            header?: {
-                "x-workspace-id"?: string | null;
-            };
-            path: {
-                loadNodeId: string;
-            };
-            cookie?: {
-                surgepilot_session?: string | null;
-            };
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["LoadNodeInitAttemptListResponse"];
-                };
-            };
-            /** @description Bad Request */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Unauthorized */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Forbidden */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Not Found */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Unprocessable Entity */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-        };
-    };
-    getLoadNodeInitAttempt: {
-        parameters: {
-            query?: never;
-            header?: {
-                "x-workspace-id"?: string | null;
-            };
-            path: {
-                loadNodeId: string;
-                attemptId: string;
-            };
-            cookie?: {
-                surgepilot_session?: string | null;
-            };
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["LoadNodeInitAttemptDetail"];
-                };
-            };
-            /** @description Bad Request */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Unauthorized */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Forbidden */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Not Found */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Unprocessable Entity */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-        };
-    };
-    initializeLoadNode: {
-        parameters: {
-            query?: never;
-            header: {
-                "x-workspace-id"?: string | null;
-                "x-csrf-token": string;
-            };
-            path: {
-                loadNodeId: string;
-            };
-            cookie?: {
-                surgepilot_session?: string | null;
-            };
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["InitializeLoadNodeRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            202: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["LoadNodeInitializeResponse"];
-                };
-            };
-            /** @description Bad Request */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Unauthorized */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Forbidden */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Not Found */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Conflict */
-            409: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Unprocessable Entity */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-        };
-    };
-    trustLoadNodeSshHostKey: {
-        parameters: {
-            query?: never;
-            header: {
-                "x-workspace-id"?: string | null;
-                "x-csrf-token": string;
-            };
-            path: {
-                loadNodeId: string;
-            };
-            cookie?: {
-                surgepilot_session?: string | null;
-            };
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["LoadNodeSshHostKeyInput"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["LoadNodeDetail"];
-                };
-            };
-            /** @description Bad Request */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Unauthorized */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Forbidden */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Not Found */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Conflict */
-            409: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Unprocessable Entity */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-        };
-    };
-    createRun: {
+    uploadDependencyFile: {
         parameters: {
             query?: never;
             header: {
@@ -4031,255 +5503,10 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["RunCreateRequest"];
-            };
-        };
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
+                "multipart/form-data": {
+                    /** Format: binary */
+                    file: string;
                 };
-                content: {
-                    "application/json": components["schemas"]["RunCreateResponse"];
-                };
-            };
-            /** @description Successful Response */
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["RunCreateResponse"];
-                };
-            };
-            /** @description Bad Request */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Unauthorized */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Forbidden */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Not Found */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Conflict */
-            409: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Unprocessable Entity */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-        };
-    };
-    stopRun: {
-        parameters: {
-            query?: never;
-            header: {
-                "x-workspace-id"?: string | null;
-                "x-csrf-token": string;
-            };
-            path: {
-                runId: string;
-            };
-            cookie?: {
-                surgepilot_session?: string | null;
-            };
-        };
-        requestBody?: never;
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["RunStopResponse"];
-                };
-            };
-            /** @description Successful Response */
-            202: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["RunStopResponse"];
-                };
-            };
-            /** @description Bad Request */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Unauthorized */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Forbidden */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Not Found */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Conflict */
-            409: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Unprocessable Entity */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-        };
-    };
-    listScenarios: {
-        parameters: {
-            query?: {
-                page?: number;
-                pageSize?: number;
-                search?: string | null;
-                tag?: string[] | null;
-                sort?: "-updatedAt" | "updatedAt" | "name" | "-name";
-            };
-            header?: {
-                "x-workspace-id"?: string | null;
-            };
-            path?: never;
-            cookie?: {
-                surgepilot_session?: string | null;
-            };
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ScenarioListResponse"];
-                };
-            };
-            /** @description Bad Request */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Unauthorized */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Forbidden */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Unprocessable Entity */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-        };
-    };
-    createScenario: {
-        parameters: {
-            query?: never;
-            header: {
-                "x-workspace-id"?: string | null;
-                "x-csrf-token": string;
-            };
-            path?: never;
-            cookie?: {
-                surgepilot_session?: string | null;
-            };
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["ScenarioCreateRequest"];
             };
         };
         responses: {
@@ -4289,15 +5516,22 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ScenarioDetail"];
+                    "application/json": components["schemas"]["DependencyFileDetail"];
                 };
             };
-            /** @description Bad Request */
+            /** @description Invalid Dependency File filename. */
             400: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
+                    /**
+                     * @example {
+                     *       "code": "INVALID_FILENAME",
+                     *       "message": "Filename is invalid.",
+                     *       "requestId": "req_example"
+                     *     }
+                     */
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
@@ -4319,243 +5553,40 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
-            /** @description Not Found */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Unprocessable Entity */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-        };
-    };
-    getScenario: {
-        parameters: {
-            query?: never;
-            header?: {
-                "x-workspace-id"?: string | null;
-            };
-            path: {
-                scenarioId: string;
-            };
-            cookie?: {
-                surgepilot_session?: string | null;
-            };
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ScenarioDetail"];
-                };
-            };
-            /** @description Bad Request */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Unauthorized */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Forbidden */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Not Found */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Unprocessable Entity */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-        };
-    };
-    deleteScenario: {
-        parameters: {
-            query?: never;
-            header: {
-                "x-workspace-id"?: string | null;
-                "x-csrf-token": string;
-            };
-            path: {
-                scenarioId: string;
-            };
-            cookie?: {
-                surgepilot_session?: string | null;
-            };
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            204: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Bad Request */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Unauthorized */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Forbidden */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Not Found */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Conflict */
+            /** @description Active Dependency File filename already exists in this Workspace. */
             409: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
+                    /**
+                     * @example {
+                     *       "code": "DEPENDENCY_FILE_NAME_CONFLICT",
+                     *       "message": "Dependency File filename already exists.",
+                     *       "requestId": "req_example"
+                     *     }
+                     */
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
-            /** @description Unprocessable Entity */
-            422: {
+            /** @description Uploaded Dependency File exceeds the configured size limit. */
+            413: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
+                    /**
+                     * @example {
+                     *       "code": "PAYLOAD_TOO_LARGE",
+                     *       "message": "Uploaded file is too large.",
+                     *       "requestId": "req_example"
+                     *     }
+                     */
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
-        };
-    };
-    patchScenario: {
-        parameters: {
-            query?: never;
-            header: {
-                "x-workspace-id"?: string | null;
-                "x-csrf-token": string;
-            };
-            path: {
-                scenarioId: string;
-            };
-            cookie?: {
-                surgepilot_session?: string | null;
-            };
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["ScenarioPatchRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ScenarioDetail"];
-                };
-            };
-            /** @description Bad Request */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Unauthorized */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Forbidden */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Not Found */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Conflict */
-            409: {
+            /** @description Unsupported Media Type */
+            415: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -4572,390 +5603,20 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
-        };
-    };
-    listTestPlans: {
-        parameters: {
-            query?: {
-                page?: number;
-                pageSize?: number;
-                search?: string | null;
-                tag?: string | null;
-                sort?: string;
-            };
-            header?: {
-                "x-workspace-id"?: string | null;
-            };
-            path?: never;
-            cookie?: {
-                surgepilot_session?: string | null;
-            };
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
+            /** @description MinIO storage is unavailable or the configured bucket is inaccessible. */
+            503: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["TestPlanListResponse"];
-                };
-            };
-            /** @description Bad Request */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
+                    /**
+                     * @example {
+                     *       "code": "STORAGE_UNAVAILABLE",
+                     *       "message": "Storage is unavailable.",
+                     *       "requestId": "req_example"
+                     *     }
+                     */
                     "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Unauthorized */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Forbidden */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-        };
-    };
-    createTestPlan: {
-        parameters: {
-            query?: never;
-            header: {
-                "x-workspace-id"?: string | null;
-                "x-csrf-token": string;
-            };
-            path?: never;
-            cookie?: {
-                surgepilot_session?: string | null;
-            };
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["TestPlanCreateRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["TestPlanDetail"];
-                };
-            };
-            /** @description Bad Request */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Unauthorized */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Forbidden */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Not Found */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Unprocessable Entity */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-        };
-    };
-    getTestPlan: {
-        parameters: {
-            query?: never;
-            header?: {
-                "x-workspace-id"?: string | null;
-            };
-            path: {
-                testPlanId: string;
-            };
-            cookie?: {
-                surgepilot_session?: string | null;
-            };
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["TestPlanDetail"];
-                };
-            };
-            /** @description Bad Request */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Unauthorized */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Forbidden */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Not Found */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Unprocessable Entity */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-        };
-    };
-    deleteTestPlan: {
-        parameters: {
-            query?: never;
-            header: {
-                "x-workspace-id"?: string | null;
-                "x-csrf-token": string;
-            };
-            path: {
-                testPlanId: string;
-            };
-            cookie?: {
-                surgepilot_session?: string | null;
-            };
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            204: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Bad Request */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Unauthorized */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Forbidden */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Not Found */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Conflict */
-            409: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Unprocessable Entity */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-        };
-    };
-    patchTestPlan: {
-        parameters: {
-            query?: never;
-            header: {
-                "x-workspace-id"?: string | null;
-                "x-csrf-token": string;
-            };
-            path: {
-                testPlanId: string;
-            };
-            cookie?: {
-                surgepilot_session?: string | null;
-            };
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["TestPlanPatchRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["TestPlanDetail"];
-                };
-            };
-            /** @description Bad Request */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Unauthorized */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Forbidden */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Not Found */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Conflict */
-            409: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Unprocessable Entity */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-        };
-    };
-    getSetupStatus: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["SetupStatusResponse"];
                 };
             };
         };

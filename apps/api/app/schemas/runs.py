@@ -19,7 +19,44 @@ CallbackEventType = Literal[
     "accepted", "running", "heartbeat", "artifact", "finished", "failed", "aborted"
 ]
 
-RunCreateType = Literal["debug", "standard"]
+class RunType(str, Enum):
+    debug = "debug"
+    standard = "standard"
+
+
+class RunSourceType(str, Enum):
+    protocol_smoke = "protocol_smoke"
+    debug_scenario = "debug_scenario"
+    test_plan = "test_plan"
+
+
+class RunValidity(str, Enum):
+    valid = "valid"
+    invalid = "invalid"
+
+
+class SlaResult(str, Enum):
+    passed = "passed"
+    failed = "failed"
+    not_evaluated = "not_evaluated"
+
+
+class RunArtifactType(str, Enum):
+    taurus_log = "taurus_log"
+    jmeter_log = "jmeter_log"
+    final_stats_csv = "final_stats_csv"
+    run_log = "run_log"
+    artifacts_zip = "artifacts_zip"
+
+
+class ReportSummaryStatus(str, Enum):
+    pending = "pending"
+    parsed = "parsed"
+    failed = "failed"
+    missing = "missing"
+
+
+RunCreateType = RunType
 RunCreateSourceType = Literal["debug_scenario", "test_plan"]
 
 
@@ -67,6 +104,206 @@ class RunStopResponse(ApiSchema):
     state: RunState
     stop_requested_at: str | None = None
     duplicate: bool
+
+
+class RunActor(ApiSchema):
+    id: str
+    email: str
+
+
+class RunSelectedNode(ApiSchema):
+    id: str
+    name: str
+    scope: str
+
+
+class RunListItem(ApiSchema):
+    id: str
+    state: RunState
+    run_type: RunType
+    source_type: RunSourceType
+    source_id: str | None = None
+    source_name: str | None = None
+    source_revision: int | None = None
+    tags: list[str] = Field(default_factory=list)
+    validity: RunValidity
+    sla_result: SlaResult
+    triggered_by: RunActor
+    selected_node: RunSelectedNode
+    created_at: str
+    started_at: str | None = None
+    ended_at: str | None = None
+    duration_ms: int | None = None
+    artifact_count: int
+    has_artifacts_zip: bool
+
+
+class RunListResponse(ApiSchema):
+    items: list[RunListItem]
+    next_cursor: str | None = None
+
+
+class RunVerdict(ApiSchema):
+    state: RunState
+    run_type: RunType
+    source_type: RunSourceType
+    validity: RunValidity
+    sla_result: SlaResult
+    sla_result_reason: str | None = None
+    duration_ms: int | None = None
+    triggered_by: RunActor
+    created_at: str
+    accepted_at: str | None = None
+    started_at: str | None = None
+    ended_at: str | None = None
+    last_heartbeat_at: str | None = None
+    failure_reason: str | None = None
+    failure_message: str | None = None
+    forced_convergence: bool
+    warnings: list[str] = Field(default_factory=list)
+
+
+class RunKpiSummary(ApiSchema):
+    status: ReportSummaryStatus
+    source_artifact_id: str | None = None
+    total_requests: int | None = None
+    failed_requests: int | None = None
+    error_rate: float | None = None
+    average_response_time_ms: float | None = None
+    p90_ms: float | None = None
+    p95_ms: float | None = None
+    p99_ms: float | None = None
+    throughput_per_second: float | None = None
+    missing_reasons: list[str] = Field(default_factory=list)
+
+
+class FailureDiagnostics(ApiSchema):
+    failure_reason: str | None = None
+    failure_message: str | None = None
+    has_failed_requests_preview: bool = False
+    notes: list[str] = Field(default_factory=list)
+
+
+class FinalStatsPreviewRow(ApiSchema):
+    label: str | None = None
+    total_requests: int | None = None
+    success_requests: int | None = None
+    failed_requests: int | None = None
+    error_rate: float | None = None
+    average_response_time_ms: float | None = None
+    p90_ms: float | None = None
+    p95_ms: float | None = None
+    p99_ms: float | None = None
+    response_code_counts: dict[str, int] = Field(default_factory=dict)
+
+
+class FinalStatsPreview(ApiSchema):
+    status: ReportSummaryStatus
+    truncated: bool
+    rows: list[FinalStatsPreviewRow]
+    warnings: list[str] = Field(default_factory=list)
+
+
+class RunSnapshotResourceRequest(ApiSchema):
+    mode: str | None = None
+    pool_type: str | None = None
+    selected_node_id: str | None = None
+    expected_concurrency_per_node: int | None = None
+
+
+class RunReportNode(ApiSchema):
+    id: str
+    name: str
+    scope: str
+    pool_type: str
+    state_at_report: str
+
+
+class RunSnapshotLoadSettings(ApiSchema):
+    concurrency_per_node: int | None = None
+    ramp_up_seconds: int | None = None
+    hold_for_seconds: int | None = None
+    iterations: int | None = None
+    target_rps: float | None = None
+    steps: int | None = None
+    delay_seconds: int | None = None
+
+
+class RunSnapshotScenarioItem(ApiSchema):
+    scenario_name: str
+    load_settings: RunSnapshotLoadSettings
+
+
+class RunSnapshotSlaRule(ApiSchema):
+    metric: str | None = None
+    condition: str | None = None
+    threshold_text: str | None = None
+
+
+class RunSnapshotSummary(ApiSchema):
+    schema_version: int
+    source_name: str | None = None
+    source_revision: int | None = None
+    env_group_name: str | None = None
+    run_mode: str | None = None
+    scenario_count: int
+    scenario_names: list[str] = Field(default_factory=list)
+    scenario_items: list[RunSnapshotScenarioItem] = Field(default_factory=list)
+    sla_rule_count: int
+    sla_rules: list[RunSnapshotSlaRule] = Field(default_factory=list)
+    dependency_file_count: int
+    dependency_file_names: list[str] = Field(default_factory=list)
+    env_group_variable_keys: list[str] = Field(default_factory=list)
+    resource_request: RunSnapshotResourceRequest | None = None
+
+
+class RunArtifactsSummary(ApiSchema):
+    count: int
+    has_artifacts_zip: bool
+    has_final_stats_csv: bool
+    latest_available_at: str | None = None
+
+
+class RunReportDetail(ApiSchema):
+    id: str
+    verdict: RunVerdict
+    kpi_summary: RunKpiSummary
+    failure_diagnostics: FailureDiagnostics
+    final_stats_preview: FinalStatsPreview
+    snapshot: RunSnapshotSummary
+    nodes: list[RunReportNode] = Field(default_factory=list)
+    artifacts_summary: RunArtifactsSummary
+
+
+class RunArtifactItem(ApiSchema):
+    id: str
+    node_id: str
+    artifact_type: RunArtifactType
+    relative_path: str
+    display_filename: str
+    size_bytes: int
+    sha256: str
+    content_type: str | None = None
+    terminal_late: bool
+    created_at: str
+    available_at: str | None = None
+    download_url: str
+
+
+class RunArtifactListResponse(ApiSchema):
+    items: list[RunArtifactItem]
+    next_cursor: str | None = None
+
+
+class RunValidityPatchRequest(ApiSchema):
+    validity: RunValidity
+
+
+class RunValidityPatchResponse(ApiSchema):
+    id: str
+    validity: RunValidity
+    validity_updated_at: str
+    validity_updated_by: RunActor
 
 
 class RunnerCallbackRequest(ApiSchema):
