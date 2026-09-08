@@ -145,7 +145,15 @@ class EnvGroupReferenceChecker:
         self.workspace_id = workspace_id
 
     def is_in_use(self, env_group_id: str) -> bool:
-        return False
+        if self.db is None:
+            return False
+        if self.workspace_id is None:
+            raise ValueError("workspace_id is required when checking Env Group references")
+        from app.services.test_plans import test_plan_references_env_group
+
+        return test_plan_references_env_group(
+            self.db, workspace_id=self.workspace_id, env_group_id=env_group_id
+        )
 
 
 def create_env_group(

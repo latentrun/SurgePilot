@@ -2,6 +2,17 @@ from dataclasses import dataclass
 import base64
 import binascii
 import os
+import re
+
+
+JMETER_MEMORY_XMX_PATTERN = re.compile(r"^[1-9][0-9]*[KMG]$")
+
+
+def _jmeter_memory_xmx_from_env() -> str:
+    value = os.environ.get("SURGEPILOT_JMETER_MEMORY_XMX", "4G").strip()
+    if not JMETER_MEMORY_XMX_PATTERN.fullmatch(value):
+        raise ValueError("SURGEPILOT_JMETER_MEMORY_XMX must match ^[1-9][0-9]*[KMG]$.")
+    return value
 
 
 def _normalize_database_url(value: str) -> str:
@@ -64,6 +75,16 @@ class Settings:
     run_artifact_max_bytes: int
     run_terminal_late_artifact_max_bytes: int
     run_terminal_late_artifact_seconds: int
+    max_scenario_items_per_test_plan: int
+    single_node_concurrency_soft_limit: int
+    single_node_concurrency_hard_limit: int
+    max_run_duration_seconds: int
+    max_ramp_up_seconds: int
+    max_delay_seconds: int
+    max_iterations: int
+    max_target_rps: int
+    max_sla_rules_per_test_plan: int
+    jmeter_memory_xmx: str
 
 
 def get_settings() -> Settings:
@@ -137,6 +158,26 @@ def get_settings() -> Settings:
         run_terminal_late_artifact_seconds=int(
             os.environ.get("SURGEPILOT_RUN_TERMINAL_LATE_ARTIFACT_SECONDS", "300")
         ),
+        max_scenario_items_per_test_plan=int(
+            os.environ.get("SURGEPILOT_MAX_SCENARIO_ITEMS_PER_TEST_PLAN", "20")
+        ),
+        single_node_concurrency_soft_limit=int(
+            os.environ.get("SURGEPILOT_SINGLE_NODE_CONCURRENCY_SOFT_LIMIT", "1000")
+        ),
+        single_node_concurrency_hard_limit=int(
+            os.environ.get("SURGEPILOT_SINGLE_NODE_CONCURRENCY_HARD_LIMIT", "10000")
+        ),
+        max_run_duration_seconds=int(
+            os.environ.get("SURGEPILOT_MAX_RUN_DURATION_SECONDS", "86400")
+        ),
+        max_ramp_up_seconds=int(os.environ.get("SURGEPILOT_MAX_RAMP_UP_SECONDS", "86400")),
+        max_delay_seconds=int(os.environ.get("SURGEPILOT_MAX_DELAY_SECONDS", "86400")),
+        max_iterations=int(os.environ.get("SURGEPILOT_MAX_ITERATIONS", "1000000")),
+        max_target_rps=int(os.environ.get("SURGEPILOT_MAX_TARGET_RPS", "100000")),
+        max_sla_rules_per_test_plan=int(
+            os.environ.get("SURGEPILOT_MAX_SLA_RULES_PER_TEST_PLAN", "5")
+        ),
+        jmeter_memory_xmx=_jmeter_memory_xmx_from_env(),
     )
 
 

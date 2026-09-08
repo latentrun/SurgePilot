@@ -87,6 +87,20 @@ export type ScenarioStepSettings =
 export type ScenarioSummary = components["schemas"]["ScenarioSummary"];
 export type ScenarioUploadFile = components["schemas"]["ScenarioUploadFile"];
 
+export type TestPlanCreateRequest =
+  components["schemas"]["TestPlanCreateRequest"];
+export type TestPlanDetail = components["schemas"]["TestPlanDetail"];
+export type TestPlanListResponse =
+  components["schemas"]["TestPlanListResponse"];
+export type TestPlanLoadSettings =
+  components["schemas"]["TestPlanLoadSettings"];
+export type TestPlanPatchRequest =
+  components["schemas"]["TestPlanPatchRequest"];
+export type TestPlanSummary = components["schemas"]["TestPlanSummary"];
+export type TestPlanScenarioItem =
+  components["schemas"]["TestPlanScenarioItemDetail"];
+export type TestPlanSlaRule = components["schemas"]["TestPlanSlaRuleDetail"];
+
 export class ApiError extends Error {
   readonly body: ApiErrorBody;
   readonly status: number;
@@ -715,6 +729,93 @@ export function deleteScenario(
 ) {
   return request<void>(
     `/v1/scenarios/${encodeURIComponent(scenarioId)}`,
+    {
+      method: "DELETE",
+      headers: {
+        "x-csrf-token": csrfToken,
+        "x-workspace-id": workspaceId,
+      },
+    },
+  );
+}
+
+export function listTestPlans(params: {
+  page?: number;
+  pageSize?: number;
+  search?: string;
+  sort?: "-updatedAt" | "updatedAt" | "name" | "-name";
+  workspaceId: string;
+}) {
+  const searchParams = new URLSearchParams();
+  if (params.page !== undefined) {
+    searchParams.set("page", String(params.page));
+  }
+  if (params.pageSize !== undefined) {
+    searchParams.set("pageSize", String(params.pageSize));
+  }
+  if (params.search) {
+    searchParams.set("search", params.search);
+  }
+  if (params.sort) {
+    searchParams.set("sort", params.sort);
+  }
+  const queryStr = searchParams.toString();
+  const url = queryStr ? `/v1/test-plans?${queryStr}` : "/v1/test-plans";
+  return request<TestPlanListResponse>(url, {
+    headers: { "x-workspace-id": params.workspaceId },
+  });
+}
+
+export function createTestPlan(
+  payload: TestPlanCreateRequest,
+  workspaceId: string,
+  csrfToken: string,
+) {
+  return request<TestPlanDetail>("/v1/test-plans", {
+    method: "POST",
+    headers: {
+      "x-csrf-token": csrfToken,
+      "x-workspace-id": workspaceId,
+    },
+    body: JSON.stringify(payload),
+  });
+}
+
+export function getTestPlan(testPlanId: string, workspaceId: string) {
+  return request<TestPlanDetail>(
+    `/v1/test-plans/${encodeURIComponent(testPlanId)}`,
+    {
+      headers: { "x-workspace-id": workspaceId },
+    },
+  );
+}
+
+export function patchTestPlan(
+  testPlanId: string,
+  payload: TestPlanPatchRequest,
+  workspaceId: string,
+  csrfToken: string,
+) {
+  return request<TestPlanDetail>(
+    `/v1/test-plans/${encodeURIComponent(testPlanId)}`,
+    {
+      method: "PATCH",
+      headers: {
+        "x-csrf-token": csrfToken,
+        "x-workspace-id": workspaceId,
+      },
+      body: JSON.stringify(payload),
+    },
+  );
+}
+
+export function deleteTestPlan(
+  testPlanId: string,
+  workspaceId: string,
+  csrfToken: string,
+) {
+  return request<void>(
+    `/v1/test-plans/${encodeURIComponent(testPlanId)}`,
     {
       method: "DELETE",
       headers: {

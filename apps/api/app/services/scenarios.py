@@ -663,6 +663,12 @@ def delete_scenario(db: Session, *, scenario: Scenario, actor: User) -> None:
     )
     if active_run is not None:
         raise AppError("RESOURCE_IN_USE", "Resource is in use and cannot be deleted.", 409)
+    from app.services.test_plans import test_plan_references_scenario
+
+    if test_plan_references_scenario(
+        db, workspace_id=scenario.workspace_id, scenario_id=scenario.id
+    ):
+        raise AppError("RESOURCE_IN_USE", "Resource is in use and cannot be deleted.", 409)
     now = utc_now()
     scenario.deleted_at = now
     scenario.updated_by_user_id = actor.id

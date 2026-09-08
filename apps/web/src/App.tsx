@@ -13,6 +13,8 @@ import { LoadNodesPage } from "./features/load-nodes/pages/load-nodes-page";
 import { RegisterLoadNodePage } from "./features/load-nodes/pages/register-load-node-page";
 import { ScenarioListPage } from "./features/scenarios/pages/scenario-list-page";
 import { ScenarioDesignerPage } from "./features/scenarios/pages/scenario-designer-page";
+import { TestPlanListPage } from "./features/test-plans/pages/test-plan-list-page";
+import { TestPlanEditorPage } from "./features/test-plans/pages/test-plan-editor-page";
 
 function LoadingPage() {
   return (
@@ -32,6 +34,7 @@ function RunCreatedPage({ runId }: { runId: string }) {
       </p>
       <nav>
         <a href="/scenarios">Scenarios</a>
+        <a href="/test-plans">Test Plans</a>
         <a href="/assets/env-groups">Env Groups</a>
       </nav>
     </main>
@@ -63,6 +66,7 @@ function OverviewPage() {
         <a href="/assets/dependency-files">Dependency Files</a>
         <a href="/resources/load-nodes">Load Nodes</a>
         <a href="/scenarios">Scenarios</a>
+        <a href="/test-plans">Test Plans</a>
       </nav>
       <button onClick={() => void handleLogout()} type="button">
         Sign out
@@ -91,6 +95,8 @@ function AppRoutes() {
   if (pathname === "/resources/load-nodes") return <LoadNodesPage />;
   if (pathname.startsWith("/scenarios/")) return <ScenarioDesignerPage />;
   if (pathname === "/scenarios") return <ScenarioListPage />;
+  if (pathname.startsWith("/test-plans/")) return <TestPlanEditorPage />;
+  if (pathname === "/test-plans") return <TestPlanListPage />;
   if (pathname.startsWith("/runs/")) {
     const runId = decodeURIComponent(pathname.slice("/runs/".length));
     return <RunCreatedPage runId={runId} />;

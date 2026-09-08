@@ -18,6 +18,7 @@ from app.routes import (
     runs,
     scenarios,
     setup,
+    test_plans,
 )
 from app.services.storage import get_storage_client
 
@@ -49,6 +50,7 @@ app.include_router(dependency_files.router)
 app.include_router(load_nodes.router)
 app.include_router(runs.router)
 app.include_router(scenarios.router)
+app.include_router(test_plans.router)
 app.include_router(runner_internal.router)
 
 
@@ -66,6 +68,7 @@ def custom_openapi() -> dict:
                 "getSetupStatus",
                 "listEnvGroups",
                 "listDependencyFiles",
+                "listTestPlans",
             }:
                 operation.get("responses", {}).pop("422", None)
             for parameter in operation.get("parameters", []):
@@ -105,6 +108,7 @@ def custom_openapi() -> dict:
             "LOAD_NODE_INIT_FAILED",
             "CREDENTIAL_DECRYPT_FAILED",
             "SCENARIO_REVISION_CONFLICT",
+            "RESOURCE_REQUEST_INVALID",
             "RUN_STOP_NOT_ALLOWED",
             "RUN_TERMINAL_STATE",
             "RUNNER_UNAUTHORIZED",
@@ -118,6 +122,9 @@ def custom_openapi() -> dict:
             "ARTIFACT_PATH_CONFLICT",
             "ARTIFACT_NOT_READY",
             "RUN_CONTROL_CONFLICT",
+            "TEST_PLAN_REVISION_CONFLICT",
+            "TEST_PLAN_NOT_RUNNABLE",
+            "LOAD_SOFT_LIMIT_CONFIRMATION_REQUIRED",
         ]
     )
     schemas = openapi_schema.get("components", {}).get("schemas", {})

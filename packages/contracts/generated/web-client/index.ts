@@ -459,6 +459,46 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/test-plans": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Test Plans */
+        get: operations["listTestPlans"];
+        put?: never;
+        /** Create Test Plan */
+        post: operations["createTestPlan"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/test-plans/{testPlanId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Test Plan */
+        get: operations["getTestPlan"];
+        put?: never;
+        post?: never;
+        /**
+         * Delete Test Plan
+         * @description Soft-delete a Test Plan. Deleted Test Plans are hidden from active lists; historical Run Reports keep their saved snapshots.
+         */
+        delete: operations["deleteTestPlan"];
+        options?: never;
+        head?: never;
+        /** Patch Test Plan */
+        patch: operations["patchTestPlan"];
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -1014,24 +1054,29 @@ export interface components {
         };
         /** RunCreateRequest */
         RunCreateRequest: {
+            /**
+             * Confirmhighconcurrency
+             * @default false
+             */
+            confirmHighConcurrency: boolean;
             /** Envgroupid */
             envGroupId?: string | null;
             /** Expectedsourcerevision */
             expectedSourceRevision: number;
             /**
              * Runtype
-             * @constant
+             * @enum {string}
              */
-            runType: "debug";
+            runType: "debug" | "standard";
             /** Selectednodeid */
             selectedNodeId?: string | null;
             /** Sourceid */
             sourceId: string;
             /**
              * Sourcetype
-             * @constant
+             * @enum {string}
              */
-            sourceType: "debug_scenario";
+            sourceType: "debug_scenario" | "test_plan";
         };
         /** RunCreateResponse */
         RunCreateResponse: {
@@ -1043,19 +1088,21 @@ export interface components {
             id: string;
             /**
              * Runtype
-             * @constant
+             * @enum {string}
              */
-            runType: "debug";
+            runType: "debug" | "standard";
             /** Selectednodeid */
             selectedNodeId: string;
             /** Sourceid */
             sourceId?: string | null;
             /**
              * Sourcetype
-             * @constant
+             * @enum {string}
              */
-            sourceType: "debug_scenario";
+            sourceType: "debug_scenario" | "test_plan";
             state: components["schemas"]["RunState"];
+            /** Validity */
+            validity?: string | null;
         };
         /**
          * RunState
@@ -1463,6 +1510,332 @@ export interface components {
             hasDefaultWorkspace: boolean;
             /** Needsbootstrap */
             needsBootstrap: boolean;
+        };
+        /** TestPlanCreateRequest */
+        TestPlanCreateRequest: {
+            /** Description */
+            description?: string | null;
+            /** Envgroupid */
+            envGroupId?: string | null;
+            /** Name */
+            name: string;
+            resource?: components["schemas"]["TestPlanResourceConfig"];
+            /**
+             * Runmode
+             * @default sequential
+             * @enum {string}
+             */
+            runMode: "sequential" | "parallel";
+            /** Scenarioitems */
+            scenarioItems?: components["schemas"]["TestPlanScenarioItemInput"][];
+            /** Slarules */
+            slaRules?: components["schemas"]["TestPlanSlaRuleInput"][];
+            /** Tags */
+            tags?: string[];
+        };
+        /** TestPlanDetail */
+        TestPlanDetail: {
+            /** Createdat */
+            createdAt: string;
+            /** Description */
+            description?: string | null;
+            /** Envgroupid */
+            envGroupId?: string | null;
+            /** Id */
+            id: string;
+            /** Name */
+            name: string;
+            /** Notrunnablereasons */
+            notRunnableReasons: string[];
+            resource: components["schemas"]["TestPlanResourceConfig"];
+            /** Revision */
+            revision: number;
+            runGuard: components["schemas"]["TestPlanRunGuard"];
+            /**
+             * Runmode
+             * @enum {string}
+             */
+            runMode: "sequential" | "parallel";
+            /** Runnable */
+            runnable: boolean;
+            /** Scenarioitems */
+            scenarioItems: components["schemas"]["TestPlanScenarioItemDetail"][];
+            /** Slarules */
+            slaRules: components["schemas"]["TestPlanSlaRuleDetail"][];
+            /** Tags */
+            tags: string[];
+            /** Updatedat */
+            updatedAt: string;
+        };
+        /** TestPlanEnvGroupRef */
+        TestPlanEnvGroupRef: {
+            /** Id */
+            id: string;
+            /** Name */
+            name: string;
+        };
+        /** TestPlanListResponse */
+        TestPlanListResponse: {
+            /** Items */
+            items: components["schemas"]["TestPlanSummary"][];
+            /** Page */
+            page: number;
+            /** Pagesize */
+            pageSize: number;
+            /** Total */
+            total: number;
+        };
+        /** TestPlanLoadSettings */
+        TestPlanLoadSettings: {
+            /**
+             * Concurrencypernode
+             * @default 1
+             */
+            concurrencyPerNode: number;
+            /**
+             * Delayseconds
+             * @default 0
+             */
+            delaySeconds: number;
+            /**
+             * Holdforseconds
+             * @default 60
+             */
+            holdForSeconds: number | null;
+            /** Iterations */
+            iterations?: number | null;
+            /**
+             * Rampupseconds
+             * @default 0
+             */
+            rampUpSeconds: number;
+            /** Steps */
+            steps?: number | null;
+            /** Targetrps */
+            targetRps?: number | null;
+        };
+        /** TestPlanPatchRequest */
+        TestPlanPatchRequest: {
+            /** Description */
+            description?: string | null;
+            /** Envgroupid */
+            envGroupId?: string | null;
+            /** Expectedrevision */
+            expectedRevision: number;
+            /** Name */
+            name: string;
+            resource?: components["schemas"]["TestPlanResourceConfig"];
+            /**
+             * Runmode
+             * @default sequential
+             * @enum {string}
+             */
+            runMode: "sequential" | "parallel";
+            /** Scenarioitems */
+            scenarioItems?: components["schemas"]["TestPlanScenarioItemInput"][];
+            /** Slarules */
+            slaRules?: components["schemas"]["TestPlanSlaRuleInput"][];
+            /** Tags */
+            tags?: string[];
+        };
+        /** TestPlanResourceConfig */
+        TestPlanResourceConfig: {
+            /** Pooltype */
+            poolType?: ("public" | "private") | null;
+            /** Selectednodeid */
+            selectedNodeId?: string | null;
+        };
+        /** TestPlanResourceSummary */
+        TestPlanResourceSummary: {
+            /** Pooltype */
+            poolType?: ("public" | "private") | null;
+            /** Selectednodeid */
+            selectedNodeId?: string | null;
+            /** Selectednodename */
+            selectedNodeName?: string | null;
+            /** Selectednodestatus */
+            selectedNodeStatus?: string | null;
+        };
+        /** TestPlanRunGuard */
+        TestPlanRunGuard: {
+            /** Expectedconcurrencypernode */
+            expectedConcurrencyPerNode: number;
+            /** Hardconcurrencypernodelimit */
+            hardConcurrencyPerNodeLimit: number;
+            /** Requireshighconcurrencyconfirmation */
+            requiresHighConcurrencyConfirmation: boolean;
+            /** Softconcurrencypernodelimit */
+            softConcurrencyPerNodeLimit: number;
+        };
+        /** TestPlanScenarioItemDetail */
+        TestPlanScenarioItemDetail: {
+            /**
+             * Enabled
+             * @default true
+             */
+            enabled: boolean;
+            /** Enabledstepcount */
+            enabledStepCount?: number | null;
+            /** Id */
+            id: string;
+            loadSettings?: components["schemas"]["TestPlanLoadSettings"];
+            /**
+             * Order
+             * @default 0
+             */
+            order: number;
+            /** Scenarioid */
+            scenarioId: string;
+            /** Scenarioname */
+            scenarioName?: string | null;
+            /** Scenariorevision */
+            scenarioRevision?: number | null;
+            /** Updatedat */
+            updatedAt?: string | null;
+        };
+        /** TestPlanScenarioItemInput */
+        TestPlanScenarioItemInput: {
+            /**
+             * Enabled
+             * @default true
+             */
+            enabled: boolean;
+            /** Id */
+            id?: string | null;
+            loadSettings?: components["schemas"]["TestPlanLoadSettings"];
+            /**
+             * Order
+             * @default 0
+             */
+            order: number;
+            /** Scenarioid */
+            scenarioId: string;
+        };
+        /** TestPlanSlaRuleDetail */
+        TestPlanSlaRuleDetail: {
+            /**
+             * Action
+             * @default continue
+             * @enum {string}
+             */
+            action: "continue" | "stop";
+            /**
+             * Condition
+             * @enum {string}
+             */
+            condition: "gt" | "gte" | "lt" | "lte" | "eq";
+            /**
+             * Enabled
+             * @default true
+             */
+            enabled: boolean;
+            /** Id */
+            id: string;
+            /**
+             * Label
+             * @description Exact generated sampler label; leave empty to evaluate the whole run.
+             */
+            label?: string | null;
+            /**
+             * Subject
+             * @description Supported SLA subjects: avg_rt, p90, p95, p99, fail, succ, hits, bytes, or response-code subjects such as rc500, rc4??, and rc*.
+             */
+            subject: string & (("avg_rt" | "p90" | "p95" | "p99" | "fail" | "succ" | "hits" | "bytes") | unknown);
+            threshold: components["schemas"]["TestPlanSlaThreshold"];
+            /** Timeframelogic */
+            timeframeLogic?: ("for" | "within") | null;
+            /** Timeframeseconds */
+            timeframeSeconds?: number | null;
+        };
+        /** TestPlanSlaRuleInput */
+        TestPlanSlaRuleInput: {
+            /**
+             * Action
+             * @default continue
+             * @enum {string}
+             */
+            action: "continue" | "stop";
+            /**
+             * Condition
+             * @enum {string}
+             */
+            condition: "gt" | "gte" | "lt" | "lte" | "eq";
+            /**
+             * Enabled
+             * @default true
+             */
+            enabled: boolean;
+            /** Id */
+            id?: string | null;
+            /**
+             * Label
+             * @description Exact generated sampler label; leave empty to evaluate the whole run.
+             */
+            label?: string | null;
+            /**
+             * Subject
+             * @description Supported SLA subjects: avg_rt, p90, p95, p99, fail, succ, hits, bytes, or response-code subjects such as rc500, rc4??, and rc*.
+             */
+            subject: string & (("avg_rt" | "p90" | "p95" | "p99" | "fail" | "succ" | "hits" | "bytes") | unknown);
+            threshold: components["schemas"]["TestPlanSlaThreshold"];
+            /** Timeframelogic */
+            timeframeLogic?: ("for" | "within") | null;
+            /** Timeframeseconds */
+            timeframeSeconds?: number | null;
+        };
+        /** TestPlanSlaThreshold */
+        TestPlanSlaThreshold: {
+            /**
+             * Unit
+             * @enum {string}
+             */
+            unit: "ms" | "s" | "percent" | "count" | "b" | "kb" | "mb";
+            /** Value */
+            value: number;
+        };
+        /** TestPlanSummary */
+        TestPlanSummary: {
+            /** Description */
+            description?: string | null;
+            /** Enabledscenarioitemcount */
+            enabledScenarioItemCount: number;
+            envGroup?: components["schemas"]["TestPlanEnvGroupRef"] | null;
+            /** Expectedconcurrencypernode */
+            expectedConcurrencyPerNode: number;
+            /** Id */
+            id: string;
+            /** Name */
+            name: string;
+            /** Notrunnablereasons */
+            notRunnableReasons: string[];
+            /** Requireshighconcurrencyconfirmation */
+            requiresHighConcurrencyConfirmation: boolean;
+            resource: components["schemas"]["TestPlanResourceSummary"];
+            /** Revision */
+            revision: number;
+            /**
+             * Runmode
+             * @enum {string}
+             */
+            runMode: "sequential" | "parallel";
+            /** Runnable */
+            runnable: boolean;
+            /** Scenarioitemcount */
+            scenarioItemCount: number;
+            /** Slarulecount */
+            slaRuleCount: number;
+            /** Tags */
+            tags: string[];
+            /** Updatedat */
+            updatedAt: string;
+            updatedBy?: components["schemas"]["TestPlanUpdatedBy"] | null;
+        };
+        /** TestPlanUpdatedBy */
+        TestPlanUpdatedBy: {
+            /** Displayname */
+            displayName: string;
+            /** Id */
+            id: string;
         };
         /** UserSummary */
         UserSummary: {
@@ -4143,6 +4516,372 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ScenarioDetail"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    listTestPlans: {
+        parameters: {
+            query?: {
+                page?: number;
+                pageSize?: number;
+                search?: string | null;
+                tag?: string | null;
+                sort?: string;
+            };
+            header?: {
+                "x-workspace-id"?: string | null;
+            };
+            path?: never;
+            cookie?: {
+                surgepilot_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TestPlanListResponse"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    createTestPlan: {
+        parameters: {
+            query?: never;
+            header: {
+                "x-workspace-id"?: string | null;
+                "x-csrf-token": string;
+            };
+            path?: never;
+            cookie?: {
+                surgepilot_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TestPlanCreateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TestPlanDetail"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    getTestPlan: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-workspace-id"?: string | null;
+            };
+            path: {
+                testPlanId: string;
+            };
+            cookie?: {
+                surgepilot_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TestPlanDetail"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    deleteTestPlan: {
+        parameters: {
+            query?: never;
+            header: {
+                "x-workspace-id"?: string | null;
+                "x-csrf-token": string;
+            };
+            path: {
+                testPlanId: string;
+            };
+            cookie?: {
+                surgepilot_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    patchTestPlan: {
+        parameters: {
+            query?: never;
+            header: {
+                "x-workspace-id"?: string | null;
+                "x-csrf-token": string;
+            };
+            path: {
+                testPlanId: string;
+            };
+            cookie?: {
+                surgepilot_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TestPlanPatchRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TestPlanDetail"];
                 };
             };
             /** @description Bad Request */
