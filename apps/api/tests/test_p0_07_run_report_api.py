@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 
 from app.models.auth import AuditEvent, DEFAULT_WORKSPACE_ID, User, Workspace, WorkspaceMember
 from app.models.load_nodes import LoadNode
-from app.models.runs import Run, RunArtifact, RunNodeAllocation, RunReportSummary, RunSnapshot
+from app.models.runs import Run, RunArtifact, RunReportSummary, RunSnapshot
 from app.core.ids import new_ulid
 from app.services.storage import StoredObjectStream
 from app.services.run_reports import get_run_report, list_runs_report
@@ -106,32 +106,6 @@ def seed_run(
     db.add(run)
     db.flush()
     db.add(
-        RunNodeAllocation(
-            id=new_ulid(),
-            workspace_id=workspace_id,
-            run_id=run.id,
-            node_id=node.id,
-            node_index=1,
-            total_nodes=1,
-            expected_runtime_version="runtime-test-v1",
-            state=state,
-            accepted_at=run.accepted_at,
-            started_at=run.started_at,
-            ended_at=run.ended_at,
-            last_heartbeat_at=run.last_heartbeat_at,
-            runner_pid=None,
-            terminal_reason=state if state in {"finished", "failed", "aborted"} else None,
-            terminal_message=None,
-            cleanup_status="released" if state in {"finished", "failed", "aborted"} else None,
-            quarantine_reason=None,
-            sla_result=sla_result,
-            sla_result_reason=None,
-            created_at=created_at,
-            updated_at=created_at,
-        )
-    )
-    db.flush()
-    db.add(
         RunSnapshot(
             id=f"{run_id[:-2]}{run_id[-1]}S",
             workspace_id=workspace_id,
@@ -165,7 +139,6 @@ def seed_run(
                     "mode": "manual",
                     "poolType": "workspace",
                     "selectedNodeId": node.id,
-                    "selectedNodeIds": [node.id],
                     "expectedConcurrencyPerNode": 10,
                 },
                 "scenarioItems": [
@@ -211,19 +184,11 @@ def seed_artifact(
     status: str = "available",
 ) -> RunArtifact:
     created_at = datetime(2030, 6, 3, 8, 5, 18, tzinfo=UTC)
-    allocation = db.scalar(
-        select(RunNodeAllocation).where(
-            RunNodeAllocation.run_id == run.id,
-            RunNodeAllocation.node_id == run.selected_node_id,
-        )
-    )
-    assert allocation is not None
     artifact = RunArtifact(
         id=artifact_id,
         workspace_id=run.workspace_id,
         run_id=run.id,
         node_id=run.selected_node_id,
-        allocation_id=allocation.id,
         event_id=f"{artifact_id[:-2]}{artifact_id[-1]}E",
         artifact_type=artifact_type,
         relative_path=relative_path,
@@ -232,8 +197,7 @@ def seed_artifact(
         sha256="a" * 64,
         content_type="application/zip" if artifact_type == "artifacts_zip" else "text/csv",
         storage_key=(
-            f"run-artifacts/{run.workspace_id}/{run.id}/nodes/{run.selected_node_id}/"
-            f"allocations/{allocation.id}/{relative_path}"
+            f"run-artifacts/{run.workspace_id}/{run.id}/nodes/{run.selected_node_id}/{relative_path}"
         ),
         status=status,
         terminal_late=False,
@@ -289,44 +253,6 @@ def seed_summary(db: Session, *, run: Run, artifact: RunArtifact) -> None:
             updated_at=now,
         )
     )
-
-
-def seed_final_stats_artifact_for_allocation(
-    db: Session,
-    *,
-    run: Run,
-    allocation: RunNodeAllocation,
-    artifact_id: str | None = None,
-    created_at: datetime | None = None,
-    node_id: str | None = None,
-    terminal_late: bool = False,
-    relative_path: str = "artifacts/finalstats.csv",
-) -> RunArtifact:
-    artifact_id = artifact_id or new_ulid()
-    created_at = (created_at or datetime(2030, 6, 3, 8, 5, 18, tzinfo=UTC)).replace(tzinfo=None)
-    artifact = RunArtifact(
-        id=artifact_id,
-        workspace_id=run.workspace_id,
-        run_id=run.id,
-        node_id=node_id or allocation.node_id,
-        allocation_id=allocation.id,
-        event_id=new_ulid(),
-        artifact_type="final_stats_csv",
-        relative_path=relative_path,
-        display_filename="finalstats.csv",
-        size_bytes=2048,
-        sha256="b" * 64,
-        content_type="text/csv",
-        storage_key=(
-            f"run-artifacts/{run.workspace_id}/{run.id}/nodes/{allocation.node_id}/"
-            f"allocations/{allocation.id}/{relative_path}"
-        ),
-        status="available",
-        terminal_late=terminal_late,
-        created_at=created_at,
-    )
-    db.add(artifact)
-    return artifact
 
 
 def seed_final_stats_summary(
@@ -621,7 +547,6 @@ def test_run_list_batches_page_supplemental_data(db_session: Session) -> None:
     assert response.items[0].triggered_by.email == user.email
     assert response.items[0].artifact_count == 1
     assert response.items[0].has_artifacts_zip is True
-    assert response.items[0].allocated_node_count == 1
     assert all(
         item.selected_node.id == run.selected_node_id for item, run in zip(response.items, runs)
     )
@@ -805,9 +730,7 @@ async def test_run_report_detail_artifacts_download_and_validity(
     assert body["failureDiagnostics"]["hasFailedRequestsPreview"] is False
     assert body["snapshot"]["sourceName"] == "Checkout Load Test"
     assert body["snapshot"]["resourceRequest"]["selectedNodeId"] == created_run.selected_node_id
-    assert body["snapshot"]["resourceRequest"]["selectedNodeIds"] == [created_run.selected_node_id]
-    assert [node["id"] for node in body["allocatedNodes"]] == [created_run.selected_node_id]
-    assert "nodes" not in body
+    assert [node["id"] for node in body["nodes"]] == [created_run.selected_node_id]
     assert body["snapshot"]["scenarioItems"] == [
         {
             "scenarioName": "Checkout scenario",
@@ -984,7 +907,7 @@ async def test_active_run_report_returns_pending_sections_without_mutating_state
     assert report.status_code == 200
     assert report.json()["verdict"]["state"] == "running"
     assert report.json()["kpiSummary"]["status"] == "pending"
-    assert report.json()["kpiSummary"]["missingReasons"] == ["allocation_pending_for_final_stats"]
+    assert report.json()["kpiSummary"]["missingReasons"] == ["summary_pending"]
     assert report.json()["finalStatsPreview"]["status"] == "pending"
     db_session.refresh(active)
     assert active.state == "running"

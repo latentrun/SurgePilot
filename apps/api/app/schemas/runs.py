@@ -130,7 +130,6 @@ class RunListItem(ApiSchema):
     sla_result: SlaResult
     triggered_by: RunActor
     selected_node: RunSelectedNode
-    allocated_node_count: int = 1
     created_at: str
     started_at: str | None = None
     ended_at: str | None = None
@@ -205,63 +204,19 @@ class FinalStatsPreview(ApiSchema):
     warnings: list[str] = Field(default_factory=list)
 
 
-class DebugHttpTraceBody(ApiSchema):
-    content_type: str | None = None
-    text: str | None = None
-    inline_preview: str | None = None
-    body_storage: Literal["inline", "truncated", "sidecar", "dropped"] = "inline"
-    body_truncated: bool = False
-    size_bytes: int | None = None
-    sha256_prefix: str | None = None
-    download_artifact_id: str | None = None
-    download_relative_path: str | None = Field(default=None, exclude=True)
-    drop_reason: str | None = None
-
-
-class DebugHttpTraceEntry(ApiSchema):
-    sequence: int
-    label: str | None = None
-    method: str
-    url: str
-    request_headers: dict[str, str] = Field(default_factory=dict)
-    request_body: DebugHttpTraceBody
-    response_status: int | None = None
-    response_headers: dict[str, str] = Field(default_factory=dict)
-    response_body: DebugHttpTraceBody
-    duration_ms: int | None = None
-    error: str | None = None
-
-
-class DebugHttpTrace(ApiSchema):
-    status: Literal["available", "unavailable"]
-    source_artifact_id: str | None = None
-    entry_count: int
-    trace_truncated: bool
-    warnings: list[str] = Field(default_factory=list)
-    entries: list[DebugHttpTraceEntry] = Field(default_factory=list)
-
-
 class RunSnapshotResourceRequest(ApiSchema):
     mode: str | None = None
     pool_type: str | None = None
     selected_node_id: str | None = None
-    selected_node_ids: list[str] = Field(default_factory=list)
-    node_count: int | None = None
     expected_concurrency_per_node: int | None = None
 
 
-class RunAllocatedNode(ApiSchema):
+class RunReportNode(ApiSchema):
     id: str
     name: str
     scope: str
-    node_index: int
-    total_nodes: int
-    state: str
-    last_heartbeat_at: str | None = None
-    terminal_reason: str | None = None
-    cleanup_status: str | None = None
-    quarantine_reason: str | None = None
-    sla_result: SlaResult | None = None
+    pool_type: str
+    state_at_report: str
 
 
 class RunSnapshotLoadSettings(ApiSchema):
@@ -315,16 +270,14 @@ class RunReportDetail(ApiSchema):
     kpi_summary: RunKpiSummary
     failure_diagnostics: FailureDiagnostics
     final_stats_preview: FinalStatsPreview
-    debug_http_trace: DebugHttpTrace | None
     snapshot: RunSnapshotSummary
-    allocated_nodes: list[RunAllocatedNode] = Field(default_factory=list)
+    nodes: list[RunReportNode] = Field(default_factory=list)
     artifacts_summary: RunArtifactsSummary
 
 
 class RunArtifactItem(ApiSchema):
     id: str
     node_id: str
-    allocation_id: str | None = None
     artifact_type: RunArtifactType
     relative_path: str
     display_filename: str

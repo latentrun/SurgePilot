@@ -33,6 +33,7 @@ from app.schemas.runs import (
     RunReportDetail,
     RunListItem,
     RunListResponse,
+    RunReportNode,
     RunSelectedNode,
     RunSnapshotResourceRequest,
     RunSnapshotSummary,
@@ -260,7 +261,7 @@ def _actor(db: Session, user_id: str) -> RunActor:
 
 
 def _snapshot_summary(snapshot: dict[str, Any], run: Run) -> RunSnapshotSummary:
-    return RunSnapshotSummary(schema_version=int(snapshot.get("schemaVersion") or snapshot.get("snapshotVersion") or 1), source_name=(snapshot.get("testPlan") or snapshot.get("scenario") or {}).get("name"), source_revision=snapshot.get("sourceRevision"), env_group_name=(snapshot.get("envGroup") or {}).get("name"), run_mode=(snapshot.get("testPlan") or {}).get("runMode"), scenario_count=len(snapshot.get("scenarioItems") or []) or (1 if snapshot.get("scenario") else 0), scenario_names=[str(item.get("scenarioName")) for item in snapshot.get("scenarioItems", []) if isinstance(item, dict) and item.get("scenarioName")], scenario_items=[], sla_rule_count=len(snapshot.get("slaRules") or []), sla_rules=[], dependency_file_count=len(snapshot.get("dependencyFiles") or []), dependency_file_names=[], env_group_variable_keys=[], resource_request=RunSnapshotResourceRequest(mode="manual", selected_node_id=run.selected_node_id, selected_node_ids=[run.selected_node_id]))
+    return RunSnapshotSummary(schema_version=int(snapshot.get("schemaVersion") or snapshot.get("snapshotVersion") or 1), source_name=(snapshot.get("testPlan") or snapshot.get("scenario") or {}).get("name"), source_revision=snapshot.get("sourceRevision"), env_group_name=(snapshot.get("envGroup") or {}).get("name"), run_mode=(snapshot.get("testPlan") or {}).get("runMode"), scenario_count=len(snapshot.get("scenarioItems") or []) or (1 if snapshot.get("scenario") else 0), scenario_names=[str(item.get("scenarioName")) for item in snapshot.get("scenarioItems", []) if isinstance(item, dict) and item.get("scenarioName")], scenario_items=[], sla_rule_count=len(snapshot.get("slaRules") or []), sla_rules=[], dependency_file_count=len(snapshot.get("dependencyFiles") or []), dependency_file_names=[], env_group_variable_keys=[], resource_request=RunSnapshotResourceRequest(mode="manual", selected_node_id=run.selected_node_id))
 
 
 def get_run_report(db: Session, *, workspace_id: str, run_id: str) -> RunReportDetail:
@@ -273,7 +274,7 @@ def get_run_report(db: Session, *, workspace_id: str, run_id: str) -> RunReportD
     snapshot = snapshot_row.snapshot_json if snapshot_row else {}
     artifacts = db.scalars(select(RunArtifact).where(RunArtifact.run_id == run.id, RunArtifact.status == "available", RunArtifact.artifact_type.in_(PUBLIC_ARTIFACT_TYPES))).all()
     node = db.get(LoadNode, run.selected_node_id)
-    return RunReportDetail(id=run.id, verdict=RunVerdict(state=run.state, run_type=run.run_type, source_type=run.source_type, validity=run.validity or ("invalid" if run.run_type == "debug" else "valid"), sla_result=run.sla_result or "not_evaluated", sla_result_reason=run.sla_result_reason, duration_ms=_duration_ms(run), triggered_by=_actor(db, run.triggered_by_user_id), created_at=iso_z(run.created_at) or "", accepted_at=iso_z(run.accepted_at), started_at=iso_z(run.started_at), ended_at=iso_z(run.ended_at), last_heartbeat_at=iso_z(run.last_heartbeat_at), failure_reason=run.failure_reason, failure_message=run.failure_message, forced_convergence=run.forced_convergence, warnings=[]), kpi_summary=_kpi(status, artifact, summary), failure_diagnostics=FailureDiagnostics(failure_reason=run.failure_reason, failure_message=run.failure_message, has_failed_requests_preview=False, notes=[]), final_stats_preview=_preview(summary, status), debug_http_trace=None, snapshot=_snapshot_summary(snapshot, run), allocated_nodes=[], artifacts_summary=RunArtifactsSummary(count=len(artifacts), has_artifacts_zip=any(item.artifact_type == "artifacts_zip" for item in artifacts), has_final_stats_csv=artifact is not None, latest_available_at=iso_z(max((item.created_at for item in artifacts), default=None))))
+    return RunReportDetail(id=run.id, verdict=RunVerdict(state=run.state, run_type=run.run_type, source_type=run.source_type, validity=run.validity or ("invalid" if run.run_type == "debug" else "valid"), sla_result=run.sla_result or "not_evaluated", sla_result_reason=run.sla_result_reason, duration_ms=_duration_ms(run), triggered_by=_actor(db, run.triggered_by_user_id), created_at=iso_z(run.created_at) or "", accepted_at=iso_z(run.accepted_at), started_at=iso_z(run.started_at), ended_at=iso_z(run.ended_at), last_heartbeat_at=iso_z(run.last_heartbeat_at), failure_reason=run.failure_reason, failure_message=run.failure_message, forced_convergence=run.forced_convergence, warnings=[]), kpi_summary=_kpi(status, artifact, summary), failure_diagnostics=FailureDiagnostics(failure_reason=run.failure_reason, failure_message=run.failure_message, has_failed_requests_preview=False, notes=[]), final_stats_preview=_preview(summary, status), snapshot=_snapshot_summary(snapshot, run), nodes=[RunReportNode(id=run.selected_node_id, name=f"Load Node {run.selected_node_id[-6:]}", scope=node.scope if node else "unknown", pool_type="workspace" if node and node.scope == "workspace" else "public", state_at_report=node.status if node else "unknown")], artifacts_summary=RunArtifactsSummary(count=len(artifacts), has_artifacts_zip=any(item.artifact_type == "artifacts_zip" for item in artifacts), has_final_stats_csv=artifact is not None, latest_available_at=iso_z(max((item.created_at for item in artifacts), default=None))))
 
 
 def update_run_validity(db: Session, *, workspace_id: str, run_id: str, validity: str, actor: User, request: Request | None = None) -> RunValidityPatchResponse:
@@ -323,7 +324,7 @@ def _run_list_item(db: Session, run: Run, snapshot: RunSnapshot | None) -> RunLi
         tags=list(source.get("tags") or []), validity=run.validity or ("invalid" if run.run_type == "debug" else "valid"),
         sla_result=run.sla_result or "not_evaluated", triggered_by=_actor(db, run.triggered_by_user_id),
         selected_node=RunSelectedNode(id=run.selected_node_id, name=f"Load Node {run.selected_node_id[-6:]}", scope=node.scope if node else "unknown"),
-        allocated_node_count=1, created_at=iso_z(run.created_at) or "", started_at=iso_z(run.started_at), ended_at=iso_z(run.ended_at),
+        created_at=iso_z(run.created_at) or "", started_at=iso_z(run.started_at), ended_at=iso_z(run.ended_at),
         duration_ms=_duration_ms(run), artifact_count=len(artifacts), has_artifacts_zip=any(a.artifact_type == "artifacts_zip" for a in artifacts),
     )
 
@@ -362,7 +363,7 @@ def list_runs_report(db: Session, *, workspace_id: str, state: str | None = None
 
 
 def _artifact_item(artifact: RunArtifact) -> RunArtifactItem:
-    return RunArtifactItem(id=artifact.id, node_id=artifact.node_id, allocation_id=None, artifact_type=artifact.artifact_type,
+    return RunArtifactItem(id=artifact.id, node_id=artifact.node_id, artifact_type=artifact.artifact_type,
                            relative_path=artifact.relative_path, display_filename=artifact.display_filename, size_bytes=artifact.size_bytes,
                            sha256=artifact.sha256, content_type=artifact.content_type, terminal_late=artifact.terminal_late,
                            created_at=iso_z(artifact.created_at) or "", available_at=iso_z(artifact.created_at),
