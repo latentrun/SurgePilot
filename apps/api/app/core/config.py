@@ -61,6 +61,9 @@ class Settings:
     load_node_ssh_connect_timeout_seconds: int
     load_node_init_command_timeout_seconds: int
     load_node_init_timeout_seconds: int
+    load_node_runtime_artifact_dir: str
+    load_node_runtime_version: str | None
+    load_node_runtime_install_timeout_seconds: int
     load_node_init_log_tail_bytes: int
     load_node_generated_key_type: str
     runner_internal_token: str | None
@@ -122,6 +125,13 @@ def get_settings() -> Settings:
             os.environ.get("LOAD_NODE_INIT_COMMAND_TIMEOUT_SECONDS", "30")
         ),
         load_node_init_timeout_seconds=int(os.environ.get("LOAD_NODE_INIT_TIMEOUT_SECONDS", "120")),
+        load_node_runtime_artifact_dir=os.environ.get(
+            "LOAD_NODE_RUNTIME_ARTIFACT_DIR", "/opt/surgepilot/runtime-artifacts"
+        ),
+        load_node_runtime_version=os.environ.get("LOAD_NODE_RUNTIME_VERSION") or None,
+        load_node_runtime_install_timeout_seconds=int(
+            os.environ.get("LOAD_NODE_RUNTIME_INSTALL_TIMEOUT_SECONDS", "120")
+        ),
         load_node_init_log_tail_bytes=int(os.environ.get("LOAD_NODE_INIT_LOG_TAIL_BYTES", "65536")),
         load_node_generated_key_type=os.environ.get("LOAD_NODE_GENERATED_KEY_TYPE", "ed25519"),
         runner_internal_token=os.environ.get("RUNNER_INTERNAL_TOKEN") or None,
