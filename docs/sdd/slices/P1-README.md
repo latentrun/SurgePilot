@@ -14,6 +14,9 @@ Use only these references for P1 Slice drafting decisions:
 
 - P1 governance start: `docs/sdd/adr/ADR-0022-p1-governance-start.md`.
 - P1 Debug HTTP Trace scope addition: `docs/sdd/adr/ADR-0008-p1-debug-http-trace.md`.
+- P1 Resource Multi-node decision: `docs/sdd/adr/ADR-0009-p1-resource-multi-node.md`.
+- P1 Scenario Global Configuration Phase A authorization: `docs/sdd/adr/ADR-0015-p1-scenario-global-configuration.md`.
+- P1 Scenario execution preview removal: `docs/sdd/adr/ADR-0023-remove-scenario-execution-preview.md`.
 - P1 scope: `docs/sdd/00-product-scope-and-priority.md` §6.
 - P1 fixed boundaries: `docs/sdd/00-product-scope-and-priority.md` §6 fixed-boundary list.
 - P1 Slice split guidance and P0 non-prerequisite rule: `docs/sdd/00-product-scope-and-priority.md` §6.
@@ -21,11 +24,30 @@ Use only these references for P1 Slice drafting decisions:
 
 ## P1 Slice Index
 
-The only active P1 Slice SDD present at this revision is:
+The following files are the current P1 Slice index. Real active Slice SDDs are authoritative only for their own scoped capability.
 
-1. `docs/sdd/slices/P1-08-debug-http-trace.md` -- active Slice SDD for P1 Debug HTTP Trace, governed by `ADR-0008`.
+1. `docs/sdd/slices/P1-00-monitoring.md` -- active Slice SDD for deployment-level P1 Monitoring: JMeter Backend Listener / InfluxDB write config bridge + same-origin Grafana iframe.
+2. `docs/sdd/slices/P1-01-resource-multi-node.md` -- active Slice SDD for P1 Resource Multi-node; design frozen and Accepted for implementation.
+3. `docs/sdd/slices/P1-03-workspace-admin.md` -- active Slice SDD for P1 Workspace / Admin.
+4. `docs/sdd/slices/P1-04-scenario-testplan-polish.md` -- active Slice SDD for P1 Scenario / Test Plan polish, amended by `ADR-0023` to retain Generated YAML Preview only on Test Plan.
+5. `docs/sdd/slices/P1-05-curl-import.md` -- active Slice SDD for P1 cURL Import.
+6. `docs/sdd/slices/P1-06-dependency-preview.md` -- active Slice SDD for P1 Dependency File Preview.
+7. `docs/sdd/slices/P1-07-run-report-preview.md` -- placeholder / ordering suggestion until written.
+8. `docs/sdd/slices/P1-08-debug-http-trace.md` -- active Slice SDD for P1 Debug HTTP Trace.
+9. `docs/sdd/slices/P1-09-scenario-global-configuration.md` -- active Slice SDD for Scenario Global Configuration Phase A, authorized by `ADR-0015`; this is a Scenario/Test Plan polish add-on Slice and does not replace `P1-04`.
 
-The other recommended P1 Slice names in §6 are roadmap metadata only. Their ADRs and Slice SDDs are not present in this revision and they are not active, accepted implementation inputs. `P1-02` remains unused.
+`P1-02` is intentionally unused in this index revision so accepted active files do not need to be renamed.
+
+Active P1 Slice SDDs at this revision:
+
+- `P1-00-monitoring.md`, governed by the P1 scope gate and limited to deployment-level config, Standard Run InfluxDB writes, and a read-only Grafana entry.
+- `P1-01-resource-multi-node.md`, governed by `ADR-0009` and the P1 scope gate; frozen as the implementation Slice SDD.
+- `P1-03-workspace-admin.md`, governed by the P1 scope gate.
+- `P1-04-scenario-testplan-polish.md`, governed by the P1 scope gate.
+- `P1-05-curl-import.md`, governed by the P1 scope gate.
+- `P1-06-dependency-preview.md`, governed by the P1 scope gate.
+- `P1-08-debug-http-trace.md`, governed by `ADR-0008`.
+- `P1-09-scenario-global-configuration.md`, governed by `ADR-0015` and limited to Scenario Global Configuration Phase A as a Scenario/Test Plan polish add-on; it does not replace `P1-04`.
 
 Do not expand placeholders into implementation design, schemas, migrations, or generated-contract details inside this README.
 
@@ -36,6 +58,8 @@ Contract-first rules, Workspace isolation, permission checks, Runner/Web/API bou
 P1 placeholder or index documents must not create clickable P1 UI, callable P1 API behavior, or P1 execution dependencies. Implementation requires a real active P1 Slice SDD.
 
 P1 capabilities must not become prerequisites for the P0 execution loop.
+
+`P1-09` must not be expanded from Scenario Global Configuration Phase A into API Catalog generation, editable YAML editor, script library, Secret Scenario variables, or Test Plan schema redesign.
 
 ## Revision Protocol
 
