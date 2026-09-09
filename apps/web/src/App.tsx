@@ -20,6 +20,9 @@ import { RunReportPage } from "./features/runs/pages/run-report-page";
 import { AppLayout } from "./app/layouts/app-layout";
 import { OverviewPage } from "./features/overview/pages/overview-page";
 import { AdminSetupStatusPage } from "./features/admin/pages/setup-status-page";
+import { AdminWorkspacesPage } from "./features/admin/pages/workspaces-page";
+import { AdminUsersPage } from "./features/admin/pages/users-page";
+import { AdminSystemSettingsPage } from "./features/admin/pages/system-settings-page";
 
 function LoadingPage() {
   return (
@@ -29,7 +32,9 @@ function LoadingPage() {
   );
 }
 
-function AppRoutes() {
+function AppRoutes({
+  workspaceSwitchGuard,
+}: Readonly<{ workspaceSwitchGuard: WorkspaceSwitchGuard | null }>) {
   const { isAuthenticated, isRestoring } = useAuthSession();
   const [pathname, setPathname] = useState(() => window.location.pathname);
 
@@ -66,19 +71,25 @@ function AppRoutes() {
     page = <RunReportPage runId={runId} />;
   } else if (pathname === "/admin/setup-status") {
     page = <AdminSetupStatusPage />;
+  } else if (pathname === "/admin/workspaces") {
+    page = <AdminWorkspacesPage />;
+  } else if (pathname === "/admin/users") {
+    page = <AdminUsersPage />;
+  } else if (pathname === "/admin/system-settings") {
+    page = <AdminSystemSettingsPage />;
   } else {
     page = <OverviewPage />;
   }
-  return <AppLayout pathname={pathname}>{page}</AppLayout>;
+  return <AppLayout pathname={pathname} workspaceSwitchGuard={workspaceSwitchGuard}>{page}</AppLayout>;
 }
 
 export function App() {
-  const [_guard, setGuard] = useState<WorkspaceSwitchGuard | null>(null);
+  const [guard, setGuard] = useState<WorkspaceSwitchGuard | null>(null);
 
   return (
     <AuthSessionProvider>
       <WorkspaceSwitchGuardProvider onGuardChange={setGuard}>
-        <AppRoutes />
+        <AppRoutes workspaceSwitchGuard={guard} />
       </WorkspaceSwitchGuardProvider>
     </AuthSessionProvider>
   );

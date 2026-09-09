@@ -1,6 +1,7 @@
 import { useState } from "react";
 
 import { useAuthSession } from "../auth-session";
+import type { WorkspaceSwitchGuard } from "../workspace-switch-guard";
 
 type NavItem = {
   label: string;
@@ -37,7 +38,12 @@ const resourcesGroup: NavGroup = {
 
 const adminGroup: NavGroup = {
   label: "Admin",
-  items: [{ label: "Setup Status", path: "/admin/setup-status" }],
+  items: [
+    { label: "Setup Status", path: "/admin/setup-status" },
+    { label: "Workspaces", path: "/admin/workspaces" },
+    { label: "Users", path: "/admin/users" },
+    { label: "System Settings", path: "/admin/system-settings" },
+  ],
 };
 
 function isNavItemActive(pathname: string, item: NavItem) {
@@ -50,9 +56,16 @@ function isNavItemActive(pathname: string, item: NavItem) {
 export function AppLayout({
   children,
   pathname,
-}: Readonly<{ children: React.ReactNode; pathname: string }>) {
-  const { session, signOut } = useAuthSession();
+  workspaceSwitchGuard,
+}: Readonly<{
+  children: React.ReactNode;
+  pathname: string;
+  workspaceSwitchGuard: WorkspaceSwitchGuard | null;
+}>) {
+  const { session, signOut, switchWorkspace } = useAuthSession();
   const [isSigningOut, setIsSigningOut] = useState(false);
+  const [isSwitchingWorkspace, setIsSwitchingWorkspace] = useState(false);
+  const [pendingWorkspaceId, setPendingWorkspaceId] = useState<string | null>(null);
 
   if (session === null) {
     return null;
@@ -78,6 +91,30 @@ export function AppLayout({
     } finally {
       setIsSigningOut(false);
     }
+  }
+
+  async function performWorkspaceSwitch(
+    workspaceId: string,
+    guard: WorkspaceSwitchGuard | null = null,
+  ) {
+    setIsSwitchingWorkspace(true);
+    try {
+      await switchWorkspace(workspaceId);
+      guard?.onAbandon?.();
+      window.history.replaceState({}, "", guard?.safePath ?? "/overview");
+      window.dispatchEvent(new PopStateEvent("popstate"));
+    } finally {
+      setIsSwitchingWorkspace(false);
+    }
+  }
+
+  function handleWorkspaceChange(workspaceId: string) {
+    if (workspaceId === session.currentWorkspace.id) return;
+    if (workspaceSwitchGuard?.dirty) {
+      setPendingWorkspaceId(workspaceId);
+      return;
+    }
+    void performWorkspaceSwitch(workspaceId);
   }
 
   return (
@@ -112,7 +149,21 @@ export function AppLayout({
           ))}
         </nav>
         <div>
-          <div>{session.defaultWorkspace.name}</div>
+          <label>
+            Workspace
+            <select
+              aria-label="Current workspace"
+              disabled={isSwitchingWorkspace}
+              onChange={(event) => handleWorkspaceChange(event.target.value)}
+              value={session.currentWorkspace.id}
+            >
+              {session.availableWorkspaces.map((workspace) => (
+                <option key={workspace.id} value={workspace.id}>
+                  {workspace.name}
+                </option>
+              ))}
+            </select>
+          </label>
           <div>Signed in as {session.user.displayName}</div>
           <button
             disabled={isSigningOut}
@@ -124,6 +175,25 @@ export function AppLayout({
         </div>
       </aside>
       <div>{children}</div>
+      {pendingWorkspaceId !== null ? (
+        <div role="dialog" aria-labelledby="workspace-switch-title">
+          <h2 id="workspace-switch-title">Switch workspace?</h2>
+          <p>This page has unsaved changes. Abandon them before switching workspaces, or cancel to keep editing.</p>
+          <button onClick={() => setPendingWorkspaceId(null)} type="button">Cancel switch</button>
+          <button
+            disabled={isSwitchingWorkspace}
+            onClick={() => {
+              const target = pendingWorkspaceId;
+              const guard = workspaceSwitchGuard;
+              setPendingWorkspaceId(null);
+              void performWorkspaceSwitch(target, guard);
+            }}
+            type="button"
+          >
+            Abandon and switch
+          </button>
+        </div>
+      ) : null}
     </div>
   );
 }

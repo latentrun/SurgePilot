@@ -3,12 +3,25 @@
     "schemas": {
       "AuthSessionResponse": {
         "properties": {
+          "availableWorkspaces": {
+            "items": {
+              "$ref": "#/components/schemas/AvailableWorkspaceSummary"
+            },
+            "title": "Availableworkspaces",
+            "type": "array"
+          },
           "csrfToken": {
             "title": "Csrftoken",
             "type": "string"
           },
+          "currentWorkspace": {
+            "$ref": "#/components/schemas/WorkspaceSummary"
+          },
           "defaultWorkspace": {
             "$ref": "#/components/schemas/WorkspaceSummary"
+          },
+          "permissions": {
+            "$ref": "#/components/schemas/PermissionSummary"
           },
           "user": {
             "$ref": "#/components/schemas/UserSummary"
@@ -16,10 +29,38 @@
         },
         "required": [
           "user",
+          "currentWorkspace",
+          "availableWorkspaces",
+          "permissions",
           "defaultWorkspace",
           "csrfToken"
         ],
         "title": "AuthSessionResponse",
+        "type": "object"
+      },
+      "AvailableWorkspaceSummary": {
+        "properties": {
+          "archivedAt": {
+            "anyOf": [
+              { "format": "date-time", "type": "string" },
+              { "type": "null" }
+            ],
+            "title": "Archivedat"
+          },
+          "id": { "title": "Id", "type": "string" },
+          "membership": {
+            "$ref": "#/components/schemas/WorkspaceMembershipSummary"
+          },
+          "name": { "title": "Name", "type": "string" },
+          "status": {
+            "default": "active",
+            "enum": ["active", "archived"],
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": ["id", "name", "membership"],
+        "title": "AvailableWorkspaceSummary",
         "type": "object"
       },
       "CsrfTokenResponse": {
@@ -37,8 +78,21 @@
       },
       "CurrentUserResponse": {
         "properties": {
+          "availableWorkspaces": {
+            "items": {
+              "$ref": "#/components/schemas/AvailableWorkspaceSummary"
+            },
+            "title": "Availableworkspaces",
+            "type": "array"
+          },
+          "currentWorkspace": {
+            "$ref": "#/components/schemas/WorkspaceSummary"
+          },
           "defaultWorkspace": {
             "$ref": "#/components/schemas/WorkspaceSummary"
+          },
+          "permissions": {
+            "$ref": "#/components/schemas/PermissionSummary"
           },
           "user": {
             "$ref": "#/components/schemas/UserSummary"
@@ -46,6 +100,9 @@
         },
         "required": [
           "user",
+          "currentWorkspace",
+          "availableWorkspaces",
+          "permissions",
           "defaultWorkspace"
         ],
         "title": "CurrentUserResponse",
@@ -5835,6 +5892,17 @@
         "title": "TestPlanUpdatedBy",
         "type": "object"
       },
+      "PermissionSummary": {
+        "properties": {
+          "canManageSystemSettings": { "title": "Canmanagesystemsettings", "type": "boolean" },
+          "canManageUsers": { "title": "Canmanageusers", "type": "boolean" },
+          "canManageWorkspaces": { "title": "Canmanageworkspaces", "type": "boolean" },
+          "canViewSetupStatus": { "title": "Canviewsetupstatus", "type": "boolean" }
+        },
+        "required": ["canManageWorkspaces", "canManageUsers", "canManageSystemSettings", "canViewSetupStatus"],
+        "title": "PermissionSummary",
+        "type": "object"
+      },
       "UserSummary": {
         "properties": {
           "displayName": {
@@ -5875,8 +5943,30 @@
         "title": "UserSummary",
         "type": "object"
       },
+      "AvailableWorkspaceSummary": {
+        "properties": {
+          "archivedAt": { "anyOf": [{ "format": "date-time", "type": "string" }, { "type": "null" }], "title": "Archivedat" },
+          "id": { "title": "Id", "type": "string" },
+          "membership": { "$ref": "#/components/schemas/WorkspaceMembershipSummary" },
+          "name": { "title": "Name", "type": "string" },
+          "status": { "default": "active", "enum": ["active", "archived"], "title": "Status", "type": "string" }
+        },
+        "required": ["id", "name", "membership"],
+        "title": "AvailableWorkspaceSummary",
+        "type": "object"
+      },
+      "WorkspaceMembershipSummary": {
+        "properties": {
+          "joinedAt": { "anyOf": [{ "format": "date-time", "type": "string" }, { "type": "null" }], "title": "Joinedat" },
+          "kind": { "enum": ["member", "admin_access"], "title": "Kind", "type": "string" }
+        },
+        "required": ["kind"],
+        "title": "WorkspaceMembershipSummary",
+        "type": "object"
+      },
       "WorkspaceSummary": {
         "properties": {
+          "archivedAt": { "anyOf": [{ "format": "date-time", "type": "string" }, { "type": "null" }], "title": "Archivedat" },
           "id": {
             "title": "Id",
             "type": "string"
@@ -5884,7 +5974,8 @@
           "name": {
             "title": "Name",
             "type": "string"
-          }
+          },
+          "status": { "default": "active", "enum": ["active", "archived"], "title": "Status", "type": "string" }
         },
         "required": [
           "id",

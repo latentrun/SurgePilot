@@ -684,10 +684,20 @@ export interface components {
             workspaces: components["schemas"]["WorkspaceSummary"][];
         };
         AuthSessionResponse: {
+            availableWorkspaces: components["schemas"]["AvailableWorkspaceSummary"][];
             /** Csrftoken */
             csrfToken: string;
+            currentWorkspace: components["schemas"]["WorkspaceSummary"];
             defaultWorkspace: components["schemas"]["WorkspaceSummary"];
+            permissions: components["schemas"]["PermissionSummary"];
             user: components["schemas"]["UserSummary"];
+        };
+        AvailableWorkspaceSummary: {
+            archivedAt?: string | null;
+            id: string;
+            membership: components["schemas"]["WorkspaceMembershipSummary"];
+            name: string;
+            status: "active" | "archived";
         };
         MembershipReplaceRequest: { workspaceIds: string[] };
         ResetPasswordRequest: { newPassword: string };
@@ -739,7 +749,10 @@ export interface components {
             csrfToken: string;
         };
         CurrentUserResponse: {
+            availableWorkspaces: components["schemas"]["AvailableWorkspaceSummary"][];
+            currentWorkspace: components["schemas"]["WorkspaceSummary"];
             defaultWorkspace: components["schemas"]["WorkspaceSummary"];
+            permissions: components["schemas"]["PermissionSummary"];
             user: components["schemas"]["UserSummary"];
         };
         DependencyFileDetail: {
@@ -2430,11 +2443,23 @@ export interface components {
              */
             status: "active";
         };
+        PermissionSummary: {
+            canManageSystemSettings: boolean;
+            canManageUsers: boolean;
+            canManageWorkspaces: boolean;
+            canViewSetupStatus: boolean;
+        };
+        WorkspaceMembershipSummary: {
+            joinedAt?: string | null;
+            kind: "member" | "admin_access";
+        };
         WorkspaceSummary: {
+            archivedAt?: string | null;
             /** Id */
             id: string;
             /** Name */
             name: string;
+            status: "active" | "archived";
         };
         WorkspaceEnvelope: { workspace: components["schemas"]["WorkspaceSummary"] };
         WorkspaceListResponse: {

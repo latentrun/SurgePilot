@@ -3,6 +3,10 @@ import type { components } from "@surgepilot/contracts/web-client";
 export type UserRole = "admin" | "user";
 
 export type ApiErrorBody = components["schemas"]["ErrorResponse"];
+export type WorkspaceSummary = components["schemas"]["WorkspaceSummary"];
+export type AvailableWorkspaceSummary =
+  components["schemas"]["AvailableWorkspaceSummary"];
+export type PermissionSummary = components["schemas"]["PermissionSummary"];
 export type AuthSession = components["schemas"]["AuthSessionResponse"];
 export type CsrfTokenResponse = components["schemas"]["CsrfTokenResponse"];
 export type CurrentUser = components["schemas"]["CurrentUserResponse"];
@@ -10,7 +14,17 @@ export type LoginRequest = components["schemas"]["LoginRequest"];
 export type RegisterRequest = components["schemas"]["RegisterRequest"];
 export type SetupStatus = components["schemas"]["SetupStatusResponse"];
 export type UserSummary = components["schemas"]["UserSummary"];
-export type WorkspaceSummary = components["schemas"]["WorkspaceSummary"];
+export type WorkspaceWriteRequest = components["schemas"]["WorkspaceWriteRequest"];
+export type WorkspaceEnvelope = components["schemas"]["WorkspaceEnvelope"];
+export type AdminWorkspaceListResponse =
+  components["schemas"]["AdminWorkspaceListResponse"];
+export type AdminUserSummary = components["schemas"]["AdminUserSummary"];
+export type AdminUserCreateRequest = components["schemas"]["AdminUserCreateRequest"];
+export type AdminUserPatchRequest = components["schemas"]["AdminUserPatchRequest"];
+export type AdminUserEnvelope = components["schemas"]["AdminUserEnvelope"];
+export type AdminUserListResponse = components["schemas"]["AdminUserListResponse"];
+export type SystemSettingsResponse = components["schemas"]["SystemSettingsResponse"];
+export type SystemSettingsPatchRequest = components["schemas"]["SystemSettingsPatchRequest"];
 
 export type EnvGroupCreateRequest =
   components["schemas"]["EnvGroupCreateRequest"];
@@ -203,8 +217,11 @@ export function getOverview(params: {
   });
 }
 
-export function getCurrentUser() {
-  return request<CurrentUser>("/v1/auth/me");
+export function getCurrentUser(preferredWorkspaceId?: string | null) {
+  const query = preferredWorkspaceId
+    ? `?preferredWorkspaceId=${encodeURIComponent(preferredWorkspaceId)}`
+    : "";
+  return request<CurrentUser>(`/v1/auth/me${query}`);
 }
 
 export function getCsrfToken() {
@@ -228,6 +245,92 @@ export function register(payload: RegisterRequest) {
 export function logout(csrfToken: string) {
   return request<void>("/v1/auth/logout", {
     method: "POST",
+    headers: { "x-csrf-token": csrfToken },
+  });
+}
+
+export function switchWorkspace(workspaceId: string, csrfToken: string) {
+  return request<CurrentUser>("/v1/workspaces/switch", {
+    method: "POST",
+    body: JSON.stringify({ workspaceId }),
+    headers: { "x-csrf-token": csrfToken },
+  });
+}
+
+export function listAdminWorkspaces(status: "active" | "archived" | "all" = "active") {
+  return request<AdminWorkspaceListResponse>(
+    `/v1/admin/workspaces?status=${encodeURIComponent(status)}`,
+  );
+}
+
+export function createAdminWorkspace(payload: WorkspaceWriteRequest, csrfToken: string) {
+  return request<WorkspaceEnvelope>("/v1/admin/workspaces", {
+    method: "POST",
+    body: JSON.stringify(payload),
+    headers: { "x-csrf-token": csrfToken },
+  });
+}
+
+export function patchAdminWorkspace(id: string, payload: WorkspaceWriteRequest, csrfToken: string) {
+  return request<WorkspaceEnvelope>(`/v1/admin/workspaces/${encodeURIComponent(id)}`, {
+    method: "PATCH",
+    body: JSON.stringify(payload),
+    headers: { "x-csrf-token": csrfToken },
+  });
+}
+
+export function archiveAdminWorkspace(id: string, csrfToken: string) {
+  return request<WorkspaceEnvelope>(`/v1/admin/workspaces/${encodeURIComponent(id)}/archive`, {
+    method: "POST",
+    headers: { "x-csrf-token": csrfToken },
+  });
+}
+
+export function listAdminUsers(q?: string) {
+  const query = q ? `?q=${encodeURIComponent(q)}` : "";
+  return request<AdminUserListResponse>(`/v1/admin/users${query}`);
+}
+
+export function createAdminUser(payload: AdminUserCreateRequest, csrfToken: string) {
+  return request<AdminUserEnvelope>("/v1/admin/users", {
+    method: "POST",
+    body: JSON.stringify(payload),
+    headers: { "x-csrf-token": csrfToken },
+  });
+}
+
+export function patchAdminUser(id: string, payload: AdminUserPatchRequest, csrfToken: string) {
+  return request<AdminUserEnvelope>(`/v1/admin/users/${encodeURIComponent(id)}`, {
+    method: "PATCH",
+    body: JSON.stringify(payload),
+    headers: { "x-csrf-token": csrfToken },
+  });
+}
+
+export function replaceAdminUserWorkspaces(id: string, workspaceIds: string[], csrfToken: string) {
+  return request<AdminUserEnvelope>(`/v1/admin/users/${encodeURIComponent(id)}/workspaces`, {
+    method: "PUT",
+    body: JSON.stringify({ workspaceIds }),
+    headers: { "x-csrf-token": csrfToken },
+  });
+}
+
+export function resetAdminUserPassword(id: string, newPassword: string, csrfToken: string) {
+  return request<{ user: AdminUserSummary }>(`/v1/admin/users/${encodeURIComponent(id)}/reset-password`, {
+    method: "POST",
+    body: JSON.stringify({ newPassword }),
+    headers: { "x-csrf-token": csrfToken },
+  });
+}
+
+export function getSystemSettings() {
+  return request<SystemSettingsResponse>("/v1/admin/system-settings");
+}
+
+export function patchSystemSettings(payload: SystemSettingsPatchRequest, csrfToken: string) {
+  return request<SystemSettingsResponse>("/v1/admin/system-settings", {
+    method: "PATCH",
+    body: JSON.stringify(payload),
     headers: { "x-csrf-token": csrfToken },
   });
 }
