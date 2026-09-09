@@ -280,6 +280,13 @@ Verification commands added or used:
 - `make verify`
 - `make verify-p1-08-debug-http-trace-e2e`
 
+R11 reconstruction verification backfill:
+
+1. Focused API parser coverage is recorded in `apps/api/tests/test_p1_08_debug_http_trace.py` for targeted redaction, malformed JSONL, request limits, artifact limits, and binary metadata handling.
+2. OpenAPI boundary coverage is recorded in `tests/contract/test_p1_08_debug_http_trace_openapi.py`; internal trace artifact types remain absent from the public artifact enum and Runner routes remain absent from the Web contract.
+3. Web Run Report polling behavior is covered in `apps/web/src/features/runs/run-report.test.tsx`, while the E2E acceptance shape is recorded in `tests/e2e/p1_08_debug_http_trace.spec.ts`.
+4. This reconstruction checkpoint exposes Debug Run HTTP Trace only. Monitoring, multi-node allocation, Workspace/Admin surfaces, and P2 navigation/API are intentionally not introduced by R11.
+
 Remaining risks:
 
 1. Inline Groovy is covered by YAML structure/string tests but not by a real JMeter/Groovy execution test in the default verification gate.
