@@ -214,6 +214,14 @@ def test_stable_manifest_hash_is_sorted_and_drives_version() -> None:
     )
 
 
+@pytest.mark.parametrize("prefix", ["release/test", "release test", "-release", "a" * 65])
+def test_release_prefix_rejects_unsafe_artifact_names(prefix: str) -> None:
+    module = load_module()
+
+    with pytest.raises(RuntimeError, match="RUNTIME_RELEASE_PREFIX"):
+        module.validate_release_prefix(prefix)
+
+
 @pytest.mark.parametrize(
     ("machine", "artifact_arch", "metadata_arch"),
     [
