@@ -22,6 +22,7 @@ from app.models.auth import User
 from app.models.load_nodes import LoadNode
 from app.models.runs import Run, RunArtifact, RunReportSummary, RunSnapshot
 from app.schemas.runs import (
+    DebugHttpTrace,
     FailureDiagnostics,
     FinalStatsPreview,
     FinalStatsPreviewRow,
@@ -41,6 +42,11 @@ from app.schemas.runs import (
     RunVerdict,
 )
 from app.services.audit import write_audit_event
+from app.services.debug_http_trace import (
+    DEBUG_HTTP_BODY_BLOB_ARTIFACT_TYPE,
+    DEBUG_HTTP_TRACE_ARTIFACT_TYPE,
+    parse_debug_http_trace_jsonl,
+)
 from app.services.storage import StoredObjectStream, get_storage_client
 
 FINAL_STATS_TOTAL_ROW_MISSING = "FINAL_STATS_TOTAL_ROW_MISSING"
@@ -264,6 +270,48 @@ def _snapshot_summary(snapshot: dict[str, Any], run: Run) -> RunSnapshotSummary:
     return RunSnapshotSummary(schema_version=int(snapshot.get("schemaVersion") or snapshot.get("snapshotVersion") or 1), source_name=(snapshot.get("testPlan") or snapshot.get("scenario") or {}).get("name"), source_revision=snapshot.get("sourceRevision"), env_group_name=(snapshot.get("envGroup") or {}).get("name"), run_mode=(snapshot.get("testPlan") or {}).get("runMode"), scenario_count=len(snapshot.get("scenarioItems") or []) or (1 if snapshot.get("scenario") else 0), scenario_names=[str(item.get("scenarioName")) for item in snapshot.get("scenarioItems", []) if isinstance(item, dict) and item.get("scenarioName")], scenario_items=[], sla_rule_count=len(snapshot.get("slaRules") or []), sla_rules=[], dependency_file_count=len(snapshot.get("dependencyFiles") or []), dependency_file_names=[], env_group_variable_keys=[], resource_request=RunSnapshotResourceRequest(mode="manual", selected_node_id=run.selected_node_id))
 
 
+def _debug_http_trace_for_run(db: Session, run: Run) -> DebugHttpTrace | None:
+    if run.run_type != "debug" or run.source_type not in {"debug_scenario", "test_plan"}:
+        return None
+    artifact = db.scalar(select(RunArtifact).where(
+        RunArtifact.run_id == run.id,
+        RunArtifact.artifact_type == DEBUG_HTTP_TRACE_ARTIFACT_TYPE,
+        RunArtifact.status == "available",
+    ).order_by(RunArtifact.created_at.desc(), RunArtifact.id.desc()).limit(1))
+    if artifact is None:
+        if run.state not in TERMINAL_RUN_STATES:
+            return None
+        return DebugHttpTrace(status="unavailable", source_artifact_id=None, entry_count=0,
+                              trace_truncated=False, warnings=["debug_http_trace_missing"], entries=[])
+    blob_ids = {
+        item.relative_path: item.id
+        for item in db.scalars(select(RunArtifact).where(
+            RunArtifact.run_id == run.id,
+            RunArtifact.artifact_type == DEBUG_HTTP_BODY_BLOB_ARTIFACT_TYPE,
+            RunArtifact.status == "available",
+        )).all()
+    }
+    settings = get_settings()
+    try:
+        stored = get_storage_client().get_stream(bucket=settings.minio_bucket, object_key=artifact.storage_key)
+        try:
+            return parse_debug_http_trace_jsonl(
+                stored.stream, source_artifact_id=artifact.id,
+                max_requests=settings.debug_trace_max_requests,
+                body_max_bytes=settings.debug_trace_body_max_bytes,
+                artifact_max_bytes=settings.debug_trace_artifact_max_bytes,
+                record_max_bytes=settings.debug_trace_record_max_bytes,
+                body_blob_artifact_ids_by_relative_path=blob_ids,
+            )
+        finally:
+            close = getattr(stored.stream, "close", None)
+            if callable(close):
+                close()
+    except Exception:
+        return DebugHttpTrace(status="unavailable", source_artifact_id=artifact.id, entry_count=0,
+                              trace_truncated=False, warnings=["debug_http_trace_unavailable"], entries=[])
+
+
 def get_run_report(db: Session, *, workspace_id: str, run_id: str) -> RunReportDetail:
     row = db.execute(select(Run, RunSnapshot).join(RunSnapshot, RunSnapshot.run_id == Run.id, isouter=True).where(Run.id == run_id, Run.workspace_id == workspace_id)).first()
     if row is None:
@@ -274,7 +322,7 @@ def get_run_report(db: Session, *, workspace_id: str, run_id: str) -> RunReportD
     snapshot = snapshot_row.snapshot_json if snapshot_row else {}
     artifacts = db.scalars(select(RunArtifact).where(RunArtifact.run_id == run.id, RunArtifact.status == "available", RunArtifact.artifact_type.in_(PUBLIC_ARTIFACT_TYPES))).all()
     node = db.get(LoadNode, run.selected_node_id)
-    return RunReportDetail(id=run.id, verdict=RunVerdict(state=run.state, run_type=run.run_type, source_type=run.source_type, validity=run.validity or ("invalid" if run.run_type == "debug" else "valid"), sla_result=run.sla_result or "not_evaluated", sla_result_reason=run.sla_result_reason, duration_ms=_duration_ms(run), triggered_by=_actor(db, run.triggered_by_user_id), created_at=iso_z(run.created_at) or "", accepted_at=iso_z(run.accepted_at), started_at=iso_z(run.started_at), ended_at=iso_z(run.ended_at), last_heartbeat_at=iso_z(run.last_heartbeat_at), failure_reason=run.failure_reason, failure_message=run.failure_message, forced_convergence=run.forced_convergence, warnings=[]), kpi_summary=_kpi(status, artifact, summary), failure_diagnostics=FailureDiagnostics(failure_reason=run.failure_reason, failure_message=run.failure_message, has_failed_requests_preview=False, notes=[]), final_stats_preview=_preview(summary, status), snapshot=_snapshot_summary(snapshot, run), nodes=[RunReportNode(id=run.selected_node_id, name=f"Load Node {run.selected_node_id[-6:]}", scope=node.scope if node else "unknown", pool_type="workspace" if node and node.scope == "workspace" else "public", state_at_report=node.status if node else "unknown")], artifacts_summary=RunArtifactsSummary(count=len(artifacts), has_artifacts_zip=any(item.artifact_type == "artifacts_zip" for item in artifacts), has_final_stats_csv=artifact is not None, latest_available_at=iso_z(max((item.created_at for item in artifacts), default=None))))
+    return RunReportDetail(id=run.id, verdict=RunVerdict(state=run.state, run_type=run.run_type, source_type=run.source_type, validity=run.validity or ("invalid" if run.run_type == "debug" else "valid"), sla_result=run.sla_result or "not_evaluated", sla_result_reason=run.sla_result_reason, duration_ms=_duration_ms(run), triggered_by=_actor(db, run.triggered_by_user_id), created_at=iso_z(run.created_at) or "", accepted_at=iso_z(run.accepted_at), started_at=iso_z(run.started_at), ended_at=iso_z(run.ended_at), last_heartbeat_at=iso_z(run.last_heartbeat_at), failure_reason=run.failure_reason, failure_message=run.failure_message, forced_convergence=run.forced_convergence, warnings=[]), kpi_summary=_kpi(status, artifact, summary), failure_diagnostics=FailureDiagnostics(failure_reason=run.failure_reason, failure_message=run.failure_message, has_failed_requests_preview=False, notes=[]), final_stats_preview=_preview(summary, status), debug_http_trace=_debug_http_trace_for_run(db, run), snapshot=_snapshot_summary(snapshot, run), nodes=[RunReportNode(id=run.selected_node_id, name=f"Load Node {run.selected_node_id[-6:]}", scope=node.scope if node else "unknown", pool_type="workspace" if node and node.scope == "workspace" else "public", state_at_report=node.status if node else "unknown")], artifacts_summary=RunArtifactsSummary(count=len(artifacts), has_artifacts_zip=any(item.artifact_type == "artifacts_zip" for item in artifacts), has_final_stats_csv=artifact is not None, latest_available_at=iso_z(max((item.created_at for item in artifacts), default=None))))
 
 
 def update_run_validity(db: Session, *, workspace_id: str, run_id: str, validity: str, actor: User, request: Request | None = None) -> RunValidityPatchResponse:

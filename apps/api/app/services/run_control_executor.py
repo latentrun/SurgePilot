@@ -16,6 +16,12 @@ from app.services.load_nodes import (
     decrypt_credential,
     sanitize_log,
 )
+from app.services.execution_bundles import (
+    ExecutionBundleFile,
+    build_debug_scenario_execution_bundle,
+    build_test_plan_execution_bundle,
+)
+from app.services.load_node_initializer import safe_join
 from app.services.runner_bundle import RunnerBundle
 from app.services.runs import (
     RunControlCommand,
@@ -72,6 +78,17 @@ class RemoteRunControlExecutor(RunControlExecutor):
         )
 
     def execute(self, command: RunControlCommand) -> RunControlExecutionResult:
+        execution_bundle_files: list[ExecutionBundleFile] | None = None
+        if command.action == "start" and command.source_type in {"debug_scenario", "test_plan"}:
+            try:
+                execution_bundle_files = self._build_execution_bundle(command)
+            except Exception:
+                return RunControlExecutionResult(
+                    ok=False,
+                    error_code="RUN_BUNDLE_BUILD_FAILED",
+                    message="Run execution bundle could not be prepared.",
+                    quarantine_node=False,
+                )
         target: SshTarget | None = None
         env_path: str | None = None
         start_invoked = False
@@ -89,6 +106,9 @@ class RemoteRunControlExecutor(RunControlExecutor):
                 trusted_host_key_fingerprint_sha256=command.trusted_host_key_fingerprint_sha256,
             )
             self._upload_runner(target=target, runner_home=command.runner_home)
+            self._upload_execution_bundle(
+                target=target, command=command, files=execution_bundle_files
+            )
             env_path = self._remote_env_path(command)
             cleanup_required = command.action == "start"
             self.adapter.upload_text(
@@ -158,6 +178,8 @@ class RemoteRunControlExecutor(RunControlExecutor):
                 ),
                 cleanup_required=start_invoked,
             )
+        finally:
+            self._close_execution_bundle(execution_bundle_files)
         if result.ok:
             return RunControlExecutionResult(ok=True)
         return RunControlExecutionResult(
@@ -198,6 +220,37 @@ class RemoteRunControlExecutor(RunControlExecutor):
             self.adapter.upload_bytes(
                 target, remote_path=remote_path, content=file.content, mode=file.mode
             )
+
+    def _build_execution_bundle(self, command: RunControlCommand) -> list[ExecutionBundleFile]:
+        if self.session_factory is None:
+            raise RuntimeError("Run execution bundle requires a session factory.")
+        with self.session_factory() as session:
+            if command.source_type == "test_plan":
+                return build_test_plan_execution_bundle(
+                    session, run_id=command.run_id, runner_home=command.runner_home, settings=self.settings
+                )
+            return build_debug_scenario_execution_bundle(
+                session, run_id=command.run_id, runner_home=command.runner_home, settings=self.settings
+            )
+
+    def _upload_execution_bundle(
+        self, *, target: SshTarget, command: RunControlCommand,
+        files: list[ExecutionBundleFile] | None,
+    ) -> None:
+        if not files:
+            return
+        bundle_root = posixpath.join(command.runner_home, "runs", command.run_id, "bundle")
+        for file in files:
+            remote_path = safe_join(bundle_root, file.relative_path)
+            if file.content is not None:
+                self.adapter.upload_bytes(target, remote_path=remote_path, content=file.content, mode=file.mode)
+            elif file.stream is not None:
+                self.adapter.upload_stream(target, remote_path=remote_path, source=file.stream, mode=file.mode)
+
+    def _close_execution_bundle(self, files: list[ExecutionBundleFile] | None) -> None:
+        for file in files or []:
+            if file.stream is not None:
+                file.stream.close()
 
     def _failure_requires_quarantine(
         self,

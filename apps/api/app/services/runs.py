@@ -32,7 +32,7 @@ import logging
 import re
 from typing import Any, BinaryIO
 
-from sqlalchemy import and_, or_, select
+from sqlalchemy import and_, func, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -53,6 +53,11 @@ from app.models.runs import (
     RunSnapshot,
 )
 from app.services.audit import write_audit_event
+from app.services.debug_http_trace import (
+    DEBUG_HTTP_BODY_BLOB_ARTIFACT_TYPE,
+    DEBUG_HTTP_TRACE_ARTIFACT_TYPE,
+    DEBUG_HTTP_TRACE_RELATIVE_PATH,
+)
 from app.services.load_nodes import visible_node_filters
 from app.services.storage import get_storage_client
 
@@ -1324,6 +1329,44 @@ def _terminal_late_policy_limit(run: Run, *, declared_size_bytes: int, now: date
     return max_bytes
 
 
+DEBUG_HTTP_BODY_BLOB_RELATIVE_PATH_PREFIX = "artifacts/debug-http-body-blobs/"
+
+
+def _validate_debug_http_internal_scope_and_path(
+    run: Run, *, artifact_type: str, relative_path: str
+) -> None:
+    if artifact_type not in {DEBUG_HTTP_TRACE_ARTIFACT_TYPE, DEBUG_HTTP_BODY_BLOB_ARTIFACT_TYPE}:
+        return
+    if run.run_type != "debug" or run.source_type not in {"debug_scenario", "test_plan"}:
+        raise AppError("RUNNER_FORBIDDEN", "Runner is not allowed to upload this artifact.", 403)
+    if artifact_type == DEBUG_HTTP_TRACE_ARTIFACT_TYPE:
+        if relative_path != DEBUG_HTTP_TRACE_RELATIVE_PATH:
+            raise AppError("INVALID_ARTIFACT_PATH", "Artifact path is invalid.", 400)
+    elif not (
+        relative_path.startswith(DEBUG_HTTP_BODY_BLOB_RELATIVE_PATH_PREFIX)
+        and relative_path.endswith(".bin")
+        and relative_path.count("/") == 2
+    ):
+        raise AppError("INVALID_ARTIFACT_PATH", "Artifact path is invalid.", 400)
+
+
+def _validate_debug_http_internal_pre_terminal(run: Run, *, artifact_type: str) -> None:
+    if artifact_type in {DEBUG_HTTP_TRACE_ARTIFACT_TYPE, DEBUG_HTTP_BODY_BLOB_ARTIFACT_TYPE} and run.state in TERMINAL_STATES:
+        raise AppError("RUN_TERMINAL_STATE", "Run is already terminal.", 409)
+
+
+def _validate_debug_http_body_blob_total_budget(db: Session, *, run_id: str, new_size_bytes: int) -> None:
+    if new_size_bytes < 0:
+        raise AppError("ARTIFACT_SIZE_MISMATCH", "Artifact size does not match.", 400)
+    existing = db.scalar(select(func.coalesce(func.sum(RunArtifact.size_bytes), 0)).where(
+        RunArtifact.run_id == run_id,
+        RunArtifact.artifact_type == DEBUG_HTTP_BODY_BLOB_ARTIFACT_TYPE,
+        RunArtifact.status == "available",
+    ))
+    if int(existing or 0) + new_size_bytes > get_settings().debug_trace_body_blob_total_max_bytes:
+        raise AppError("PAYLOAD_TOO_LARGE", "Uploaded file is too large.", 413)
+
+
 def _delete_artifact_object_best_effort(*, bucket: str, object_key: str, storage_client) -> None:
     delete = getattr(storage_client, "delete_object_best_effort", None)
     if callable(delete):
@@ -1377,6 +1420,10 @@ def ingest_run_artifact(
     if declared_size_bytes < 0:
         raise AppError("ARTIFACT_SIZE_MISMATCH", "Artifact size does not match.", 400)
     run = _lock_run(db, run_id)
+    _validate_debug_http_internal_scope_and_path(
+        run, artifact_type=artifact_type, relative_path=safe_path
+    )
+    _validate_debug_http_internal_pre_terminal(run, artifact_type=artifact_type)
     _validate_runner_node_binding(
         db, run=run, node_id=node_id, authenticated_node_id=authenticated_node_id
     )
@@ -1435,6 +1482,8 @@ def ingest_run_artifact(
             bucket=bucket, object_key=temp_storage_key, storage_client=storage_client
         )
         raise AppError("RUN_TERMINAL_STATE", "Run is already terminal.", 409)
+    if artifact_type == DEBUG_HTTP_BODY_BLOB_ARTIFACT_TYPE:
+        _validate_debug_http_body_blob_total_budget(db, run_id=run_id, new_size_bytes=put.size_bytes)
     if put.size_bytes != declared_size_bytes:
         _delete_artifact_object_best_effort(
             bucket=bucket, object_key=temp_storage_key, storage_client=storage_client
@@ -1447,6 +1496,10 @@ def ingest_run_artifact(
         raise AppError("ARTIFACT_HASH_MISMATCH", "Artifact hash does not match.", 400)
     try:
         run = _lock_run(db, run_id)
+        _validate_debug_http_internal_scope_and_path(
+            run, artifact_type=artifact_type, relative_path=safe_path
+        )
+        _validate_debug_http_internal_pre_terminal(run, artifact_type=artifact_type)
         _validate_runner_node_binding(
             db, run=run, node_id=node_id, authenticated_node_id=authenticated_node_id
         )
@@ -1485,6 +1538,10 @@ def ingest_run_artifact(
             _terminal_late_policy_limit(run, declared_size_bytes=put.size_bytes, now=utc_now())
             if put.size_bytes >= get_settings().run_terminal_late_artifact_max_bytes:
                 raise AppError("RUN_TERMINAL_STATE", "Run is already terminal.", 409)
+        if artifact_type == DEBUG_HTTP_BODY_BLOB_ARTIFACT_TYPE:
+            _validate_debug_http_body_blob_total_budget(
+                db, run_id=run_id, new_size_bytes=put.size_bytes
+            )
         _copy_artifact_object(
             bucket=bucket,
             source_key=temp_storage_key,
