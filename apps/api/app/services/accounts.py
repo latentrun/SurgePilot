@@ -12,13 +12,18 @@ from app.models.auth import User, Workspace
 from app.schemas.auth import (
     AuthSessionResponse,
     CurrentUserResponse,
-    UserSummary,
-    WorkspaceSummary,
 )
 from app.services.audit import write_audit_event
 from app.services.passwords import PasswordPolicyError, hash_password, verify_password
 from app.services.sessions import CreatedSession, create_session
 from app.services.system_settings import effective_allow_signup
+from app.services.workspace_admin import (
+    available_workspaces,
+    permissions_for,
+    resolve_current_workspace,
+    user_summary,
+    workspace_summary,
+)
 from app.services.workspaces import add_default_membership, get_default_workspace
 
 DUMMY_PASSWORD_HASH = (
@@ -32,19 +37,12 @@ def normalize_email(email: str) -> str:
 
 
 def _session_context(db: Session, user: User, workspace: Workspace):
-    user_data = UserSummary(
-        id=user.id,
-        email=user.email,
-        display_name=user.display_name,
-        role=user.role,
-        status=user.status,
-    )
-    workspace_data = WorkspaceSummary(
-        id=workspace.id,
-        name=workspace.name,
-    )
+    workspace_data = workspace_summary(workspace)
     return {
-        "user": user_data,
+        "user": user_summary(user),
+        "current_workspace": workspace_data,
+        "available_workspaces": available_workspaces(db, user),
+        "permissions": permissions_for(user),
         "default_workspace": workspace_data,
     }
 
@@ -59,6 +57,13 @@ def auth_response(
 
 def current_user_response(db: Session, user: User, workspace: Workspace) -> CurrentUserResponse:
     return CurrentUserResponse(**_session_context(db, user, workspace))
+
+
+def current_user_response_for_preference(
+    db: Session, *, user: User, preferred_workspace_id: str | None
+) -> CurrentUserResponse:
+    workspace, _ = resolve_current_workspace(db, user=user, preferred_workspace_id=preferred_workspace_id)
+    return current_user_response(db, user, workspace)
 
 
 def users_exist(db: Session) -> bool:
@@ -214,7 +219,9 @@ def login_user(
     user.locked_until = None
     user.last_login_at = now
     user.updated_at = now
-    workspace = get_default_workspace(db, user.id)
+    if user.status == "disabled":
+        raise AppError("USER_DISABLED", "User is disabled.", 403)
+    workspace, _ = resolve_current_workspace(db, user=user, preferred_workspace_id=None)
     session = create_session(db, user=user)
     write_audit_event(
         db,

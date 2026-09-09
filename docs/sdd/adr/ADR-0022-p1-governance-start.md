@@ -44,3 +44,7 @@ If any of those files still mention P0-only after this ADR is merged, interpret 
 - P2 remains out of scope unless a separate accepted ADR or PRD update explicitly changes it.
 - API Catalog / OpenAPI generated Scenario or Test Plan flows remain excluded from P1.
 - Schedule Run, Scheduled Job, product Help page, Dependency archive extraction, and enterprise auth/security extensions remain P2 unless separately changed.
+
+## P1-03 Verification Backfill
+
+The P1-03 reconstruction remains within the governance boundary established here. Its final verification atomic is represented by focused API, Web, contract, E2E, and base-compose drift checks; those checks verify session/workspace authority, Admin protections, settings secrecy, and generated-contract boundaries without authorizing another P1 Slice or any P2 surface.

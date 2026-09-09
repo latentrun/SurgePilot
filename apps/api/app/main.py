@@ -21,6 +21,7 @@ from app.routes import (
     scenarios,
     setup,
     test_plans,
+    workspaces,
 )
 from app.services.storage import get_storage_client
 
@@ -48,6 +49,7 @@ app.add_exception_handler(RequestValidationError, validation_error_handler)
 app.include_router(setup.router)
 app.include_router(admin.router)
 app.include_router(auth.router)
+app.include_router(workspaces.router)
 app.include_router(env_groups.router)
 app.include_router(dependency_files.router)
 app.include_router(load_nodes.router)

@@ -21,6 +21,48 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/admin/system-settings": {
+        parameters: { query?: never; header?: never; path?: never; cookie?: never; };
+        get: operations["adminGetSystemSettings"];
+        put?: never; post?: never; delete?: never; options?: never; head?: never;
+        patch: operations["adminPatchSystemSettings"];
+        trace?: never;
+    };
+    "/v1/admin/users": {
+        parameters: { query?: never; header?: never; path?: never; cookie?: never; };
+        get: operations["adminListUsers"];
+        put?: never; post: operations["adminCreateUser"]; delete?: never; options?: never; head?: never; patch?: never; trace?: never;
+    };
+    "/v1/admin/users/{userId}": {
+        parameters: { query?: never; header?: never; path?: never; cookie?: never; };
+        get: operations["adminGetUser"];
+        put?: never; post?: never; delete?: never; options?: never; head?: never;
+        patch: operations["adminPatchUser"];
+        trace?: never;
+    };
+    "/v1/admin/users/{userId}/reset-password": {
+        parameters: { query?: never; header?: never; path?: never; cookie?: never; };
+        get?: never; put?: never; post: operations["adminResetUserPassword"]; delete?: never; options?: never; head?: never; patch?: never; trace?: never;
+    };
+    "/v1/admin/users/{userId}/workspaces": {
+        parameters: { query?: never; header?: never; path?: never; cookie?: never; };
+        get?: never; put: operations["adminReplaceUserWorkspaces"]; post?: never; delete?: never; options?: never; head?: never; patch?: never; trace?: never;
+    };
+    "/v1/admin/workspaces": {
+        parameters: { query?: never; header?: never; path?: never; cookie?: never; };
+        get: operations["adminListWorkspaces"];
+        put?: never; post: operations["adminCreateWorkspace"]; delete?: never; options?: never; head?: never; patch?: never; trace?: never;
+    };
+    "/v1/admin/workspaces/{workspaceId}": {
+        parameters: { query?: never; header?: never; path?: never; cookie?: never; };
+        get?: never; put?: never; post?: never; delete?: never; options?: never; head?: never;
+        patch: operations["adminPatchWorkspace"];
+        trace?: never;
+    };
+    "/v1/admin/workspaces/{workspaceId}/archive": {
+        parameters: { query?: never; header?: never; path?: never; cookie?: never; };
+        get?: never; put?: never; post: operations["adminArchiveWorkspace"]; delete?: never; options?: never; head?: never; patch?: never; trace?: never;
+    };
     "/v1/auth/csrf": {
         parameters: {
             query?: never;
@@ -601,22 +643,116 @@ export interface paths {
         patch: operations["patchTestPlan"];
         trace?: never;
     };
+    "/v1/workspaces": {
+        parameters: { query?: never; header?: never; path?: never; cookie?: never; };
+        get: operations["listWorkspaces"];
+        put?: never; post?: never; delete?: never; options?: never; head?: never; patch?: never; trace?: never;
+    };
+    "/v1/workspaces/switch": {
+        parameters: { query?: never; header?: never; path?: never; cookie?: never; };
+        get?: never; put?: never; post: operations["switchWorkspace"]; delete?: never; options?: never; head?: never; patch?: never; trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        AdminUserCreateRequest: {
+            displayName: string;
+            email: string;
+            password: string;
+            role: "admin" | "user";
+            status: "active" | "disabled";
+            workspaceIds?: string[];
+        };
+        AdminUserEnvelope: { user: components["schemas"]["AdminUserSummary"] };
+        AdminUserListResponse: { users: components["schemas"]["AdminUserSummary"][] };
+        AdminUserPatchRequest: {
+            displayName?: string | null;
+            role?: ("admin" | "user") | null;
+            status?: ("active" | "disabled") | null;
+        };
+        AdminUserSummary: {
+            disabledAt?: string | null;
+            displayName: string;
+            email: string;
+            id: string;
+            role: "admin" | "user";
+            status: "active" | "disabled";
+            workspaceIds?: string[];
+        };
+        AdminWorkspaceListResponse: {
+            workspaces: components["schemas"]["WorkspaceSummary"][];
+        };
         AuthSessionResponse: {
+            availableWorkspaces: components["schemas"]["AvailableWorkspaceSummary"][];
             /** Csrftoken */
             csrfToken: string;
+            currentWorkspace: components["schemas"]["WorkspaceSummary"];
             defaultWorkspace: components["schemas"]["WorkspaceSummary"];
+            permissions: components["schemas"]["PermissionSummary"];
             user: components["schemas"]["UserSummary"];
+        };
+        AvailableWorkspaceSummary: {
+            archivedAt?: string | null;
+            id: string;
+            membership: components["schemas"]["WorkspaceMembershipSummary"];
+            name: string;
+            status: "active" | "archived";
+        };
+        MembershipReplaceRequest: { workspaceIds: string[] };
+        ResetPasswordRequest: { newPassword: string };
+        SensitiveStatus: {
+            minioCredentialsConfigured: boolean;
+            runnerInternalTokenConfigured: boolean;
+            sshCredentialEncryptionKeyConfigured: boolean;
+        };
+        SystemSettingsPatchRequest: {
+            allowSignup?: boolean | null;
+            dependencyFileAllowedExtensions?: string[] | string | null;
+            dependencyFileMaxBytes?: number | null;
+            dependencyFilePreviewBinaryDenyExtensions?: string[] | string | null;
+            dependencyFilePreviewMaxBytes?: number | null;
+            jmeterMemoryXmx?: string | null;
+            loadNodeApiBaseUrl?: string | null;
+            loadSoftLimitWarningConcurrency?: number | null;
+            maxDelaySeconds?: number | null;
+            maxIterations?: number | null;
+            maxRampUpSeconds?: number | null;
+            maxRunDurationSeconds?: number | null;
+            maxScenarioItemsPerTestPlan?: number | null;
+            maxSlaRulesPerTestPlan?: number | null;
+            maxTargetRps?: number | null;
+        };
+        SystemSettingsResponse: {
+            sensitiveStatus: components["schemas"]["SensitiveStatus"];
+            settings: components["schemas"]["SystemSettingsValues"];
+        };
+        SystemSettingsValues: {
+            allowSignup: boolean;
+            dependencyFileAllowedExtensions: string[];
+            dependencyFileMaxBytes: number;
+            dependencyFilePreviewBinaryDenyExtensions: string[];
+            dependencyFilePreviewMaxBytes: number;
+            jmeterMemoryXmx: string;
+            loadNodeApiBaseUrl?: string | null;
+            loadSoftLimitWarningConcurrency: number;
+            maxDelaySeconds: number;
+            maxIterations: number;
+            maxRampUpSeconds: number;
+            maxRunDurationSeconds: number;
+            maxScenarioItemsPerTestPlan: number;
+            maxSlaRulesPerTestPlan: number;
+            maxTargetRps: number;
         };
         CsrfTokenResponse: {
             /** Csrftoken */
             csrfToken: string;
         };
         CurrentUserResponse: {
+            availableWorkspaces: components["schemas"]["AvailableWorkspaceSummary"][];
+            currentWorkspace: components["schemas"]["WorkspaceSummary"];
             defaultWorkspace: components["schemas"]["WorkspaceSummary"];
+            permissions: components["schemas"]["PermissionSummary"];
             user: components["schemas"]["UserSummary"];
         };
         DependencyFileDetail: {
@@ -2307,12 +2443,30 @@ export interface components {
              */
             status: "active";
         };
+        PermissionSummary: {
+            canManageSystemSettings: boolean;
+            canManageUsers: boolean;
+            canManageWorkspaces: boolean;
+            canViewSetupStatus: boolean;
+        };
+        WorkspaceMembershipSummary: {
+            joinedAt?: string | null;
+            kind: "member" | "admin_access";
+        };
         WorkspaceSummary: {
+            archivedAt?: string | null;
             /** Id */
             id: string;
             /** Name */
             name: string;
+            status: "active" | "archived";
         };
+        WorkspaceEnvelope: { workspace: components["schemas"]["WorkspaceSummary"] };
+        WorkspaceListResponse: {
+            workspaces: components["schemas"]["WorkspaceSummary"][];
+        };
+        WorkspaceSwitchRequest: { workspaceId: string };
+        WorkspaceWriteRequest: { name: string };
     };
     responses: never;
     parameters: never;
@@ -2321,7 +2475,28 @@ export interface components {
     pathItems: never;
 }
 export type $defs = Record<string, never>;
+
+type generatedOperation<T, Request = never> = {
+    parameters: { query?: Record<string, string | null>; header?: Record<string, string>; path?: Record<string, string>; cookie?: { surgepilot_session?: string | null } };
+    requestBody: Request extends never ? never : { content: { "application/json": Request } };
+    responses: { 200: { headers: { [name: string]: unknown }; content: { "application/json": T } }; 201: { headers: { [name: string]: unknown }; content: { "application/json": T } } };
+};
+
 export interface operations {
+    adminGetSystemSettings: generatedOperation<components["schemas"]["SystemSettingsResponse"]>;
+    adminPatchSystemSettings: generatedOperation<components["schemas"]["SystemSettingsResponse"], components["schemas"]["SystemSettingsPatchRequest"]>;
+    adminListUsers: generatedOperation<components["schemas"]["AdminUserListResponse"]>;
+    adminCreateUser: generatedOperation<components["schemas"]["AdminUserEnvelope"], components["schemas"]["AdminUserCreateRequest"]>;
+    adminGetUser: generatedOperation<components["schemas"]["AdminUserEnvelope"]>;
+    adminPatchUser: generatedOperation<components["schemas"]["AdminUserEnvelope"], components["schemas"]["AdminUserPatchRequest"]>;
+    adminResetUserPassword: generatedOperation<components["schemas"]["AdminUserEnvelope"], components["schemas"]["ResetPasswordRequest"]>;
+    adminReplaceUserWorkspaces: generatedOperation<components["schemas"]["AdminUserEnvelope"], components["schemas"]["MembershipReplaceRequest"]>;
+    adminListWorkspaces: generatedOperation<components["schemas"]["AdminWorkspaceListResponse"]>;
+    adminCreateWorkspace: generatedOperation<components["schemas"]["WorkspaceEnvelope"], components["schemas"]["WorkspaceWriteRequest"]>;
+    adminPatchWorkspace: generatedOperation<components["schemas"]["WorkspaceEnvelope"], components["schemas"]["WorkspaceWriteRequest"]>;
+    adminArchiveWorkspace: generatedOperation<components["schemas"]["WorkspaceEnvelope"]>;
+    listWorkspaces: generatedOperation<components["schemas"]["WorkspaceListResponse"]>;
+    switchWorkspace: generatedOperation<components["schemas"]["CurrentUserResponse"], components["schemas"]["WorkspaceSwitchRequest"]>;
     createEnvGroup: {
         parameters: {
             query?: never;

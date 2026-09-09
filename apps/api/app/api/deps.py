@@ -13,6 +13,7 @@ from app.services.sessions import (
     get_session_user,
     verify_csrf,
 )
+from app.services.workspace_admin import ensure_active_user, get_accessible_workspace
 from app.services.workspaces import get_default_workspace
 
 DbDep = Annotated[Session, Depends(get_db)]
@@ -39,8 +40,7 @@ CurrentSessionDep = Annotated[SessionRecord, Depends(get_current_session)]
 
 def get_current_user(db: DbDep, record: CurrentSessionDep) -> User:
     user = get_session_user(db, record)
-    if user is None or user.status != "active":
-        raise AppError("UNAUTHENTICATED", "Authentication is required.", 401)
+    ensure_active_user(user)
     return user
 
 
@@ -53,7 +53,14 @@ def get_current_workspace(
     request: Request,
     workspace_id: WorkspaceHeaderDep = None,
 ) -> Workspace:
-    workspace = get_default_workspace(db, user.id)
+    if workspace_id is None:
+        workspace = get_default_workspace(db, user.id)
+    else:
+        if not is_ulid(workspace_id):
+            raise AppError("WORKSPACE_REQUIRED", "Workspace context is required.", 400)
+        workspace = get_accessible_workspace(db, workspace_id=workspace_id, user=user)
+        if workspace is None:
+            raise AppError("WORKSPACE_ACCESS_DENIED", "Workspace access is denied.", 403)
     request.state.workspace_id = workspace.id
     return workspace
 

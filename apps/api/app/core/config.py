@@ -56,6 +56,8 @@ class Settings:
     minio_secure: bool
     dependency_file_max_bytes: int
     dependency_file_allowed_extensions: str
+    dependency_file_preview_max_bytes: int
+    dependency_file_preview_binary_deny_extensions: str
     ssh_credential_encryption_key: str | None
     load_node_default_runner_home: str
     load_node_ssh_connect_timeout_seconds: int
@@ -120,6 +122,12 @@ def get_settings() -> Settings:
             os.environ.get("DEPENDENCY_FILE_MAX_BYTES", str(100 * 1024 * 1024))
         ),
         dependency_file_allowed_extensions=os.environ.get("DEPENDENCY_FILE_ALLOWED_EXTENSIONS", ""),
+        dependency_file_preview_max_bytes=max(
+            1, int(os.environ.get("DEPENDENCY_FILE_PREVIEW_MAX_BYTES", str(64 * 1024)))
+        ),
+        dependency_file_preview_binary_deny_extensions=os.environ.get(
+            "DEPENDENCY_FILE_PREVIEW_BINARY_DENY_EXTENSIONS", ".png,.jpg,.jpeg,.gif,.webp,.bmp,.ico,.svg,.pdf,.zip,.tar,.gz,.tgz,.bz2,.xz,.7z,.rar,.jar,.war,.class,.so,.dll,.dylib,.exe,.bin,.dat,.woff,.woff2,.ttf,.otf,.eot,.mp3,.mp4,.mov,.avi,.mkv,.webm"
+        ),
         ssh_credential_encryption_key=os.environ.get("SSH_CREDENTIAL_ENCRYPTION_KEY") or None,
         load_node_default_runner_home=os.environ.get(
             "LOAD_NODE_DEFAULT_RUNNER_HOME", "/opt/surgepilot/runner"
