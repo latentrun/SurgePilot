@@ -87,6 +87,12 @@ class Settings:
     max_iterations: int
     max_target_rps: int
     max_sla_rules_per_test_plan: int
+    debug_trace_max_requests: int
+    debug_trace_body_max_bytes: int
+    debug_trace_artifact_max_bytes: int
+    debug_trace_record_max_bytes: int
+    debug_trace_body_blob_max_bytes: int
+    debug_trace_body_blob_total_max_bytes: int
     jmeter_memory_xmx: str
 
 
@@ -186,6 +192,24 @@ def get_settings() -> Settings:
         max_target_rps=int(os.environ.get("SURGEPILOT_MAX_TARGET_RPS", "100000")),
         max_sla_rules_per_test_plan=int(
             os.environ.get("SURGEPILOT_MAX_SLA_RULES_PER_TEST_PLAN", "5")
+        ),
+        debug_trace_max_requests=int(os.environ.get("SURGEPILOT_DEBUG_TRACE_MAX_REQUESTS", "100")),
+        debug_trace_body_max_bytes=int(
+            os.environ.get("SURGEPILOT_DEBUG_TRACE_BODY_MAX_BYTES", str(64 * 1024))
+        ),
+        debug_trace_artifact_max_bytes=int(
+            os.environ.get("SURGEPILOT_DEBUG_TRACE_ARTIFACT_MAX_BYTES", str(10 * 1024 * 1024))
+        ),
+        debug_trace_record_max_bytes=int(
+            os.environ.get("SURGEPILOT_DEBUG_TRACE_RECORD_MAX_BYTES", str(128 * 1024))
+        ),
+        debug_trace_body_blob_max_bytes=int(
+            os.environ.get("SURGEPILOT_DEBUG_TRACE_BODY_BLOB_MAX_BYTES", str(5 * 1024 * 1024))
+        ),
+        debug_trace_body_blob_total_max_bytes=int(
+            os.environ.get(
+                "SURGEPILOT_DEBUG_TRACE_BODY_BLOB_TOTAL_MAX_BYTES", str(20 * 1024 * 1024)
+            )
         ),
         jmeter_memory_xmx=_jmeter_memory_xmx_from_env(),
     )
