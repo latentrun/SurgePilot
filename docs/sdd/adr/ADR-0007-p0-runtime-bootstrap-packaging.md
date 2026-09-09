@@ -49,7 +49,7 @@ The deployment pipeline places the artifacts needed by the target environment in
 /opt/surgepilot/runtime-artifacts/
 ```
 
-When no CI/release artifact job is available, `make release-runtime` is the local release-job subset. P2-05 runs the existing production recipe inside `infra/docker/runtime-builder/Dockerfile`, so Linux and macOS hosts produce a Linux artifact for the actual Docker daemon architecture without admitting host-native macOS binaries. `scripts/run_runtime_builder.py` writes the selected `LOAD_NODE_RUNTIME_VERSION`; `scripts/release_runtime_artifact.py` remains the underlying manifest, packaging, checksum, smoke, and reuse authority. Optional component checksum pins retain their existing fail-fast semantics.
+When no CI/release artifact job is available, the release process must provide an equivalent local packaging path. The exact production-builder and compatibility-gate workflow is deferred to a later checkpoint; R10 records only the artifact contract and Load Node bootstrap boundary.
 
 api-worker reads from that directory and uploads the selected runtime archive to the Load Node through SFTP `upload_stream`. Load Nodes do not receive runtime download URLs or credentials and do not download runtime artifacts themselves.
 
@@ -181,14 +181,3 @@ Costs and constraints:
 - `docs/sdd/05-runner-protocol-and-run-state-machine.md`
 - `docs/sdd/adr/ADR-0002-runner-independent-app.md`
 - `docs/sdd/adr/ADR-0006-p0-separate-api-worker.md`
-
-## Follow-up: single production builder for SSH E2E and runtime compatibility
-
-
-The SSH E2E runtime path now uses the same containerized production builder as `make release-runtime`. `scripts/run_runtime_builder.py --fixed-version <version>` invokes `scripts/release_runtime_artifact.py --fixed-version <version>` inside native Linux while preserving the same source, staging, archive, sidecar, manifest, environment-file, and reuse validation flow as hash-version releases.
-
-Fixed-version reuse must never mean filename-only reuse. Reuse is valid only after current component inputs and checksums are recomputed, the manifest input hash matches the current input hash, `manifestHash` matches, the `*.tar.gz.sha256` sidecar equals the actual archive SHA256, and archive `metadata.json` matches name, version, platform, arch, Taurus, JMeter, and required plugins.
-
-The former SSH-image seed helper has been removed. `start-full-ssh-e2e`, `_verify-runner-ssh`, and verifier runtime preparation now call the production builder with fixed version `p0-e2e` and persistent output/build/cache directories. First use may need network access to construct the runtime; subsequent uses rely on the production builder cache and output reuse. The Load Node initialization boundary remains zero network, zero pip, and zero compile.
-
-The minimum runtime compatibility matrix is now Ubuntu 24.04 and Debian 12 on the same production artifact for the release host architecture, with Debian 12 as the glibc baseline. `make verify-runtime-compat` is the release/nightly/main-merge gate for this matrix. It validates runtime upload, whole-archive SHA256, safe extraction, metadata and critical files, `current/bin/bzt -h`, JMeter `5.6.3 --version`, all five required plugin classes, the generated-JMX external-class resolution check, and the bounded Taurus/JMeter compatibility smoke on both distributions. Default `start-full-stack` and `start-full-ssh-e2e` remain startup/manual-review paths and do not replace the compatibility gate.
