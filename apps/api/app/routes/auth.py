@@ -1,6 +1,6 @@
 from typing import Annotated
 
-from fastapi import APIRouter, Cookie, Header, Request, Response, status
+from fastapi import APIRouter, Cookie, Header, Query, Request, Response, status
 
 from app.api.deps import CurrentSessionDep, CurrentUserDep, DbDep
 from app.core.errors import AppError
@@ -14,7 +14,7 @@ from app.schemas.auth import (
 from app.schemas.common import ErrorResponse
 from app.services.accounts import (
     auth_response,
-    current_user_response,
+    current_user_response_for_preference,
     login_user,
     register_user,
 )
@@ -28,7 +28,6 @@ from app.services.sessions import (
     set_session_cookie,
     verify_csrf,
 )
-from app.services.workspaces import get_default_workspace
 
 router = APIRouter(prefix="/api/v1/auth", tags=["auth"])
 SessionCookieDep = Annotated[
@@ -148,10 +147,10 @@ def get_current_user(
     response: Response,
     db: DbDep,
     user: CurrentUserDep,
+    preferred_workspace_id: Annotated[str | None, Query(alias="preferredWorkspaceId")] = None,
 ) -> CurrentUserResponse:
-    workspace = get_default_workspace(db, user.id)
-    result = current_user_response(db, user, workspace)
-    _attach_workspace_header(response, workspace.id)
+    result = current_user_response_for_preference(db, user=user, preferred_workspace_id=preferred_workspace_id)
+    _attach_workspace_header(response, result.current_workspace.id)
     db.commit()
     return result
 

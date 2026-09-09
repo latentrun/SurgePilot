@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import Any
 
-from sqlalchemy import CheckConstraint, ForeignKey, Index, String, Text, UniqueConstraint
+from sqlalchemy import CheckConstraint, ForeignKey, Index, String, Text, UniqueConstraint, func
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.types import JSON
@@ -15,7 +15,7 @@ class User(Base):
     __tablename__ = "users"
     __table_args__ = (
         CheckConstraint("role in ('admin', 'user')", name="ck_users_role"),
-        CheckConstraint("status in ('active')", name="ck_users_status"),
+        CheckConstraint("status in ('active', 'disabled')", name="ck_users_status"),
         CheckConstraint("length(id) = 26", name="ck_users_id_len"),
         CheckConstraint("length(email) <= 320", name="ck_users_email_len"),
         CheckConstraint(
@@ -34,6 +34,7 @@ class User(Base):
     failed_login_count: Mapped[int] = mapped_column(nullable=False, default=0)
     locked_until: Mapped[datetime | None] = mapped_column(nullable=True)
     last_login_at: Mapped[datetime | None] = mapped_column(nullable=True)
+    disabled_at: Mapped[datetime | None] = mapped_column(nullable=True)
     created_at: Mapped[datetime] = mapped_column(nullable=False)
     updated_at: Mapped[datetime] = mapped_column(nullable=False)
 
@@ -43,15 +44,24 @@ class User(Base):
 class Workspace(Base):
     __tablename__ = "workspaces"
     __table_args__ = (
-        CheckConstraint("status in ('active')", name="ck_workspaces_status"),
+        CheckConstraint("status in ('active', 'archived')", name="ck_workspaces_status"),
         CheckConstraint("length(id) = 26", name="ck_workspaces_id_len"),
     )
 
     id: Mapped[str] = mapped_column(String(26), primary_key=True)
     name: Mapped[str] = mapped_column(Text, nullable=False)
     status: Mapped[str] = mapped_column(Text, nullable=False, default="active")
+    archived_at: Mapped[datetime | None] = mapped_column(nullable=True)
     created_at: Mapped[datetime] = mapped_column(nullable=False)
     updated_at: Mapped[datetime] = mapped_column(nullable=False)
+
+Index(
+    "uq_workspaces_active_name_ci",
+    func.lower(Workspace.name),
+    unique=True,
+    sqlite_where=Workspace.status == "active",
+    postgresql_where=Workspace.status == "active",
+)
 
 
 class WorkspaceMember(Base):
@@ -65,6 +75,17 @@ class WorkspaceMember(Base):
         String(26), ForeignKey("users.id", ondelete="CASCADE"), primary_key=True
     )
     joined_at: Mapped[datetime] = mapped_column(nullable=False)
+
+
+class SystemSetting(Base):
+    __tablename__ = "system_settings"
+
+    key: Mapped[str] = mapped_column(Text, primary_key=True)
+    value_json: Mapped[Any] = mapped_column(JSONB().with_variant(JSON(), "sqlite"), nullable=False)
+    updated_by_user_id: Mapped[str | None] = mapped_column(
+        String(26), ForeignKey("users.id"), nullable=True
+    )
+    updated_at: Mapped[datetime] = mapped_column(nullable=False)
 
 
 class SessionRecord(Base):
