@@ -128,6 +128,20 @@ def initializer(adapter: FakeAdapter) -> RealLoadNodeInitializer:
     return RealLoadNodeInitializer(adapter=adapter, runner_bundle=FakeBundle(), settings=settings)
 
 
+def test_runtime_settings_are_loaded_from_environment(monkeypatch) -> None:
+    monkeypatch.setenv("LOAD_NODE_RUNTIME_ARTIFACT_DIR", "/srv/surgepilot/runtime-artifacts")
+    monkeypatch.setenv("LOAD_NODE_RUNTIME_VERSION", "test-runtime-v1")
+    monkeypatch.setenv("LOAD_NODE_RUNTIME_INSTALL_TIMEOUT_SECONDS", "321")
+
+    settings = get_settings()
+
+    assert settings.load_node_runtime_artifact_dir == "/srv/surgepilot/runtime-artifacts"
+    assert settings.load_node_runtime_version == "test-runtime-v1"
+    assert settings.load_node_runtime_install_timeout_seconds == 321
+    assert not hasattr(settings, "load_node_jmeter_path")
+    assert not hasattr(settings, "load_node_jmeter_version")
+
+
 def test_real_initializer_verifies_dependencies_and_uploads_runner() -> None:
     adapter = FakeAdapter()
 
