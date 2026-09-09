@@ -776,6 +776,8 @@ Implemented engineering facts for this Slice:
 8. Env/compose R1-R6 drift was backfilled: `.env.example` has one `RUNNER_INTERNAL_TOKEN`, compose-consumed variables are documented, Web runtime `VITE_API_BASE_URL` was removed from full/base compose, optional API/Web image build mirrors remain build-arg-only and commented in `.env.example`, and Monitoring/Grafana/Influx secrets remain outside System Settings responses/UI.
 9. Added API/Web/E2E coverage for P1-03 session context, Workspace/User/Settings governance, disabled session invalidation, last active Admin/Workspace protection, Admin business access to active Workspaces, Workspace switch smoke, Setup Status runtime readiness, System Settings policy UI smoke, env/compose drift checks, DB-backed policy validation, Dependency File policy hot-read behavior, Test Plan guardrail hot-read behavior, and JMeter snapshot behavior.
 
+R12a atomic 5 factual backfill: the reconstructed staging checkpoint now carries focused API coverage in `apps/api/tests/test_p1_03_workspace_admin_api.py`, a Web dirty-switch guard test, the P1-03 OpenAPI/secret-safety contract assertion, the available base-compose drift check, and Playwright smoke coverage in `tests/e2e/p1_03_workspace_admin.spec.ts`. These checks cover the session-context preference fallback, Workspace create/rename/archive and archived access, Admin-only user management, disabled-session invalidation, last-active protections, writable-settings whitelist, secret rejection, generated contract boundaries, and the scoped Web workspace-switch/settings flows. No P1-01/04/05/06/09 or P2 surface is added by this verification atomic.
+
 Verification used during implementation:
 
 - `make setup`

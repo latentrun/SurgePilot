@@ -40,3 +40,24 @@ def test_generated_web_client_is_present() -> None:
 
     assert client_path.exists()
     assert "export type paths" in client_path.read_text() or "export interface paths" in client_path.read_text()
+
+
+def test_p1_03_workspace_admin_contract_is_explicit_and_secret_safe() -> None:
+    document = json.loads(
+        (ROOT / "packages/contracts/openapi/api.openapi.json").read_text()
+    )
+    paths = document["paths"]
+    for path in (
+        "/v1/auth/me",
+        "/v1/workspaces",
+        "/v1/workspaces/switch",
+        "/v1/admin/workspaces",
+        "/v1/admin/users",
+        "/v1/admin/system-settings",
+    ):
+        assert path in paths
+    serialized = json.dumps(document)
+    assert "passwordHash" not in serialized
+    assert '"runnerInternalToken":' not in serialized
+    assert "USER_LAST_ACTIVE_ADMIN" in serialized
+    assert "SENSITIVE_SETTING_VALUE_FORBIDDEN" in serialized
