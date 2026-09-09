@@ -60,3 +60,23 @@ Runner emits periodic heartbeats while active. api-worker scans for acceptance t
 ## Acceptance focus
 
 Tests must cover every legal transition, terminal immutability, duplicate and out-of-order callbacks, `accepted` remaining `initializing`, Stop from both active states, Stop-before-accepted and Stop/start races, concurrent duplicate callbacks, timeout convergence, lease release, cleanup failure quarantine, and fake/real Runner contract parity.
+
+## Artifact ingest boundary
+
+Runner uploads one artifact per request to `POST /api/internal/v1/runner/artifacts` using the bound `x-runner-token`. The API validates the Run/node binding, schema version, event idempotency key, safe relative path, declared size, SHA-256 and artifact type before storing bytes and metadata. The Runner never receives MinIO credentials and the API returns an artifact identifier, not an object key.
+
+The public artifact type whitelist is:
+
+```text
+taurus_log
+jmeter_log
+final_stats_csv
+run_log
+artifacts_zip
+```
+
+P1-08 additionally permits two scoped internal ingest types for the Debug Run sources covered by `docs/sdd/adr/ADR-0008-p1-debug-http-trace.md` and `docs/sdd/slices/P1-08-debug-http-trace.md`: `debug_http_trace` and `debug_http_body_blob`. `debug_http_trace` is the bounded JSONL report input. `debug_http_body_blob` is an internal-only sanitized request/response body sidecar for large text bodies. Neither type enters the public artifact enum, list, filter, or count; `debug_http_trace` is not downloadable through the generic raw artifact endpoint, and body blobs use only the dedicated Run Report download route after API authorization. Unknown types remain rejected; this addition does not authorize other P1/P2 artifact types.
+
+Both P1-08 internal types are pre-terminal artifacts. When present, Runner must upload the trace and any body sidecars before sending the terminal callback. They must not use the terminal-late diagnostics path. Upload or parse failure must not change terminal Run state, verdict, lease cleanup or Stop convergence.
+
+After a Run is terminal, the API may accept only bounded diagnostic artifacts within five minutes of `endedAt` and below the configured 1MB terminal-late limit. Such artifacts are marked terminal-late, do not change Run state, and are rejected with `RUN_TERMINAL_STATE` outside that policy. This terminal-late rule never makes either P1-08 internal type a terminal-late artifact.

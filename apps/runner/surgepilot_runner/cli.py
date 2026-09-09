@@ -831,7 +831,23 @@ def _artifact_candidates(run_id: str) -> list[tuple[str, str, Path]]:
     root = run_dir(run_id)
     bundle = bundle_dir(run_id)
     artifacts = bundle / "artifacts"
+    body_blob_dir = artifacts / "debug-http-body-blobs"
+    body_blob_candidates = [
+        (
+            "debug_http_body_blob",
+            f"artifacts/debug-http-body-blobs/{path.name}",
+            path,
+        )
+        for path in sorted(body_blob_dir.glob("*.bin"))
+        if path.is_file()
+    ]
     return [
+        (
+            "debug_http_trace",
+            "artifacts/debug-http-trace.jsonl",
+            artifacts / "debug-http-trace.jsonl",
+        ),
+        *body_blob_candidates,
         ("final_stats_csv", "artifacts/final_stats.csv", artifacts / "final_stats.csv"),
         ("final_stats_csv", "artifacts/finalstats.csv", artifacts / "finalstats.csv"),
         ("run_log", "logs/runner.log", root / "logs" / "runner.log"),

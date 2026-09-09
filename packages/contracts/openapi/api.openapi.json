@@ -51,6 +51,246 @@
         "title": "CurrentUserResponse",
         "type": "object"
       },
+      "DebugHttpTrace": {
+        "properties": {
+          "entries": {
+            "items": {
+              "$ref": "#/components/schemas/DebugHttpTraceEntry"
+            },
+            "title": "Entries",
+            "type": "array"
+          },
+          "entryCount": {
+            "title": "Entrycount",
+            "type": "integer"
+          },
+          "sourceArtifactId": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sourceartifactid"
+          },
+          "status": {
+            "enum": [
+              "available",
+              "unavailable"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "traceTruncated": {
+            "title": "Tracetruncated",
+            "type": "boolean"
+          },
+          "warnings": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Warnings",
+            "type": "array"
+          }
+        },
+        "required": [
+          "status",
+          "entryCount",
+          "traceTruncated"
+        ],
+        "title": "DebugHttpTrace",
+        "type": "object"
+      },
+      "DebugHttpTraceBody": {
+        "properties": {
+          "bodyStorage": {
+            "default": "inline",
+            "enum": [
+              "inline",
+              "truncated",
+              "sidecar",
+              "dropped"
+            ],
+            "title": "Bodystorage",
+            "type": "string"
+          },
+          "bodyTruncated": {
+            "default": false,
+            "title": "Bodytruncated",
+            "type": "boolean"
+          },
+          "contentType": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Contenttype"
+          },
+          "downloadArtifactId": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Downloadartifactid"
+          },
+          "dropReason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dropreason"
+          },
+          "inlinePreview": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Inlinepreview"
+          },
+          "sha256Prefix": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sha256Prefix"
+          },
+          "sizeBytes": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sizebytes"
+          },
+          "text": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Text"
+          }
+        },
+        "title": "DebugHttpTraceBody",
+        "type": "object"
+      },
+      "DebugHttpTraceEntry": {
+        "properties": {
+          "durationMs": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Durationms"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          },
+          "label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Label"
+          },
+          "method": {
+            "title": "Method",
+            "type": "string"
+          },
+          "requestBody": {
+            "$ref": "#/components/schemas/DebugHttpTraceBody"
+          },
+          "requestHeaders": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "title": "Requestheaders",
+            "type": "object"
+          },
+          "responseBody": {
+            "$ref": "#/components/schemas/DebugHttpTraceBody"
+          },
+          "responseHeaders": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "title": "Responseheaders",
+            "type": "object"
+          },
+          "responseStatus": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Responsestatus"
+          },
+          "sequence": {
+            "title": "Sequence",
+            "type": "integer"
+          },
+          "url": {
+            "title": "Url",
+            "type": "string"
+          }
+        },
+        "required": [
+          "sequence",
+          "method",
+          "url",
+          "requestBody",
+          "responseBody"
+        ],
+        "title": "DebugHttpTraceEntry",
+        "type": "object"
+      },
       "DependencyFileDetail": {
         "properties": {
           "contentType": {
@@ -2922,6 +3162,16 @@
           "artifactsSummary": {
             "$ref": "#/components/schemas/RunArtifactsSummary"
           },
+          "debugHttpTrace": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DebugHttpTrace"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "failureDiagnostics": {
             "$ref": "#/components/schemas/FailureDiagnostics"
           },
@@ -2948,6 +3198,7 @@
           "kpiSummary",
           "failureDiagnostics",
           "finalStatsPreview",
+          "debugHttpTrace",
           "snapshot",
           "artifactsSummary"
         ],

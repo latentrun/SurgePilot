@@ -1432,6 +1432,7 @@ export interface components {
         };
         RunReportDetail: {
             artifactsSummary: components["schemas"]["RunArtifactsSummary"];
+            debugHttpTrace: components["schemas"]["DebugHttpTrace"] | null;
             failureDiagnostics: components["schemas"]["FailureDiagnostics"];
             finalStatsPreview: components["schemas"]["FinalStatsPreview"];
             /** Id */
@@ -1439,6 +1440,38 @@ export interface components {
             kpiSummary: components["schemas"]["RunKpiSummary"];
             snapshot: components["schemas"]["RunSnapshotSummary"];
             verdict: components["schemas"]["RunVerdict"];
+        };
+        DebugHttpTrace: {
+            entries?: components["schemas"]["DebugHttpTraceEntry"][];
+            entryCount: number;
+            sourceArtifactId?: string | null;
+            status: "available" | "unavailable";
+            traceTruncated: boolean;
+            warnings?: string[];
+        };
+        DebugHttpTraceBody: {
+            bodyStorage?: "inline" | "truncated" | "sidecar" | "dropped";
+            bodyTruncated?: boolean;
+            contentType?: string | null;
+            downloadArtifactId?: string | null;
+            dropReason?: string | null;
+            inlinePreview?: string | null;
+            sha256Prefix?: string | null;
+            sizeBytes?: number | null;
+            text?: string | null;
+        };
+        DebugHttpTraceEntry: {
+            durationMs?: number | null;
+            error?: string | null;
+            label?: string | null;
+            method: string;
+            requestBody: components["schemas"]["DebugHttpTraceBody"];
+            requestHeaders?: Record<string, string>;
+            responseBody: components["schemas"]["DebugHttpTraceBody"];
+            responseHeaders?: Record<string, string>;
+            responseStatus?: number | null;
+            sequence: number;
+            url: string;
         };
         RunSelectedNode: {
             /** Id */

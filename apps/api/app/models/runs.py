@@ -16,6 +16,14 @@ RUN_ARTIFACT_TYPES = (
     "final_stats_csv",
     "run_log",
     "artifacts_zip",
+    "debug_http_trace",
+    "debug_http_body_blob",
+)
+INTERNAL_RUN_ARTIFACT_TYPES = {"debug_http_trace", "debug_http_body_blob"}
+PUBLIC_RUN_ARTIFACT_TYPES = tuple(
+    artifact_type
+    for artifact_type in RUN_ARTIFACT_TYPES
+    if artifact_type not in INTERNAL_RUN_ARTIFACT_TYPES
 )
 SLA_RESULTS = ("passed", "failed", "not_evaluated")
 REPORT_SUMMARY_STATUSES = ("pending", "parsed", "failed")
@@ -311,7 +319,7 @@ class RunArtifact(Base):
         CheckConstraint("length(id) = 26", name="ck_run_artifacts_id_len"),
         CheckConstraint(
             "artifact_type in ('taurus_log', 'jmeter_log', 'final_stats_csv', "
-            "'run_log', 'artifacts_zip')",
+            "'run_log', 'artifacts_zip', 'debug_http_trace', 'debug_http_body_blob')",
             name="ck_run_artifacts_artifact_type",
         ),
         CheckConstraint("status in ('available', 'failed')", name="ck_run_artifacts_status"),
