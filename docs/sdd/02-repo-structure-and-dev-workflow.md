@@ -1,5 +1,7 @@
 # 02. Repository Structure and Development Workflow
 
+- Current delivery target: P1 governance start / P1 Slice kickoff under `docs/sdd/adr/ADR-0022-p1-governance-start.md`
+
 ## Repository layout
 
 ```text
@@ -43,3 +45,5 @@ Dependencies run in Docker Compose while Web, API, api-worker, and Runner may ru
 ## Scope discipline
 
 Each change follows design -> schema/contracts -> backend -> Runner/Web -> generated artifacts -> tests -> factual documentation. Repository scaffolding must not introduce routes, services, dependencies, tables, or configuration for excluded future capability.
+
+P0 is the completed baseline. P1 work may start only when the task names a real P1 Slice SDD and its accepted scope source; each Slice must include verifiable Done When criteria. P1 must not regress the P0 execution loop, P0-Stability, contract-first workflow, Workspace isolation, permission enforcement, Runner/API/Web boundaries, or verification gates. P2 remains out of scope unless separately authorized by an accepted ADR or PRD update.
