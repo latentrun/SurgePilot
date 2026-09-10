@@ -50,6 +50,7 @@ from app.models.dependency_files import DependencyFile
 from app.models.env_groups import EnvGroup
 from app.models.runs import Run
 from app.models.scenarios import RunCreationDedupKey, Scenario, ScenarioDependencyFileRef
+from app.schemas.common import ExecutionPreviewWarning
 from app.schemas.scenarios import ScenarioCreateRequest, ScenarioPatchRequest
 from app.services.audit import write_audit_event
 from app.services.env_groups import env_group_runtime_values
@@ -64,6 +65,9 @@ DEFAULT_DEDUP_WINDOW_SECONDS = 30
 SCENARIO_ALIAS = "surgepilot_scenario"
 UNSAFE_URL_CHAR_PATTERN = re.compile(r"[\x00-\x20\x7f]")
 RUNTIME_JMETER_VERSION = "5.6.3"
+PREVIEW_RUNNER_HOME = "/opt/surgepilot/runner"
+PREVIEW_REDACTED_RUNTIME_PATH = "<redacted-runtime-path>"
+PREVIEW_REDACTED_ENV_VALUE = "<redacted-env-value>"
 
 
 def runtime_jmeter_path(runner_home: str) -> str:
@@ -99,6 +103,86 @@ def invalid_preview_mode(field: str) -> AppError:
             )
         ],
     )
+
+
+def _preview_warning(
+    code: str, message: str, *, field: str | None = None, severity: str = "warning"
+) -> ExecutionPreviewWarning:
+    return ExecutionPreviewWarning(code=code, message=message, field=field, severity=severity)
+
+
+def _redact_preview_document(
+    value: Any, *, variable_values: list[str], warning_codes: set[str]
+) -> Any:
+    if isinstance(value, dict):
+        redacted: dict[str, Any] = {}
+        for key, item in value.items():
+            if (
+                key == "path"
+                and isinstance(item, str)
+                and item.startswith("/")
+                and "jmeter" in item.lower()
+            ):
+                warning_codes.add("runtime_path_redacted")
+                redacted[key] = PREVIEW_REDACTED_RUNTIME_PATH
+            elif key in {"env", "variables"} and isinstance(item, dict):
+                if item:
+                    warning_codes.add("env_value_redacted")
+                redacted[key] = {name: PREVIEW_REDACTED_ENV_VALUE for name in item}
+            else:
+                redacted[key] = _redact_preview_document(
+                    item, variable_values=variable_values, warning_codes=warning_codes
+                )
+        return redacted
+    if isinstance(value, list):
+        return [
+            _redact_preview_document(
+                item, variable_values=variable_values, warning_codes=warning_codes
+            )
+            for item in value
+        ]
+    if isinstance(value, str):
+        result = value
+        for variable_value in variable_values:
+            if variable_value and variable_value in result:
+                result = result.replace(variable_value, PREVIEW_REDACTED_ENV_VALUE)
+                warning_codes.add("env_value_redacted")
+        if result.startswith(PREVIEW_RUNNER_HOME):
+            warning_codes.add("runtime_path_redacted")
+            return PREVIEW_REDACTED_RUNTIME_PATH
+        return result
+    return value
+
+
+def safe_preview_yaml(
+    document: dict[str, Any], *, variable_values: list[str]
+) -> tuple[str, list[ExecutionPreviewWarning]]:
+    warning_codes: set[str] = set()
+    safe_document = _redact_preview_document(
+        document,
+        variable_values=sorted(set(variable_values), key=len, reverse=True),
+        warning_codes=warning_codes,
+    )
+    warnings: list[ExecutionPreviewWarning] = []
+    if "runtime_path_redacted" in warning_codes:
+        warnings.append(
+            _preview_warning(
+                "runtime_path_redacted",
+                "Runtime-only paths were redacted from the preview.",
+                field="modules.jmeter.path",
+                severity="info",
+            )
+        )
+    if "env_value_redacted" in warning_codes:
+        warnings.append(
+            _preview_warning(
+                "env_value_redacted",
+                "Variable-derived values were redacted from the preview.",
+                field="settings.env",
+                severity="info",
+            )
+        )
+    return yaml.safe_dump(safe_document, sort_keys=False, allow_unicode=False), warnings
 
 
 def _pydantic_content(payload: dict[str, Any], *, patch: bool = False) -> dict[str, Any]:
@@ -554,6 +638,47 @@ def create_scenario(
     _replace_dependency_refs(db, scenario=scenario, files=files, content=content)
     db.flush()
     return scenario
+
+
+def clone_scenario(
+    db: Session, *, workspace_id: str, scenario_id: str, actor: User, name: str | None
+) -> Scenario:
+    source = get_scenario(db, workspace_id=workspace_id, scenario_id=scenario_id)
+    content = {
+        "name": name or f"Copy of {source.name}",
+        "description": source.description,
+        "tags": list(source.tags_json or []),
+        "baseUrlExpression": source.base_url_expression,
+        "defaultSettings": source.default_settings_json,
+        "dataSources": source.data_sources_json,
+        "steps": source.steps_json,
+    }
+    content = validate_scenario_content(_pydantic_content(content))
+    files = _validate_dependency_files(db, workspace_id=workspace_id, content=content)
+    now = utc_now()
+    clone = Scenario(
+        id=new_ulid(),
+        workspace_id=workspace_id,
+        scenario_type="visual",
+        name=content["name"].strip(),
+        description=content.get("description") or None,
+        tags_json=content["tags"],
+        base_url_expression=content["baseUrlExpression"],
+        default_settings_json=content["defaultSettings"],
+        data_sources_json=content["dataSources"],
+        steps_json=content["steps"],
+        visual_schema_version=source.visual_schema_version,
+        revision=1,
+        created_by_user_id=actor.id,
+        updated_by_user_id=actor.id,
+        created_at=now,
+        updated_at=now,
+    )
+    db.add(clone)
+    db.flush()
+    _replace_dependency_refs(db, scenario=clone, files=files, content=content)
+    db.flush()
+    return clone
 
 
 def get_scenario(db: Session, *, workspace_id: str, scenario_id: str) -> Scenario:
