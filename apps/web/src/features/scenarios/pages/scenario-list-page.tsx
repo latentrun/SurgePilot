@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 
 import {
   ApiError,
+  cloneScenario,
   createScenario,
   deleteScenario,
   getCsrfToken,
@@ -88,7 +89,7 @@ function Eye({ className }: { className?: string }) {
   );
 }
 
-function Trash2({ className }: { className?: string }) {
+function Copy({ className }: { className?: string }) {
   return (
     <svg
       aria-hidden="true"
@@ -102,11 +103,29 @@ function Trash2({ className }: { className?: string }) {
       viewBox="0 0 24 24"
       width="16"
     >
-      <path d="M3 6h18" />
-      <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6" />
-      <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2" />
-      <line x1="10" x2="10" y1="11" y2="17" />
-      <line x1="14" x2="14" y1="11" y2="17" />
+      <rect height="14" rx="2" ry="2" width="14" x="8" y="8" />
+      <path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2" />
+    </svg>
+  );
+}
+
+function Archive({ className }: { className?: string }) {
+  return (
+    <svg
+      aria-hidden="true"
+      className={className}
+      fill="none"
+      height="16"
+      stroke="currentColor"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      strokeWidth="2"
+      viewBox="0 0 24 24"
+      width="16"
+    >
+      <rect height="5" rx="1" width="20" x="2" y="3" />
+      <path d="M4 8v11a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8" />
+      <path d="M10 12h4" />
     </svg>
   );
 }
@@ -212,11 +231,12 @@ export function ScenarioListPage() {
   const [createError, setCreateError] = useState<string | null>(null);
   const [isCreating, setIsCreating] = useState(false);
 
-  const [deleteTarget, setDeleteTarget] = useState<ScenarioSummary | null>(
+  const [archiveTarget, setArchiveTarget] = useState<ScenarioSummary | null>(
     null,
   );
-  const [deleteError, setDeleteError] = useState<string | null>(null);
-  const [isDeleting, setIsDeleting] = useState(false);
+  const [actionError, setActionError] = useState<string | null>(null);
+  const [isArchiving, setIsArchiving] = useState(false);
+  const [cloningId, setCloningId] = useState<string | null>(null);
 
   const fetchList = useCallback(async () => {
     if (!workspaceId) return;
@@ -297,22 +317,41 @@ export function ScenarioListPage() {
     }
   }
 
-  async function handleDelete() {
-    if (!deleteTarget) return;
-    setIsDeleting(true);
-    setDeleteError(null);
+  async function handleClone(scenario: ScenarioSummary) {
+    setCloningId(scenario.id);
+    setActionError(null);
     try {
       const token = await getWriteToken();
-      await deleteScenario(deleteTarget.id, workspaceId, token);
+      const cloned = await cloneScenario(
+        scenario.id,
+        {},
+        workspaceId,
+        token,
+      );
+      navigateTo(`/scenarios/${cloned.id}`);
+    } catch (error) {
+      setActionError(errorMessage(error));
+    } finally {
+      setCloningId(null);
+    }
+  }
+
+  async function handleArchive() {
+    if (!archiveTarget) return;
+    setIsArchiving(true);
+    setActionError(null);
+    try {
+      const token = await getWriteToken();
+      await deleteScenario(archiveTarget.id, workspaceId, token);
       if (items.length === 1 && page > 1) {
         setPage((current) => Math.max(1, current - 1));
       }
-      setDeleteTarget(null);
+      setArchiveTarget(null);
       await fetchList();
     } catch (error) {
-      setDeleteError(errorMessage(error));
+      setActionError(errorMessage(error));
     } finally {
-      setIsDeleting(false);
+      setIsArchiving(false);
     }
   }
 
@@ -385,6 +424,12 @@ export function ScenarioListPage() {
             <RefreshCw className="h-4 w-4" />
             Retry
           </button>
+        </div>
+      ) : null}
+
+      {actionError && !archiveTarget ? (
+        <div className="rounded-xl border border-error/30 bg-error-container p-4 text-sm text-on-error-container">
+          {actionError}
         </div>
       ) : null}
 
@@ -493,13 +538,23 @@ export function ScenarioListPage() {
                           <Eye className="h-4 w-4" />
                         </a>
                         <button
-                          aria-label={`${scenarioCopy.delete} ${scenario.name}`}
-                          className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-white/10 text-text-muted transition hover:border-error/30 hover:bg-white/5 hover:text-error"
-                          onClick={() => setDeleteTarget(scenario)}
-                          title={scenarioCopy.delete}
+                          aria-label={`${scenarioCopy.clone} ${scenario.name}`}
+                          className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-white/10 text-text-muted transition hover:border-primary/30 hover:bg-white/5 hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
+                          disabled={cloningId === scenario.id}
+                          onClick={() => void handleClone(scenario)}
+                          title={scenarioCopy.clone}
                           type="button"
                         >
-                          <Trash2 className="h-4 w-4" />
+                          <Copy className="h-4 w-4" />
+                        </button>
+                        <button
+                          aria-label={`${scenarioCopy.archive} ${scenario.name}`}
+                          className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-white/10 text-text-muted transition hover:border-error/30 hover:bg-white/5 hover:text-error"
+                          onClick={() => setArchiveTarget(scenario)}
+                          title={scenarioCopy.archive}
+                          type="button"
+                        >
+                          <Archive className="h-4 w-4" />
                         </button>
                       </div>
                     </td>
@@ -603,23 +658,23 @@ export function ScenarioListPage() {
         </div>
       ) : null}
 
-      {deleteTarget ? (
+      {archiveTarget ? (
         <div
-          aria-label={scenarioCopy.deleteTitle}
+          aria-label={scenarioCopy.archiveTitle}
           aria-modal="true"
           className="fixed inset-0 z-50 grid place-items-center bg-black/60 p-4"
           role="dialog"
         >
           <div className="w-[min(440px,calc(100vw-32px))] rounded-2xl border border-white/10 bg-surface-container-low p-6 shadow-2xl">
             <h2 className="text-lg font-semibold text-white">
-              {scenarioCopy.deleteTitle}
+              {scenarioCopy.archiveTitle}
             </h2>
             <p className="mt-2 text-sm leading-6 text-text-muted">
-              Delete {deleteTarget.name}? {scenarioCopy.deleteBody}
+              Archive {archiveTarget.name}? {scenarioCopy.archiveBody}
             </p>
-            {deleteError ? (
+            {actionError ? (
               <p className="mt-4 rounded-lg border border-error/30 bg-error-container px-4 py-3 text-sm text-on-error-container">
-                {deleteError}
+                {actionError}
               </p>
             ) : null}
             <div className="mt-6 flex justify-end gap-3">
@@ -628,8 +683,8 @@ export function ScenarioListPage() {
                   "rounded-lg border border-white/10 px-4 py-2 text-sm text-text-main transition hover:bg-white/5",
                 )}
                 onClick={() => {
-                  setDeleteTarget(null);
-                  setDeleteError(null);
+                  setArchiveTarget(null);
+                  setActionError(null);
                 }}
                 type="button"
               >
@@ -637,11 +692,11 @@ export function ScenarioListPage() {
               </button>
               <button
                 className="rounded-lg bg-error-container px-4 py-2 text-sm font-semibold text-on-error-container transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-60"
-                disabled={isDeleting}
-                onClick={() => void handleDelete()}
+                disabled={isArchiving}
+                onClick={() => void handleArchive()}
                 type="button"
               >
-                {isDeleting ? "Deleting..." : scenarioCopy.delete}
+                {isArchiving ? "Archiving..." : scenarioCopy.archive}
               </button>
             </div>
           </div>

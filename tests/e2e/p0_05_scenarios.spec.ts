@@ -322,11 +322,11 @@ test("creates a Scenario and starts a Scenario Debug Run", async ({ page }) => {
   await page.getByRole("link", { name: "Scenarios" }).click();
   await expect(page.getByRole("link", { name: "Checkout smoke" })).toBeVisible();
 
-  await page.getByRole("button", { name: "Delete Checkout smoke" }).click();
+  await page.getByRole("button", { name: "Archive Checkout smoke" }).click();
   await expect(
-    page.getByRole("dialog", { name: "Delete Scenario" }),
+    page.getByRole("dialog", { name: "Archive Scenario" }),
   ).toBeVisible();
-  await page.getByRole("button", { name: "Delete", exact: true }).click();
+  await page.getByRole("button", { name: "Archive", exact: true }).click();
   await expect(
     page.getByRole("heading", { name: "No scenarios yet" }),
   ).toBeVisible();

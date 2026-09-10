@@ -93,6 +93,7 @@ export type MonitoringEmbedResponse =
   components["schemas"]["MonitoringEmbedResponse"];
 export type RunMonitoringLinkResponse =
   components["schemas"]["RunMonitoringLinkResponse"];
+export type CloneRequest = components["schemas"]["CloneRequest"];
 export type ScenarioAssertion = components["schemas"]["ScenarioAssertion"];
 export type ScenarioBody = components["schemas"]["ScenarioBody"];
 export type ScenarioCreateRequest =
@@ -129,6 +130,10 @@ export type TestPlanSummary = components["schemas"]["TestPlanSummary"];
 export type TestPlanScenarioItem =
   components["schemas"]["TestPlanScenarioItemDetail"];
 export type TestPlanSlaRule = components["schemas"]["TestPlanSlaRuleDetail"];
+export type ExecutionPreviewResponse =
+  components["schemas"]["ExecutionPreviewResponse"];
+export type ExecutionPreviewWarning =
+  components["schemas"]["ExecutionPreviewWarning"];
 
 export type OverviewActiveRuns =
   components["schemas"]["OverviewActiveRuns"];
@@ -857,6 +862,25 @@ export function createScenario(
   });
 }
 
+export function cloneScenario(
+  scenarioId: string,
+  payload: CloneRequest,
+  workspaceId: string,
+  csrfToken: string,
+) {
+  return request<ScenarioDetail>(
+    `/v1/scenarios/${encodeURIComponent(scenarioId)}/clone`,
+    {
+      method: "POST",
+      headers: {
+        "x-csrf-token": csrfToken,
+        "x-workspace-id": workspaceId,
+      },
+      body: JSON.stringify(payload),
+    },
+  );
+}
+
 export function patchScenario(
   scenarioId: string,
   payload: ScenarioPatchRequest,
@@ -941,6 +965,37 @@ export function getTestPlan(testPlanId: string, workspaceId: string) {
     {
       headers: { "x-workspace-id": workspaceId },
     },
+  );
+}
+
+export function cloneTestPlan(
+  testPlanId: string,
+  payload: CloneRequest,
+  workspaceId: string,
+  csrfToken: string,
+) {
+  return request<TestPlanDetail>(
+    `/v1/test-plans/${encodeURIComponent(testPlanId)}/clone`,
+    {
+      method: "POST",
+      headers: {
+        "x-csrf-token": csrfToken,
+        "x-workspace-id": workspaceId,
+      },
+      body: JSON.stringify(payload),
+    },
+  );
+}
+
+export function getTestPlanExecutionPreview(params: {
+  testPlanId: string;
+  workspaceId: string;
+  runType: "debug" | "standard";
+}) {
+  const query = new URLSearchParams({ runType: params.runType });
+  return request<ExecutionPreviewResponse>(
+    `/v1/test-plans/${encodeURIComponent(params.testPlanId)}/execution-preview?${query.toString()}`,
+    { headers: { "x-workspace-id": params.workspaceId } },
   );
 }
 
