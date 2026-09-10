@@ -999,6 +999,47 @@ class ValidatedPlanContext:
     jmeter_memory_xmx: str
 
 
+def _resource_value(resource_request: object, snake_name: str, camel_name: str) -> Any:
+    if isinstance(resource_request, dict):
+        return resource_request.get(camel_name, resource_request.get(snake_name))
+    return getattr(resource_request, snake_name, None)
+
+
+def _normalize_resource_request_override(resource_request: object | None) -> dict[str, Any] | None:
+    if resource_request is None:
+        return None
+    mode = _resource_value(resource_request, "mode", "mode")
+    selected_node_ids = list(
+        _resource_value(resource_request, "selected_node_ids", "selectedNodeIds") or []
+    )
+    node_count = _resource_value(resource_request, "node_count", "nodeCount")
+    if mode not in {"manual", "auto"}:
+        raise AppError("RESOURCE_REQUEST_INVALID", "Resource request is invalid.", 422)
+    if mode == "manual":
+        if node_count is not None or not selected_node_ids:
+            raise AppError("RESOURCE_REQUEST_INVALID", "Resource request is invalid.", 422)
+        if len(set(selected_node_ids)) != len(selected_node_ids):
+            raise AppError("RESOURCE_REQUEST_INVALID", "Resource request is invalid.", 422)
+    elif selected_node_ids or not isinstance(node_count, int) or node_count <= 0:
+        raise AppError("RESOURCE_REQUEST_INVALID", "Resource request is invalid.", 422)
+    return {
+        "mode": mode,
+        "selectedNodeIds": selected_node_ids,
+        "selectedNodeId": selected_node_ids[0] if selected_node_ids else None,
+        "nodeCount": node_count if mode == "auto" else None,
+    }
+
+
+def _apply_resource_request_override(
+    snapshot_payload: dict[str, Any], *, resource_request: dict[str, Any] | None
+) -> dict[str, Any]:
+    resource = dict(snapshot_payload.get("resourceRequest") or {})
+    if resource_request is not None:
+        resource.update(resource_request)
+    snapshot_payload["resourceRequest"] = resource
+    return resource
+
+
 def detail_payload(db: Session, plan: TestPlan) -> dict[str, Any]:
     items, rules = _rows_for_plan(db, plan_id=plan.id)
     scenarios = _scenario_map(db, workspace_id=plan.workspace_id, items=items)
@@ -1098,6 +1139,7 @@ def _validate_run_context(
     run_type: str,
     settings: Settings,
     confirm_high_concurrency: bool,
+    resource_request: dict[str, Any] | None = None,
 ) -> ValidatedPlanContext:
     items, rules = _rows_for_plan(db, plan_id=plan.id)
     enabled_items = [item for item in items if item.enabled]
@@ -1114,19 +1156,34 @@ def _validate_run_context(
         )
     if plan.pool_type is None:
         raise AppError("TEST_PLAN_NOT_RUNNABLE", "Test Plan is missing Load Node resources.", 409)
-    if plan.selected_node_id is None:
+    requested_node_ids = list(
+        (plan.selected_node_ids_json or ([plan.selected_node_id] if plan.selected_node_id else []))
+    )
+    resource_mode = plan.resource_mode
+    node_count = plan.node_count
+    if run_type == "standard" and resource_request is not None:
+        resource_mode = resource_request["mode"]
+        requested_node_ids = list(resource_request["selectedNodeIds"])
+        node_count = resource_request["nodeCount"]
+    if resource_mode == "auto" and run_type == "standard":
+        if not node_count:
+            raise AppError("TEST_PLAN_NOT_RUNNABLE", "Test Plan is missing Load Node count.", 409)
+    elif not requested_node_ids:
         raise AppError(
             "TEST_PLAN_NOT_RUNNABLE", "Test Plan is missing a selected Load Node.", 409
         )
-    node = _node_for_plan(db, plan)
-    if node is None or node.archived_at is not None:
-        raise AppError("TEST_PLAN_NOT_RUNNABLE", "Selected Load Node is unavailable.", 409)
-    if plan.pool_type == "public" and node.scope != "public":
-        raise AppError("TEST_PLAN_NOT_RUNNABLE", "Selected Load Node is unavailable.", 409)
-    if plan.pool_type == "private" and not (
-        node.scope == "workspace" and node.workspace_id == plan.workspace_id
-    ):
-        raise AppError("TEST_PLAN_NOT_RUNNABLE", "Selected Load Node is unavailable.", 409)
+    if not (run_type == "standard" and resource_mode == "auto"):
+        node = _node_for_plan(db, plan)
+        if requested_node_ids and (plan.selected_node_id not in requested_node_ids):
+            node = db.get(LoadNode, requested_node_ids[0])
+        if node is None or node.archived_at is not None:
+            raise AppError("TEST_PLAN_NOT_RUNNABLE", "Selected Load Node is unavailable.", 409)
+        if plan.pool_type == "public" and node.scope != "public":
+            raise AppError("TEST_PLAN_NOT_RUNNABLE", "Selected Load Node is unavailable.", 409)
+        if plan.pool_type == "private" and not (
+            node.scope == "workspace" and node.workspace_id == plan.workspace_id
+        ):
+            raise AppError("TEST_PLAN_NOT_RUNNABLE", "Selected Load Node is unavailable.", 409)
     env_group = _env_for_plan(db, plan)
     if plan.env_group_id is not None and env_group is None:
         raise AppError("RESOURCE_NOT_FOUND", "Resource was not found.", 404)
@@ -1303,9 +1360,14 @@ def _snapshot_payload(
         },
         "envGroup": env_snapshot,
         "resourceRequest": {
-            "mode": "manual",
+            "mode": plan.resource_mode,
             "poolType": plan.pool_type,
             "selectedNodeId": plan.selected_node_id,
+            "selectedNodeIds": list(
+                plan.selected_node_ids_json
+                or ([plan.selected_node_id] if plan.selected_node_id else [])
+            ),
+            "nodeCount": plan.node_count,
             "expectedConcurrencyPerNode": ctx.expected_concurrency
             if run_type == "standard"
             else 1,
@@ -1355,6 +1417,7 @@ def create_test_plan_run(
     expected_source_revision: int,
     run_type: str,
     confirm_high_concurrency: bool = False,
+    resource_request: object | None = None,
     dedup_window_seconds: int = DEFAULT_DEDUP_WINDOW_SECONDS,
 ) -> TestPlanRunResult:
     """Create a Test Plan Standard Run Now or Debug Run.
@@ -1390,14 +1453,21 @@ def create_test_plan_run(
         )
     settings = get_settings()
     _items, rules = _rows_for_plan(db, plan_id=plan.id)
+    normalized_resource_request = _normalize_resource_request_override(resource_request)
+    if run_type == "debug" and normalized_resource_request is not None:
+        raise AppError("RESOURCE_REQUEST_INVALID", "Resource request is invalid.", 422)
     ctx = _validate_run_context(
         db,
         plan=plan,
         run_type=run_type,
         settings=settings,
         confirm_high_concurrency=confirm_high_concurrency,
+        resource_request=normalized_resource_request,
     )
     snapshot_payload = _snapshot_payload(ctx, run_type=run_type, rules=rules)
+    resource = _apply_resource_request_override(
+        snapshot_payload, resource_request=normalized_resource_request
+    )
     snapshot_hash = _canonical_hash(snapshot_payload)
     dedup_input = {
         "workspaceId": workspace_id,
@@ -1406,7 +1476,9 @@ def create_test_plan_run(
         "sourceType": "test_plan",
         "sourceId": plan.id,
         "sourceRevision": plan.revision,
-        "selectedNodeId": plan.selected_node_id,
+        "resourceMode": resource.get("mode"),
+        "selectedNodeIds": list(resource.get("selectedNodeIds") or []),
+        "nodeCount": resource.get("nodeCount"),
         "snapshotHash": snapshot_hash,
     }
     dedup_hash = _canonical_hash(dedup_input)
@@ -1425,11 +1497,15 @@ def create_test_plan_run(
             RunExecutionInput(
                 workspace_id=workspace_id,
                 actor=actor,
-                selected_node_id=plan.selected_node_id or "",
+                selected_node_id=resource.get("selectedNodeId") or plan.selected_node_id or "",
                 run_type=run_type,
                 source_type="test_plan",
                 source_id=plan.id,
                 snapshot_payload=snapshot_payload,
+                selected_node_ids=tuple(resource.get("selectedNodeIds") or ()),
+                resource_mode=resource.get("mode", "manual") if run_type == "standard" else "manual",
+                pool_type=resource.get("poolType") if run_type == "standard" else None,
+                node_count=resource.get("nodeCount") if run_type == "standard" else None,
             ),
         )
     except AppError as exc:

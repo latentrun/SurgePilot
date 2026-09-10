@@ -177,6 +177,7 @@ def create_run(
             expected_source_revision=payload.expected_source_revision,
             run_type=payload.run_type,
             confirm_high_concurrency=payload.confirm_high_concurrency,
+            resource_request=payload.resource_request,
         )
     else:
         raise AppError(

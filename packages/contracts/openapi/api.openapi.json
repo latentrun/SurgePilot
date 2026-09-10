@@ -42,24 +42,42 @@
         "properties": {
           "archivedAt": {
             "anyOf": [
-              { "format": "date-time", "type": "string" },
-              { "type": "null" }
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
             ],
             "title": "Archivedat"
           },
-          "id": { "title": "Id", "type": "string" },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
           "membership": {
             "$ref": "#/components/schemas/WorkspaceMembershipSummary"
           },
-          "name": { "title": "Name", "type": "string" },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
           "status": {
             "default": "active",
-            "enum": ["active", "archived"],
+            "enum": [
+              "active",
+              "archived"
+            ],
             "title": "Status",
             "type": "string"
           }
         },
-        "required": ["id", "name", "membership"],
+        "required": [
+          "id",
+          "name",
+          "membership"
+        ],
         "title": "AvailableWorkspaceSummary",
         "type": "object"
       },
@@ -2823,13 +2841,18 @@
             "title": "Expectedsourcerevision",
             "type": "integer"
           },
+          "resourceRequest": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RunResourceRequest"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "runType": {
-            "enum": [
-              "debug",
-              "standard"
-            ],
-            "title": "Runtype",
-            "type": "string"
+            "$ref": "#/components/schemas/RunType"
           },
           "selectedNodeId": {
             "anyOf": [
@@ -3060,6 +3083,11 @@
       },
       "RunListItem": {
         "properties": {
+          "allocatedNodeCount": {
+            "default": 1,
+            "title": "Allocatednodecount",
+            "type": "integer"
+          },
           "artifactCount": {
             "title": "Artifactcount",
             "type": "integer"
@@ -3216,6 +3244,13 @@
       },
       "RunReportDetail": {
         "properties": {
+          "allocatedNodes": {
+            "items": {
+              "$ref": "#/components/schemas/RunAllocatedNode"
+            },
+            "title": "Allocatednodes",
+            "type": "array"
+          },
           "artifactsSummary": {
             "$ref": "#/components/schemas/RunArtifactsSummary"
           },
@@ -3392,6 +3427,17 @@
             ],
             "title": "Mode"
           },
+          "nodeCount": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Nodecount"
+          },
           "poolType": {
             "anyOf": [
               {
@@ -3413,6 +3459,13 @@
               }
             ],
             "title": "Selectednodeid"
+          },
+          "selectedNodeIds": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Selectednodeids",
+            "type": "array"
           }
         },
         "title": "RunSnapshotResourceRequest",
@@ -5894,12 +5947,29 @@
       },
       "PermissionSummary": {
         "properties": {
-          "canManageSystemSettings": { "title": "Canmanagesystemsettings", "type": "boolean" },
-          "canManageUsers": { "title": "Canmanageusers", "type": "boolean" },
-          "canManageWorkspaces": { "title": "Canmanageworkspaces", "type": "boolean" },
-          "canViewSetupStatus": { "title": "Canviewsetupstatus", "type": "boolean" }
+          "canManageSystemSettings": {
+            "title": "Canmanagesystemsettings",
+            "type": "boolean"
+          },
+          "canManageUsers": {
+            "title": "Canmanageusers",
+            "type": "boolean"
+          },
+          "canManageWorkspaces": {
+            "title": "Canmanageworkspaces",
+            "type": "boolean"
+          },
+          "canViewSetupStatus": {
+            "title": "Canviewsetupstatus",
+            "type": "boolean"
+          }
         },
-        "required": ["canManageWorkspaces", "canManageUsers", "canManageSystemSettings", "canViewSetupStatus"],
+        "required": [
+          "canManageWorkspaces",
+          "canManageUsers",
+          "canManageSystemSettings",
+          "canViewSetupStatus"
+        ],
         "title": "PermissionSummary",
         "type": "object"
       },
@@ -5943,30 +6013,49 @@
         "title": "UserSummary",
         "type": "object"
       },
-      "AvailableWorkspaceSummary": {
-        "properties": {
-          "archivedAt": { "anyOf": [{ "format": "date-time", "type": "string" }, { "type": "null" }], "title": "Archivedat" },
-          "id": { "title": "Id", "type": "string" },
-          "membership": { "$ref": "#/components/schemas/WorkspaceMembershipSummary" },
-          "name": { "title": "Name", "type": "string" },
-          "status": { "default": "active", "enum": ["active", "archived"], "title": "Status", "type": "string" }
-        },
-        "required": ["id", "name", "membership"],
-        "title": "AvailableWorkspaceSummary",
-        "type": "object"
-      },
       "WorkspaceMembershipSummary": {
         "properties": {
-          "joinedAt": { "anyOf": [{ "format": "date-time", "type": "string" }, { "type": "null" }], "title": "Joinedat" },
-          "kind": { "enum": ["member", "admin_access"], "title": "Kind", "type": "string" }
+          "joinedAt": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Joinedat"
+          },
+          "kind": {
+            "enum": [
+              "member",
+              "admin_access"
+            ],
+            "title": "Kind",
+            "type": "string"
+          }
         },
-        "required": ["kind"],
+        "required": [
+          "kind"
+        ],
         "title": "WorkspaceMembershipSummary",
         "type": "object"
       },
       "WorkspaceSummary": {
         "properties": {
-          "archivedAt": { "anyOf": [{ "format": "date-time", "type": "string" }, { "type": "null" }], "title": "Archivedat" },
+          "archivedAt": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Archivedat"
+          },
           "id": {
             "title": "Id",
             "type": "string"
@@ -5975,13 +6064,163 @@
             "title": "Name",
             "type": "string"
           },
-          "status": { "default": "active", "enum": ["active", "archived"], "title": "Status", "type": "string" }
+          "status": {
+            "default": "active",
+            "enum": [
+              "active",
+              "archived"
+            ],
+            "title": "Status",
+            "type": "string"
+          }
         },
         "required": [
           "id",
           "name"
         ],
         "title": "WorkspaceSummary",
+        "type": "object"
+      },
+      "RunResourceRequest": {
+        "properties": {
+          "concurrencyPerNode": {
+            "anyOf": [
+              {
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Concurrencypernode"
+          },
+          "mode": {
+            "enum": [
+              "manual",
+              "auto"
+            ],
+            "title": "Mode",
+            "type": "string"
+          },
+          "nodeCount": {
+            "anyOf": [
+              {
+                "maximum": 10.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Nodecount"
+          },
+          "selectedNodeIds": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 10,
+            "title": "Selectednodeids",
+            "type": "array"
+          }
+        },
+        "required": [
+          "mode"
+        ],
+        "title": "RunResourceRequest",
+        "type": "object"
+      },
+      "RunAllocatedNode": {
+        "properties": {
+          "cleanupStatus": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cleanupstatus"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "lastHeartbeatAt": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Lastheartbeatat"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "nodeIndex": {
+            "title": "Nodeindex",
+            "type": "integer"
+          },
+          "quarantineReason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Quarantinereason"
+          },
+          "scope": {
+            "title": "Scope",
+            "type": "string"
+          },
+          "slaResult": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SlaResult"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "state": {
+            "title": "State",
+            "type": "string"
+          },
+          "terminalReason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Terminalreason"
+          },
+          "totalNodes": {
+            "title": "Totalnodes",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "scope",
+          "nodeIndex",
+          "totalNodes",
+          "state"
+        ],
+        "title": "RunAllocatedNode",
         "type": "object"
       }
     }

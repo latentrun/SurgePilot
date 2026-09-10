@@ -162,6 +162,7 @@ class RunListItem(ApiSchema):
     sla_result: SlaResult
     triggered_by: RunActor
     selected_node: RunSelectedNode
+    allocated_node_count: int = 1
     created_at: str
     started_at: str | None = None
     ended_at: str | None = None
@@ -281,12 +282,18 @@ class RunSnapshotResourceRequest(ApiSchema):
     expected_concurrency_per_node: int | None = None
 
 
-class RunReportNode(ApiSchema):
+class RunAllocatedNode(ApiSchema):
     id: str
     name: str
     scope: str
-    pool_type: str
-    state_at_report: str
+    node_index: int
+    total_nodes: int
+    state: str
+    last_heartbeat_at: str | None = None
+    terminal_reason: str | None = None
+    cleanup_status: str | None = None
+    quarantine_reason: str | None = None
+    sla_result: SlaResult | None = None
 
 
 class RunSnapshotLoadSettings(ApiSchema):
@@ -342,7 +349,7 @@ class RunReportDetail(ApiSchema):
     final_stats_preview: FinalStatsPreview
     debug_http_trace: DebugHttpTrace | None
     snapshot: RunSnapshotSummary
-    nodes: list[RunReportNode] = Field(default_factory=list)
+    allocated_nodes: list[RunAllocatedNode] = Field(default_factory=list)
     artifacts_summary: RunArtifactsSummary
 
 
