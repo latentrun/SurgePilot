@@ -89,6 +89,10 @@ export type RunSourceType = components["schemas"]["RunSourceType"];
 export type RunValidity = components["schemas"]["RunValidity"];
 export type RunValidityPatchResponse = components["schemas"]["RunValidityPatchResponse"];
 export type RunStopResponse = components["schemas"]["RunStopResponse"];
+export type MonitoringEmbedResponse =
+  components["schemas"]["MonitoringEmbedResponse"];
+export type RunMonitoringLinkResponse =
+  components["schemas"]["RunMonitoringLinkResponse"];
 export type ScenarioAssertion = components["schemas"]["ScenarioAssertion"];
 export type ScenarioBody = components["schemas"]["ScenarioBody"];
 export type ScenarioCreateRequest =
@@ -1023,6 +1027,13 @@ export function getRunReport(runId: string, workspaceId: string) {
   });
 }
 
+export function getRunMonitoringLink(runId: string, workspaceId: string) {
+  return request<RunMonitoringLinkResponse>(
+    `/v1/runs/${encodeURIComponent(runId)}/monitoring`,
+    { headers: { "x-workspace-id": workspaceId } },
+  );
+}
+
 export function listRunArtifacts(params: {
   runId: string;
   workspaceId: string;
@@ -1067,5 +1078,24 @@ export function stopRun(runId: string, workspaceId: string, csrfToken: string) {
   return request<RunStopResponse>(`/v1/runs/${encodeURIComponent(runId)}/stop`, {
     method: "POST",
     headers: { "x-csrf-token": csrfToken, "x-workspace-id": workspaceId },
+  });
+}
+
+export function getMonitoringEmbed(params: {
+  workspaceId: string;
+  runId?: string | null;
+  from?: string | null;
+  to?: string | null;
+}) {
+  const query = new URLSearchParams();
+  if (params.runId) query.set("runId", params.runId);
+  if (params.from) query.set("from", params.from);
+  if (params.to) query.set("to", params.to);
+  const queryStr = query.toString();
+  const url = queryStr
+    ? `/v1/monitoring/embed?${queryStr}`
+    : "/v1/monitoring/embed";
+  return request<MonitoringEmbedResponse>(url, {
+    headers: { "x-workspace-id": params.workspaceId },
   });
 }

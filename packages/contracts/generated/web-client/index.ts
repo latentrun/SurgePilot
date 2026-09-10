@@ -428,6 +428,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/monitoring/embed": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Monitoring Embed Route */
+        get: operations["getMonitoringEmbed"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/overview": {
         parameters: {
             query?: never;
@@ -504,6 +521,23 @@ export interface paths {
         };
         /** Download Run Artifact */
         get: operations["downloadRunArtifact"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/runs/{runId}/monitoring": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Run Monitoring Link Route */
+        get: operations["getRunMonitoringLink"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1290,6 +1324,16 @@ export interface components {
             /** Password */
             password?: string | null;
         };
+        MonitoringEmbedResponse: {
+            dashboardUid: string;
+            enabled: boolean;
+            from?: string | null;
+            iframeUrl?: string | null;
+            runId?: string | null;
+            status: "ready" | "not_configured" | "disabled" | "config_error";
+            to?: string | null;
+            warnings?: string[];
+        };
         OverviewActiveRuns: {
             /** Initializing */
             initializing: number;
@@ -1568,6 +1612,20 @@ export interface components {
             items: components["schemas"]["RunListItem"][];
             /** Nextcursor */
             nextCursor?: string | null;
+        };
+        RunMonitoringLinkResponse: {
+            dashboardUid: string;
+            disabledReason?: ("debug_run_not_monitored" | "monitoring_disabled" | "not_configured") | null;
+            enabledForRun: boolean;
+            grafanaFrom?: string | null;
+            grafanaTo?: string | null;
+            iframeUrl?: string | null;
+            platformMonitoringUrl?: string | null;
+            runEndedAt?: string | null;
+            runId: string;
+            runStartedAt?: string | null;
+            status: "not_configured" | "disabled" | "enabled" | "config_error";
+            warnings?: string[];
         };
         RunReportDetail: {
             /** Allocatednodes */
@@ -4155,6 +4213,70 @@ export interface operations {
             };
         };
     };
+    getMonitoringEmbed: {
+        parameters: {
+            query?: {
+                runId?: string | null;
+                from?: string | null;
+                to?: string | null;
+            };
+            header?: {
+                "x-workspace-id"?: string | null;
+            };
+            path?: never;
+            cookie?: {
+                surgepilot_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MonitoringEmbedResponse"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
     getOverview: {
         parameters: {
             query?: {
@@ -4239,6 +4361,77 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["RunReportDetail"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    getRunMonitoringLink: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-workspace-id"?: string | null;
+            };
+            path: {
+                runId: string;
+            };
+            cookie?: {
+                surgepilot_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RunMonitoringLinkResponse"];
                 };
             };
             /** @description Bad Request */

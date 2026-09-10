@@ -17,6 +17,7 @@ import { TestPlanListPage } from "./features/test-plans/pages/test-plan-list-pag
 import { TestPlanEditorPage } from "./features/test-plans/pages/test-plan-editor-page";
 import { RunListPage } from "./features/runs/pages/run-list-page";
 import { RunReportPage } from "./features/runs/pages/run-report-page";
+import { MonitoringPage } from "./features/monitoring/pages/monitoring-page";
 import { AppLayout } from "./app/layouts/app-layout";
 import { OverviewPage } from "./features/overview/pages/overview-page";
 import { AdminSetupStatusPage } from "./features/admin/pages/setup-status-page";
@@ -69,6 +70,8 @@ function AppRoutes({
   } else if (pathname.startsWith("/runs/")) {
     const runId = decodeURIComponent(pathname.slice("/runs/".length));
     page = <RunReportPage runId={runId} />;
+  } else if (pathname === "/observability/monitoring") {
+    page = <MonitoringPage />;
   } else if (pathname === "/admin/setup-status") {
     page = <AdminSetupStatusPage />;
   } else if (pathname === "/admin/workspaces") {
