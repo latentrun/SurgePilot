@@ -50,6 +50,7 @@ from app.models.runs import (
     RunArtifact,
     RunControlRequest,
     RunnerCallbackEvent,
+    RunNodeAllocation,
     RunSnapshot,
 )
 from app.services.audit import write_audit_event
@@ -141,6 +142,10 @@ class RunExecutionInput:
     source_type: str
     source_id: str | None
     snapshot_payload: dict[str, Any]
+    selected_node_ids: tuple[str, ...] = ()
+    resource_mode: str = "manual"
+    pool_type: str | None = None
+    node_count: int | None = None
 
 
 @dataclass(frozen=True)
@@ -278,11 +283,13 @@ def enqueue_control_request(
     action: str,
     reason: str | None = None,
     run_after: datetime | None = None,
+    allocation: RunNodeAllocation | None = None,
 ) -> RunControlRequest:
     existing = db.scalar(
         select(RunControlRequest).where(
             RunControlRequest.run_id == run.id,
             RunControlRequest.action == action,
+            *([RunControlRequest.node_id == allocation.node_id] if allocation else []),
             RunControlRequest.status.in_(list(ACTIVE_CONTROL_STATUSES)),
         )
     )
@@ -293,7 +300,8 @@ def enqueue_control_request(
         id=new_ulid(),
         workspace_id=run.workspace_id,
         run_id=run.id,
-        node_id=run.selected_node_id,
+        allocation_id=allocation.id if allocation else None,
+        node_id=allocation.node_id if allocation else run.selected_node_id,
         action=action,
         reason=reason,
         status="pending",
@@ -335,6 +343,67 @@ def _validate_selected_node(
     return node
 
 
+def _requested_node_ids(db: Session, *, execution: RunExecutionInput) -> list[str]:
+    explicit = list(execution.selected_node_ids or ())
+    if not explicit and execution.selected_node_id:
+        explicit = [execution.selected_node_id]
+    if execution.resource_mode == "manual":
+        if not explicit or len(set(explicit)) != len(explicit):
+            raise AppError("RESOURCE_REQUEST_INVALID", "Resource request is invalid.", 422)
+        return explicit
+    if execution.resource_mode != "auto" or not execution.node_count or execution.pool_type not in {"public", "private"}:
+        raise AppError("RESOURCE_REQUEST_INVALID", "Resource request is invalid.", 422)
+    query = select(LoadNode).where(
+        LoadNode.archived_at.is_(None),
+        LoadNode.status == "idle",
+        visible_node_filters(workspace_id=execution.workspace_id),
+        LoadNode.scope == "public" if execution.pool_type == "public" else and_(LoadNode.scope == "workspace", LoadNode.workspace_id == execution.workspace_id),
+    )
+    runtime_version = get_settings().load_node_runtime_version
+    if runtime_version:
+        query = query.where(LoadNode.runtime_version == runtime_version)
+    nodes = db.scalars(
+        query
+        .order_by(LoadNode.created_at.asc(), LoadNode.id.asc())
+        .with_for_update()
+    ).all()
+    available = [node for node in nodes if _active_lease(db, node_id=node.id) is None]
+    if len(available) < execution.node_count:
+        raise AppError("LOAD_NODE_CAPACITY_UNAVAILABLE", "Not enough Load Nodes are available.", 409)
+    return [node.id for node in available[: execution.node_count]]
+
+
+def _validate_nodes_for_allocation(
+    db: Session, *, execution: RunExecutionInput, node_ids: list[str], now: datetime
+) -> list[LoadNode]:
+    nodes = db.scalars(
+        select(LoadNode).where(LoadNode.id.in_(node_ids)).with_for_update()
+    ).all()
+    by_id = {node.id: node for node in nodes}
+    result: list[LoadNode] = []
+    for node_id in node_ids:
+        node = by_id.get(node_id)
+        visible = node is not None and (
+            node.scope == "public" or node.workspace_id == execution.workspace_id
+        )
+        in_pool = execution.pool_type is None or (
+            execution.pool_type == "public" and node is not None and node.scope == "public"
+        ) or (
+            execution.pool_type == "private" and node is not None
+            and node.scope == "workspace" and node.workspace_id == execution.workspace_id
+        )
+        if node is None or node.archived_at is not None or not visible or not in_pool:
+            raise AppError("RESOURCE_NOT_FOUND", "Resource was not found.", 404)
+        if node.status != "idle" or _active_lease(db, node_id=node.id) is not None:
+            raise AppError("LOAD_NODE_UNAVAILABLE" if len(node_ids) > 1 else "LOAD_NODE_BUSY", "Load Node is unavailable." if len(node_ids) > 1 else "Load Node is busy.", 409)
+        if get_settings().load_node_runtime_version and node.runtime_version != get_settings().load_node_runtime_version:
+            raise AppError("LOAD_NODE_UNAVAILABLE", "Load Node is unavailable.", 409)
+        if node.last_force_kill_at is not None and as_utc(node.last_force_kill_at) > now - timedelta(seconds=get_settings().node_cooldown_seconds):
+            raise AppError("LOAD_NODE_ACTION_NOT_ALLOWED", "Load Node is cooling down.", 409)
+        result.append(node)
+    return result
+
+
 def create_run_execution(db: Session, execution: RunExecutionInput) -> Run:
     """Atomically create a Run, Run Snapshot shell, node lease, and Busy node.
 
@@ -346,7 +415,11 @@ def create_run_execution(db: Session, execution: RunExecutionInput) -> Run:
     if execution.source_type == "protocol_smoke" and not get_settings().enable_protocol_smoke_runs:
         raise AppError("RUN_CREATION_NOT_ALLOWED", "Protocol smoke Runs are disabled.", 403)
     now = utc_now()
-    node = _validate_selected_node(db, execution=execution, now=now)
+    node_ids = _requested_node_ids(db, execution=execution)
+    if execution.run_type == "debug" and len(node_ids) != 1:
+        raise AppError("RESOURCE_REQUEST_INVALID", "Debug Runs support one Load Node only.", 422)
+    nodes = _validate_nodes_for_allocation(db, execution=execution, node_ids=node_ids, now=now)
+    node = nodes[0]
 
     run = Run(
         id=new_ulid(),
@@ -373,6 +446,7 @@ def create_run_execution(db: Session, execution: RunExecutionInput) -> Run:
     snapshot_payload.setdefault("protocolSchemaVersion", 1)
     snapshot_payload["runType"] = run.run_type
     snapshot_payload["sourceType"] = run.source_type
+    snapshot_payload["allocatedNodeIds"] = [allocated_node.id for allocated_node in nodes]
     if execution.source_id is None:
         snapshot_payload.pop("sourceId", None)
     else:
@@ -400,25 +474,37 @@ def create_run_execution(db: Session, execution: RunExecutionInput) -> Run:
         snapshot_json=snapshot_payload,
         created_at=now,
     )
-    lease = NodeLease(
-        id=new_ulid(),
-        workspace_id=execution.workspace_id,
-        node_id=node.id,
-        run_id=run.id,
-        acquired_at=now,
-        created_at=now,
-        updated_at=now,
-    )
-    db.add_all([snapshot, lease])
-    node.status = "busy"
-    node.current_run_id = run.id
-    node.last_status_reason = None
-    node.updated_at = now
+    db.add(snapshot)
+    allocations: list[RunNodeAllocation] = []
+    requests: list[RunControlRequest] = []
+    for index, allocated_node in enumerate(nodes, start=1):
+        allocation = RunNodeAllocation(
+            id=new_ulid(), workspace_id=execution.workspace_id, run_id=run.id,
+            node_id=allocated_node.id, node_index=index, total_nodes=len(nodes),
+            state="initializing", sla_result="not_evaluated", created_at=now, updated_at=now,
+        )
+        allocations.append(allocation)
+        db.add(NodeLease(
+            id=new_ulid(), workspace_id=execution.workspace_id, node_id=allocated_node.id,
+            run_id=run.id, acquired_at=now, created_at=now, updated_at=now,
+        ))
+        allocated_node.status = "busy"
+        allocated_node.current_run_id = run.id
+        allocated_node.last_status_reason = None
+        allocated_node.updated_at = now
+        requests.append(RunControlRequest(
+            id=new_ulid(), workspace_id=execution.workspace_id, run_id=run.id,
+            allocation_id=allocation.id, node_id=allocated_node.id, action="start",
+            reason=None, status="pending", run_after=now, attempt_count=0,
+            created_at=now, updated_at=now,
+        ))
+        db.add(allocation)
     try:
         db.flush()
+        db.add_all(requests)
+        db.flush()
     except IntegrityError as exc:
-        raise AppError("LOAD_NODE_BUSY", "Load Node is busy.", 409) from exc
-    enqueue_control_request(db, run=run, action="start")
+        raise AppError("LOAD_NODE_UNAVAILABLE", "Load Node is unavailable.", 409) from exc
     return run
 
 

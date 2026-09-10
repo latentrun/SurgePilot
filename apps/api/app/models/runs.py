@@ -115,6 +115,7 @@ class Run(Base):
 
     snapshot: Mapped["RunSnapshot"] = relationship(back_populates="run", uselist=False)
     leases: Mapped[list["NodeLease"]] = relationship(back_populates="run")
+    node_allocations: Mapped[list["RunNodeAllocation"]] = relationship(back_populates="run")
     control_requests: Mapped[list["RunControlRequest"]] = relationship(back_populates="run")
 
 
@@ -203,6 +204,56 @@ Index(
 )
 Index("ix_node_leases_released_acquired", NodeLease.released_at, NodeLease.acquired_at)
 Index("ix_node_leases_node", NodeLease.node_id)
+Index("ix_node_leases_run", NodeLease.run_id)
+
+
+class RunNodeAllocation(Base):
+    __tablename__ = "run_node_allocations"
+    __table_args__ = (
+        CheckConstraint("length(id) = 26", name="ck_run_node_allocations_id_len"),
+        CheckConstraint("length(workspace_id) = 26", name="ck_run_node_allocations_workspace_id_len"),
+        CheckConstraint("length(run_id) = 26", name="ck_run_node_allocations_run_id_len"),
+        CheckConstraint("length(node_id) = 26", name="ck_run_node_allocations_node_id_len"),
+        CheckConstraint("node_index >= 1", name="ck_run_node_allocations_node_index"),
+        CheckConstraint("total_nodes >= 1", name="ck_run_node_allocations_total_nodes"),
+        CheckConstraint(
+            "state in ('initializing', 'running', 'stopping', 'finished', 'failed', 'aborted')",
+            name="ck_run_node_allocations_state",
+        ),
+        CheckConstraint(
+            "sla_result is null or sla_result in ('passed', 'failed', 'not_evaluated')",
+            name="ck_run_node_allocations_sla_result",
+        ),
+    )
+
+    id: Mapped[str] = mapped_column(String(26), primary_key=True)
+    workspace_id: Mapped[str] = mapped_column(String(26), ForeignKey("workspaces.id", ondelete="CASCADE"), nullable=False)
+    run_id: Mapped[str] = mapped_column(String(26), ForeignKey("runs.id", ondelete="CASCADE"), nullable=False)
+    node_id: Mapped[str] = mapped_column(String(26), ForeignKey("load_nodes.id", ondelete="RESTRICT"), nullable=False)
+    node_index: Mapped[int] = mapped_column(nullable=False)
+    total_nodes: Mapped[int] = mapped_column(nullable=False)
+    state: Mapped[str] = mapped_column(Text, nullable=False)
+    accepted_at: Mapped[datetime | None] = mapped_column(nullable=True)
+    started_at: Mapped[datetime | None] = mapped_column(nullable=True)
+    ended_at: Mapped[datetime | None] = mapped_column(nullable=True)
+    last_heartbeat_at: Mapped[datetime | None] = mapped_column(nullable=True)
+    runner_pid: Mapped[int | None] = mapped_column(nullable=True)
+    terminal_reason: Mapped[str | None] = mapped_column(Text)
+    terminal_message: Mapped[str | None] = mapped_column(Text)
+    cleanup_status: Mapped[str | None] = mapped_column(Text)
+    quarantine_reason: Mapped[str | None] = mapped_column(Text)
+    sla_result: Mapped[str | None] = mapped_column(Text)
+    sla_result_reason: Mapped[str | None] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(nullable=False)
+
+    run: Mapped[Run] = relationship(back_populates="node_allocations")
+
+
+Index("uq_run_node_allocations_run_node", RunNodeAllocation.run_id, RunNodeAllocation.node_id, unique=True)
+Index("uq_run_node_allocations_run_index", RunNodeAllocation.run_id, RunNodeAllocation.node_index, unique=True)
+Index("ix_run_node_allocations_workspace_run", RunNodeAllocation.workspace_id, RunNodeAllocation.run_id)
+Index("ix_run_node_allocations_node_state", RunNodeAllocation.node_id, RunNodeAllocation.state)
 
 
 class RunnerCallbackEvent(Base):
@@ -278,6 +329,9 @@ class RunControlRequest(Base):
     run_id: Mapped[str] = mapped_column(
         String(26), ForeignKey("runs.id", ondelete="CASCADE"), nullable=False
     )
+    allocation_id: Mapped[str | None] = mapped_column(
+        String(26), ForeignKey("run_node_allocations.id", ondelete="CASCADE")
+    )
     node_id: Mapped[str] = mapped_column(
         String(26), ForeignKey("load_nodes.id", ondelete="RESTRICT"), nullable=False
     )
@@ -300,6 +354,7 @@ class RunControlRequest(Base):
 Index(
     "uq_run_control_requests_active_action",
     RunControlRequest.run_id,
+    RunControlRequest.node_id,
     RunControlRequest.action,
     unique=True,
     sqlite_where=RunControlRequest.status.in_(["pending", "running"]),

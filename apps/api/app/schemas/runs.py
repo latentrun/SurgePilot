@@ -1,7 +1,9 @@
 from enum import Enum
 from typing import Literal
 
-from pydantic import ConfigDict, Field
+from pydantic import ConfigDict, Field, field_validator, model_validator
+
+from app.core.ids import is_ulid
 
 from app.schemas.common import ApiSchema
 
@@ -60,6 +62,35 @@ RunCreateType = RunType
 RunCreateSourceType = Literal["debug_scenario", "test_plan"]
 
 
+class RunResourceRequest(ApiSchema):
+    mode: Literal["manual", "auto"]
+    selected_node_ids: list[str] = Field(default_factory=list, max_length=10)
+    node_count: int | None = Field(default=None, ge=1, le=10)
+    concurrency_per_node: int | None = Field(default=None, ge=1)
+
+    @field_validator("selected_node_ids")
+    @classmethod
+    def validate_selected_node_ids(cls, value: list[str]) -> list[str]:
+        if any(not is_ulid(item) for item in value):
+            raise ValueError("Invalid ULID.")
+        return value
+
+    @model_validator(mode="after")
+    def validate_mode_fields(self) -> "RunResourceRequest":
+        if self.mode == "manual":
+            if self.node_count is not None:
+                raise ValueError("Manual resource requests must not include nodeCount.")
+            if not self.selected_node_ids:
+                raise ValueError("Manual resource requests require selectedNodeIds.")
+            if len(set(self.selected_node_ids)) != len(self.selected_node_ids):
+                raise ValueError("Manual resource requests require distinct selectedNodeIds.")
+        elif self.selected_node_ids:
+            raise ValueError("Auto resource requests must not include selectedNodeIds.")
+        elif self.node_count is None:
+            raise ValueError("Auto resource requests require nodeCount.")
+        return self
+
+
 class RunCreateRequest(ApiSchema):
     """Public ``POST /api/v1/runs`` payload for Scenario Debug Runs and
     Test Plan Runs.
@@ -84,6 +115,7 @@ class RunCreateRequest(ApiSchema):
     expected_source_revision: int = Field(ge=1)
     env_group_id: str | None = Field(default=None, min_length=26, max_length=26)
     selected_node_id: str | None = Field(default=None, min_length=26, max_length=26)
+    resource_request: RunResourceRequest | None = None
     confirm_high_concurrency: bool = False
 
 
@@ -244,6 +276,8 @@ class RunSnapshotResourceRequest(ApiSchema):
     mode: str | None = None
     pool_type: str | None = None
     selected_node_id: str | None = None
+    selected_node_ids: list[str] = Field(default_factory=list)
+    node_count: int | None = None
     expected_concurrency_per_node: int | None = None
 
 
