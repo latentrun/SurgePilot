@@ -39,6 +39,10 @@ def _session_cookie_secure_from_env(*, app_env: str) -> bool:
     raise ValueError("SESSION_COOKIE_SECURE must be true or false.")
 
 
+def _monitoring_token_configured_from_env() -> bool:
+    return _bool_from_env(os.environ.get("SURGEPILOT_MONITORING_INFLUXDB_TOKEN_CONFIGURED"), False)
+
+
 @dataclass(frozen=True)
 class Settings:
     app_env: str
@@ -95,6 +99,16 @@ class Settings:
     debug_trace_record_max_bytes: int
     debug_trace_body_blob_max_bytes: int
     debug_trace_body_blob_total_max_bytes: int
+    monitoring_enabled: bool
+    monitoring_influxdb_internal_url: str | None
+    monitoring_influxdb_node_write_url: str | None
+    monitoring_influxdb_org: str | None
+    monitoring_influxdb_bucket: str | None
+    monitoring_influxdb_token_configured: bool
+    monitoring_grafana_base_path: str
+    monitoring_dashboard_uid: str
+    monitoring_dashboard_slug: str
+    monitoring_time_padding_seconds: int
     jmeter_memory_xmx: str
 
 
@@ -218,6 +232,30 @@ def get_settings() -> Settings:
             os.environ.get(
                 "SURGEPILOT_DEBUG_TRACE_BODY_BLOB_TOTAL_MAX_BYTES", str(20 * 1024 * 1024)
             )
+        ),
+        monitoring_enabled=_bool_from_env(os.environ.get("SURGEPILOT_MONITORING_ENABLED"), False),
+        monitoring_influxdb_internal_url=os.environ.get(
+            "SURGEPILOT_MONITORING_INFLUXDB_INTERNAL_URL"
+        )
+        or None,
+        monitoring_influxdb_node_write_url=os.environ.get(
+            "SURGEPILOT_MONITORING_INFLUXDB_NODE_WRITE_URL"
+        )
+        or None,
+        monitoring_influxdb_org=os.environ.get("SURGEPILOT_MONITORING_INFLUXDB_ORG") or None,
+        monitoring_influxdb_bucket=os.environ.get("SURGEPILOT_MONITORING_INFLUXDB_BUCKET") or None,
+        monitoring_influxdb_token_configured=_monitoring_token_configured_from_env(),
+        monitoring_grafana_base_path=os.environ.get(
+            "SURGEPILOT_MONITORING_GRAFANA_BASE_PATH", "/grafana"
+        ),
+        monitoring_dashboard_uid=os.environ.get(
+            "SURGEPILOT_MONITORING_DASHBOARD_UID", "surgepilot-jmeter-13644"
+        ),
+        monitoring_dashboard_slug=os.environ.get(
+            "SURGEPILOT_MONITORING_DASHBOARD_SLUG", "jmeter-load-test"
+        ),
+        monitoring_time_padding_seconds=int(
+            os.environ.get("SURGEPILOT_MONITORING_TIME_PADDING_SECONDS", "60")
         ),
         jmeter_memory_xmx=_jmeter_memory_xmx_from_env(),
     )
