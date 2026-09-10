@@ -24,11 +24,13 @@ Use only these references for P1 Slice drafting decisions:
 The following files are the current P1 Slice index. Real active Slice SDDs are authoritative only for their own scoped capability.
 
 1. `docs/sdd/slices/P1-03-workspace-admin.md` -- active Slice SDD for P1 Workspace / Admin.
-2. `docs/sdd/slices/P1-08-debug-http-trace.md` -- active Slice SDD for P1 Debug HTTP Trace.
+2. `docs/sdd/slices/P1-01-resource-multi-node.md` -- active Slice SDD for P1 Resource Multi-node; design frozen and Accepted for implementation.
+3. `docs/sdd/slices/P1-08-debug-http-trace.md` -- active Slice SDD for P1 Debug HTTP Trace.
 
 Active P1 Slice SDDs at this revision:
 
 - `P1-03-workspace-admin.md`, governed by the P1 scope gate.
+- `P1-01-resource-multi-node.md`, governed by `ADR-0009`.
 - `P1-08-debug-http-trace.md`, governed by `ADR-0008`.
 
 Do not expand placeholders into implementation design, schemas, migrations, or generated-contract details inside this README.
