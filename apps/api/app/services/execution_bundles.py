@@ -15,19 +15,16 @@ from app.services.env_groups import internal_env_values
 from app.models.dependency_files import DependencyFile
 from app.models.runs import Run, RunSnapshot
 from app.services.scenarios import (
+    RUNTIME_JMETER_VERSION,
     build_debug_taurus_yaml_from_content,
     bundle_file_path,
+    runtime_jmeter_path,
 )
 from app.services.test_plans import build_test_plan_taurus_document_from_snapshot
 import yaml
 from app.services.storage import get_storage_client
 
 SAFE_BUNDLE_SEGMENT = re.compile(r"^[A-Za-z0-9._-]+$")
-RUNTIME_JMETER_VERSION = "5.6.3"
-
-
-def runtime_jmeter_path(runner_home: str) -> str:
-    return f"{runner_home.rstrip('/')}/apache-jmeter/bin/jmeter"
 
 
 @dataclass(frozen=True)

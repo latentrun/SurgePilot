@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from dataclasses import dataclass
+import os
+from pathlib import Path
 import posixpath
 import shlex
 
@@ -22,6 +24,7 @@ from app.services.execution_bundles import (
     build_test_plan_execution_bundle,
 )
 from app.services.load_node_initializer import safe_join
+from app.services.monitoring import build_monitoring_properties
 from app.services.runner_bundle import RunnerBundle
 from app.services.runs import (
     RunControlCommand,
@@ -39,6 +42,20 @@ from app.services.ssh_remote import (
 
 
 CredentialResolver = Callable[[str], CredentialPlaintext]
+
+
+def _monitoring_token_from_worker_env() -> str | None:
+    value = os.environ.get("SURGEPILOT_MONITORING_INFLUXDB_TOKEN")
+    if value:
+        return value
+    file_path = os.environ.get("SURGEPILOT_MONITORING_INFLUXDB_TOKEN_FILE")
+    if not file_path:
+        return None
+    try:
+        content = Path(file_path).read_text(encoding="utf-8").strip()
+    except OSError:
+        return None
+    return content or None
 
 
 @dataclass(frozen=True)
@@ -117,6 +134,7 @@ class RemoteRunControlExecutor(RunControlExecutor):
                 content=self._env_file(command),
                 mode=0o600,
             )
+            self._upload_monitoring_properties_if_needed(target=target, command=command)
             remote_command = self._shell_command(command=command, env_path=env_path)
             start_invoked = command.action == "start"
             result = self.adapter.run_command(
@@ -252,6 +270,37 @@ class RemoteRunControlExecutor(RunControlExecutor):
             if file.stream is not None:
                 file.stream.close()
 
+    def _upload_monitoring_properties_if_needed(
+        self, *, target: SshTarget, command: RunControlCommand
+    ) -> None:
+        if command.action != "start" or self.session_factory is None:
+            return
+        with self.session_factory() as session:
+            content = build_monitoring_properties(
+                session,
+                run_id=command.run_id,
+                node_id=command.node_id,
+                monitoring_token=_monitoring_token_from_worker_env(),
+                settings=self.settings,
+            )
+        if content is None:
+            return
+        secrets_dir = posixpath.join(command.runner_home, "runs", command.run_id, "secrets")
+        mkdir_result = self.adapter.run_command(
+            target,
+            command=f"mkdir -p {shlex.quote(secrets_dir)} && chmod 700 {shlex.quote(secrets_dir)}",
+            timeout_seconds=self.settings.load_node_ssh_connect_timeout_seconds,
+            output_limit_bytes=512,
+        )
+        if not mkdir_result.ok:
+            raise RuntimeError("Monitoring secret directory could not be prepared.")
+        self.adapter.upload_text(
+            target,
+            remote_path=posixpath.join(secrets_dir, "monitoring.properties"),
+            content=content,
+            mode=0o600,
+        )
+
     def _failure_requires_quarantine(
         self,
         *,
@@ -262,10 +311,22 @@ class RemoteRunControlExecutor(RunControlExecutor):
     ) -> bool:
         if not cleanup_required or target is None or env_path is None:
             return False
+        monitoring_path = posixpath.join(
+            command.runner_home,
+            "runs",
+            command.run_id,
+            "secrets",
+            "monitoring.properties",
+        )
+        secrets_dir = posixpath.dirname(monitoring_path)
         try:
             result = self.adapter.run_command(
                 target,
-                command=f"rm -f {shlex.quote(env_path)}",
+                command=(
+                    f"rm -f {shlex.quote(env_path)} {shlex.quote(monitoring_path)} && "
+                    f"rmdir {shlex.quote(secrets_dir)} && "
+                    f"test ! -e {shlex.quote(monitoring_path)}"
+                ),
                 timeout_seconds=self.options.command_timeout_seconds,
                 output_limit_bytes=512,
             )

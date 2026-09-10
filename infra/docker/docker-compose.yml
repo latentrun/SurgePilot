@@ -1,0 +1,312 @@
+# Standard full SurgePilot stack: base application services plus P1 Monitoring.
+# Keep this file explicit; do not rely on base+monitoring override merge semantics.
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: surgepilot
+      POSTGRES_USER: surgepilot
+      POSTGRES_PASSWORD: surgepilot
+    ports:
+      - "${POSTGRES_HOST_PORT:-5432}:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U surgepilot -d surgepilot"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  minio:
+    image: minio/minio:RELEASE.2025-04-22T22-12-26Z
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin}
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - minio-data:/data
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  minio-init:
+    image: minio/mc:RELEASE.2025-04-16T18-13-26Z
+    depends_on:
+      minio:
+        condition: service_started
+    environment:
+      MINIO_ENDPOINT: http://minio:9000
+      MINIO_BUCKET: ${MINIO_BUCKET:-surgepilot}
+      MINIO_ACCESS_KEY: ${MINIO_ACCESS_KEY:-minioadmin}
+      MINIO_SECRET_KEY: ${MINIO_SECRET_KEY:-minioadmin}
+    volumes:
+      - ./minio/init-bucket.sh:/init-bucket.sh:ro
+    entrypoint: ["/bin/sh", "/init-bucket.sh"]
+
+  api-migrate:
+    build:
+      context: ../..
+      dockerfile: apps/api/Dockerfile
+      args:
+        PIP_INDEX_URL: ${SURGEPILOT_PIP_INDEX_URL:-https://pypi.org/simple}
+        UV_INDEX_URL: ${SURGEPILOT_PIP_INDEX_URL:-https://pypi.org/simple}
+    command: ["uv", "run", "alembic", "upgrade", "head"]
+    environment:
+      APP_ENV: development
+      DATABASE_URL: postgresql://surgepilot:surgepilot@postgres:5432/surgepilot
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  api:
+    build:
+      context: ../..
+      dockerfile: apps/api/Dockerfile
+      args:
+        PIP_INDEX_URL: ${SURGEPILOT_PIP_INDEX_URL:-https://pypi.org/simple}
+        UV_INDEX_URL: ${SURGEPILOT_PIP_INDEX_URL:-https://pypi.org/simple}
+    environment:
+      APP_ENV: development
+      UV_NO_SYNC: "1"
+      APP_BASE_URL: http://localhost:8000
+      SURGEPILOT_NODE_API_BASE_URL: ${SURGEPILOT_NODE_API_BASE_URL:-http://api.surgepilot.test:8000}
+      DATABASE_URL: postgresql://surgepilot:surgepilot@postgres:5432/surgepilot
+      MINIO_ENDPOINT: http://minio:9000
+      MINIO_BUCKET: ${MINIO_BUCKET:-surgepilot}
+      MINIO_ACCESS_KEY: ${MINIO_ACCESS_KEY:-minioadmin}
+      MINIO_SECRET_KEY: ${MINIO_SECRET_KEY:-minioadmin}
+      RUNNER_INTERNAL_TOKEN: ${RUNNER_INTERNAL_TOKEN:?RUNNER_INTERNAL_TOKEN is required}
+      SSH_CREDENTIAL_ENCRYPTION_KEY: ${SSH_CREDENTIAL_ENCRYPTION_KEY:?SSH_CREDENTIAL_ENCRYPTION_KEY is required}
+      ALLOW_SIGNUP: ${ALLOW_SIGNUP:-true}
+      DEFAULT_WORKSPACE_NAME: ${DEFAULT_WORKSPACE_NAME:-Default Workspace}
+      DEPENDENCY_FILE_MAX_BYTES: ${DEPENDENCY_FILE_MAX_BYTES:-104857600}
+      DEPENDENCY_FILE_ALLOWED_EXTENSIONS: ${DEPENDENCY_FILE_ALLOWED_EXTENSIONS:-}
+      DEPENDENCY_FILE_PREVIEW_MAX_BYTES: ${DEPENDENCY_FILE_PREVIEW_MAX_BYTES:-65536}
+      DEPENDENCY_FILE_PREVIEW_BINARY_DENY_EXTENSIONS: ${DEPENDENCY_FILE_PREVIEW_BINARY_DENY_EXTENSIONS:-.png,.jpg,.jpeg,.gif,.webp,.bmp,.ico,.svg,.pdf,.zip,.tar,.gz,.tgz,.bz2,.xz,.7z,.rar,.jar,.war,.class,.so,.dll,.dylib,.exe,.bin,.dat,.woff,.woff2,.ttf,.otf,.eot,.mp3,.mp4,.mov,.avi,.mkv,.webm}
+      SURGEPILOT_MAX_SCENARIO_ITEMS_PER_TEST_PLAN: ${SURGEPILOT_MAX_SCENARIO_ITEMS_PER_TEST_PLAN:-20}
+      SURGEPILOT_SINGLE_NODE_CONCURRENCY_SOFT_LIMIT: ${SURGEPILOT_SINGLE_NODE_CONCURRENCY_SOFT_LIMIT:-1000}
+      SURGEPILOT_MAX_RUN_DURATION_SECONDS: ${SURGEPILOT_MAX_RUN_DURATION_SECONDS:-86400}
+      SURGEPILOT_MAX_RAMP_UP_SECONDS: ${SURGEPILOT_MAX_RAMP_UP_SECONDS:-86400}
+      SURGEPILOT_MAX_DELAY_SECONDS: ${SURGEPILOT_MAX_DELAY_SECONDS:-86400}
+      SURGEPILOT_MAX_ITERATIONS: ${SURGEPILOT_MAX_ITERATIONS:-1000000}
+      SURGEPILOT_MAX_TARGET_RPS: ${SURGEPILOT_MAX_TARGET_RPS:-100000}
+      SURGEPILOT_MAX_SLA_RULES_PER_TEST_PLAN: ${SURGEPILOT_MAX_SLA_RULES_PER_TEST_PLAN:-5}
+      LOAD_NODE_DEFAULT_RUNNER_HOME: ${LOAD_NODE_DEFAULT_RUNNER_HOME:-/opt/surgepilot/runner}
+      LOAD_NODE_SSH_CONNECT_TIMEOUT_SECONDS: ${LOAD_NODE_SSH_CONNECT_TIMEOUT_SECONDS:-15}
+      LOAD_NODE_INIT_COMMAND_TIMEOUT_SECONDS: ${LOAD_NODE_INIT_COMMAND_TIMEOUT_SECONDS:-30}
+      LOAD_NODE_INIT_LOG_TAIL_BYTES: ${LOAD_NODE_INIT_LOG_TAIL_BYTES:-65536}
+      LOAD_NODE_GENERATED_KEY_TYPE: ${LOAD_NODE_GENERATED_KEY_TYPE:-ed25519}
+      SURGEPILOT_DEBUG_TRACE_MAX_REQUESTS: ${SURGEPILOT_DEBUG_TRACE_MAX_REQUESTS:-100}
+      SURGEPILOT_DEBUG_TRACE_BODY_MAX_BYTES: ${SURGEPILOT_DEBUG_TRACE_BODY_MAX_BYTES:-65536}
+      SURGEPILOT_DEBUG_TRACE_ARTIFACT_MAX_BYTES: ${SURGEPILOT_DEBUG_TRACE_ARTIFACT_MAX_BYTES:-10485760}
+      SURGEPILOT_DEBUG_TRACE_RECORD_MAX_BYTES: ${SURGEPILOT_DEBUG_TRACE_RECORD_MAX_BYTES:-131072}
+      SURGEPILOT_DEBUG_TRACE_BODY_BLOB_MAX_BYTES: ${SURGEPILOT_DEBUG_TRACE_BODY_BLOB_MAX_BYTES:-5242880}
+      SURGEPILOT_DEBUG_TRACE_BODY_BLOB_TOTAL_MAX_BYTES: ${SURGEPILOT_DEBUG_TRACE_BODY_BLOB_TOTAL_MAX_BYTES:-20971520}
+      SURGEPILOT_MONITORING_TIME_PADDING_SECONDS: ${SURGEPILOT_MONITORING_TIME_PADDING_SECONDS:-60}
+      SURGEPILOT_NODE_COOLDOWN_SECONDS: ${SURGEPILOT_NODE_COOLDOWN_SECONDS:-300}
+      SURGEPILOT_RUN_ARTIFACT_MAX_BYTES: ${SURGEPILOT_RUN_ARTIFACT_MAX_BYTES:-209715200}
+      SURGEPILOT_RUN_TERMINAL_LATE_ARTIFACT_MAX_BYTES: ${SURGEPILOT_RUN_TERMINAL_LATE_ARTIFACT_MAX_BYTES:-1048576}
+      SURGEPILOT_RUN_TERMINAL_LATE_ARTIFACT_SECONDS: ${SURGEPILOT_RUN_TERMINAL_LATE_ARTIFACT_SECONDS:-300}
+      SURGEPILOT_RUN_CONTROL_STALE_SECONDS: ${SURGEPILOT_RUN_CONTROL_STALE_SECONDS:-120}
+      SURGEPILOT_SINGLE_NODE_CONCURRENCY_HARD_LIMIT: ${SURGEPILOT_SINGLE_NODE_CONCURRENCY_HARD_LIMIT:-10000}
+      SURGEPILOT_MONITORING_ENABLED: "true"
+      SURGEPILOT_MONITORING_INFLUXDB_INTERNAL_URL: http://influxdb:8086
+      SURGEPILOT_MONITORING_INFLUXDB_NODE_WRITE_URL: ${SURGEPILOT_MONITORING_INFLUXDB_NODE_WRITE_URL:-http://influxdb:8086}
+      SURGEPILOT_MONITORING_INFLUXDB_ORG: ${SURGEPILOT_MONITORING_INFLUXDB_ORG:-surgepilot}
+      SURGEPILOT_MONITORING_INFLUXDB_BUCKET: ${SURGEPILOT_MONITORING_INFLUXDB_BUCKET:-jmeter}
+      SURGEPILOT_MONITORING_INFLUXDB_TOKEN_CONFIGURED: "true"
+      SURGEPILOT_MONITORING_GRAFANA_BASE_PATH: /grafana
+      SURGEPILOT_MONITORING_DASHBOARD_UID: ${SURGEPILOT_MONITORING_DASHBOARD_UID:-surgepilot-jmeter-13644}
+      SURGEPILOT_MONITORING_DASHBOARD_SLUG: ${SURGEPILOT_MONITORING_DASHBOARD_SLUG:-jmeter-load-test}
+      SURGEPILOT_JMETER_MEMORY_XMX: ${SURGEPILOT_JMETER_MEMORY_XMX:-4G}
+      LOAD_NODE_RUNTIME_ARTIFACT_DIR: /opt/surgepilot/runtime-artifacts
+      LOAD_NODE_RUNTIME_VERSION: ${LOAD_NODE_RUNTIME_VERSION:-}
+    ports:
+      - "${SURGEPILOT_API_HOST_PORT:-8000}:8000"
+    networks:
+      default:
+        aliases:
+          - api.surgepilot.test
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/healthz')",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    volumes:
+      - ${LOAD_NODE_RUNTIME_ARTIFACT_HOST_DIR:-../../.surgepilot/runtime-artifacts/default}:/opt/surgepilot/runtime-artifacts:ro
+    depends_on:
+      api-migrate:
+        condition: service_completed_successfully
+      minio-init:
+        condition: service_completed_successfully
+      grafana:
+        condition: service_started
+
+  api-worker:
+    restart: unless-stopped
+    build:
+      context: ../..
+      dockerfile: apps/api/Dockerfile
+      args:
+        PIP_INDEX_URL: ${SURGEPILOT_PIP_INDEX_URL:-https://pypi.org/simple}
+        UV_INDEX_URL: ${SURGEPILOT_PIP_INDEX_URL:-https://pypi.org/simple}
+    command: ["uv", "run", "python", "-m", "app.worker"]
+    environment:
+      APP_ENV: development
+      UV_NO_SYNC: "1"
+      APP_BASE_URL: http://api:8000
+      SURGEPILOT_NODE_API_BASE_URL: ${SURGEPILOT_NODE_API_BASE_URL:-http://api.surgepilot.test:8000}
+      DATABASE_URL: postgresql://surgepilot:surgepilot@postgres:5432/surgepilot
+      MINIO_ENDPOINT: http://minio:9000
+      MINIO_BUCKET: ${MINIO_BUCKET:-surgepilot}
+      MINIO_ACCESS_KEY: ${MINIO_ACCESS_KEY:-minioadmin}
+      MINIO_SECRET_KEY: ${MINIO_SECRET_KEY:-minioadmin}
+      SSH_CREDENTIAL_ENCRYPTION_KEY: ${SSH_CREDENTIAL_ENCRYPTION_KEY:?SSH_CREDENTIAL_ENCRYPTION_KEY is required}
+      RUNNER_INTERNAL_TOKEN: ${RUNNER_INTERNAL_TOKEN:?RUNNER_INTERNAL_TOKEN is required}
+      SURGEPILOT_RUNNER_BUNDLE_DIR: /opt/surgepilot/runner-bundle
+      LOAD_NODE_INIT_TIMEOUT_SECONDS: ${LOAD_NODE_INIT_TIMEOUT_SECONDS:-120}
+      LOAD_NODE_RUNTIME_ARTIFACT_DIR: /opt/surgepilot/runtime-artifacts
+      LOAD_NODE_RUNTIME_VERSION: ${LOAD_NODE_RUNTIME_VERSION:-}
+      LOAD_NODE_RUNTIME_INSTALL_TIMEOUT_SECONDS: ${LOAD_NODE_RUNTIME_INSTALL_TIMEOUT_SECONDS:-120}
+      SURGEPILOT_RUN_HEARTBEAT_TIMEOUT_SECONDS: ${SURGEPILOT_RUN_HEARTBEAT_TIMEOUT_SECONDS:-60}
+      SURGEPILOT_RUN_ACCEPTED_TIMEOUT_SECONDS: ${SURGEPILOT_RUN_ACCEPTED_TIMEOUT_SECONDS:-120}
+      SURGEPILOT_RUN_STOP_GRACE_SECONDS: ${SURGEPILOT_RUN_STOP_GRACE_SECONDS:-60}
+      SURGEPILOT_RUN_FORCE_KILL_SSH_TIMEOUT_SECONDS: ${SURGEPILOT_RUN_FORCE_KILL_SSH_TIMEOUT_SECONDS:-30}
+      SURGEPILOT_RUNNER_CALLBACK_RETENTION_DAYS: ${SURGEPILOT_RUNNER_CALLBACK_RETENTION_DAYS:-30}
+      SURGEPILOT_MONITORING_ENABLED: "true"
+      LOAD_NODE_DEFAULT_RUNNER_HOME: ${LOAD_NODE_DEFAULT_RUNNER_HOME:-/opt/surgepilot/runner}
+      LOAD_NODE_SSH_CONNECT_TIMEOUT_SECONDS: ${LOAD_NODE_SSH_CONNECT_TIMEOUT_SECONDS:-15}
+      LOAD_NODE_INIT_COMMAND_TIMEOUT_SECONDS: ${LOAD_NODE_INIT_COMMAND_TIMEOUT_SECONDS:-30}
+      LOAD_NODE_INIT_LOG_TAIL_BYTES: ${LOAD_NODE_INIT_LOG_TAIL_BYTES:-65536}
+      LOAD_NODE_GENERATED_KEY_TYPE: ${LOAD_NODE_GENERATED_KEY_TYPE:-ed25519}
+      SURGEPILOT_DEBUG_TRACE_MAX_REQUESTS: ${SURGEPILOT_DEBUG_TRACE_MAX_REQUESTS:-100}
+      SURGEPILOT_DEBUG_TRACE_BODY_MAX_BYTES: ${SURGEPILOT_DEBUG_TRACE_BODY_MAX_BYTES:-65536}
+      SURGEPILOT_DEBUG_TRACE_ARTIFACT_MAX_BYTES: ${SURGEPILOT_DEBUG_TRACE_ARTIFACT_MAX_BYTES:-10485760}
+      SURGEPILOT_DEBUG_TRACE_RECORD_MAX_BYTES: ${SURGEPILOT_DEBUG_TRACE_RECORD_MAX_BYTES:-131072}
+      SURGEPILOT_DEBUG_TRACE_BODY_BLOB_MAX_BYTES: ${SURGEPILOT_DEBUG_TRACE_BODY_BLOB_MAX_BYTES:-5242880}
+      SURGEPILOT_DEBUG_TRACE_BODY_BLOB_TOTAL_MAX_BYTES: ${SURGEPILOT_DEBUG_TRACE_BODY_BLOB_TOTAL_MAX_BYTES:-20971520}
+      SURGEPILOT_MONITORING_TIME_PADDING_SECONDS: ${SURGEPILOT_MONITORING_TIME_PADDING_SECONDS:-60}
+      SURGEPILOT_NODE_COOLDOWN_SECONDS: ${SURGEPILOT_NODE_COOLDOWN_SECONDS:-300}
+      SURGEPILOT_RUN_ARTIFACT_MAX_BYTES: ${SURGEPILOT_RUN_ARTIFACT_MAX_BYTES:-209715200}
+      SURGEPILOT_RUN_TERMINAL_LATE_ARTIFACT_MAX_BYTES: ${SURGEPILOT_RUN_TERMINAL_LATE_ARTIFACT_MAX_BYTES:-1048576}
+      SURGEPILOT_RUN_TERMINAL_LATE_ARTIFACT_SECONDS: ${SURGEPILOT_RUN_TERMINAL_LATE_ARTIFACT_SECONDS:-300}
+      SURGEPILOT_RUN_CONTROL_STALE_SECONDS: ${SURGEPILOT_RUN_CONTROL_STALE_SECONDS:-120}
+      SURGEPILOT_SINGLE_NODE_CONCURRENCY_HARD_LIMIT: ${SURGEPILOT_SINGLE_NODE_CONCURRENCY_HARD_LIMIT:-10000}
+      SURGEPILOT_MONITORING_INFLUXDB_INTERNAL_URL: http://influxdb:8086
+      SURGEPILOT_MONITORING_INFLUXDB_NODE_WRITE_URL: ${SURGEPILOT_MONITORING_INFLUXDB_NODE_WRITE_URL:-http://influxdb:8086}
+      SURGEPILOT_MONITORING_INFLUXDB_ORG: ${SURGEPILOT_MONITORING_INFLUXDB_ORG:-surgepilot}
+      SURGEPILOT_MONITORING_INFLUXDB_BUCKET: ${SURGEPILOT_MONITORING_INFLUXDB_BUCKET:-jmeter}
+      SURGEPILOT_MONITORING_INFLUXDB_TOKEN_FILE: /run/secrets/surgepilot_influxdb_token
+      SURGEPILOT_MONITORING_GRAFANA_BASE_PATH: /grafana
+      SURGEPILOT_MONITORING_DASHBOARD_UID: ${SURGEPILOT_MONITORING_DASHBOARD_UID:-surgepilot-jmeter-13644}
+      SURGEPILOT_MONITORING_DASHBOARD_SLUG: ${SURGEPILOT_MONITORING_DASHBOARD_SLUG:-jmeter-load-test}
+      SURGEPILOT_JMETER_MEMORY_XMX: ${SURGEPILOT_JMETER_MEMORY_XMX:-4G}
+    depends_on:
+      api-migrate:
+        condition: service_completed_successfully
+      minio-init:
+        condition: service_completed_successfully
+      influxdb:
+        condition: service_healthy
+    volumes:
+      - ${LOAD_NODE_RUNTIME_ARTIFACT_HOST_DIR:-../../.surgepilot/runtime-artifacts/default}:/opt/surgepilot/runtime-artifacts:ro
+    secrets:
+      - surgepilot_influxdb_token
+
+  web:
+    build:
+      context: ../..
+      dockerfile: apps/web/Dockerfile
+      args:
+        NPM_REGISTRY: ${SURGEPILOT_NPM_REGISTRY:-https://registry.npmjs.org/}
+        VITE_API_BASE_URL: ${VITE_API_BASE_URL:-}
+    ports:
+      - "5173:80"
+
+  nginx:
+    image: nginx:1.27-alpine
+    ports:
+      - "${SURGEPILOT_HTTP_PORT:-8080}:80"
+    volumes:
+      - ./nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
+    depends_on:
+      web:
+        condition: service_started
+      api:
+        condition: service_healthy
+      grafana:
+        condition: service_started
+
+  influxdb:
+    image: influxdb:2.7-alpine
+    environment:
+      DOCKER_INFLUXDB_INIT_MODE: setup
+      DOCKER_INFLUXDB_INIT_USERNAME: ${SURGEPILOT_MONITORING_INFLUXDB_USERNAME:-surgepilot}
+      DOCKER_INFLUXDB_INIT_PASSWORD: ${SURGEPILOT_MONITORING_INFLUXDB_PASSWORD:-surgepilot-dev-password}
+      DOCKER_INFLUXDB_INIT_ORG: ${SURGEPILOT_MONITORING_INFLUXDB_ORG:-surgepilot}
+      DOCKER_INFLUXDB_INIT_BUCKET: ${SURGEPILOT_MONITORING_INFLUXDB_BUCKET:-jmeter}
+      DOCKER_INFLUXDB_INIT_ADMIN_TOKEN_FILE: /run/secrets/surgepilot_influxdb_token
+    ports:
+      # If this is overridden to 18086, the real-IP node write URL must use
+      # the same published port: http://<host-ip>:18086.
+      - "${SURGEPILOT_MONITORING_INFLUXDB_HOST_PORT:-8086}:8086"
+    secrets:
+      - surgepilot_influxdb_token
+    volumes:
+      - influxdb-data:/var/lib/influxdb2
+    healthcheck:
+      test: ["CMD", "influx", "ping", "--host", "http://localhost:8086"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  grafana:
+    image: grafana/grafana:12.0.2
+    user: "0:0"
+    entrypoint:
+      - /bin/sh
+      - /etc/surgepilot/grafana-entrypoint.sh
+    environment:
+      GF_SERVER_ROOT_URL: ${SURGEPILOT_GRAFANA_ROOT_URL:-%(protocol)s://%(domain)s:%(http_port)s/grafana/}
+      GF_SERVER_SERVE_FROM_SUB_PATH: "true"
+      GF_AUTH_ANONYMOUS_ENABLED: "true"
+      GF_AUTH_ANONYMOUS_ORG_ROLE: Viewer
+      GF_SECURITY_ALLOW_EMBEDDING: "true"
+      GF_AUTH_DISABLE_LOGIN_FORM: "true"
+      GF_SECURITY_ADMIN_USER: ${SURGEPILOT_GRAFANA_ADMIN_USER:-admin}
+      SURGEPILOT_MONITORING_INFLUXDB_URL: http://influxdb:8086
+      SURGEPILOT_MONITORING_INFLUXDB_ORG: ${SURGEPILOT_MONITORING_INFLUXDB_ORG:-surgepilot}
+      SURGEPILOT_MONITORING_INFLUXDB_BUCKET: ${SURGEPILOT_MONITORING_INFLUXDB_BUCKET:-jmeter}
+    depends_on:
+      influxdb:
+        condition: service_healthy
+    secrets:
+      - surgepilot_influxdb_token
+    tmpfs:
+      - /run/surgepilot:mode=0710,uid=0,gid=0
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ./grafana/entrypoint.sh:/etc/surgepilot/grafana-entrypoint.sh:ro
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
+
+volumes:
+  postgres-data:
+  minio-data:
+  influxdb-data:
+  grafana-data:
+
+secrets:
+  surgepilot_influxdb_token:
+    file: ${SURGEPILOT_MONITORING_INFLUXDB_TOKEN_FILE_HOST:-./monitoring/influxdb-token.example}

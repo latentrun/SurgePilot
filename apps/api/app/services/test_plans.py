@@ -55,7 +55,9 @@ TAURUS_MODULE_CLASS_ALIASES = {
 # P0-03/P0-05 runtime baseline: the Load Node's configured Apache JMeter
 # deployment is the source of truth for ``modules.jmeter.path``/``version``.
 # P0-06 must not redefine the JMeter runtime independently.
-JMETER_RUNTIME_PATH = "/opt/surgepilot/apache-jmeter/bin/jmeter"
+JMETER_RUNTIME_PATH = (
+    "/opt/surgepilot/runner/current/apache-jmeter-5.6.3/bin/surgepilot-jmeter-wrapper"
+)
 JMETER_RUNTIME_VERSION = "5.6.3"
 
 

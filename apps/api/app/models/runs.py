@@ -28,6 +28,7 @@ PUBLIC_RUN_ARTIFACT_TYPES = tuple(
 SLA_RESULTS = ("passed", "failed", "not_evaluated")
 REPORT_SUMMARY_STATUSES = ("pending", "parsed", "failed")
 REPORT_SUMMARY_TYPES = ("final_stats",)
+RUN_MONITORING_STATUSES = ("enabled", "config_error")
 
 
 class Run(Base):
@@ -117,6 +118,9 @@ class Run(Base):
     leases: Mapped[list["NodeLease"]] = relationship(back_populates="run")
     node_allocations: Mapped[list["RunNodeAllocation"]] = relationship(back_populates="run")
     control_requests: Mapped[list["RunControlRequest"]] = relationship(back_populates="run")
+    monitoring_config: Mapped["RunMonitoringConfig | None"] = relationship(
+        back_populates="run", uselist=False
+    )
 
 
 Index("ix_runs_workspace_created", Run.workspace_id, Run.created_at.desc(), Run.id.desc())
@@ -165,6 +169,45 @@ class RunSnapshot(Base):
     created_at: Mapped[datetime] = mapped_column(nullable=False)
 
     run: Mapped[Run] = relationship(back_populates="snapshot")
+
+
+class RunMonitoringConfig(Base):
+    __tablename__ = "run_monitoring_configs"
+    __table_args__ = (
+        CheckConstraint("length(run_id) = 26", name="ck_run_monitoring_configs_run_id_len"),
+        CheckConstraint(
+            "length(workspace_id) = 26", name="ck_run_monitoring_configs_workspace_id_len"
+        ),
+        CheckConstraint(
+            "status in ('enabled', 'config_error')", name="ck_run_monitoring_configs_status"
+        ),
+        CheckConstraint(
+            "disabled_reason is null or disabled_reason in ('not_configured')",
+            name="ck_run_monitoring_configs_disabled_reason",
+        ),
+    )
+
+    run_id: Mapped[str] = mapped_column(
+        String(26), ForeignKey("runs.id", ondelete="CASCADE"), primary_key=True
+    )
+    workspace_id: Mapped[str] = mapped_column(
+        String(26), ForeignKey("workspaces.id", ondelete="CASCADE"), nullable=False
+    )
+    status: Mapped[str] = mapped_column(Text, nullable=False)
+    disabled_reason: Mapped[str | None] = mapped_column(Text)
+    influxdb_node_write_url: Mapped[str | None] = mapped_column(Text)
+    dashboard_uid: Mapped[str] = mapped_column(Text, nullable=False)
+    grafana_base_path: Mapped[str] = mapped_column(Text, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(nullable=False)
+
+    run: Mapped[Run] = relationship(back_populates="monitoring_config")
+
+
+Index(
+    "ix_run_monitoring_configs_workspace_run",
+    RunMonitoringConfig.workspace_id,
+    RunMonitoringConfig.run_id,
+)
 
 
 class NodeLease(Base):
@@ -232,6 +275,7 @@ class RunNodeAllocation(Base):
     node_id: Mapped[str] = mapped_column(String(26), ForeignKey("load_nodes.id", ondelete="RESTRICT"), nullable=False)
     node_index: Mapped[int] = mapped_column(nullable=False)
     total_nodes: Mapped[int] = mapped_column(nullable=False)
+    expected_runtime_version: Mapped[str | None] = mapped_column(Text)
     state: Mapped[str] = mapped_column(Text, nullable=False)
     accepted_at: Mapped[datetime | None] = mapped_column(nullable=True)
     started_at: Mapped[datetime | None] = mapped_column(nullable=True)
