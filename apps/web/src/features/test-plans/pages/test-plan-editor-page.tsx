@@ -393,6 +393,9 @@ export function TestPlanEditorPage() {
   const [runningType, setRunningType] = useState<"debug" | "standard" | null>(
     null,
   );
+  const [resourceRunType, setResourceRunType] = useState<
+    "debug" | "standard"
+  >("standard");
   const [pendingConfirmation, setPendingConfirmation] = useState<
     "standard" | null
   >(null);
@@ -1076,109 +1079,131 @@ export function TestPlanEditorPage() {
                 uses a fixed low-risk profile.
               </p>
             </div>
-            <Field label="Resource Mode">
+            <Field label="Resource Configuration For">
               <select
-                aria-label="Resource Mode"
+                aria-label="Resource Configuration For"
                 className={cn(inputClass(false), "text-text-main")}
                 onChange={(event) =>
-                  updateDraft((current) => ({
-                    ...current,
-                    resource: {
-                      ...current.resource,
-                      mode: event.target.value as "manual" | "auto",
-                      selectedNodeId: null,
-                      selectedNodeIds: [],
-                      nodeCount:
-                        event.target.value === "auto"
-                          ? current.resource.nodeCount ?? 2
-                          : null,
-                    },
-                  }))
+                  setResourceRunType(event.target.value as "debug" | "standard")
                 }
-                value={resourceMode}
+                value={resourceRunType}
               >
-                <option value="manual">Manual selected nodes</option>
-                <option value="auto">Auto node count</option>
+                <option value="standard">Standard Run</option>
+                <option value="debug">Debug Run</option>
               </select>
             </Field>
-            <Field label="Pool Type">
-              <select
-                aria-label="Pool Type"
-                className={cn(inputClass(false), "text-text-main")}
-                onChange={(event) =>
-                  updateDraft((current) => ({
-                    ...current,
-                    resource: {
-                      ...current.resource,
-                      poolType:
-                        (event.target.value as "public" | "private" | "") ||
-                        null,
-                      selectedNodeId: null,
-                      selectedNodeIds: [],
-                    },
-                  }))
-                }
-                value={poolType ?? ""}
-              >
-                <option value="">{testPlanCopy.selectPool}</option>
-                <option value="private">Private</option>
-                <option value="public">Public</option>
-              </select>
-            </Field>
-            {poolType && resourceMode === "auto" ? (
-              <Field label="Node Count">
-                <input
-                  aria-label="Node Count"
-                  className={textInputClass()}
-                  min={1}
-                  max={10}
-                  onChange={(event) =>
-                    updateDraft((current) => ({
-                      ...current,
-                      resource: {
-                        ...current.resource,
-                        nodeCount: Math.max(1, Number(event.target.value) || 1),
-                        selectedNodeId: null,
-                        selectedNodeIds: [],
-                      },
-                    }))
-                  }
-                  type="number"
-                  value={draft.resource.nodeCount ?? 2}
-                />
-                <small>SurgePilot allocates this many idle nodes.</small>
-              </Field>
-            ) : null}
-            {poolType && resourceMode === "manual" ? (
-              <Field label="Load Node">
-                <select
-                  aria-label="Load Nodes"
-                  className={cn(inputClass(false), "text-text-main")}
-                  multiple
-                  onChange={(event) => {
-                    const next = Array.from(event.target.selectedOptions).map(
-                      (option) => option.value,
-                    );
-                    updateDraft((current) => ({
-                      ...current,
-                      resource: {
-                        ...current.resource,
-                        selectedNodeIds: next,
-                        selectedNodeId: next[0] ?? null,
-                      },
-                    }));
-                  }}
-                  value={selectedNodeIds}
-                >
-                  {idleCandidates.map((node) => (
-                    <option key={node.id} value={node.id}>
-                      {testPlanCopy.nodeOption(node.host, node.status)}
-                    </option>
-                  ))}
-                </select>
-                <small>Hold Ctrl/⌘ to select multiple idle nodes.</small>
-              </Field>
-            ) : null}
+            {resourceRunType === "standard" ? (
+              <>
+                <Field label="Resource Mode">
+                  <select
+                    aria-label="Resource Mode"
+                    className={cn(inputClass(false), "text-text-main")}
+                    onChange={(event) =>
+                      updateDraft((current) => ({
+                        ...current,
+                        resource: {
+                          ...current.resource,
+                          mode: event.target.value as "manual" | "auto",
+                          selectedNodeId: null,
+                          selectedNodeIds: [],
+                          nodeCount:
+                            event.target.value === "auto"
+                              ? current.resource.nodeCount ?? 2
+                              : null,
+                        },
+                      }))
+                    }
+                    value={resourceMode}
+                  >
+                    <option value="manual">Manual selected nodes</option>
+                    <option value="auto">Auto node count</option>
+                  </select>
+                </Field>
+                <Field label="Pool Type">
+                  <select
+                    aria-label="Pool Type"
+                    className={cn(inputClass(false), "text-text-main")}
+                    onChange={(event) =>
+                      updateDraft((current) => ({
+                        ...current,
+                        resource: {
+                          ...current.resource,
+                          poolType:
+                            (event.target.value as "public" | "private" | "") ||
+                            null,
+                          selectedNodeId: null,
+                          selectedNodeIds: [],
+                        },
+                      }))
+                    }
+                    value={poolType ?? ""}
+                  >
+                    <option value="">{testPlanCopy.selectPool}</option>
+                    <option value="private">Private</option>
+                    <option value="public">Public</option>
+                  </select>
+                </Field>
+                {poolType && resourceMode === "auto" ? (
+                  <Field label="Node Count">
+                    <input
+                      aria-label="Node Count"
+                      className={textInputClass()}
+                      min={1}
+                      max={10}
+                      onChange={(event) =>
+                        updateDraft((current) => ({
+                          ...current,
+                          resource: {
+                            ...current.resource,
+                            nodeCount: Math.max(1, Number(event.target.value) || 1),
+                            selectedNodeId: null,
+                            selectedNodeIds: [],
+                          },
+                        }))
+                      }
+                      type="number"
+                      value={draft.resource.nodeCount ?? 2}
+                    />
+                    <small>SurgePilot allocates this many idle nodes.</small>
+                  </Field>
+                ) : null}
+                {poolType && resourceMode === "manual" ? (
+                  <Field label="Load Node">
+                    <select
+                      aria-label="Load Nodes"
+                      className={cn(inputClass(false), "text-text-main")}
+                      multiple
+                      onChange={(event) => {
+                        const next = Array.from(event.target.selectedOptions).map(
+                          (option) => option.value,
+                        );
+                        updateDraft((current) => ({
+                          ...current,
+                          resource: {
+                            ...current.resource,
+                            selectedNodeIds: next,
+                            selectedNodeId: next[0] ?? null,
+                          },
+                        }));
+                      }}
+                      value={selectedNodeIds}
+                    >
+                      {idleCandidates.map((node) => (
+                        <option key={node.id} value={node.id}>
+                          {testPlanCopy.nodeOption(node.host, node.status)}
+                        </option>
+                      ))}
+                    </select>
+                    <small>Hold Ctrl/⌘ to select multiple idle nodes.</small>
+                  </Field>
+                ) : null}
+              </>
+            ) : (
+              <p className="rounded-xl border border-primary/20 bg-primary/5 p-3 text-sm text-text-muted">
+                Debug Runs always use one low-risk node. Standard resource
+                settings are not used for Debug Runs.
+              </p>
+            )}
             {isLoadingNodes ? (
               <p className="text-xs text-text-muted">
                 Loading Load Nodes...
