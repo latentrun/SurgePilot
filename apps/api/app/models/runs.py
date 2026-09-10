@@ -391,6 +391,9 @@ class RunArtifact(Base):
     node_id: Mapped[str] = mapped_column(
         String(26), ForeignKey("load_nodes.id", ondelete="RESTRICT"), nullable=False
     )
+    allocation_id: Mapped[str | None] = mapped_column(
+        String(26), ForeignKey("run_node_allocations.id", ondelete="SET NULL")
+    )
     event_id: Mapped[str] = mapped_column(String(26), nullable=False)
     artifact_type: Mapped[str] = mapped_column(Text, nullable=False)
     relative_path: Mapped[str] = mapped_column(Text, nullable=False)
@@ -408,11 +411,14 @@ Index("uq_run_artifacts_run_event", RunArtifact.run_id, RunArtifact.event_id, un
 Index(
     "uq_run_artifacts_run_path_available",
     RunArtifact.run_id,
+    RunArtifact.node_id,
+    RunArtifact.allocation_id,
     RunArtifact.relative_path,
     unique=True,
     sqlite_where=RunArtifact.status == "available",
     postgresql_where=RunArtifact.status == "available",
 )
+Index("ix_run_artifacts_run_allocation", RunArtifact.run_id, RunArtifact.allocation_id)
 Index(
     "ix_run_artifacts_workspace_run_created",
     RunArtifact.workspace_id,

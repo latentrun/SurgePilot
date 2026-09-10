@@ -319,6 +319,100 @@ def enqueue_control_request(
     return request
 
 
+def _allocation_for_node(db: Session, *, run_id: str, node_id: str) -> RunNodeAllocation | None:
+    return db.scalar(
+        select(RunNodeAllocation)
+        .where(RunNodeAllocation.run_id == run_id, RunNodeAllocation.node_id == node_id)
+        .with_for_update()
+    )
+
+
+def _validate_authenticated_runner_node(
+    *,
+    authenticated_node_id: str | None,
+    payload_node_id: str,
+    allocation: RunNodeAllocation | None,
+) -> None:
+    if authenticated_node_id is None or authenticated_node_id != payload_node_id:
+        raise AppError("RUNNER_FORBIDDEN", "Runner is not allowed to report this node.", 403)
+    if allocation is None:
+        raise AppError("RUNNER_FORBIDDEN", "Runner is not allowed to report this Run.", 403)
+
+
+def _allocations_for_run(db: Session, *, run_id: str) -> list[RunNodeAllocation]:
+    return list(
+        db.scalars(
+            select(RunNodeAllocation)
+            .where(RunNodeAllocation.run_id == run_id)
+            .order_by(RunNodeAllocation.node_index.asc())
+            .with_for_update()
+        ).all()
+    )
+
+
+def _derive_run_terminal_from_allocations(
+    db: Session, *, run: Run, allocations: list[RunNodeAllocation], now: datetime
+) -> bool:
+    if not allocations or any(allocation.state not in TERMINAL_STATES for allocation in allocations):
+        return False
+    if any(allocation.state == "failed" for allocation in allocations):
+        target = "failed"
+    elif any(allocation.state == "aborted" for allocation in allocations):
+        target = "aborted"
+    else:
+        target = "finished"
+    if run.state not in TERMINAL_STATES:
+        failed = next((a for a in allocations if a.state == "failed"), None)
+        if not _apply_transition(
+            db,
+            run=run,
+            new_state=target,
+            reason=failed.terminal_reason if failed else None,
+            message=failed.terminal_message if failed else None,
+            now=now,
+        ):
+            return False
+    if run.run_type == "standard":
+        snapshot = db.scalar(select(RunSnapshot).where(RunSnapshot.run_id == run.id))
+        snapshot_json = snapshot.snapshot_json if snapshot is not None else {}
+        rules = snapshot_json.get("slaRules", []) if isinstance(snapshot_json, dict) else []
+        enabled_rules = [r for r in rules if isinstance(r, dict) and r.get("enabled", True)]
+        if snapshot_json.get("slaEvaluationMode") == "passfail" and enabled_rules:
+            verdicts = [allocation.sla_result for allocation in allocations]
+            if any(verdict == "failed" for verdict in verdicts):
+                run.sla_result = "failed"
+                run.sla_result_reason = "node_sla_failed"
+            elif all(verdict == "passed" for verdict in verdicts):
+                run.sla_result = "passed"
+                run.sla_result_reason = None
+            else:
+                run.sla_result = "not_evaluated"
+                run.sla_result_reason = "missing_sla_result"
+    db.flush()
+    return True
+
+
+def _enqueue_cleanup_for_non_terminal_siblings(
+    db: Session,
+    *,
+    run: Run,
+    failed_allocation: RunNodeAllocation,
+    reason: str,
+    now: datetime,
+) -> None:
+    for allocation in _allocations_for_run(db, run_id=run.id):
+        if allocation.id == failed_allocation.id or allocation.state in TERMINAL_STATES:
+            continue
+        enqueue_control_request(
+            db,
+            run=run,
+            action="force_kill",
+            reason=reason,
+            run_after=now,
+            allocation=allocation,
+        )
+
+
 def _validate_selected_node(
     db: Session, *, execution: RunExecutionInput, now: datetime
 ) -> LoadNode:
@@ -534,6 +628,7 @@ def release_run_lease(
     quarantine: bool = False,
     now: datetime | None = None,
     node_id: str | None = None,
+    allocation: RunNodeAllocation | None = None,
 ) -> None:
     """Release the active node lease and converge node status.
 
@@ -543,9 +638,10 @@ def release_run_lease(
     lease alone never makes a disabled/offline/quarantined node selectable.
     """
     at = now or utc_now()
+    target_node_id = node_id or (allocation.node_id if allocation else None)
     conditions = [NodeLease.run_id == run.id, NodeLease.released_at.is_(None)]
-    if node_id is not None:
-        conditions.append(NodeLease.node_id == node_id)
+    if target_node_id is not None:
+        conditions.append(NodeLease.node_id == target_node_id)
     leases = list(db.scalars(select(NodeLease).where(*conditions).with_for_update()).all())
     for lease in leases:
         lease.released_at = at
@@ -579,6 +675,10 @@ def release_run_lease(
                 node.status = "idle"
                 node.last_status_reason = None
             node.updated_at = at
+    if allocation is not None:
+        allocation.cleanup_status = "quarantined" if quarantine else "released"
+        allocation.quarantine_reason = reason if quarantine else None
+        allocation.updated_at = at
     db.flush()
 
 
@@ -696,19 +796,6 @@ def _store_callback_event(
     return event
 
 
-def _validate_runner_node_binding(
-    db: Session, *, run: Run, node_id: str, authenticated_node_id: str | None
-) -> None:
-    if authenticated_node_id is not None and authenticated_node_id != node_id:
-        raise AppError("RUNNER_FORBIDDEN", "Runner is not allowed to report this node.", 403)
-    if node_id != run.selected_node_id:
-        raise AppError("RUNNER_FORBIDDEN", "Runner is not allowed to report this Run.", 403)
-    if run.state not in TERMINAL_STATES and _active_lease(
-        db, run_id=run.id, node_id=node_id
-    ) is None:
-        raise AppError("RUNNER_FORBIDDEN", "Runner is not allowed to report this Run.", 403)
-
-
 def apply_runner_callback(
     db: Session,
     *,
@@ -725,11 +812,11 @@ def apply_runner_callback(
     state.
     """
     run = _lock_run(db, callback.run_id)
-    _validate_runner_node_binding(
-        db,
-        run=run,
-        node_id=callback.node_id,
+    allocation = _allocation_for_node(db, run_id=run.id, node_id=callback.node_id)
+    _validate_authenticated_runner_node(
         authenticated_node_id=authenticated_node_id,
+        payload_node_id=callback.node_id,
+        allocation=allocation,
     )
     payload, payload_hash = _callback_event_payload(callback)
     now = utc_now()
@@ -761,13 +848,24 @@ def apply_runner_callback(
     elif callback.event_type == "accepted":
         run.accepted_at = run.accepted_at or at
         run.runner_pid = callback.runner_pid
+        allocation.accepted_at = allocation.accepted_at or at
+        allocation.runner_pid = callback.runner_pid
+        allocation.updated_at = at
         run.updated_at = at
     elif callback.event_type == "running":
-        state_changed = _apply_transition(db, run=run, new_state="running", now=at)
+        if allocation.state == "initializing":
+            allocation.state = "running"
+            allocation.started_at = allocation.started_at or at
+            allocation.updated_at = at
+            state_changed = True
+        if run.state == "initializing":
+            state_changed = _apply_transition(db, run=run, new_state="running", now=at) or state_changed
         if not state_changed:
             ignored_reason = "illegal_transition"
     elif callback.event_type == "heartbeat":
         run.last_heartbeat_at = at
+        allocation.last_heartbeat_at = at
+        allocation.updated_at = at
         run.updated_at = at
         node = db.get(LoadNode, callback.node_id)
         if node is not None:
@@ -777,29 +875,37 @@ def apply_runner_callback(
     elif callback.event_type in TERMINAL_STATES:
         reason = details.get("reason") if isinstance(details.get("reason"), str) else None
         process_group_exited = details.get("processGroupExited") is True
-        terminal_reason = reason or (
-            None if callback.event_type == "finished" else callback.event_type
-        )
-        state_changed = _apply_transition(
-            db,
-            run=run,
-            new_state=callback.event_type,
-            reason=terminal_reason,
-            message=callback.message,
-            now=at,
-        )
-        if not state_changed:
+        sla_result = details.get("slaResult")
+        if sla_result is not None and sla_result not in {"passed", "failed"}:
+            raise AppError("RUNNER_CALLBACK_INVALID", "Runner callback is invalid.", 422)
+        if callback.event_type == "finished" and allocation.state not in {"running", "stopping"}:
             ignored_reason = "illegal_transition"
-        elif process_group_exited:
-            release_run_lease(db, run=run, reason=callback.event_type, now=at)
         else:
-            # The Runner cannot prove process cleanup; keep the node unavailable
-            # until the shared force-kill cleanup reports a result.
-            enqueue_control_request(
-                db,
-                run=run,
-                action="force_kill",
-                reason=terminal_reason or callback.event_type,
+            allocation.state = callback.event_type
+            allocation.ended_at = at
+            allocation.terminal_reason = reason or callback.event_type
+            allocation.terminal_message = _safe_message(callback.message, "Run allocation ended.")
+            allocation.sla_result = sla_result if isinstance(sla_result, str) else allocation.sla_result
+            allocation.updated_at = at
+            if process_group_exited:
+                release_run_lease(db, run=run, reason=callback.event_type, now=at, allocation=allocation)
+            else:
+                enqueue_control_request(
+                    db, run=run, action="force_kill", reason=reason or callback.event_type,
+                    allocation=allocation,
+                )
+            if callback.event_type == "failed":
+                run.failure_reason = allocation.terminal_reason
+                run.failure_message = allocation.terminal_message
+                _enqueue_cleanup_for_non_terminal_siblings(
+                    db,
+                    run=run,
+                    failed_allocation=allocation,
+                    reason=reason or callback.event_type,
+                    now=at,
+                )
+            state_changed = _derive_run_terminal_from_allocations(
+                db, run=run, allocations=_allocations_for_run(db, run_id=run.id), now=at
             )
     run.last_callback_event_id = event.id
     event.ignored_reason = ignored_reason
@@ -836,14 +942,21 @@ def request_stop(
         raise AppError("RUN_TERMINAL_STATE", "Run is already terminal.", 409)
     if run.state not in {"initializing", "running"}:
         raise AppError("RUN_STOP_NOT_ALLOWED", "Run cannot be stopped from its current state.", 409)
-    if _active_lease(db, run_id=run.id) is None:
-        raise AppError("RUN_ALLOCATION_REQUIRED", "Run has no active node lease.", 409)
+    allocations = _allocations_for_run(db, run_id=run.id)
+    if not allocations:
+        raise AppError("RUN_ALLOCATION_REQUIRED", "Run has no node allocation.", 409)
     previous = run.state
     run.state = "stopping"
     run.stop_requested_at = now
     run.stop_requested_by_user_id = actor.id
     run.updated_at = now
-    enqueue_control_request(db, run=run, action="stop")
+    for allocation in allocations:
+        if allocation.state not in TERMINAL_STATES:
+            allocation.state = "stopping"
+            allocation.updated_at = now
+            enqueue_control_request(
+                db, run=run, action="stop", run_after=now, allocation=allocation
+            )
     write_audit_event(
         db,
         event_type="run.stop_requested",
@@ -855,6 +968,7 @@ def request_stop(
             "runId": run.id,
             "workspaceId": run.workspace_id,
             "previousState": previous,
+            "allocationCount": len(allocations),
         },
     )
     db.flush()
@@ -957,9 +1071,19 @@ def build_run_control_command(
     )
     if run is None:
         return None
+    allocation = db.scalar(
+        select(RunNodeAllocation)
+        .where(
+            RunNodeAllocation.id == current.allocation_id
+            if current.allocation_id is not None
+            else and_(RunNodeAllocation.run_id == run.id, RunNodeAllocation.node_id == current.node_id)
+        )
+        .with_for_update()
+    )
     if current.action == "start" and (
         run.state not in {"initializing", "running"}
-        or _active_lease(db, run_id=run.id) is None
+        or allocation is None
+        or allocation.state != "initializing"
     ):
         cancel_run_control_request(current)
         db.flush()
@@ -1034,6 +1158,7 @@ def complete_run_control_request(
     )
     request.updated_at = now
     run = db.get(Run, request.run_id)
+    allocation = db.get(RunNodeAllocation, request.allocation_id) if request.allocation_id else None
     if run is not None and request.action == "start" and success:
         run.remote_start_attempted_at = run.remote_start_attempted_at or now
         run.remote_start_completed_at = now
@@ -1044,14 +1169,12 @@ def complete_run_control_request(
         and run.state not in TERMINAL_STATES
     ):
         terminal_message = _safe_message(error_message, "Runner start failed.")
-        _apply_transition(
-            db,
-            run=run,
-            new_state="failed",
-            reason="runner_start_failed",
-            message=terminal_message,
-            now=now,
-        )
+        if allocation is not None:
+            allocation.state = "failed"
+            allocation.ended_at = now
+            allocation.terminal_reason = "runner_start_failed"
+            allocation.terminal_message = terminal_message
+            allocation.updated_at = now
         if cleanup_required:
             # Uncertain remote start: keep the node unavailable under its lease
             # until the shared force-kill cleanup reports a result.
@@ -1061,6 +1184,7 @@ def complete_run_control_request(
                 action="force_kill",
                 reason="runner_start_failed",
                 run_after=now,
+                allocation=allocation,
             )
         else:
             release_run_lease(
@@ -1069,6 +1193,11 @@ def complete_run_control_request(
                 reason="runner_start_failed",
                 quarantine=quarantine_node,
                 now=now,
+                allocation=allocation,
+            )
+        if allocation is not None:
+            _derive_run_terminal_from_allocations(
+                db, run=run, allocations=_allocations_for_run(db, run_id=run.id), now=now
             )
     if run is not None and request.action == "force_kill":
         quarantine_required = request.reason == "stale_process_detected" or not success
@@ -1081,6 +1210,23 @@ def complete_run_control_request(
         )
         if success:
             run.last_force_kill_at = now
+        if allocation is not None and allocation.state not in TERMINAL_STATES:
+            allocation.state = (
+                "aborted"
+                if run.stop_requested_at is not None and run.failure_reason is None
+                else "failed"
+            )
+            allocation.ended_at = now
+            allocation.terminal_reason = request.reason or release_reason
+            allocation.terminal_message = (
+                "Runner cleanup completed."
+                if success
+                else _safe_message(error_message, "Runner cleanup failed.")
+            )
+            allocation.updated_at = now
+            if allocation.state == "failed":
+                run.failure_reason = allocation.terminal_reason
+                run.failure_message = allocation.terminal_message
         node = db.get(LoadNode, request.node_id)
         if success and node is not None:
             node.last_force_kill_at = now
@@ -1110,6 +1256,10 @@ def complete_run_control_request(
             quarantine=quarantine_required,
             now=now,
             node_id=request.node_id,
+            allocation=allocation,
+        )
+        _derive_run_terminal_from_allocations(
+            db, run=run, allocations=_allocations_for_run(db, run_id=run.id), now=now
         )
     db.flush()
 
@@ -1135,15 +1285,27 @@ def _force_converge_run(
         return False
     if target_state == "aborted" and run.state != "stopping":
         return False
-    if _active_lease(db, run_id=run.id) is None:
+    allocations = _allocations_for_run(db, run_id=run.id)
+    if not allocations:
         return False
-    run.state = target_state
-    run.ended_at = now
     run.failure_reason = reason
     run.failure_message = _safe_message(None, "Run was force-converged by SurgePilot.")
     run.forced_convergence = forced
     run.updated_at = now
-    enqueue_control_request(db, run=run, action="force_kill", reason=reason, run_after=now)
+    for allocation in allocations:
+        if allocation.state in TERMINAL_STATES:
+            continue
+        allocation.state = target_state
+        allocation.ended_at = now
+        allocation.terminal_reason = reason
+        allocation.terminal_message = run.failure_message
+        allocation.updated_at = now
+        enqueue_control_request(
+            db, run=run, action="force_kill", reason=reason, run_after=now, allocation=allocation
+        )
+    _derive_run_terminal_from_allocations(
+        db, run=run, allocations=_allocations_for_run(db, run_id=run.id), now=now
+    )
     db.flush()
     return True
 
@@ -1156,27 +1318,36 @@ def sweep_accepted_timeouts(
     cutoff = at - timedelta(
         seconds=timeout_seconds or get_settings().runner_accepted_timeout_seconds
     )
-    runs = db.scalars(
-        select(Run)
+    rows = db.execute(
+        select(Run, RunNodeAllocation)
+        .join(RunNodeAllocation, RunNodeAllocation.run_id == Run.id)
         .where(
             Run.state.in_(("initializing", "running")),
             Run.remote_start_requested_at.is_not(None),
             Run.remote_start_requested_at < cutoff,
-            Run.accepted_at.is_(None),
+            RunNodeAllocation.state == "initializing",
+            RunNodeAllocation.accepted_at.is_(None),
         )
         .with_for_update(skip_locked=True)
     ).all()
     converged = 0
-    for run in runs:
-        if _force_converge_run(
-            db,
-            run=run,
-            target_state="failed",
-            reason="runner_accept_timeout",
-            forced=False,
-            now=at,
-        ):
-            converged += 1
+    for run, allocation in rows:
+        allocation.state = "failed"
+        allocation.ended_at = at
+        allocation.terminal_reason = "runner_accept_timeout"
+        allocation.terminal_message = "Run allocation timed out waiting for Runner acceptance."
+        allocation.updated_at = at
+        enqueue_control_request(
+            db, run=run, action="force_kill", reason="runner_accept_timeout",
+            run_after=at, allocation=allocation
+        )
+        _enqueue_cleanup_for_non_terminal_siblings(
+            db, run=run, failed_allocation=allocation, reason="runner_accept_timeout", now=at
+        )
+        _derive_run_terminal_from_allocations(
+            db, run=run, allocations=_allocations_for_run(db, run_id=run.id), now=at
+        )
+        converged += 1
     return converged
 
 
@@ -1193,25 +1364,27 @@ def sweep_heartbeat_timeouts(
     cutoff = at - timedelta(
         seconds=timeout_seconds or get_settings().runner_heartbeat_timeout_seconds
     )
-    runs = db.scalars(
-        select(Run)
+    rows = db.execute(
+        select(Run, RunNodeAllocation)
+        .join(RunNodeAllocation, RunNodeAllocation.run_id == Run.id)
         .where(
             Run.state.in_(("initializing", "running")),
+            RunNodeAllocation.state.in_(("initializing", "running")),
             or_(
                 and_(
-                    Run.state == "initializing",
-                    Run.accepted_at.is_not(None),
-                    Run.accepted_at < cutoff,
-                    Run.started_at.is_(None),
+                    RunNodeAllocation.state == "initializing",
+                    RunNodeAllocation.accepted_at.is_not(None),
+                    RunNodeAllocation.accepted_at < cutoff,
+                    RunNodeAllocation.started_at.is_(None),
                 ),
                 and_(
-                    Run.state == "running",
+                    RunNodeAllocation.state == "running",
                     or_(
-                        Run.last_heartbeat_at < cutoff,
+                        RunNodeAllocation.last_heartbeat_at < cutoff,
                         and_(
-                            Run.last_heartbeat_at.is_(None),
-                            Run.started_at.is_not(None),
-                            Run.started_at < cutoff,
+                            RunNodeAllocation.last_heartbeat_at.is_(None),
+                            RunNodeAllocation.started_at.is_not(None),
+                            RunNodeAllocation.started_at < cutoff,
                         ),
                     ),
                 ),
@@ -1220,12 +1393,23 @@ def sweep_heartbeat_timeouts(
         .with_for_update(skip_locked=True)
     ).all()
     converged = 0
-    for run in runs:
-        reason = "runner_start_timeout" if run.state == "initializing" else "heartbeat_timeout"
-        if _force_converge_run(
-            db, run=run, target_state="failed", reason=reason, forced=False, now=at
-        ):
-            converged += 1
+    for run, allocation in rows:
+        reason = "runner_start_timeout" if allocation.state == "initializing" else "heartbeat_timeout"
+        allocation.state = "failed"
+        allocation.ended_at = at
+        allocation.terminal_reason = reason
+        allocation.terminal_message = "Run allocation timed out."
+        allocation.updated_at = at
+        enqueue_control_request(
+            db, run=run, action="force_kill", reason=reason, run_after=at, allocation=allocation
+        )
+        _enqueue_cleanup_for_non_terminal_siblings(
+            db, run=run, failed_allocation=allocation, reason=reason, now=at
+        )
+        _derive_run_terminal_from_allocations(
+            db, run=run, allocations=_allocations_for_run(db, run_id=run.id), now=at
+        )
+        converged += 1
     return converged
 
 
@@ -1281,6 +1465,7 @@ def recover_stale_leases(db: Session) -> int:
                 action="force_kill",
                 reason="stale_recovery",
                 run_after=utc_now(),
+                allocation=_allocation_for_node(db, run_id=run.id, node_id=lease.node_id),
             )
             count += 1
     return count
@@ -1469,10 +1654,13 @@ def _copy_artifact_object(
     raise AppError("STORAGE_UNAVAILABLE", "Storage is unavailable.", 503)
 
 
-def _artifact_path_conditions(*, run_id: str, node_id: str, safe_path: str) -> list[Any]:
+def _artifact_path_conditions(
+    *, run_id: str, node_id: str, allocation: RunNodeAllocation, safe_path: str
+) -> list[Any]:
     return [
         RunArtifact.run_id == run_id,
         RunArtifact.node_id == node_id,
+        RunArtifact.allocation_id == allocation.id,
         RunArtifact.relative_path == safe_path,
         RunArtifact.status == "available",
     ]
@@ -1510,8 +1698,11 @@ def ingest_run_artifact(
         run, artifact_type=artifact_type, relative_path=safe_path
     )
     _validate_debug_http_internal_pre_terminal(run, artifact_type=artifact_type)
-    _validate_runner_node_binding(
-        db, run=run, node_id=node_id, authenticated_node_id=authenticated_node_id
+    allocation = _allocation_for_node(db, run_id=run.id, node_id=node_id)
+    _validate_authenticated_runner_node(
+        authenticated_node_id=authenticated_node_id,
+        payload_node_id=node_id,
+        allocation=allocation,
     )
     existing = db.scalar(
         select(RunArtifact).where(RunArtifact.run_id == run_id, RunArtifact.event_id == event_id)
@@ -1520,7 +1711,9 @@ def ingest_run_artifact(
         return ArtifactResult(existing.id, True)
     path_existing = db.scalar(
         select(RunArtifact).where(
-            *_artifact_path_conditions(run_id=run_id, node_id=node_id, safe_path=safe_path)
+            *_artifact_path_conditions(
+                run_id=run_id, node_id=node_id, allocation=allocation, safe_path=safe_path
+            )
         )
     )
     if path_existing is not None:
@@ -1536,11 +1729,11 @@ def ingest_run_artifact(
     settings = get_settings()
     artifact_id = new_ulid()
     storage_key = (
-        f"run-artifacts/{run.workspace_id}/{run.id}/nodes/{node_id}/{safe_path}"
+        f"run-artifacts/{run.workspace_id}/{run.id}/nodes/{node_id}/allocations/{allocation.id}/{safe_path}"
     )
     temp_storage_key = (
         f"run-artifacts/{run.workspace_id}/{run.id}/.tmp/{artifact_id}/"
-        f"nodes/{node_id}/{safe_path}"
+        f"nodes/{node_id}/allocations/{allocation.id}/{safe_path}"
     )
     now = utc_now()
     terminal_late = run.state in TERMINAL_STATES
@@ -1586,8 +1779,11 @@ def ingest_run_artifact(
             run, artifact_type=artifact_type, relative_path=safe_path
         )
         _validate_debug_http_internal_pre_terminal(run, artifact_type=artifact_type)
-        _validate_runner_node_binding(
-            db, run=run, node_id=node_id, authenticated_node_id=authenticated_node_id
+        allocation = _allocation_for_node(db, run_id=run.id, node_id=node_id)
+        _validate_authenticated_runner_node(
+            authenticated_node_id=authenticated_node_id,
+            payload_node_id=node_id,
+            allocation=allocation,
         )
         existing = db.scalar(
             select(RunArtifact).where(
@@ -1601,7 +1797,9 @@ def ingest_run_artifact(
             return ArtifactResult(existing.id, True)
         path_existing = db.scalar(
             select(RunArtifact).where(
-                *_artifact_path_conditions(run_id=run_id, node_id=node_id, safe_path=safe_path)
+                *_artifact_path_conditions(
+                    run_id=run_id, node_id=node_id, allocation=allocation, safe_path=safe_path
+                )
             )
         )
         if path_existing is not None:
@@ -1640,6 +1838,7 @@ def ingest_run_artifact(
             workspace_id=run.workspace_id,
             run_id=run.id,
             node_id=node_id,
+            allocation_id=allocation.id,
             event_id=event_id,
             artifact_type=artifact_type,
             relative_path=safe_path,
