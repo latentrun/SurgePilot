@@ -376,10 +376,11 @@ Implementation PR facts:
 12. Runner deletes a local Run directory only after all discovered artifacts have no failed upload result, `artifacts_zip` is either uploaded or explicitly skipped for size, the terminal callback receives an API semantic ACK (`accepted=true` with no `ignoredReason`, including safe duplicates), and supervisor/workload liveness checks are safe. Upload failure, terminal callback non-ACK, live or uncertain workload/supervisor state, corrupt pidfile, or cleanup filesystem failure preserves the local directory for fail-closed diagnostics. This does not add ZIP extraction, preview, file-tree browsing, or new API/Web contract.
 13. Verification added:
    - `apps/api/tests/test_p1_01_resource_multi_node.py`
+   - shared fake Runner multi-node smoke executes one fake Runner flow per allocation, including artifact callbacks, success/failure aggregation, node-bound mismatch rejection, and report redaction
    - `apps/api/tests/test_p0_07_run_report_api.py` allocation-aware final stats regression cases
-   - `apps/web/src/features/runs/runs.test.tsx` aggregate final stats warning display case
+   - `apps/web/src/features/runs/run-report.test.tsx` allocation-backed node row and redaction regression case
    - `apps/runner/tests/test_cli.py` diagnostic archive allowlist, oversize preflight, callback ACK, and cleanup gate regression cases
    - `tests/contract/test_p1_01_resource_multi_node_openapi.py`
    - `tests/e2e/p1_01_resource_multi_node.spec.ts`
 14. Local verification run for this implementation included `make generate-contracts`, targeted API/contract/Web/E2E checks, `make verify-db`, and `make verify`.
-15. Remaining acceptance gap: real SSH two-node acceptance requires an SSH-capable environment profile and was not executed in the local development environment for this PR.
+15. Remaining acceptance gap: real SSH two-node acceptance requires an SSH-capable environment profile and was not executed in the local development environment for this PR; the shared fake Runner multi-node smoke is covered by the API verification above.
