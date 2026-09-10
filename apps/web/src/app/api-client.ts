@@ -116,6 +116,11 @@ export type ScenarioStepSettings =
   components["schemas"]["ScenarioStepSettings"];
 export type ScenarioSummary = components["schemas"]["ScenarioSummary"];
 export type ScenarioUploadFile = components["schemas"]["ScenarioUploadFile"];
+export type CurlImportParseRequest =
+  components["schemas"]["CurlImportParseRequest"];
+export type CurlImportParseResponse =
+  components["schemas"]["CurlImportParseResponse"];
+export type CurlImportStepDraft = components["schemas"]["CurlImportStepDraft"];
 
 export type TestPlanCreateRequest =
   components["schemas"]["TestPlanCreateRequest"];
@@ -891,6 +896,24 @@ export function patchScenario(
     `/v1/scenarios/${encodeURIComponent(scenarioId)}`,
     {
       method: "PATCH",
+      headers: {
+        "x-csrf-token": csrfToken,
+        "x-workspace-id": workspaceId,
+      },
+      body: JSON.stringify(payload),
+    },
+  );
+}
+
+export function parseScenarioCurlImport(
+  payload: CurlImportParseRequest,
+  workspaceId: string,
+  csrfToken: string,
+) {
+  return request<CurlImportParseResponse>(
+    "/v1/scenarios/curl-import/parse",
+    {
+      method: "POST",
       headers: {
         "x-csrf-token": csrfToken,
         "x-workspace-id": workspaceId,

@@ -8,6 +8,13 @@ export const scenarioCopy = {
   rename: "Rename Scenario",
   renameInputLabel: "Scenario title",
   debugRun: "Debug Run",
+  curlImport: "Import from cURL",
+  curlImportShort: "Import cURL",
+  curlImportTitle: "Import from cURL",
+  curlImportDescription:
+    "Paste one cURL command to preview a request Step. The import updates only your unsaved draft.",
+  curlImportSensitiveWarning:
+    "Pasted credentials may be saved into the Scenario if you import this Step and save the Scenario.",
   noEnvironment: "No environment",
   clone: "Clone",
   archive: "Archive",

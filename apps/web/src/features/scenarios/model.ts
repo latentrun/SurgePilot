@@ -1,4 +1,5 @@
 import type {
+  CurlImportStepDraft,
   ScenarioCreateRequest,
   ScenarioDetail,
   ScenarioPatchRequest,
@@ -177,6 +178,60 @@ export function cloneStep(step: ScenarioStep): ScenarioStep {
       timeoutMs: step.settings?.timeoutMs ?? null,
       followRedirects: step.settings?.followRedirects ?? null,
       keepAlive: step.settings?.keepAlive ?? null,
+    },
+  };
+}
+
+function materializeNamedValue<
+  T extends { name: string; value: string; enabled?: boolean },
+>(item: T) {
+  return {
+    id: ulid(),
+    name: item.name,
+    value: item.value,
+    enabled: item.enabled ?? true,
+  };
+}
+
+/**
+ * Materializes a request-only cURL import Step draft into an editable Scenario
+ * Step. The API preview never returns persistent IDs, so the merge layer owns
+ * every Step and child ID here.
+ */
+export function stepFromCurlImportDraft(
+  draft: CurlImportStepDraft,
+  preserveStepId?: string,
+): ScenarioStep {
+  const base = newStep();
+  const body = draft.body ?? {
+    type: "none" as const,
+    contentType: null,
+    rawText: null,
+    formFields: [],
+  };
+  return {
+    ...base,
+    id: preserveStepId ?? base.id,
+    enabled: draft.enabled ?? true,
+    name: draft.name,
+    method: draft.method,
+    path: draft.path,
+    queryParams: (draft.queryParams ?? []).map(materializeNamedValue),
+    headers: (draft.headers ?? []).map(materializeNamedValue),
+    body: {
+      type: body.type ?? "none",
+      contentType: body.contentType ?? null,
+      rawText: body.rawText ?? null,
+      formFields: (body.formFields ?? []).map(materializeNamedValue),
+    },
+    uploadFiles: [],
+    extractors: [],
+    scripts: [],
+    settings: {
+      thinkTimeMs: null,
+      timeoutMs: draft.settings?.timeoutMs ?? null,
+      followRedirects: draft.settings?.followRedirects ?? null,
+      keepAlive: draft.settings?.keepAlive ?? null,
     },
   };
 }
