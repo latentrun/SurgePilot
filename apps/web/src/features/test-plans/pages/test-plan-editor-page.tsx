@@ -543,7 +543,12 @@ export function TestPlanEditorPage() {
     draft !== null && (dirty ? canRunDraft(draft) : draft.runnable);
 
   const poolType = draft?.resource.poolType ?? null;
-  const selectedNodeId = draft?.resource.selectedNodeId ?? null;
+  const resourceMode = draft?.resource.mode ?? "manual";
+  const selectedNodeIds = draft?.resource.selectedNodeIds?.length
+    ? draft.resource.selectedNodeIds
+    : draft?.resource.selectedNodeId
+      ? [draft.resource.selectedNodeId]
+      : [];
   const idleCandidates = useMemo(() => {
     const pool = poolType;
     return nodes.filter((node) => {
@@ -553,11 +558,24 @@ export function TestPlanEditorPage() {
       return false;
     });
   }, [poolType, nodes]);
-  const selectedNode = useMemo(
-    () => nodes.find((node) => node.id === selectedNodeId) ?? null,
-    [nodes, selectedNodeId],
-  );
-  const selectedNodeIdle = selectedNode?.status === "idle";
+  function standardResourceRequest(current: TestPlanDetail) {
+    const mode = current.resource.mode ?? "manual";
+    return mode === "auto"
+      ? {
+          mode: "auto" as const,
+          nodeCount: current.resource.nodeCount ?? 1,
+          concurrencyPerNode: expectedConcurrency(current) || null,
+        }
+      : {
+          mode: "manual" as const,
+          selectedNodeIds: current.resource.selectedNodeIds?.length
+            ? current.resource.selectedNodeIds
+            : current.resource.selectedNodeId
+              ? [current.resource.selectedNodeId]
+              : [],
+          concurrencyPerNode: expectedConcurrency(current) || null,
+        };
+  }
 
   async function handleSave(): Promise<TestPlanDetail | null> {
     if (!draft) return null;
@@ -620,6 +638,8 @@ export function TestPlanEditorPage() {
           sourceId: saved.id,
           expectedSourceRevision: saved.revision,
           confirmHighConcurrency,
+          resourceRequest:
+            runType === "standard" ? standardResourceRequest(saved) : undefined,
         },
         workspaceId,
         token,
@@ -1056,6 +1076,31 @@ export function TestPlanEditorPage() {
                 uses a fixed low-risk profile.
               </p>
             </div>
+            <Field label="Resource Mode">
+              <select
+                aria-label="Resource Mode"
+                className={cn(inputClass(false), "text-text-main")}
+                onChange={(event) =>
+                  updateDraft((current) => ({
+                    ...current,
+                    resource: {
+                      ...current.resource,
+                      mode: event.target.value as "manual" | "auto",
+                      selectedNodeId: null,
+                      selectedNodeIds: [],
+                      nodeCount:
+                        event.target.value === "auto"
+                          ? current.resource.nodeCount ?? 2
+                          : null,
+                    },
+                  }))
+                }
+                value={resourceMode}
+              >
+                <option value="manual">Manual selected nodes</option>
+                <option value="auto">Auto node count</option>
+              </select>
+            </Field>
             <Field label="Pool Type">
               <select
                 aria-label="Pool Type"
@@ -1069,6 +1114,7 @@ export function TestPlanEditorPage() {
                         (event.target.value as "public" | "private" | "") ||
                         null,
                       selectedNodeId: null,
+                      selectedNodeIds: [],
                     },
                   }))
                 }
@@ -1079,42 +1125,58 @@ export function TestPlanEditorPage() {
                 <option value="public">Public</option>
               </select>
             </Field>
-            {poolType ? (
-              <Field label="Load Node">
-                <select
-                  aria-label="Load Node"
-                  className={cn(inputClass(false), "text-text-main")}
+            {poolType && resourceMode === "auto" ? (
+              <Field label="Node Count">
+                <input
+                  aria-label="Node Count"
+                  className={textInputClass()}
+                  min={1}
+                  max={10}
                   onChange={(event) =>
                     updateDraft((current) => ({
                       ...current,
                       resource: {
                         ...current.resource,
-                        selectedNodeId: event.target.value || null,
+                        nodeCount: Math.max(1, Number(event.target.value) || 1),
+                        selectedNodeId: null,
+                        selectedNodeIds: [],
                       },
                     }))
                   }
-                  value={selectedNodeId ?? ""}
+                  type="number"
+                  value={draft.resource.nodeCount ?? 2}
+                />
+                <small>SurgePilot allocates this many idle nodes.</small>
+              </Field>
+            ) : null}
+            {poolType && resourceMode === "manual" ? (
+              <Field label="Load Node">
+                <select
+                  aria-label="Load Nodes"
+                  className={cn(inputClass(false), "text-text-main")}
+                  multiple
+                  onChange={(event) => {
+                    const next = Array.from(event.target.selectedOptions).map(
+                      (option) => option.value,
+                    );
+                    updateDraft((current) => ({
+                      ...current,
+                      resource: {
+                        ...current.resource,
+                        selectedNodeIds: next,
+                        selectedNodeId: next[0] ?? null,
+                      },
+                    }));
+                  }}
+                  value={selectedNodeIds}
                 >
-                  <option value="">{testPlanCopy.selectIdleNode}</option>
-                  {selectedNode && !selectedNodeIdle ? (
-                    <option
-                      disabled
-                      key={selectedNode.id}
-                      value={selectedNode.id}
-                    >
-                      {testPlanCopy.nodeOption(
-                        selectedNode.host,
-                        selectedNode.status,
-                      )}{" "}
-                      (not idle)
-                    </option>
-                  ) : null}
                   {idleCandidates.map((node) => (
                     <option key={node.id} value={node.id}>
                       {testPlanCopy.nodeOption(node.host, node.status)}
                     </option>
                   ))}
                 </select>
+                <small>Hold Ctrl/⌘ to select multiple idle nodes.</small>
               </Field>
             ) : null}
             {isLoadingNodes ? (

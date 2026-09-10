@@ -1466,6 +1466,7 @@ export interface components {
             envGroupId?: string | null;
             /** Expectedsourcerevision */
             expectedSourceRevision: number;
+            resourceRequest?: components["schemas"]["RunResourceRequest"] | null;
             /**
              * Runtype
              * @enum {string}
@@ -1530,6 +1531,8 @@ export interface components {
             totalRequests?: number | null;
         };
         RunListItem: {
+            /** Allocatednodecount */
+            allocatedNodeCount: number;
             /** Artifactcount */
             artifactCount: number;
             /** Createdat */
@@ -1567,6 +1570,8 @@ export interface components {
             nextCursor?: string | null;
         };
         RunReportDetail: {
+            /** Allocatednodes */
+            allocatedNodes?: components["schemas"]["RunAllocatedNode"][];
             artifactsSummary: components["schemas"]["RunArtifactsSummary"];
             debugHttpTrace: components["schemas"]["DebugHttpTrace"] | null;
             failureDiagnostics: components["schemas"]["FailureDiagnostics"];
@@ -1576,6 +1581,12 @@ export interface components {
             kpiSummary: components["schemas"]["RunKpiSummary"];
             snapshot: components["schemas"]["RunSnapshotSummary"];
             verdict: components["schemas"]["RunVerdict"];
+        };
+        RunResourceRequest: {
+            concurrencyPerNode?: number | null;
+            mode: "manual" | "auto";
+            nodeCount?: number | null;
+            selectedNodeIds?: string[];
         };
         DebugHttpTrace: {
             entries?: components["schemas"]["DebugHttpTraceEntry"][];
@@ -1642,6 +1653,19 @@ export interface components {
             poolType?: string | null;
             /** Selectednodeid */
             selectedNodeId?: string | null;
+        };
+        RunAllocatedNode: {
+            cleanupStatus?: string | null;
+            id: string;
+            lastHeartbeatAt?: string | null;
+            name: string;
+            nodeIndex: number;
+            quarantineReason?: string | null;
+            scope: string;
+            slaResult?: components["schemas"]["SlaResult"] | null;
+            state: string;
+            terminalReason?: string | null;
+            totalNodes: number;
         };
         RunSnapshotScenarioItem: {
             loadSettings: components["schemas"]["RunSnapshotLoadSettings"];
@@ -2237,10 +2261,16 @@ export interface components {
             tags?: string[];
         };
         TestPlanResourceConfig: {
+            /** Mode */
+            mode?: "manual" | "auto";
+            /** Nodecount */
+            nodeCount?: number | null;
             /** Pooltype */
             poolType?: ("public" | "private") | null;
             /** Selectednodeid */
             selectedNodeId?: string | null;
+            /** Selectednodeids */
+            selectedNodeIds?: string[];
         };
         TestPlanResourceSummary: {
             /** Pooltype */

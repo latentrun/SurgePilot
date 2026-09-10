@@ -34,8 +34,11 @@ export function blankTestPlanPayload(
     envGroupId: null,
     runMode: "sequential",
     resource: {
+      mode: "manual",
       poolType: null,
       selectedNodeId: null,
+      selectedNodeIds: [],
+      nodeCount: null,
     },
     scenarioItems: [],
     slaRules: [],
@@ -51,8 +54,11 @@ export function toPatchPayload(detail: TestPlanDetail): TestPlanPatchRequest {
     envGroupId: detail.envGroupId ?? null,
     runMode: detail.runMode,
     resource: detail.resource ?? {
+      mode: "manual",
       poolType: null,
       selectedNodeId: null,
+      selectedNodeIds: [],
+      nodeCount: null,
     },
     scenarioItems: detail.scenarioItems.map((item, index) => ({
       id: item.id,
@@ -135,9 +141,16 @@ const STANDARD_ONLY_NOT_RUNNABLE_REASONS = new Set([
 
 export function canRunDraft(detail: TestPlanDetail | null) {
   if (!detail) return false;
+  const mode = detail.resource.mode ?? "manual";
+  const hasResource = mode === "auto"
+    ? Boolean(detail.resource.poolType && detail.resource.nodeCount)
+    : Boolean(
+        detail.resource.poolType &&
+        (detail.resource.selectedNodeIds?.length || detail.resource.selectedNodeId),
+      );
   return (
     detail.scenarioItems.length > 0 &&
-    Boolean(detail.resource.poolType && detail.resource.selectedNodeId)
+    hasResource
   );
 }
 
