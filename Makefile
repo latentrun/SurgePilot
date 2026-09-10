@@ -1,4 +1,4 @@
-.PHONY: help setup dev dev-web dev-api dev-runner generate-contracts contracts-stale-check lint test verify
+.PHONY: help setup dev dev-web dev-api dev-runner generate-contracts contracts-stale-check lint test verify verify-p1-00-monitoring-compose
 
 help:
 	@printf "SurgePilot commands:\n"
@@ -11,6 +11,7 @@ help:
 	@printf "  make lint                   Run bootstrap lint and type checks\n"
 	@printf "  make test                   Run bootstrap tests\n"
 	@printf "  make verify                 Run the bootstrap verification gate\n"
+	@printf "  make verify-p1-00-monitoring-compose  Start the full stack with Monitoring and check provisioning\n"
 
 setup:
 	pnpm install --frozen-lockfile
@@ -50,3 +51,6 @@ test:
 	uv run --all-packages pytest tests/contract -q
 
 verify: lint test contracts-stale-check
+
+verify-p1-00-monitoring-compose:
+	uv run python scripts/verify_p1_00_monitoring_compose.py

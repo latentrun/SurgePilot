@@ -1,0 +1,16 @@
+apiVersion: 1
+
+datasources:
+  - name: InfluxDB-SurgePilot
+    uid: InfluxDB-SurgePilot
+    type: influxdb
+    access: proxy
+    url: ${SURGEPILOT_MONITORING_INFLUXDB_URL}
+    isDefault: true
+    jsonData:
+      version: Flux
+      organization: ${SURGEPILOT_MONITORING_INFLUXDB_ORG}
+      defaultBucket: ${SURGEPILOT_MONITORING_INFLUXDB_BUCKET}
+      tlsSkipVerify: true
+    secureJsonData:
+      token: $__file{/run/surgepilot/influxdb-token}

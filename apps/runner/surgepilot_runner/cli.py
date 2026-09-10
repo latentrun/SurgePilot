@@ -189,6 +189,18 @@ def surgepilot_yaml_path(run_id: str, *, base: Path | None = None) -> Path:
     return bundle_dir(run_id, base=base) / "surgepilot.yml"
 
 
+def monitoring_properties_path(run_id: str, *, base: Path | None = None) -> Path:
+    return run_dir(run_id, base=base) / "secrets" / "monitoring.properties"
+
+
+def cleanup_monitoring_properties(run_id: str, *, base: Path | None = None) -> bool:
+    try:
+        monitoring_properties_path(run_id, base=base).unlink(missing_ok=True)
+    except OSError:
+        return False
+    return True
+
+
 def supervisor_pidfile_path(run_id: str, *, base: Path | None = None) -> Path:
     return run_dir(run_id, base=base) / SUPERVISOR_PIDFILE
 
@@ -1098,6 +1110,7 @@ def managed_run(run_id: str) -> None:
             )
         )
     finally:
+        cleanup_monitoring_properties(run_id)
         if workload is not None and not managed_process_group_alive(workload):
             cleanup_workload_pidfile(run_id)
         deleted = cleanup_run_directory_if_safe(
@@ -1214,48 +1227,54 @@ def version() -> None:
 @click.option("--fake", is_flag=True, help="Use the local fake runner mode.")
 def start(run_id: str, fake: bool) -> None:
     require_safe_run_id(run_id)
-    if fake:
-        fake_scenario(run_id)
-        return
-    if reconcile_managed_pidfiles_before_start():
-        post_callback(
-            payload(
-                run_id,
-                os.environ.get("SURGEPILOT_NODE_ID", "01HZX3Y9M0E9W7Z6M5QK9S8P7C"),
-                "failed",
-                1,
-                runtime_version=RUNNER_VERSION,
-                details={
-                    "processGroupExited": False,
-                    "reason": "stale_process_detected",
-                },
+    cleanup_owned_by_child = False
+    try:
+        if fake:
+            fake_scenario(run_id)
+            return
+        if reconcile_managed_pidfiles_before_start():
+            post_callback(
+                payload(
+                    run_id,
+                    os.environ.get("SURGEPILOT_NODE_ID", "01HZX3Y9M0E9W7Z6M5QK9S8P7C"),
+                    "failed",
+                    1,
+                    runtime_version=RUNNER_VERSION,
+                    details={
+                        "processGroupExited": False,
+                        "reason": "stale_process_detected",
+                    },
+                )
             )
+            click.echo("stale managed process detected", err=True)
+            raise click.ClickException("stale managed process detected")
+        process = subprocess.Popen(
+            [sys.executable, str(runner_entrypoint()), "managed", "--run-id", run_id],
+            start_new_session=True,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
         )
-        click.echo("stale managed process detected", err=True)
-        raise click.ClickException("stale managed process detected")
-    process = subprocess.Popen(
-        [sys.executable, str(runner_entrypoint()), "managed", "--run-id", run_id],
-        start_new_session=True,
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
-    )
-    child_ready = False
-    deadline = time.monotonic() + start_workload_wait_seconds()
-    while time.monotonic() < deadline:
-        if (
-            read_supervisor_pidfile(run_id) is not None
-            or read_workload_pidfile(run_id) is not None
-        ):
-            child_ready = True
-            break
-        if process.poll() is not None:
-            break
-        time.sleep(0.05)
-    if not child_ready:
-        if process.poll() is None:
-            terminate_group(process.pid)
-        raise click.ClickException("managed runner failed to start")
-    click.echo(f"runner accepted run {run_id}")
+        child_ready = False
+        deadline = time.monotonic() + start_workload_wait_seconds()
+        while time.monotonic() < deadline:
+            if (
+                read_supervisor_pidfile(run_id) is not None
+                or read_workload_pidfile(run_id) is not None
+            ):
+                child_ready = True
+                break
+            if process.poll() is not None:
+                break
+            time.sleep(0.05)
+        if not child_ready:
+            if process.poll() is None:
+                terminate_group(process.pid)
+            raise click.ClickException("managed runner failed to start")
+        cleanup_owned_by_child = True
+        click.echo(f"runner accepted run {run_id}")
+    finally:
+        if not cleanup_owned_by_child:
+            cleanup_monitoring_properties(run_id)
 
 
 @cli.command()
@@ -1327,6 +1346,8 @@ def kill(run_id: str) -> None:
     if supervisor_path.exists() or workload_path.exists():
         raise click.ClickException("managed process cleanup is uncertain")
     fail_if_other_managed_process_exists(run_id)
+    if not cleanup_monitoring_properties(run_id):
+        raise click.ClickException("Monitoring secret cleanup failed")
     click.echo(f"{'killed' if killed else 'no managed process for'} run {run_id}")
 
 

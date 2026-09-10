@@ -13,10 +13,12 @@ from jsonschema import Draft202012Validator
 import pytest
 
 import surgepilot_runner.cli as runner_cli
+import surgepilot_runner.jmeter_wrapper as jmeter_wrapper
 from surgepilot_runner.cli import (
     cli,
     ManagedPid,
     ProcessGroupProbe,
+    monitoring_properties_path,
     process_group_alive,
     read_workload_pidfile,
     supervisor_pidfile_path,
@@ -25,6 +27,11 @@ from surgepilot_runner.cli import (
     write_pidfile,
     write_supervisor_pidfile,
     write_workload_pidfile,
+)
+from surgepilot_runner.jmeter_wrapper import (
+    BACKEND_LISTENER_CLASSNAME,
+    build_jmeter_wrapper_command,
+    inject_monitoring_backend_listener,
 )
 
 ROOT = Path(__file__).resolve().parents[3]
@@ -1514,3 +1521,317 @@ def test_runner_callback_schema_accepts_runner_artifact_types_and_sla_result() -
         CALLBACK_VALIDATOR.validate(artifacts_zip_payload)
     with pytest.raises(Exception):
         CALLBACK_VALIDATOR.validate(failed_requests_payload)
+
+
+def test_monitoring_wrapper_injects_backend_listener_with_placeholders_only(
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "source.jmx"
+    target = tmp_path / "target.jmx"
+    source.write_text(
+        """<?xml version="1.0" encoding="UTF-8"?>
+<jmeterTestPlan>
+  <hashTree>
+    <TestPlan testname="SurgePilot"/>
+    <hashTree/>
+  </hashTree>
+</jmeterTestPlan>
+""",
+        encoding="utf-8",
+    )
+
+    inject_monitoring_backend_listener(source, target)
+
+    text = target.read_text(encoding="utf-8")
+    assert BACKEND_LISTENER_CLASSNAME in text
+    assert "${__P(SURGEPILOT_RUN_ID)}" in text
+    assert "${__P(SURGEPILOT_NODE_ID)}" in text
+    assert "${__P(SURGEPILOT_INFLUXDB_TOKEN)}" in text
+    assert "secret-monitoring-token" not in text
+    assert source.read_text(encoding="utf-8") != text
+    inject_monitoring_backend_listener(target, target)
+    assert target.read_text(encoding="utf-8").count(BACKEND_LISTENER_CLASSNAME) == 1
+
+    root = __import__("xml.etree.ElementTree", fromlist=["parse"]).parse(target).getroot()
+    top_hash_tree = root.find("hashTree")
+    assert top_hash_tree is not None
+    test_plan_hash_tree = list(top_hash_tree)[1]
+    assert test_plan_hash_tree.tag == "hashTree"
+    assert test_plan_hash_tree.find("BackendListener") is not None
+
+
+def test_monitoring_wrapper_passes_through_without_properties(tmp_path: Path) -> None:
+    bundle = tmp_path / "runs" / "01RUN" / "bundle"
+    bundle.mkdir(parents=True)
+
+    command = build_jmeter_wrapper_command(
+        real_jmeter="/runtime/apache-jmeter-5.6.3/bin/jmeter",
+        argv=["-n", "-t", "generated.jmx", "-l", "results.jtl"],
+        cwd=bundle,
+    )
+
+    assert command == [
+        "/runtime/apache-jmeter-5.6.3/bin/jmeter",
+        "-Lio.github.mderevyankoaqa.influxdb2=ERROR",
+        "-n",
+        "-t",
+        "generated.jmx",
+        "-l",
+        "results.jtl",
+    ]
+
+
+def test_monitoring_wrapper_finds_properties_from_taurus_artifacts_cwd(tmp_path: Path) -> None:
+    run_root = tmp_path / "runs" / "01RUN"
+    bundle = run_root / "bundle"
+    artifacts = run_root / "artifacts"
+    secrets = run_root / "secrets"
+    bundle.mkdir(parents=True)
+    artifacts.mkdir()
+    secrets.mkdir()
+    (bundle / "generated.jmx").write_text(
+        "<jmeterTestPlan><hashTree><TestPlan/><hashTree/></hashTree></jmeterTestPlan>",
+        encoding="utf-8",
+    )
+    (secrets / "monitoring.properties").write_text(
+        "SURGEPILOT_INFLUXDB_TOKEN=secret\n", encoding="utf-8"
+    )
+
+    command = build_jmeter_wrapper_command(
+        real_jmeter="/runtime/apache-jmeter-5.6.3/bin/jmeter",
+        argv=["-n", "-t", "../bundle/generated.jmx", "-l", "results.jtl"],
+        cwd=artifacts,
+    )
+
+    assert "-q" in command
+    assert str(secrets / "monitoring.properties") in command
+    assert "-Lio.github.mderevyankoaqa.influxdb2=ERROR" in command
+    assert Path(command[command.index("-t") + 1]).is_file()
+
+
+def test_monitoring_wrapper_version_probe_does_not_add_q_or_delete_secret(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    run_root = tmp_path / "runs" / "01RUN"
+    bundle = run_root / "bundle"
+    secrets = run_root / "secrets"
+    bundle.mkdir(parents=True)
+    secrets.mkdir()
+    secret = secrets / "monitoring.properties"
+    secret.write_text("SURGEPILOT_INFLUXDB_TOKEN=secret\n", encoding="utf-8")
+    captured: list[list[str]] = []
+
+    def fake_call(command: list[str]) -> int:
+        captured.append(command)
+        return 0
+
+    monkeypatch.chdir(bundle)
+    monkeypatch.setattr(jmeter_wrapper.subprocess, "call", fake_call)
+    monkeypatch.setattr(
+        jmeter_wrapper.sys,
+        "argv",
+        [str(tmp_path / "runtime" / "bin" / "surgepilot-jmeter-wrapper"), "--version"],
+    )
+
+    assert jmeter_wrapper.main() == 0
+
+    assert captured
+    assert "-q" not in captured[0]
+    assert secret.exists()
+
+
+def test_monitoring_wrapper_keeps_shared_secret_when_existing_q_argument_is_present(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    runtime = tmp_path / "runtime"
+    run_root = tmp_path / "runs" / "01RUN"
+    bundle = run_root / "bundle"
+    secrets = run_root / "secrets"
+    bundle.mkdir(parents=True)
+    secrets.mkdir()
+    (bundle / "generated.jmx").write_text(
+        "<jmeterTestPlan><hashTree><TestPlan/><hashTree/></hashTree></jmeterTestPlan>",
+        encoding="utf-8",
+    )
+    secret = secrets / "monitoring.properties"
+    secret.write_text("SURGEPILOT_INFLUXDB_TOKEN=secret\n", encoding="utf-8")
+    (bundle / "existing.properties").write_text("existing=true\n", encoding="utf-8")
+    captured: list[list[str]] = []
+
+    def fake_call(command: list[str]) -> int:
+        captured.append(command)
+        return 0
+
+    monkeypatch.chdir(bundle)
+    monkeypatch.setenv("SURGEPILOT_RUNTIME_HOME", str(runtime))
+    monkeypatch.setattr(jmeter_wrapper.subprocess, "call", fake_call)
+    monkeypatch.setattr(
+        jmeter_wrapper.sys,
+        "argv",
+        [
+            str(runtime / "apache-jmeter-5.6.3" / "bin" / "surgepilot-jmeter-wrapper"),
+            "-n",
+            "-q",
+            "existing.properties",
+            "-t",
+            "generated.jmx",
+        ],
+    )
+
+    assert jmeter_wrapper.main() == 0
+
+    assert captured
+    assert captured[0].count("-q") == 2
+    assert captured[0][-2:] == ["-q", str(secret)]
+    assert "-Lio.github.mderevyankoaqa.influxdb2=ERROR" in captured[0]
+    assert secret.exists()
+
+
+def test_monitoring_wrapper_uses_jmx_copy_and_properties_for_enabled_run(tmp_path: Path) -> None:
+    bundle = tmp_path / "runs" / "01RUN" / "bundle"
+    secrets = tmp_path / "runs" / "01RUN" / "secrets"
+    bundle.mkdir(parents=True)
+    secrets.mkdir()
+    (bundle / "generated.jmx").write_text(
+        "<jmeterTestPlan><hashTree><TestPlan/><hashTree/></hashTree></jmeterTestPlan>",
+        encoding="utf-8",
+    )
+    (secrets / "monitoring.properties").write_text(
+        "SURGEPILOT_INFLUXDB_TOKEN=secret\n", encoding="utf-8"
+    )
+
+    command = build_jmeter_wrapper_command(
+        real_jmeter="/runtime/apache-jmeter-5.6.3/bin/jmeter",
+        argv=["-n", "-t", "generated.jmx", "-l", "results.jtl"],
+        cwd=bundle,
+    )
+
+    assert command[0] == "/runtime/apache-jmeter-5.6.3/bin/jmeter"
+    assert "-q" in command
+    assert "-Lio.github.mderevyankoaqa.influxdb2=ERROR" in command
+    assert str(secrets / "monitoring.properties") in command
+    injected_path = Path(command[command.index("-t") + 1])
+    assert injected_path != bundle / "generated.jmx"
+    assert injected_path.is_file()
+    assert BACKEND_LISTENER_CLASSNAME in injected_path.read_text(encoding="utf-8")
+
+
+def test_start_cleans_monitoring_secret_when_child_exits_before_ready(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    class ExitedProcess:
+        pid = 999999
+
+        def poll(self) -> int:
+            return 1
+
+    monitoring_properties = monitoring_properties_path(RUN_ID, base=tmp_path)
+    monitoring_properties.parent.mkdir(parents=True)
+    monitoring_properties.write_text("SURGEPILOT_INFLUXDB_TOKEN=secret\n", encoding="utf-8")
+    monkeypatch.setattr(runner_cli.subprocess, "Popen", lambda *args, **kwargs: ExitedProcess())
+    monkeypatch.setattr(runner_cli, "start_workload_wait_seconds", lambda: 0.01)
+
+    result = CliRunner().invoke(
+        cli, ["start", "--run-id", RUN_ID], env={"RUNNER_HOME": str(tmp_path)}
+    )
+
+    assert result.exit_code != 0
+    assert "managed runner failed to start" in result.output
+    assert not monitoring_properties.exists()
+
+
+def test_managed_runner_removes_monitoring_properties_when_bundle_is_invalid(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    events: list[dict] = []
+    secrets = tmp_path / "runs" / RUN_ID / "secrets"
+    secrets.mkdir(parents=True)
+    monitoring_properties = secrets / "monitoring.properties"
+    monitoring_properties.write_text("SURGEPILOT_INFLUXDB_TOKEN=secret\n", encoding="utf-8")
+    monkeypatch.setattr(
+        "surgepilot_runner.cli.post_callback", lambda payload: events.append(payload)
+    )
+    monkeypatch.setenv("RUNNER_HOME", str(tmp_path))
+    monkeypatch.setenv("SURGEPILOT_NODE_ID", NODE_ID)
+
+    runner_cli.managed_run(RUN_ID)
+
+    assert [event["eventType"] for event in events] == ["accepted", "failed"]
+    assert not monitoring_properties.exists()
+
+
+def test_managed_runner_cleans_monitoring_secret_when_readiness_setup_fails(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    monitoring_properties = monitoring_properties_path(RUN_ID, base=tmp_path)
+    monitoring_properties.parent.mkdir(parents=True)
+    monitoring_properties.write_text("SURGEPILOT_INFLUXDB_TOKEN=secret\n", encoding="utf-8")
+    monkeypatch.setenv("RUNNER_HOME", str(tmp_path))
+
+    def fail_pidfile_write(*args, **kwargs) -> None:
+        raise OSError("pidfile write failed")
+
+    monkeypatch.setattr(runner_cli, "write_supervisor_pidfile", fail_pidfile_write)
+
+    with pytest.raises(OSError, match="pidfile write failed"):
+        runner_cli.managed_run(RUN_ID)
+
+    assert not monitoring_properties.exists()
+
+
+def test_kill_without_workload_removes_monitoring_properties(tmp_path: Path) -> None:
+    monitoring_properties = monitoring_properties_path("run_01", base=tmp_path)
+    monitoring_properties.parent.mkdir(parents=True)
+    monitoring_properties.write_text("SURGEPILOT_INFLUXDB_TOKEN=secret\n", encoding="utf-8")
+
+    result = CliRunner().invoke(
+        cli, ["kill", "--run-id", "run_01"], env={"RUNNER_HOME": str(tmp_path)}
+    )
+
+    assert result.exit_code == 0
+    assert "no managed process" in result.output
+    assert not monitoring_properties.exists()
+
+
+def test_kill_fails_when_monitoring_secret_cannot_be_deleted(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    monitoring_properties = monitoring_properties_path("run_01", base=tmp_path)
+    monitoring_properties.parent.mkdir(parents=True)
+    monitoring_properties.write_text("SURGEPILOT_INFLUXDB_TOKEN=secret\n", encoding="utf-8")
+    original_unlink = Path.unlink
+
+    def fail_monitoring_unlink(path: Path, *args, **kwargs) -> None:
+        if path == monitoring_properties:
+            raise OSError("read-only filesystem")
+        original_unlink(path, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "unlink", fail_monitoring_unlink)
+    monkeypatch.setattr(runner_cli, "start_workload_wait_seconds", lambda: 0.0)
+
+    result = CliRunner().invoke(
+        cli, ["kill", "--run-id", "run_01"], env={"RUNNER_HOME": str(tmp_path)}
+    )
+
+    assert result.exit_code != 0
+    assert "Monitoring secret cleanup failed" in result.output
+    assert monitoring_properties.exists()
+
+
+def test_kill_preserves_monitoring_secret_when_supervisor_exit_is_unconfirmed(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    monitoring_properties = monitoring_properties_path("run_01", base=tmp_path)
+    monitoring_properties.parent.mkdir(parents=True)
+    monitoring_properties.write_text("SURGEPILOT_INFLUXDB_TOKEN=secret\n", encoding="utf-8")
+    write_supervisor_pidfile("run_01", ManagedPid(pid=321, starttime=None), runner_home=tmp_path)
+    monkeypatch.setattr(runner_cli, "managed_pid_alive", lambda managed, probe=None: True)
+    monkeypatch.setattr(runner_cli, "terminate_group", lambda pgid: False)
+
+    result = CliRunner().invoke(
+        cli, ["kill", "--run-id", "run_01"], env={"RUNNER_HOME": str(tmp_path)}
+    )
+
+    assert result.exit_code != 0
+    assert monitoring_properties.exists()
+    assert supervisor_pidfile_path("run_01", base=tmp_path).exists()
