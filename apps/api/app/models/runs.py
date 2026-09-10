@@ -184,7 +184,7 @@ class NodeLease(Base):
         String(26), ForeignKey("load_nodes.id", ondelete="RESTRICT"), nullable=False
     )
     run_id: Mapped[str] = mapped_column(
-        String(26), ForeignKey("runs.id", ondelete="CASCADE"), unique=True, nullable=False
+        String(26), ForeignKey("runs.id", ondelete="CASCADE"), nullable=False
     )
     acquired_at: Mapped[datetime] = mapped_column(nullable=False)
     released_at: Mapped[datetime | None] = mapped_column(nullable=True)
