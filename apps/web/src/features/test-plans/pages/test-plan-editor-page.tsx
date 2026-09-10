@@ -2,14 +2,18 @@ import { useEffect, useMemo, useState } from "react";
 
 import {
   ApiError,
+  cloneTestPlan,
   createRun,
+  deleteTestPlan,
   getCsrfToken,
   getTestPlan,
+  getTestPlanExecutionPreview,
   listEnvGroups,
   listLoadNodes,
   listScenarios,
   patchTestPlan,
   type EnvGroupSummary,
+  type ExecutionPreviewResponse,
   type LoadNodeSummary,
   type ScenarioSummary,
   type TestPlanDetail,
@@ -100,6 +104,31 @@ function isRevisionConflict(error: unknown) {
     (error as ApiError | undefined)?.body?.code ===
     "TEST_PLAN_REVISION_CONFLICT"
   );
+}
+
+function previewErrorMessage(error: unknown, detail: TestPlanDetail | null) {
+  const body = (error as ApiError | undefined)?.body;
+  if (
+    body?.code === "TEST_PLAN_NOT_RUNNABLE" &&
+    detail?.notRunnableReasons.includes("load_node_required")
+  ) {
+    return testPlanCopy.previewLoadNodeRequired;
+  }
+  if (body?.code === "TEST_PLAN_NOT_RUNNABLE") {
+    return testPlanCopy.previewNotRunnable;
+  }
+  return testPlanCopy.previewFailed;
+}
+
+function lifecycleErrorMessage(error: unknown) {
+  const code = (error as ApiError | undefined)?.body?.code;
+  if (code === "RESOURCE_IN_USE") {
+    return testPlanCopy.resourceInUse;
+  }
+  if (code === "WORKSPACE_ACCESS_DENIED") {
+    return "You do not have access to this workspace.";
+  }
+  return errorMessage(error);
 }
 
 function parseOptionalNumber(value: string) {
@@ -226,6 +255,47 @@ function Pencil({ className }: { className?: string }) {
     >
       <path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z" />
       <path d="m15 5 4 4" />
+    </svg>
+  );
+}
+
+function Copy({ className }: { className?: string }) {
+  return (
+    <svg
+      aria-hidden="true"
+      className={className}
+      fill="none"
+      height="16"
+      stroke="currentColor"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      strokeWidth="2"
+      viewBox="0 0 24 24"
+      width="16"
+    >
+      <rect height="14" rx="2" ry="2" width="14" x="8" y="8" />
+      <path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2" />
+    </svg>
+  );
+}
+
+function Archive({ className }: { className?: string }) {
+  return (
+    <svg
+      aria-hidden="true"
+      className={className}
+      fill="none"
+      height="16"
+      stroke="currentColor"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      strokeWidth="2"
+      viewBox="0 0 24 24"
+      width="16"
+    >
+      <rect height="5" rx="1" width="20" x="2" y="3" />
+      <path d="M4 8v11a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8" />
+      <path d="M10 12h4" />
     </svg>
   );
 }
@@ -399,6 +469,16 @@ export function TestPlanEditorPage() {
   const [pendingConfirmation, setPendingConfirmation] = useState<
     "standard" | null
   >(null);
+  const [previewRunType, setPreviewRunType] = useState<"debug" | "standard">(
+    "debug",
+  );
+  const [executionPreview, setExecutionPreview] =
+    useState<ExecutionPreviewResponse | null>(null);
+  const [previewError, setPreviewError] = useState<string | null>(null);
+  const [isPreviewing, setIsPreviewing] = useState(false);
+  const [isCloning, setIsCloning] = useState(false);
+  const [isArchiving, setIsArchiving] = useState(false);
+  const [archiveOpen, setArchiveOpen] = useState(false);
 
   const [envGroups, setEnvGroups] = useState<EnvGroupSummary[]>([]);
   const [scenarios, setScenarios] = useState<ScenarioSummary[]>([]);
@@ -420,6 +500,8 @@ export function TestPlanEditorPage() {
         setRenamingName(false);
         setActionError(null);
         setNeedsReload(false);
+        setExecutionPreview(null);
+        setPreviewError(null);
       } catch (error) {
         setLoadError(errorMessage(error));
       } finally {
@@ -529,6 +611,12 @@ export function TestPlanEditorPage() {
     });
     setDirty(true);
     setNeedsReload(false);
+    clearExecutionPreview();
+  }
+
+  function clearExecutionPreview() {
+    setExecutionPreview(null);
+    setPreviewError(null);
   }
 
   const validationErrors = useMemo(
@@ -580,6 +668,25 @@ export function TestPlanEditorPage() {
         };
   }
 
+  async function handlePreview() {
+    if (!draft || dirty) return;
+    setIsPreviewing(true);
+    setPreviewError(null);
+    try {
+      const preview = await getTestPlanExecutionPreview({
+        testPlanId: draft.id,
+        workspaceId,
+        runType: previewRunType,
+      });
+      setExecutionPreview(preview);
+    } catch (error) {
+      setExecutionPreview(null);
+      setPreviewError(previewErrorMessage(error, draft));
+    } finally {
+      setIsPreviewing(false);
+    }
+  }
+
   async function handleSave(): Promise<TestPlanDetail | null> {
     if (!draft) return null;
     if (validationErrors.length > 0) {
@@ -602,6 +709,7 @@ export function TestPlanEditorPage() {
       setTagTextState(tagText(normalized.tags));
       setDirty(false);
       setRenamingName(false);
+      clearExecutionPreview();
       return normalized;
     } catch (error) {
       setActionError(errorMessage(error));
@@ -678,6 +786,39 @@ export function TestPlanEditorPage() {
       await fetchPlan();
     } finally {
       setIsReloading(false);
+    }
+  }
+
+  async function handleClone() {
+    if (!draft) return;
+    setIsCloning(true);
+    setActionError(null);
+    try {
+      const token = await getWriteToken();
+      const cloned = await cloneTestPlan(draft.id, {}, workspaceId, token);
+      setDirty(false);
+      navigateTo(`/test-plans/${cloned.id}`);
+    } catch (error) {
+      setActionError(lifecycleErrorMessage(error));
+    } finally {
+      setIsCloning(false);
+    }
+  }
+
+  async function handleArchive() {
+    if (!draft) return;
+    setIsArchiving(true);
+    setActionError(null);
+    try {
+      const token = await getWriteToken();
+      await deleteTestPlan(draft.id, workspaceId, token);
+      setDirty(false);
+      setArchiveOpen(false);
+      navigateTo("/test-plans");
+    } catch (error) {
+      setActionError(lifecycleErrorMessage(error));
+    } finally {
+      setIsArchiving(false);
     }
   }
 
@@ -903,6 +1044,25 @@ export function TestPlanEditorPage() {
               type="button"
             >
               {isSaving ? testPlanCopy.saving : testPlanCopy.save}
+            </button>
+            <button
+              aria-label={`${testPlanCopy.clone} ${draft.name}`}
+              className="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-white/10 text-text-muted transition hover:border-primary/30 hover:bg-white/5 hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
+              disabled={isCloning}
+              onClick={() => void handleClone()}
+              title={testPlanCopy.clone}
+              type="button"
+            >
+              <Copy className="h-4 w-4" />
+            </button>
+            <button
+              aria-label={`${testPlanCopy.archive} ${draft.name}`}
+              className="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-white/10 text-text-muted transition hover:border-error/30 hover:bg-white/5 hover:text-error"
+              onClick={() => setArchiveOpen(true)}
+              title={testPlanCopy.archive}
+              type="button"
+            >
+              <Archive className="h-4 w-4" />
             </button>
             <button
               className="rounded-lg border border-primary/40 bg-primary/10 px-4 py-2 text-sm font-semibold text-primary transition hover:bg-primary/20 disabled:cursor-not-allowed disabled:opacity-40"
@@ -1531,6 +1691,74 @@ export function TestPlanEditorPage() {
         </div>
       </FieldSection>
 
+      <FieldSection
+        action={
+          <div className="flex flex-wrap items-end gap-2">
+            <Field label={testPlanCopy.previewRunType}>
+              <select
+                aria-label={testPlanCopy.previewRunType}
+                className={textInputClass()}
+                onChange={(event) => {
+                  setPreviewRunType(
+                    event.target.value as "debug" | "standard",
+                  );
+                  clearExecutionPreview();
+                }}
+                value={previewRunType}
+              >
+                <option value="debug">Debug</option>
+                <option value="standard">Standard</option>
+              </select>
+            </Field>
+            <button
+              className="rounded-lg border border-primary/30 bg-primary/10 px-4 py-2 text-sm font-semibold text-primary transition hover:bg-primary/20 disabled:cursor-not-allowed disabled:opacity-40"
+              disabled={dirty || isPreviewing}
+              onClick={() => void handlePreview()}
+              type="button"
+            >
+              {testPlanCopy.previewYaml}
+            </button>
+          </div>
+        }
+        description={testPlanCopy.previewDescription}
+        title={testPlanCopy.previewTitle}
+      >
+        {!dirty && draft.notRunnableReasons.includes("load_node_required") ? (
+          <p className="mb-3 rounded-xl border border-warning/30 bg-warning/10 p-3 text-sm text-warning">
+            {testPlanCopy.previewLoadNodePrerequisite}
+          </p>
+        ) : null}
+        {dirty ? (
+          <p className="mb-3 rounded-xl border border-warning/30 bg-warning/10 p-3 text-sm text-warning">
+            {testPlanCopy.saveBeforePreview}
+          </p>
+        ) : null}
+        {previewError ? (
+          <p className="mb-3 rounded-xl border border-error/30 bg-error-container p-3 text-sm text-on-error-container">
+            {previewError}
+          </p>
+        ) : null}
+        {executionPreview ? (
+          <div className="space-y-3">
+            {executionPreview.warnings.length > 0 ? (
+              <div className="space-y-2">
+                {executionPreview.warnings.map((warning) => (
+                  <p
+                    className="rounded-xl border border-warning/30 bg-warning/10 p-3 text-sm text-warning"
+                    key={`${warning.code}-${warning.field ?? "global"}`}
+                  >
+                    {warning.message}
+                  </p>
+                ))}
+              </div>
+            ) : null}
+            <pre className="max-h-96 overflow-auto rounded-2xl border border-white/10 bg-black/30 p-4 font-mono text-xs leading-5 text-text-main">
+              {executionPreview.content}
+            </pre>
+          </div>
+        ) : null}
+      </FieldSection>
+
       {pendingConfirmation ? (
         <div className="fixed inset-0 z-50 grid place-items-center bg-black/60 p-4">
           <div
@@ -1568,6 +1796,49 @@ export function TestPlanEditorPage() {
                 type="button"
               >
                 {testPlanCopy.confirmAndRun}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {archiveOpen ? (
+        <div
+          aria-label={testPlanCopy.archiveTitle}
+          aria-modal="true"
+          className="fixed inset-0 z-50 grid place-items-center bg-black/60 p-4"
+          role="dialog"
+        >
+          <div className="w-[min(440px,calc(100vw-32px))] rounded-2xl border border-white/10 bg-surface-container-low p-6 shadow-2xl">
+            <h2 className="text-lg font-semibold text-white">
+              {testPlanCopy.archiveTitle}
+            </h2>
+            <p className="mt-2 text-sm leading-6 text-text-muted">
+              Archive {draft.name}? {testPlanCopy.archiveBody}
+            </p>
+            {actionError ? (
+              <p className="mt-4 rounded-lg border border-error/30 bg-error-container px-4 py-3 text-sm text-on-error-container">
+                {actionError}
+              </p>
+            ) : null}
+            <div className="mt-6 flex justify-end gap-3">
+              <button
+                className="rounded-lg border border-white/10 px-4 py-2 text-sm text-text-main transition hover:bg-white/5"
+                onClick={() => {
+                  setArchiveOpen(false);
+                  setActionError(null);
+                }}
+                type="button"
+              >
+                {testPlanCopy.cancel}
+              </button>
+              <button
+                className="rounded-lg bg-error-container px-4 py-2 text-sm font-semibold text-on-error-container transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-60"
+                disabled={isArchiving}
+                onClick={() => void handleArchive()}
+                type="button"
+              >
+                {isArchiving ? "Archiving..." : testPlanCopy.archive}
               </button>
             </div>
           </div>

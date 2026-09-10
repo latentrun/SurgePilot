@@ -9,12 +9,11 @@ export const testPlanCopy = {
   createTitle: "Create Test Plan",
   rename: "Rename Test Plan",
   renameInputLabel: "Test Plan title",
-  delete: "Delete",
-  deleteTitle: "Delete Test Plan",
-  deleteBody:
+  archiveTitle: "Archive Test Plan",
+  archiveBody:
     "This Test Plan will be hidden from active lists. Historical Run Reports keep their saved snapshots.",
   resourceInUse:
-    "Test Plan cannot be deleted while it is referenced by active execution state or visible dependent resources.",
+    "Test Plan cannot be archived while it is referenced by active execution state or visible dependent resources.",
   highConcurrencyTitle: "Confirm high concurrency",
   highConcurrencyBody:
     "This run exceeds the configured single-node soft limit. Confirm that the selected node is prepared for this load.",
@@ -47,6 +46,8 @@ export const testPlanCopy = {
   startingRun: "Starting Run...",
   cancel: "Cancel",
   create: "Create",
+  clone: "Clone",
+  archive: "Archive",
   open: "Open",
   quickRun: "Quick Run",
   confirmAndRun: "Confirm and run",
@@ -73,6 +74,19 @@ export const testPlanCopy = {
   noNodes: "No idle Load Nodes are available for the selected pool.",
   noScenarios: "No saved Scenarios are available to add.",
   noTags: "No tags",
+  previewTitle: "Generated YAML Preview",
+  previewDescription:
+    "Read-only execution preview for the latest saved Test Plan revision.",
+  previewRunType: "Preview run type",
+  previewYaml: "Preview YAML",
+  previewLoadNodePrerequisite:
+    "Preview requires a Load Node. Select one in Resource Configuration and save the Test Plan.",
+  previewLoadNodeRequired:
+    "Select a Load Node in Resource Configuration, save the Test Plan, then preview.",
+  previewNotRunnable:
+    "The saved Test Plan is not ready for preview. Review the required configuration and try again.",
+  previewFailed: "Unable to generate the preview. Try again.",
+  saveBeforePreview: "Save before previewing the latest generated YAML.",
   selectPool: "Select pool",
   selectIdleNode: "Select an idle node",
   tagsPlaceholder: "checkout, baseline",

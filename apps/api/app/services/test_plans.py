@@ -10,6 +10,7 @@ from typing import Any
 
 import yaml
 from fastapi import Request
+from pydantic import ValidationError
 from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
@@ -24,8 +25,10 @@ from app.models.load_nodes import LoadNode
 from app.models.runs import Run
 from app.models.scenarios import RunCreationDedupKey, Scenario
 from app.models.test_plans import TestPlan, TestPlanScenarioItem, TestPlanSlaRule
+from app.schemas.common import ExecutionPreviewResponse, ExecutionPreviewWarning
+from app.schemas.test_plans import TestPlanCreateRequest
 from app.services.audit import write_audit_event
-from app.services.env_groups import env_group_runtime_values
+from app.services.env_groups import env_group_runtime_values, internal_env_values
 from app.services.runs import RunExecutionInput, create_run_execution
 from app.services.scenarios import (
     ACTIVE_RUN_STATES,
@@ -34,7 +37,9 @@ from app.services.scenarios import (
     _enabled_dependency_files,
     build_debug_taurus_document_from_content,
     field_error,
+    invalid_preview_mode,
     request_label,
+    safe_preview_yaml,
     validation_error,
 )
 
@@ -86,6 +91,22 @@ def _normalize_tags(tags: list[str]) -> list[str]:
     if details:
         raise validation_error(details)
     return normalized
+
+
+def _pydantic_create_payload(payload: dict[str, Any]) -> dict[str, Any]:
+    try:
+        return TestPlanCreateRequest.model_validate(payload).model_dump(by_alias=True, mode="json")
+    except ValidationError as exc:
+        raise validation_error(
+            [
+                field_error(
+                    ".".join(str(part) for part in error["loc"]),
+                    "Invalid field value.",
+                    "invalid_field",
+                )
+                for error in exc.errors()
+            ]
+        ) from exc
 
 
 def _load_settings_dict(item: TestPlanScenarioItem) -> dict[str, Any]:
@@ -540,6 +561,76 @@ def create_test_plan(
     return plan
 
 
+def clone_test_plan(
+    db: Session, *, workspace_id: str, test_plan_id: str, actor: User, name: str | None
+) -> TestPlan:
+    source = get_test_plan(db, workspace_id=workspace_id, test_plan_id=test_plan_id)
+    items, rules = _rows_for_plan(db, plan_id=source.id)
+    payload = {
+        "name": name or f"Copy of {source.name}",
+        "description": source.description,
+        "tags": list(source.tags_json or []),
+        "envGroupId": source.env_group_id,
+        "runMode": source.run_mode,
+        "resource": {
+            "poolType": source.pool_type,
+            "selectedNodeId": source.selected_node_id,
+        },
+        "scenarioItems": [
+            {
+                "id": new_ulid(),
+                "scenarioId": item.scenario_id,
+                "enabled": item.enabled,
+                "order": item.position,
+                "loadSettings": _load_settings_dict(item),
+            }
+            for item in items
+        ],
+        "slaRules": [
+            {
+                **_sla_rule_dict(rule),
+                "id": new_ulid(),
+            }
+            for rule in rules
+        ],
+    }
+    settings = get_settings()
+    payload = _pydantic_create_payload(payload)
+    payload["tags"] = _normalize_tags(payload.get("tags") or [])
+    _validate_payload_references(db, workspace_id=workspace_id, payload=payload, settings=settings)
+    now = utc_now()
+    resource = payload["resource"]
+    selected_node_ids = list(source.selected_node_ids_json or [])
+    if not selected_node_ids and source.selected_node_id:
+        selected_node_ids = [source.selected_node_id]
+    clone = TestPlan(
+        id=new_ulid(),
+        workspace_id=workspace_id,
+        name=payload["name"].strip(),
+        description=payload.get("description"),
+        tags_json=payload["tags"],
+        env_group_id=payload.get("envGroupId"),
+        run_mode=payload.get("runMode") or "sequential",
+        pool_type=resource.get("poolType"),
+        selected_node_id=resource.get("selectedNodeId"),
+        resource_mode=source.resource_mode,
+        selected_node_ids_json=selected_node_ids,
+        node_count=source.node_count,
+        revision=1,
+        created_by=actor.id,
+        updated_by=actor.id,
+        deleted_by=None,
+        created_at=now,
+        updated_at=now,
+        deleted_at=None,
+    )
+    db.add(clone)
+    db.flush()
+    _replace_children(db, plan=clone, payload=payload, now=now)
+    db.flush()
+    return clone
+
+
 def get_test_plan(db: Session, *, workspace_id: str, test_plan_id: str) -> TestPlan:
     plan = db.scalar(
         select(TestPlan).where(
@@ -783,6 +874,62 @@ def delete_test_plan(db: Session, *, plan: TestPlan, actor: User) -> None:
     locked.updated_by = actor.id
     locked.updated_at = now
     db.flush()
+
+
+def _preview_warning(
+    code: str, message: str, *, field: str | None = None, severity: str = "warning"
+) -> ExecutionPreviewWarning:
+    return ExecutionPreviewWarning(code=code, message=message, field=field, severity=severity)
+
+
+def get_test_plan_execution_preview(
+    db: Session, *, workspace_id: str, test_plan_id: str, run_type: str | None
+) -> ExecutionPreviewResponse:
+    if run_type not in {"debug", "standard"}:
+        raise invalid_preview_mode("runType")
+    plan = get_test_plan(db, workspace_id=workspace_id, test_plan_id=test_plan_id)
+    settings = get_settings()
+    ctx = _validate_run_context(
+        db,
+        plan=plan,
+        run_type=run_type,
+        settings=settings,
+        confirm_high_concurrency=True,
+    )
+    _items, rules = _rows_for_plan(db, plan_id=plan.id)
+    snapshot = _snapshot_payload(ctx, run_type=run_type, rules=rules)
+    document = build_test_plan_taurus_document_from_snapshot(
+        snapshot,
+        jmeter_path=JMETER_RUNTIME_PATH,
+        jmeter_version=JMETER_RUNTIME_VERSION,
+    )
+    variable_values = [
+        value
+        for scenario_document in ctx.scenario_taurus_docs.values()
+        for value in internal_env_values(scenario_document.get("variables") or {}).values()
+    ]
+    content, warnings = safe_preview_yaml(document, variable_values=variable_values)
+    if (
+        run_type == "standard"
+        and ctx.expected_concurrency > settings.single_node_concurrency_soft_limit
+    ):
+        warnings.append(
+            _preview_warning(
+                "soft_limit_exceeded",
+                "Saved load settings exceed the configured single-node soft limit.",
+                field="scenarioItems",
+                severity="warning",
+            )
+        )
+    return ExecutionPreviewResponse(
+        source_type="test_plan",
+        source_id=plan.id,
+        source_revision=plan.revision,
+        mode=run_type,
+        format="yaml",
+        content=content,
+        warnings=warnings,
+    )
 
 
 def test_plan_references_env_group(db: Session, *, workspace_id: str, env_group_id: str) -> bool:

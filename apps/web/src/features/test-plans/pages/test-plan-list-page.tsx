@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 
 import {
   ApiError,
+  cloneTestPlan,
   createRun,
   createTestPlan,
   deleteTestPlan,
@@ -105,7 +106,7 @@ function PlayCircle({ className }: { className?: string }) {
   );
 }
 
-function Trash2({ className }: { className?: string }) {
+function Copy({ className }: { className?: string }) {
   return (
     <svg
       aria-hidden="true"
@@ -119,11 +120,29 @@ function Trash2({ className }: { className?: string }) {
       viewBox="0 0 24 24"
       width="16"
     >
-      <path d="M3 6h18" />
-      <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6" />
-      <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2" />
-      <line x1="10" x2="10" y1="11" y2="17" />
-      <line x1="14" x2="14" y1="11" y2="17" />
+      <rect height="14" rx="2" ry="2" width="14" x="8" y="8" />
+      <path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2" />
+    </svg>
+  );
+}
+
+function Archive({ className }: { className?: string }) {
+  return (
+    <svg
+      aria-hidden="true"
+      className={className}
+      fill="none"
+      height="16"
+      stroke="currentColor"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      strokeWidth="2"
+      viewBox="0 0 24 24"
+      width="16"
+    >
+      <rect height="5" rx="1" width="20" x="2" y="3" />
+      <path d="M4 8v11a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8" />
+      <path d="M10 12h4" />
     </svg>
   );
 }
@@ -208,10 +227,11 @@ export function TestPlanListPage() {
   const [createTags, setCreateTags] = useState("");
   const [isCreating, setIsCreating] = useState(false);
 
-  const [deleteTarget, setDeleteTarget] = useState<TestPlanSummary | null>(
+  const [archiveTarget, setArchiveTarget] = useState<TestPlanSummary | null>(
     null,
   );
-  const [isDeleting, setIsDeleting] = useState(false);
+  const [isArchiving, setIsArchiving] = useState(false);
+  const [cloningId, setCloningId] = useState<string | null>(null);
 
   const [quickRunId, setQuickRunId] = useState<string | null>(null);
 
@@ -284,19 +304,33 @@ export function TestPlanListPage() {
     }
   }
 
-  async function handleDelete() {
-    if (!deleteTarget) return;
-    setIsDeleting(true);
+  async function handleClone(plan: TestPlanSummary) {
+    setCloningId(plan.id);
     setError(null);
     try {
       const token = await getWriteToken();
-      await deleteTestPlan(deleteTarget.id, workspaceId, token);
-      setDeleteTarget(null);
+      const cloned = await cloneTestPlan(plan.id, {}, workspaceId, token);
+      navigateTo(`/test-plans/${cloned.id}`);
+    } catch (err) {
+      setError(apiMessage(err));
+    } finally {
+      setCloningId(null);
+    }
+  }
+
+  async function handleArchive() {
+    if (!archiveTarget) return;
+    setIsArchiving(true);
+    setError(null);
+    try {
+      const token = await getWriteToken();
+      await deleteTestPlan(archiveTarget.id, workspaceId, token);
+      setArchiveTarget(null);
       await fetchList();
     } catch (err) {
       setError(apiMessage(err));
     } finally {
-      setIsDeleting(false);
+      setIsArchiving(false);
     }
   }
 
@@ -396,7 +430,7 @@ export function TestPlanListPage() {
           </button>
         </div>
       ) : null}
-      {error && !listError && !createOpen && !deleteTarget ? (
+      {error && !listError && !createOpen && !archiveTarget ? (
         <div className="rounded-xl border border-error/30 bg-error-container p-4 text-sm text-on-error-container">
           {error}
         </div>
@@ -529,13 +563,23 @@ export function TestPlanListPage() {
                             )}
                           </button>
                           <button
-                            aria-label={`${testPlanCopy.delete} ${item.name}`}
-                            className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-white/10 text-text-muted transition hover:border-error/30 hover:bg-white/5 hover:text-error"
-                            onClick={() => setDeleteTarget(item)}
-                            title={testPlanCopy.delete}
+                            aria-label={`${testPlanCopy.clone} ${item.name}`}
+                            className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-white/10 text-text-muted transition hover:border-primary/30 hover:bg-white/5 hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
+                            disabled={cloningId === item.id}
+                            onClick={() => void handleClone(item)}
+                            title={testPlanCopy.clone}
                             type="button"
                           >
-                            <Trash2 className="h-4 w-4" />
+                            <Copy className="h-4 w-4" />
+                          </button>
+                          <button
+                            aria-label={`${testPlanCopy.archive} ${item.name}`}
+                            className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-white/10 text-text-muted transition hover:border-error/30 hover:bg-white/5 hover:text-error"
+                            onClick={() => setArchiveTarget(item)}
+                            title={testPlanCopy.archive}
+                            type="button"
+                          >
+                            <Archive className="h-4 w-4" />
                           </button>
                         </div>
                       </td>
@@ -616,9 +660,9 @@ export function TestPlanListPage() {
         </div>
       ) : null}
 
-      {deleteTarget ? (
+      {archiveTarget ? (
         <div
-          aria-label={testPlanCopy.deleteTitle}
+          aria-label={testPlanCopy.archiveTitle}
           aria-modal="true"
           className="fixed inset-0 z-50 grid place-items-center bg-black/60 p-4"
           role="dialog"
@@ -626,20 +670,20 @@ export function TestPlanListPage() {
           <div className="w-[min(440px,calc(100vw-32px))] rounded-2xl border border-white/10 bg-surface-container-low p-6 shadow-2xl">
             <div className="flex items-start justify-between gap-3">
               <h2 className="text-lg font-semibold text-white">
-                {testPlanCopy.deleteTitle}
+                {testPlanCopy.archiveTitle}
               </h2>
               <button
                 className="rounded-lg p-2 text-text-muted transition hover:bg-white/5 hover:text-white"
-                onClick={() => setDeleteTarget(null)}
+                onClick={() => setArchiveTarget(null)}
                 type="button"
               >
                 <X className="h-5 w-5" />
               </button>
             </div>
             <p className="mt-2 text-sm leading-6 text-text-muted">
-              Delete {deleteTarget.name}? {testPlanCopy.deleteBody}
+              Archive {archiveTarget.name}? {testPlanCopy.archiveBody}
             </p>
-            {error && deleteTarget ? (
+            {error && archiveTarget ? (
               <p className="mt-4 rounded-lg border border-error/30 bg-error-container px-4 py-3 text-sm text-on-error-container">
                 {error}
               </p>
@@ -648,7 +692,7 @@ export function TestPlanListPage() {
               <button
                 className="rounded-lg border border-white/10 px-4 py-2 text-sm text-text-main transition hover:bg-white/5"
                 onClick={() => {
-                  setDeleteTarget(null);
+                  setArchiveTarget(null);
                   setError(null);
                 }}
                 type="button"
@@ -657,11 +701,11 @@ export function TestPlanListPage() {
               </button>
               <button
                 className="rounded-lg bg-error-container px-4 py-2 text-sm font-semibold text-on-error-container transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-60"
-                disabled={isDeleting}
-                onClick={() => void handleDelete()}
+                disabled={isArchiving}
+                onClick={() => void handleArchive()}
                 type="button"
               >
-                {isDeleting ? "Deleting..." : testPlanCopy.delete}
+                {isArchiving ? "Archiving..." : testPlanCopy.archive}
               </button>
             </div>
           </div>

@@ -2,7 +2,9 @@ import { useEffect, useMemo, useRef, useState } from "react";
 
 import {
   ApiError,
+  cloneScenario,
   createRun,
+  deleteScenario,
   getCsrfToken,
   getScenario,
   listDependencyFiles,
@@ -142,6 +144,17 @@ function errorMessage(error: unknown, action: "save" | "debug" = "debug") {
   return "Action failed. Refresh and try again.";
 }
 
+function lifecycleErrorMessage(error: unknown) {
+  const code = (error as ApiError | undefined)?.body?.code;
+  if (code === "RESOURCE_IN_USE") {
+    return scenarioCopy.resourceInUse;
+  }
+  if (code === "WORKSPACE_ACCESS_DENIED") {
+    return "You do not have access to this workspace.";
+  }
+  return errorMessage(error, "save");
+}
+
 function isRevisionConflict(error: unknown) {
   return (
     (error as ApiError | undefined)?.body?.code ===
@@ -262,6 +275,47 @@ function Pencil({ className }: { className?: string }) {
     >
       <path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z" />
       <path d="m15 5 4 4" />
+    </svg>
+  );
+}
+
+function Copy({ className }: { className?: string }) {
+  return (
+    <svg
+      aria-hidden="true"
+      className={className}
+      fill="none"
+      height="16"
+      stroke="currentColor"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      strokeWidth="2"
+      viewBox="0 0 24 24"
+      width="16"
+    >
+      <rect height="14" rx="2" ry="2" width="14" x="8" y="8" />
+      <path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2" />
+    </svg>
+  );
+}
+
+function Archive({ className }: { className?: string }) {
+  return (
+    <svg
+      aria-hidden="true"
+      className={className}
+      fill="none"
+      height="16"
+      stroke="currentColor"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      strokeWidth="2"
+      viewBox="0 0 24 24"
+      width="16"
+    >
+      <rect height="5" rx="1" width="20" x="2" y="3" />
+      <path d="M4 8v11a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8" />
+      <path d="M10 12h4" />
     </svg>
   );
 }
@@ -450,6 +504,9 @@ export function ScenarioDesignerPage() {
   const [selectedNodeId, setSelectedNodeId] = useState("");
   const [isStartingDebug, setIsStartingDebug] = useState(false);
   const [needsReload, setNeedsReload] = useState(false);
+  const [isCloning, setIsCloning] = useState(false);
+  const [isArchiving, setIsArchiving] = useState(false);
+  const [archiveOpen, setArchiveOpen] = useState(false);
 
   const envStorageKey = `surgepilot:scenario:${scenarioId}:env`;
 
@@ -740,6 +797,39 @@ export function ScenarioDesignerPage() {
     }
   }
 
+  async function handleClone() {
+    if (!draft) return;
+    setIsCloning(true);
+    setActionError(null);
+    try {
+      const token = await getWriteToken();
+      const cloned = await cloneScenario(draft.id, {}, workspaceId, token);
+      setDirty(false);
+      navigateTo(`/scenarios/${cloned.id}`);
+    } catch (error) {
+      setActionError(lifecycleErrorMessage(error));
+    } finally {
+      setIsCloning(false);
+    }
+  }
+
+  async function handleArchive() {
+    if (!draft) return;
+    setIsArchiving(true);
+    setActionError(null);
+    try {
+      const token = await getWriteToken();
+      await deleteScenario(draft.id, workspaceId, token);
+      setDirty(false);
+      setArchiveOpen(false);
+      navigateTo("/scenarios");
+    } catch (error) {
+      setActionError(lifecycleErrorMessage(error));
+    } finally {
+      setIsArchiving(false);
+    }
+  }
+
   function openGlobalConfiguration() {
     configBackupRef.current = {
       draft: draft ? (JSON.parse(JSON.stringify(draft)) as ScenarioDetail) : null,
@@ -919,6 +1009,25 @@ export function ScenarioDesignerPage() {
               type="button"
             >
               {isSaving ? "Saving..." : "Save"}
+            </button>
+            <button
+              aria-label={`${scenarioCopy.clone} ${draft.name}`}
+              className="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-white/10 text-text-muted transition hover:border-primary/30 hover:bg-white/5 hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
+              disabled={isCloning}
+              onClick={() => void handleClone()}
+              title={scenarioCopy.clone}
+              type="button"
+            >
+              <Copy className="h-4 w-4" />
+            </button>
+            <button
+              aria-label={`${scenarioCopy.archive} ${draft.name}`}
+              className="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-white/10 text-text-muted transition hover:border-error/30 hover:bg-white/5 hover:text-error"
+              onClick={() => setArchiveOpen(true)}
+              title={scenarioCopy.archive}
+              type="button"
+            >
+              <Archive className="h-4 w-4" />
             </button>
             <button
               className="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-on-primary transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-40"
@@ -1982,6 +2091,49 @@ export function ScenarioDesignerPage() {
             >
               {isStartingDebug ? "Starting Debug Run..." : "Start Debug Run"}
             </button>
+          </div>
+        </div>
+      ) : null}
+
+      {archiveOpen ? (
+        <div
+          aria-label={scenarioCopy.archiveTitle}
+          aria-modal="true"
+          className="fixed inset-0 z-50 grid place-items-center bg-black/60 p-4"
+          role="dialog"
+        >
+          <div className="w-[min(440px,calc(100vw-32px))] rounded-2xl border border-white/10 bg-surface-container-low p-6 shadow-2xl">
+            <h2 className="text-lg font-semibold text-white">
+              {scenarioCopy.archiveTitle}
+            </h2>
+            <p className="mt-2 text-sm leading-6 text-text-muted">
+              Archive {draft.name}? {scenarioCopy.archiveBody}
+            </p>
+            {actionError ? (
+              <p className="mt-4 rounded-lg border border-error/30 bg-error-container px-4 py-3 text-sm text-on-error-container">
+                {actionError}
+              </p>
+            ) : null}
+            <div className="mt-6 flex justify-end gap-3">
+              <button
+                className="rounded-lg border border-white/10 px-4 py-2 text-sm text-text-main transition hover:bg-white/5"
+                onClick={() => {
+                  setArchiveOpen(false);
+                  setActionError(null);
+                }}
+                type="button"
+              >
+                Cancel
+              </button>
+              <button
+                className="rounded-lg bg-error-container px-4 py-2 text-sm font-semibold text-on-error-container transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-60"
+                disabled={isArchiving}
+                onClick={() => void handleArchive()}
+                type="button"
+              >
+                {isArchiving ? "Archiving..." : scenarioCopy.archive}
+              </button>
+            </div>
           </div>
         </div>
       ) : null}

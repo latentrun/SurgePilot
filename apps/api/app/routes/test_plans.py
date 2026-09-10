@@ -5,7 +5,7 @@ from fastapi import APIRouter, Path, Query, Request, Response, status
 from app.api.deps import CsrfDep, CurrentUserDep, CurrentWorkspaceDep, DbDep
 from app.core.errors import AppError
 from app.core.ids import is_ulid
-from app.schemas.common import ErrorResponse
+from app.schemas.common import CloneRequest, ErrorResponse, ExecutionPreviewResponse
 from app.schemas.test_plans import (
     TestPlanCreateRequest,
     TestPlanDetail,
@@ -14,9 +14,11 @@ from app.schemas.test_plans import (
     TestPlanSummary,
 )
 from app.services.test_plans import (
+    clone_test_plan as clone_test_plan_service,
     create_test_plan as create_test_plan_service,
     delete_test_plan as delete_test_plan_service,
     detail_payload,
+    get_test_plan_execution_preview as get_test_plan_execution_preview_service,
     get_test_plan as get_test_plan_service,
     list_test_plans as list_test_plans_service,
     patch_test_plan as patch_test_plan_service,
@@ -195,6 +197,82 @@ def create_test_plan(
     return TestPlanDetail.model_validate(detail_payload(db, plan))
 
 
+@router.post(
+    "/{testPlanId}/clone",
+    operation_id="cloneTestPlan",
+    response_model=TestPlanDetail,
+    response_model_by_alias=True,
+    status_code=status.HTTP_201_CREATED,
+    summary="Clone Test Plan",
+    description="Clone a visible Test Plan in the current Workspace.",
+    responses={
+        400: ERROR_RESPONSE,
+        401: ERROR_RESPONSE,
+        403: ERROR_RESPONSE,
+        404: ERROR_RESPONSE,
+        422: ERROR_RESPONSE,
+    },
+)
+def clone_test_plan(
+    test_plan_id: TestPlanIdPath,
+    payload: CloneRequest,
+    response: Response,
+    db: DbDep,
+    user: CurrentUserDep,
+    workspace: CurrentWorkspaceDep,
+    _csrf: CsrfDep,
+) -> TestPlanDetail:
+    validate_test_plan_id(test_plan_id)
+    plan = clone_test_plan_service(
+        db,
+        workspace_id=workspace.id,
+        test_plan_id=test_plan_id,
+        actor=user,
+        name=payload.name,
+    )
+    db.commit()
+    attach_workspace_header(response, workspace.id)
+    return TestPlanDetail.model_validate(detail_payload(db, plan))
+
+
+@router.get(
+    "/{testPlanId}/execution-preview",
+    operation_id="getTestPlanExecutionPreview",
+    response_model=ExecutionPreviewResponse,
+    response_model_by_alias=True,
+    summary="Get Test Plan execution preview",
+    description="Return a safe read-only debug or standard execution preview for the saved Test Plan revision.",
+    responses={
+        400: ERROR_RESPONSE,
+        401: ERROR_RESPONSE,
+        403: ERROR_RESPONSE,
+        404: ERROR_RESPONSE,
+        409: ERROR_RESPONSE,
+        422: ERROR_RESPONSE,
+    },
+)
+def get_test_plan_execution_preview(
+    test_plan_id: TestPlanIdPath,
+    response: Response,
+    db: DbDep,
+    user: CurrentUserDep,
+    workspace: CurrentWorkspaceDep,
+    run_type: Annotated[
+        str | None, Query(alias="runType", json_schema_extra={"enum": ["debug", "standard"]})
+    ] = None,
+) -> ExecutionPreviewResponse:
+    _ = user
+    validate_test_plan_id(test_plan_id)
+    preview = get_test_plan_execution_preview_service(
+        db,
+        workspace_id=workspace.id,
+        test_plan_id=test_plan_id,
+        run_type=run_type,
+    )
+    attach_workspace_header(response, workspace.id)
+    return preview
+
+
 @router.get(
     "/{testPlanId}",
     operation_id="getTestPlan",
@@ -263,10 +341,10 @@ def patch_test_plan(
     "/{testPlanId}",
     operation_id="deleteTestPlan",
     status_code=status.HTTP_204_NO_CONTENT,
-    summary="Delete Test Plan",
+    summary="Archive Test Plan",
     description=(
-        "Soft-delete a Test Plan. Deleted Test Plans are hidden from active lists; "
-        "historical Run Reports keep their saved snapshots."
+        "Archive a Test Plan through the DELETE transport. Archived Test Plans are hidden "
+        "from active lists; historical Run Reports keep their saved snapshots."
     ),
     responses={
         400: ERROR_RESPONSE,

@@ -14,6 +14,7 @@ Use only these references for P1 Slice drafting decisions:
 
 - P1 governance start: `docs/sdd/adr/ADR-0022-p1-governance-start.md`.
 - P1 Debug HTTP Trace scope addition: `docs/sdd/adr/ADR-0008-p1-debug-http-trace.md`.
+- P1 Scenario execution preview removal: `docs/sdd/adr/ADR-0023-remove-scenario-execution-preview.md`.
 - P1 scope: `docs/sdd/00-product-scope-and-priority.md` §6.
 - P1 fixed boundaries: `docs/sdd/00-product-scope-and-priority.md` §6 fixed-boundary list.
 - P1 Slice split guidance and P0 non-prerequisite rule: `docs/sdd/00-product-scope-and-priority.md` §6.
@@ -26,13 +27,15 @@ The following files are the current P1 Slice index. Real active Slice SDDs are a
 1. `docs/sdd/slices/P1-00-monitoring.md` -- active Slice SDD for deployment-level P1 Monitoring: JMeter Backend Listener / InfluxDB write config bridge + same-origin Grafana iframe.
 2. `docs/sdd/slices/P1-03-workspace-admin.md` -- active Slice SDD for P1 Workspace / Admin.
 3. `docs/sdd/slices/P1-01-resource-multi-node.md` -- active Slice SDD for P1 Resource Multi-node; design frozen and Accepted for implementation.
-4. `docs/sdd/slices/P1-08-debug-http-trace.md` -- active Slice SDD for P1 Debug HTTP Trace.
+4. `docs/sdd/slices/P1-04-scenario-testplan-polish.md` -- active Slice SDD for P1 Scenario / Test Plan polish, amended by `ADR-0023` to retain Generated YAML Preview only on Test Plan.
+5. `docs/sdd/slices/P1-08-debug-http-trace.md` -- active Slice SDD for P1 Debug HTTP Trace.
 
 Active P1 Slice SDDs at this revision:
 
 - `P1-00-monitoring.md`, governed by the P1 scope gate and limited to deployment-level config, Standard Run InfluxDB writes, and a read-only Grafana entry.
 - `P1-03-workspace-admin.md`, governed by the P1 scope gate.
 - `P1-01-resource-multi-node.md`, governed by `ADR-0009`.
+- `P1-04-scenario-testplan-polish.md`, governed by the P1 scope gate and amended by `ADR-0023` to keep only the Test Plan read-only Generated YAML Preview.
 - `P1-08-debug-http-trace.md`, governed by `ADR-0008`.
 
 Do not expand placeholders into implementation design, schemas, migrations, or generated-contract details inside this README.

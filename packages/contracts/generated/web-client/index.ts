@@ -610,14 +610,34 @@ export interface paths {
         put?: never;
         post?: never;
         /**
-         * Delete Scenario
-         * @description Soft-delete a Scenario. Deleted Scenarios are hidden from active lists; historical Run Reports keep their saved snapshots.
+         * Archive Scenario
+         * @description Archive a Scenario through the DELETE transport. Archived Scenarios are hidden from active lists; historical Run Reports keep their saved snapshots.
          */
         delete: operations["deleteScenario"];
         options?: never;
         head?: never;
         /** Patch Scenario */
         patch: operations["patchScenario"];
+        trace?: never;
+    };
+    "/v1/scenarios/{scenarioId}/clone": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Clone Scenario
+         * @description Clone a visible Scenario in the current Workspace.
+         */
+        post: operations["cloneScenario"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/v1/setup/status": {
@@ -667,14 +687,54 @@ export interface paths {
         put?: never;
         post?: never;
         /**
-         * Delete Test Plan
-         * @description Soft-delete a Test Plan. Deleted Test Plans are hidden from active lists; historical Run Reports keep their saved snapshots.
+         * Archive Test Plan
+         * @description Archive a Test Plan through the DELETE transport. Archived Test Plans are hidden from active lists; historical Run Reports keep their saved snapshots.
          */
         delete: operations["deleteTestPlan"];
         options?: never;
         head?: never;
         /** Patch Test Plan */
         patch: operations["patchTestPlan"];
+        trace?: never;
+    };
+    "/v1/test-plans/{testPlanId}/clone": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Clone Test Plan
+         * @description Clone a visible Test Plan in the current Workspace.
+         */
+        post: operations["cloneTestPlan"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/test-plans/{testPlanId}/execution-preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Test Plan execution preview
+         * @description Return a safe read-only debug or standard execution preview for the saved Test Plan revision.
+         */
+        get: operations["getTestPlanExecutionPreview"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/v1/workspaces": {
@@ -732,6 +792,48 @@ export interface components {
             membership: components["schemas"]["WorkspaceMembershipSummary"];
             name: string;
             status: "active" | "archived";
+        };
+        CloneRequest: {
+            /** Name */
+            name?: string | null;
+        };
+        ExecutionPreviewResponse: {
+            /** Content */
+            content: string;
+            /**
+             * Format
+             * @constant
+             */
+            format: "yaml";
+            /**
+             * Mode
+             * @enum {string}
+             */
+            mode: "debug" | "standard";
+            /** Sourceid */
+            sourceId: string;
+            /** Sourcerevision */
+            sourceRevision: number;
+            /**
+             * Sourcetype
+             * @constant
+             */
+            sourceType: "test_plan";
+            /** Warnings */
+            warnings: components["schemas"]["ExecutionPreviewWarning"][];
+        };
+        ExecutionPreviewWarning: {
+            /** Code */
+            code: string;
+            /** Field */
+            field?: string | null;
+            /** Message */
+            message: string;
+            /**
+             * Severity
+             * @enum {string}
+             */
+            severity: "info" | "warning";
         };
         MembershipReplaceRequest: { workspaceIds: string[] };
         ResetPasswordRequest: { newPassword: string };
@@ -2585,6 +2687,158 @@ export interface operations {
     adminArchiveWorkspace: generatedOperation<components["schemas"]["WorkspaceEnvelope"]>;
     listWorkspaces: generatedOperation<components["schemas"]["WorkspaceListResponse"]>;
     switchWorkspace: generatedOperation<components["schemas"]["CurrentUserResponse"], components["schemas"]["WorkspaceSwitchRequest"]>;
+    cloneScenario: {
+        parameters: {
+            query?: never;
+            header: {
+                "x-workspace-id"?: string | null;
+                "x-csrf-token": string;
+            };
+            path: {
+                scenarioId: string;
+            };
+            cookie?: {
+                surgepilot_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CloneRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ScenarioDetail"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    cloneTestPlan: {
+        parameters: {
+            query?: never;
+            header: {
+                "x-workspace-id"?: string | null;
+                "x-csrf-token": string;
+            };
+            path: {
+                testPlanId: string;
+            };
+            cookie?: {
+                surgepilot_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CloneRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TestPlanDetail"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
     createEnvGroup: {
         parameters: {
             query?: never;
@@ -4625,6 +4879,88 @@ export interface operations {
             };
             /** @description Not Found */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    getTestPlanExecutionPreview: {
+        parameters: {
+            query?: {
+                runType?: "debug" | "standard";
+            };
+            header?: {
+                "x-workspace-id"?: string | null;
+            };
+            path: {
+                testPlanId: string;
+            };
+            cookie?: {
+                surgepilot_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExecutionPreviewResponse"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
                 headers: {
                     [name: string]: unknown;
                 };

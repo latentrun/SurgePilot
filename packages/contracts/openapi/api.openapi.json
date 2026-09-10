@@ -81,6 +81,27 @@
         "title": "AvailableWorkspaceSummary",
         "type": "object"
       },
+      "CloneRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "name": {
+            "anyOf": [
+              {
+                "maxLength": 120,
+                "minLength": 1,
+                "pattern": ".*\\S.*",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          }
+        },
+        "title": "CloneRequest",
+        "type": "object"
+      },
       "CsrfTokenResponse": {
         "properties": {
           "csrfToken": {
@@ -787,6 +808,101 @@
           "requestId"
         ],
         "title": "ErrorResponse",
+        "type": "object"
+      },
+      "ExecutionPreviewResponse": {
+        "properties": {
+          "content": {
+            "title": "Content",
+            "type": "string"
+          },
+          "format": {
+            "const": "yaml",
+            "title": "Format",
+            "type": "string"
+          },
+          "mode": {
+            "enum": [
+              "debug",
+              "standard"
+            ],
+            "title": "Mode",
+            "type": "string"
+          },
+          "sourceId": {
+            "title": "Sourceid",
+            "type": "string"
+          },
+          "sourceRevision": {
+            "title": "Sourcerevision",
+            "type": "integer"
+          },
+          "sourceType": {
+            "const": "test_plan",
+            "title": "Sourcetype",
+            "type": "string"
+          },
+          "warnings": {
+            "items": {
+              "$ref": "#/components/schemas/ExecutionPreviewWarning"
+            },
+            "title": "Warnings",
+            "type": "array"
+          }
+        },
+        "required": [
+          "sourceType",
+          "sourceId",
+          "sourceRevision",
+          "mode",
+          "format",
+          "content",
+          "warnings"
+        ],
+        "title": "ExecutionPreviewResponse",
+        "type": "object"
+      },
+      "ExecutionPreviewWarning": {
+        "properties": {
+          "code": {
+            "maxLength": 80,
+            "minLength": 1,
+            "title": "Code",
+            "type": "string"
+          },
+          "field": {
+            "anyOf": [
+              {
+                "maxLength": 120,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Field"
+          },
+          "message": {
+            "maxLength": 300,
+            "minLength": 1,
+            "title": "Message",
+            "type": "string"
+          },
+          "severity": {
+            "enum": [
+              "info",
+              "warning"
+            ],
+            "title": "Severity",
+            "type": "string"
+          }
+        },
+        "required": [
+          "code",
+          "message",
+          "severity"
+        ],
+        "title": "ExecutionPreviewWarning",
         "type": "object"
       },
       "FailureDiagnostics": {
@@ -2246,6 +2362,86 @@
         "title": "LoginRequest",
         "type": "object"
       },
+      "MonitoringEmbedResponse": {
+        "properties": {
+          "dashboardUid": {
+            "title": "Dashboarduid",
+            "type": "string"
+          },
+          "enabled": {
+            "title": "Enabled",
+            "type": "boolean"
+          },
+          "from": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "From"
+          },
+          "iframeUrl": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Iframeurl"
+          },
+          "runId": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Runid"
+          },
+          "status": {
+            "enum": [
+              "ready",
+              "not_configured",
+              "disabled",
+              "config_error"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "to": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "To"
+          },
+          "warnings": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Warnings",
+            "type": "array"
+          }
+        },
+        "required": [
+          "enabled",
+          "status",
+          "dashboardUid"
+        ],
+        "title": "MonitoringEmbedResponse",
+        "type": "object"
+      },
       "OverviewActiveRuns": {
         "properties": {
           "initializing": {
@@ -2610,6 +2806,34 @@
         "title": "OverviewWorkspace",
         "type": "object"
       },
+      "PermissionSummary": {
+        "properties": {
+          "canManageSystemSettings": {
+            "title": "Canmanagesystemsettings",
+            "type": "boolean"
+          },
+          "canManageUsers": {
+            "title": "Canmanageusers",
+            "type": "boolean"
+          },
+          "canManageWorkspaces": {
+            "title": "Canmanageworkspaces",
+            "type": "boolean"
+          },
+          "canViewSetupStatus": {
+            "title": "Canviewsetupstatus",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "canManageWorkspaces",
+          "canManageUsers",
+          "canManageSystemSettings",
+          "canViewSetupStatus"
+        ],
+        "title": "PermissionSummary",
+        "type": "object"
+      },
       "RegisterRequest": {
         "properties": {
           "displayName": {
@@ -2662,6 +2886,98 @@
           "email"
         ],
         "title": "RunActor",
+        "type": "object"
+      },
+      "RunAllocatedNode": {
+        "properties": {
+          "cleanupStatus": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cleanupstatus"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "lastHeartbeatAt": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Lastheartbeatat"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "nodeIndex": {
+            "title": "Nodeindex",
+            "type": "integer"
+          },
+          "quarantineReason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Quarantinereason"
+          },
+          "scope": {
+            "title": "Scope",
+            "type": "string"
+          },
+          "slaResult": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SlaResult"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "state": {
+            "title": "State",
+            "type": "string"
+          },
+          "terminalReason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Terminalreason"
+          },
+          "totalNodes": {
+            "title": "Totalnodes",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "scope",
+          "nodeIndex",
+          "totalNodes",
+          "state"
+        ],
+        "title": "RunAllocatedNode",
         "type": "object"
       },
       "RunArtifactItem": {
@@ -3242,37 +3558,126 @@
         "title": "RunListResponse",
         "type": "object"
       },
-      "MonitoringEmbedResponse": {
-        "properties": {
-          "dashboardUid": {"title": "Dashboarduid", "type": "string"},
-          "enabled": {"title": "Enabled", "type": "boolean"},
-          "from": {"anyOf": [{"type": "string"}, {"type": "null"}], "title": "From"},
-          "iframeUrl": {"anyOf": [{"type": "string"}, {"type": "null"}], "title": "Iframeurl"},
-          "runId": {"anyOf": [{"type": "string"}, {"type": "null"}], "title": "Runid"},
-          "status": {"enum": ["ready", "not_configured", "disabled", "config_error"], "title": "Status", "type": "string"},
-          "to": {"anyOf": [{"type": "string"}, {"type": "null"}], "title": "To"},
-          "warnings": {"items": {"type": "string"}, "title": "Warnings", "type": "array"}
-        },
-        "required": ["enabled", "status", "dashboardUid"],
-        "title": "MonitoringEmbedResponse",
-        "type": "object"
-      },
       "RunMonitoringLinkResponse": {
         "properties": {
-          "dashboardUid": {"title": "Dashboarduid", "type": "string"},
-          "disabledReason": {"anyOf": [{"enum": ["debug_run_not_monitored", "monitoring_disabled", "not_configured"], "type": "string"}, {"type": "null"}], "title": "Disabledreason"},
-          "enabledForRun": {"title": "Enabledforrun", "type": "boolean"},
-          "grafanaFrom": {"anyOf": [{"type": "string"}, {"type": "null"}], "title": "Grafanafrom"},
-          "grafanaTo": {"anyOf": [{"type": "string"}, {"type": "null"}], "title": "Grafanato"},
-          "iframeUrl": {"anyOf": [{"type": "string"}, {"type": "null"}], "title": "Iframeurl"},
-          "platformMonitoringUrl": {"anyOf": [{"type": "string"}, {"type": "null"}], "title": "Platformmonitoringurl"},
-          "runEndedAt": {"anyOf": [{"type": "string"}, {"type": "null"}], "title": "Runendedat"},
-          "runId": {"title": "Runid", "type": "string"},
-          "runStartedAt": {"anyOf": [{"type": "string"}, {"type": "null"}], "title": "Runstartedat"},
-          "status": {"enum": ["not_configured", "disabled", "enabled", "config_error"], "title": "Status", "type": "string"},
-          "warnings": {"items": {"type": "string"}, "title": "Warnings", "type": "array"}
+          "dashboardUid": {
+            "title": "Dashboarduid",
+            "type": "string"
+          },
+          "disabledReason": {
+            "anyOf": [
+              {
+                "enum": [
+                  "debug_run_not_monitored",
+                  "monitoring_disabled",
+                  "not_configured"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Disabledreason"
+          },
+          "enabledForRun": {
+            "title": "Enabledforrun",
+            "type": "boolean"
+          },
+          "grafanaFrom": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Grafanafrom"
+          },
+          "grafanaTo": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Grafanato"
+          },
+          "iframeUrl": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Iframeurl"
+          },
+          "platformMonitoringUrl": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Platformmonitoringurl"
+          },
+          "runEndedAt": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Runendedat"
+          },
+          "runId": {
+            "title": "Runid",
+            "type": "string"
+          },
+          "runStartedAt": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Runstartedat"
+          },
+          "status": {
+            "enum": [
+              "not_configured",
+              "disabled",
+              "enabled",
+              "config_error"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "warnings": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Warnings",
+            "type": "array"
+          }
         },
-        "required": ["runId", "enabledForRun", "status", "dashboardUid"],
+        "required": [
+          "runId",
+          "enabledForRun",
+          "status",
+          "dashboardUid"
+        ],
         "title": "RunMonitoringLinkResponse",
         "type": "object"
       },
@@ -3329,6 +3734,56 @@
           "artifactsSummary"
         ],
         "title": "RunReportDetail",
+        "type": "object"
+      },
+      "RunResourceRequest": {
+        "properties": {
+          "concurrencyPerNode": {
+            "anyOf": [
+              {
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Concurrencypernode"
+          },
+          "mode": {
+            "enum": [
+              "manual",
+              "auto"
+            ],
+            "title": "Mode",
+            "type": "string"
+          },
+          "nodeCount": {
+            "anyOf": [
+              {
+                "maximum": 10.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Nodecount"
+          },
+          "selectedNodeIds": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 10,
+            "title": "Selectednodeids",
+            "type": "array"
+          }
+        },
+        "required": [
+          "mode"
+        ],
+        "title": "RunResourceRequest",
         "type": "object"
       },
       "RunSelectedNode": {
@@ -5979,34 +6434,6 @@
         "title": "TestPlanUpdatedBy",
         "type": "object"
       },
-      "PermissionSummary": {
-        "properties": {
-          "canManageSystemSettings": {
-            "title": "Canmanagesystemsettings",
-            "type": "boolean"
-          },
-          "canManageUsers": {
-            "title": "Canmanageusers",
-            "type": "boolean"
-          },
-          "canManageWorkspaces": {
-            "title": "Canmanageworkspaces",
-            "type": "boolean"
-          },
-          "canViewSetupStatus": {
-            "title": "Canviewsetupstatus",
-            "type": "boolean"
-          }
-        },
-        "required": [
-          "canManageWorkspaces",
-          "canManageUsers",
-          "canManageSystemSettings",
-          "canViewSetupStatus"
-        ],
-        "title": "PermissionSummary",
-        "type": "object"
-      },
       "UserSummary": {
         "properties": {
           "displayName": {
@@ -6114,148 +6541,6 @@
         ],
         "title": "WorkspaceSummary",
         "type": "object"
-      },
-      "RunResourceRequest": {
-        "properties": {
-          "concurrencyPerNode": {
-            "anyOf": [
-              {
-                "minimum": 1.0,
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Concurrencypernode"
-          },
-          "mode": {
-            "enum": [
-              "manual",
-              "auto"
-            ],
-            "title": "Mode",
-            "type": "string"
-          },
-          "nodeCount": {
-            "anyOf": [
-              {
-                "maximum": 10.0,
-                "minimum": 1.0,
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Nodecount"
-          },
-          "selectedNodeIds": {
-            "items": {
-              "type": "string"
-            },
-            "maxItems": 10,
-            "title": "Selectednodeids",
-            "type": "array"
-          }
-        },
-        "required": [
-          "mode"
-        ],
-        "title": "RunResourceRequest",
-        "type": "object"
-      },
-      "RunAllocatedNode": {
-        "properties": {
-          "cleanupStatus": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Cleanupstatus"
-          },
-          "id": {
-            "title": "Id",
-            "type": "string"
-          },
-          "lastHeartbeatAt": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Lastheartbeatat"
-          },
-          "name": {
-            "title": "Name",
-            "type": "string"
-          },
-          "nodeIndex": {
-            "title": "Nodeindex",
-            "type": "integer"
-          },
-          "quarantineReason": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Quarantinereason"
-          },
-          "scope": {
-            "title": "Scope",
-            "type": "string"
-          },
-          "slaResult": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/SlaResult"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "state": {
-            "title": "State",
-            "type": "string"
-          },
-          "terminalReason": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Terminalreason"
-          },
-          "totalNodes": {
-            "title": "Totalnodes",
-            "type": "integer"
-          }
-        },
-        "required": [
-          "id",
-          "name",
-          "scope",
-          "nodeIndex",
-          "totalNodes",
-          "state"
-        ],
-        "title": "RunAllocatedNode",
-        "type": "object"
       }
     }
   },
@@ -6293,6 +6578,7 @@
       "LOAD_NODE_INIT_FAILED",
       "CREDENTIAL_DECRYPT_FAILED",
       "SCENARIO_REVISION_CONFLICT",
+      "INVALID_EXECUTION_PREVIEW_MODE",
       "RESOURCE_REQUEST_INVALID",
       "RUN_STOP_NOT_ALLOWED",
       "RUN_TERMINAL_STATE",
@@ -6368,6 +6654,1123 @@
           }
         },
         "summary": "Get Admin Setup Status",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/v1/admin/system-settings": {
+      "get": {
+        "operationId": "adminGetSystemSettings",
+        "parameters": [
+          {
+            "in": "cookie",
+            "name": "surgepilot_session",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "SurgePilot Session"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SystemSettingsResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          }
+        },
+        "summary": "Admin Get System Settings",
+        "tags": [
+          "admin"
+        ]
+      },
+      "patch": {
+        "operationId": "adminPatchSystemSettings",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "x-csrf-token",
+            "required": true,
+            "schema": {
+              "title": "X-Csrf-Token",
+              "type": "string"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "surgepilot_session",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "SurgePilot Session"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SystemSettingsPatchRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SystemSettingsResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          }
+        },
+        "summary": "Admin Patch System Settings",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/v1/admin/users": {
+      "get": {
+        "operationId": "adminListUsers",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "q",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Q"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "surgepilot_session",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "SurgePilot Session"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminUserListResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          }
+        },
+        "summary": "Admin List Users",
+        "tags": [
+          "admin"
+        ]
+      },
+      "post": {
+        "operationId": "adminCreateUser",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "x-csrf-token",
+            "required": true,
+            "schema": {
+              "title": "X-Csrf-Token",
+              "type": "string"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "surgepilot_session",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "SurgePilot Session"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AdminUserCreateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminUserEnvelope"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          }
+        },
+        "summary": "Admin Create User",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/v1/admin/users/{userId}": {
+      "get": {
+        "operationId": "adminGetUser",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "userId",
+            "required": true,
+            "schema": {
+              "title": "Userid",
+              "type": "string"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "surgepilot_session",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "SurgePilot Session"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminUserEnvelope"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          }
+        },
+        "summary": "Admin Get User",
+        "tags": [
+          "admin"
+        ]
+      },
+      "patch": {
+        "operationId": "adminPatchUser",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "userId",
+            "required": true,
+            "schema": {
+              "title": "Userid",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-csrf-token",
+            "required": true,
+            "schema": {
+              "title": "X-Csrf-Token",
+              "type": "string"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "surgepilot_session",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "SurgePilot Session"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AdminUserPatchRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminUserEnvelope"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          }
+        },
+        "summary": "Admin Patch User",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/v1/admin/users/{userId}/reset-password": {
+      "post": {
+        "operationId": "adminResetUserPassword",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "userId",
+            "required": true,
+            "schema": {
+              "title": "Userid",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-csrf-token",
+            "required": true,
+            "schema": {
+              "title": "X-Csrf-Token",
+              "type": "string"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "surgepilot_session",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "SurgePilot Session"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ResetPasswordRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminUserEnvelope"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          }
+        },
+        "summary": "Admin Reset User Password",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/v1/admin/users/{userId}/workspaces": {
+      "put": {
+        "operationId": "adminReplaceUserWorkspaces",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "userId",
+            "required": true,
+            "schema": {
+              "title": "Userid",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-csrf-token",
+            "required": true,
+            "schema": {
+              "title": "X-Csrf-Token",
+              "type": "string"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "surgepilot_session",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "SurgePilot Session"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MembershipReplaceRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminUserEnvelope"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          }
+        },
+        "summary": "Admin Replace User Workspaces",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/v1/admin/workspaces": {
+      "get": {
+        "operationId": "adminListWorkspaces",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "status",
+            "required": false,
+            "schema": {
+              "default": "active",
+              "enum": [
+                "active",
+                "archived",
+                "all"
+              ],
+              "title": "Status",
+              "type": "string"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "surgepilot_session",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "SurgePilot Session"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminWorkspaceListResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          }
+        },
+        "summary": "Admin List Workspaces",
+        "tags": [
+          "admin"
+        ]
+      },
+      "post": {
+        "operationId": "adminCreateWorkspace",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "x-csrf-token",
+            "required": true,
+            "schema": {
+              "title": "X-Csrf-Token",
+              "type": "string"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "surgepilot_session",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "SurgePilot Session"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WorkspaceWriteRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkspaceEnvelope"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          }
+        },
+        "summary": "Admin Create Workspace",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/v1/admin/workspaces/{workspaceId}": {
+      "patch": {
+        "operationId": "adminPatchWorkspace",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "workspaceId",
+            "required": true,
+            "schema": {
+              "title": "Workspaceid",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-csrf-token",
+            "required": true,
+            "schema": {
+              "title": "X-Csrf-Token",
+              "type": "string"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "surgepilot_session",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "SurgePilot Session"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WorkspaceWriteRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkspaceEnvelope"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          }
+        },
+        "summary": "Admin Patch Workspace",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/v1/admin/workspaces/{workspaceId}/archive": {
+      "post": {
+        "operationId": "adminArchiveWorkspace",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "workspaceId",
+            "required": true,
+            "schema": {
+              "title": "Workspaceid",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-csrf-token",
+            "required": true,
+            "schema": {
+              "title": "X-Csrf-Token",
+              "type": "string"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "surgepilot_session",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "SurgePilot Session"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkspaceEnvelope"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          }
+        },
+        "summary": "Admin Archive Workspace",
         "tags": [
           "admin"
         ]
@@ -9941,21 +11344,143 @@
       "get": {
         "operationId": "getMonitoringEmbed",
         "parameters": [
-          {"in": "query", "name": "runId", "required": false, "schema": {"anyOf": [{"type": "string"}, {"type": "null"}], "title": "Runid"}},
-          {"in": "query", "name": "from", "required": false, "schema": {"anyOf": [{"type": "string"}, {"type": "null"}], "title": "From"}},
-          {"in": "query", "name": "to", "required": false, "schema": {"anyOf": [{"type": "string"}, {"type": "null"}], "title": "To"}},
-          {"in": "header", "name": "x-workspace-id", "required": false, "schema": {"anyOf": [{"type": "string"}, {"type": "null"}], "title": "X-Workspace-Id"}},
-          {"in": "cookie", "name": "surgepilot_session", "required": false, "schema": {"anyOf": [{"type": "string"}, {"type": "null"}], "title": "SurgePilot Session"}}
+          {
+            "in": "query",
+            "name": "runId",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Runid"
+            }
+          },
+          {
+            "in": "query",
+            "name": "from",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "From"
+            }
+          },
+          {
+            "in": "query",
+            "name": "to",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "To"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-workspace-id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Workspace-Id"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "surgepilot_session",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "SurgePilot Session"
+            }
+          }
         ],
         "responses": {
-          "200": {"content": {"application/json": {"schema": {"$ref": "#/components/schemas/MonitoringEmbedResponse"}}}, "description": "Successful Response"},
-          "400": {"content": {"application/json": {"schema": {"$ref": "#/components/schemas/ErrorResponse"}}}, "description": "Bad Request"},
-          "401": {"content": {"application/json": {"schema": {"$ref": "#/components/schemas/ErrorResponse"}}}, "description": "Unauthorized"},
-          "403": {"content": {"application/json": {"schema": {"$ref": "#/components/schemas/ErrorResponse"}}}, "description": "Forbidden"},
-          "422": {"content": {"application/json": {"schema": {"$ref": "#/components/schemas/ErrorResponse"}}}, "description": "Unprocessable Entity"}
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MonitoringEmbedResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          }
         },
         "summary": "Get Monitoring Embed Route",
-        "tags": ["monitoring"]
+        "tags": [
+          "monitoring"
+        ]
       }
     },
     "/v1/overview": {
@@ -10890,20 +12415,114 @@
       "get": {
         "operationId": "getRunMonitoringLink",
         "parameters": [
-          {"in": "path", "name": "runId", "required": true, "schema": {"title": "Runid", "type": "string"}},
-          {"in": "header", "name": "x-workspace-id", "required": false, "schema": {"anyOf": [{"type": "string"}, {"type": "null"}], "title": "X-Workspace-Id"}},
-          {"in": "cookie", "name": "surgepilot_session", "required": false, "schema": {"anyOf": [{"type": "string"}, {"type": "null"}], "title": "SurgePilot Session"}}
+          {
+            "in": "path",
+            "name": "runId",
+            "required": true,
+            "schema": {
+              "title": "Runid",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-workspace-id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Workspace-Id"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "surgepilot_session",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "SurgePilot Session"
+            }
+          }
         ],
         "responses": {
-          "200": {"content": {"application/json": {"schema": {"$ref": "#/components/schemas/RunMonitoringLinkResponse"}}}, "description": "Successful Response"},
-          "400": {"content": {"application/json": {"schema": {"$ref": "#/components/schemas/ErrorResponse"}}}, "description": "Bad Request"},
-          "401": {"content": {"application/json": {"schema": {"$ref": "#/components/schemas/ErrorResponse"}}}, "description": "Unauthorized"},
-          "403": {"content": {"application/json": {"schema": {"$ref": "#/components/schemas/ErrorResponse"}}}, "description": "Forbidden"},
-          "404": {"content": {"application/json": {"schema": {"$ref": "#/components/schemas/ErrorResponse"}}}, "description": "Not Found"},
-          "422": {"content": {"application/json": {"schema": {"$ref": "#/components/schemas/ErrorResponse"}}}, "description": "Unprocessable Entity"}
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RunMonitoringLinkResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          }
         },
         "summary": "Get Run Monitoring Link Route",
-        "tags": ["runs"]
+        "tags": [
+          "runs"
+        ]
       }
     },
     "/v1/runs/{runId}/stop": {
@@ -11476,7 +13095,7 @@
     },
     "/v1/scenarios/{scenarioId}": {
       "delete": {
-        "description": "Soft-delete a Scenario. Deleted Scenarios are hidden from active lists; historical Run Reports keep their saved snapshots.",
+        "description": "Archive a Scenario through the DELETE transport. Archived Scenarios are hidden from active lists; historical Run Reports keep their saved snapshots.",
         "operationId": "deleteScenario",
         "parameters": [
           {
@@ -11595,7 +13214,7 @@
             "description": "Unprocessable Entity"
           }
         },
-        "summary": "Delete Scenario",
+        "summary": "Archive Scenario",
         "tags": [
           "scenarios"
         ]
@@ -11849,6 +13468,140 @@
           }
         },
         "summary": "Patch Scenario",
+        "tags": [
+          "scenarios"
+        ]
+      }
+    },
+    "/v1/scenarios/{scenarioId}/clone": {
+      "post": {
+        "description": "Clone a visible Scenario in the current Workspace.",
+        "operationId": "cloneScenario",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "scenarioId",
+            "required": true,
+            "schema": {
+              "title": "Scenarioid",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-workspace-id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Workspace-Id"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-csrf-token",
+            "required": true,
+            "schema": {
+              "title": "X-Csrf-Token",
+              "type": "string"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "surgepilot_session",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "SurgePilot Session"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CloneRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ScenarioDetail"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          }
+        },
+        "summary": "Clone Scenario",
         "tags": [
           "scenarios"
         ]
@@ -12146,7 +13899,7 @@
     },
     "/v1/test-plans/{testPlanId}": {
       "delete": {
-        "description": "Soft-delete a Test Plan. Deleted Test Plans are hidden from active lists; historical Run Reports keep their saved snapshots.",
+        "description": "Archive a Test Plan through the DELETE transport. Archived Test Plans are hidden from active lists; historical Run Reports keep their saved snapshots.",
         "operationId": "deleteTestPlan",
         "parameters": [
           {
@@ -12265,7 +14018,7 @@
             "description": "Unprocessable Entity"
           }
         },
-        "summary": "Delete Test Plan",
+        "summary": "Archive Test Plan",
         "tags": [
           "test-plans"
         ]
@@ -12524,13 +14277,23 @@
         ]
       }
     },
-    "/v1/admin/system-settings": {
-      "get": {
-        "operationId": "adminGetSystemSettings",
+    "/v1/test-plans/{testPlanId}/clone": {
+      "post": {
+        "description": "Clone a visible Test Plan in the current Workspace.",
+        "operationId": "cloneTestPlan",
         "parameters": [
           {
-            "in": "cookie",
-            "name": "surgepilot_session",
+            "in": "path",
+            "name": "testPlanId",
+            "required": true,
+            "schema": {
+              "title": "Testplanid",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-workspace-id",
             "required": false,
             "schema": {
               "anyOf": [
@@ -12541,50 +14304,9 @@
                   "type": "null"
                 }
               ],
-              "title": "SurgePilot Session"
+              "title": "X-Workspace-Id"
             }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/SystemSettingsResponse"
-                }
-              }
-            },
-            "description": "Successful Response"
           },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Unauthorized"
-          },
-          "403": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Forbidden"
-          }
-        },
-        "summary": "Admin Get System Settings",
-        "tags": [
-          "admin"
-        ]
-      },
-      "patch": {
-        "operationId": "adminPatchSystemSettings",
-        "parameters": [
           {
             "in": "header",
             "name": "x-csrf-token",
@@ -12615,18 +14337,18 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/SystemSettingsPatchRequest"
+                "$ref": "#/components/schemas/CloneRequest"
               }
             }
           },
           "required": true
         },
         "responses": {
-          "200": {
+          "201": {
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/SystemSettingsResponse"
+                  "$ref": "#/components/schemas/TestPlanDetail"
                 }
               }
             },
@@ -12662,6 +14384,16 @@
             },
             "description": "Forbidden"
           },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
           "422": {
             "content": {
               "application/json": {
@@ -12673,19 +14405,29 @@
             "description": "Unprocessable Entity"
           }
         },
-        "summary": "Admin Patch System Settings",
+        "summary": "Clone Test Plan",
         "tags": [
-          "admin"
+          "test-plans"
         ]
       }
     },
-    "/v1/admin/users": {
+    "/v1/test-plans/{testPlanId}/execution-preview": {
       "get": {
-        "operationId": "adminListUsers",
+        "description": "Return a safe read-only debug or standard execution preview for the saved Test Plan revision.",
+        "operationId": "getTestPlanExecutionPreview",
         "parameters": [
+          {
+            "in": "path",
+            "name": "testPlanId",
+            "required": true,
+            "schema": {
+              "title": "Testplanid",
+              "type": "string"
+            }
+          },
           {
             "in": "query",
-            "name": "q",
+            "name": "runType",
             "required": false,
             "schema": {
               "anyOf": [
@@ -12696,584 +14438,27 @@
                   "type": "null"
                 }
               ],
-              "title": "Q"
-            }
-          },
-          {
-            "in": "cookie",
-            "name": "surgepilot_session",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "SurgePilot Session"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/AdminUserListResponse"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Unauthorized"
-          },
-          "403": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Forbidden"
-          }
-        },
-        "summary": "Admin List Users",
-        "tags": [
-          "admin"
-        ]
-      },
-      "post": {
-        "operationId": "adminCreateUser",
-        "parameters": [
-          {
-            "in": "header",
-            "name": "x-csrf-token",
-            "required": true,
-            "schema": {
-              "title": "X-Csrf-Token",
-              "type": "string"
-            }
-          },
-          {
-            "in": "cookie",
-            "name": "surgepilot_session",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "SurgePilot Session"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/AdminUserCreateRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "201": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/AdminUserEnvelope"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Unauthorized"
-          },
-          "403": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Forbidden"
-          },
-          "409": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Conflict"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Unprocessable Entity"
-          }
-        },
-        "summary": "Admin Create User",
-        "tags": [
-          "admin"
-        ]
-      }
-    },
-    "/v1/admin/users/{userId}": {
-      "get": {
-        "operationId": "adminGetUser",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "userId",
-            "required": true,
-            "schema": {
-              "title": "Userid",
-              "type": "string"
-            }
-          },
-          {
-            "in": "cookie",
-            "name": "surgepilot_session",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "SurgePilot Session"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/AdminUserEnvelope"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Unauthorized"
-          },
-          "403": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Forbidden"
-          },
-          "404": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Not Found"
-          }
-        },
-        "summary": "Admin Get User",
-        "tags": [
-          "admin"
-        ]
-      },
-      "patch": {
-        "operationId": "adminPatchUser",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "userId",
-            "required": true,
-            "schema": {
-              "title": "Userid",
-              "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "x-csrf-token",
-            "required": true,
-            "schema": {
-              "title": "X-Csrf-Token",
-              "type": "string"
-            }
-          },
-          {
-            "in": "cookie",
-            "name": "surgepilot_session",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "SurgePilot Session"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/AdminUserPatchRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/AdminUserEnvelope"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Unauthorized"
-          },
-          "403": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Forbidden"
-          },
-          "404": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Not Found"
-          },
-          "409": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Conflict"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Unprocessable Entity"
-          }
-        },
-        "summary": "Admin Patch User",
-        "tags": [
-          "admin"
-        ]
-      }
-    },
-    "/v1/admin/users/{userId}/reset-password": {
-      "post": {
-        "operationId": "adminResetUserPassword",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "userId",
-            "required": true,
-            "schema": {
-              "title": "Userid",
-              "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "x-csrf-token",
-            "required": true,
-            "schema": {
-              "title": "X-Csrf-Token",
-              "type": "string"
-            }
-          },
-          {
-            "in": "cookie",
-            "name": "surgepilot_session",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "SurgePilot Session"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/ResetPasswordRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/AdminUserEnvelope"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Unauthorized"
-          },
-          "403": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Forbidden"
-          },
-          "404": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Not Found"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Unprocessable Entity"
-          }
-        },
-        "summary": "Admin Reset User Password",
-        "tags": [
-          "admin"
-        ]
-      }
-    },
-    "/v1/admin/users/{userId}/workspaces": {
-      "put": {
-        "operationId": "adminReplaceUserWorkspaces",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "userId",
-            "required": true,
-            "schema": {
-              "title": "Userid",
-              "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "x-csrf-token",
-            "required": true,
-            "schema": {
-              "title": "X-Csrf-Token",
-              "type": "string"
-            }
-          },
-          {
-            "in": "cookie",
-            "name": "surgepilot_session",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "SurgePilot Session"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/MembershipReplaceRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/AdminUserEnvelope"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Unauthorized"
-          },
-          "403": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Forbidden"
-          },
-          "404": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Not Found"
-          },
-          "409": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Conflict"
-          }
-        },
-        "summary": "Admin Replace User Workspaces",
-        "tags": [
-          "admin"
-        ]
-      }
-    },
-    "/v1/admin/workspaces": {
-      "get": {
-        "operationId": "adminListWorkspaces",
-        "parameters": [
-          {
-            "in": "query",
-            "name": "status",
-            "required": false,
-            "schema": {
-              "default": "active",
               "enum": [
-                "active",
-                "archived",
-                "all"
+                "debug",
+                "standard"
               ],
-              "title": "Status",
-              "type": "string"
+              "title": "Runtype"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-workspace-id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Workspace-Id"
             }
           },
           {
@@ -13298,13 +14483,13 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/AdminWorkspaceListResponse"
+                  "$ref": "#/components/schemas/ExecutionPreviewResponse"
                 }
               }
             },
             "description": "Successful Response"
           },
-          "401": {
+          "400": {
             "content": {
               "application/json": {
                 "schema": {
@@ -13312,180 +14497,7 @@
                 }
               }
             },
-            "description": "Unauthorized"
-          },
-          "403": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Forbidden"
-          }
-        },
-        "summary": "Admin List Workspaces",
-        "tags": [
-          "admin"
-        ]
-      },
-      "post": {
-        "operationId": "adminCreateWorkspace",
-        "parameters": [
-          {
-            "in": "header",
-            "name": "x-csrf-token",
-            "required": true,
-            "schema": {
-              "title": "X-Csrf-Token",
-              "type": "string"
-            }
-          },
-          {
-            "in": "cookie",
-            "name": "surgepilot_session",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "SurgePilot Session"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/WorkspaceWriteRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "201": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/WorkspaceEnvelope"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Unauthorized"
-          },
-          "403": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Forbidden"
-          },
-          "409": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Conflict"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Unprocessable Entity"
-          }
-        },
-        "summary": "Admin Create Workspace",
-        "tags": [
-          "admin"
-        ]
-      }
-    },
-    "/v1/admin/workspaces/{workspaceId}": {
-      "patch": {
-        "operationId": "adminPatchWorkspace",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "workspaceId",
-            "required": true,
-            "schema": {
-              "title": "Workspaceid",
-              "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "x-csrf-token",
-            "required": true,
-            "schema": {
-              "title": "X-Csrf-Token",
-              "type": "string"
-            }
-          },
-          {
-            "in": "cookie",
-            "name": "surgepilot_session",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "SurgePilot Session"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/WorkspaceWriteRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/WorkspaceEnvelope"
-                }
-              }
-            },
-            "description": "Successful Response"
+            "description": "Bad Request"
           },
           "401": {
             "content": {
@@ -13538,106 +14550,9 @@
             "description": "Unprocessable Entity"
           }
         },
-        "summary": "Admin Patch Workspace",
+        "summary": "Get Test Plan execution preview",
         "tags": [
-          "admin"
-        ]
-      }
-    },
-    "/v1/admin/workspaces/{workspaceId}/archive": {
-      "post": {
-        "operationId": "adminArchiveWorkspace",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "workspaceId",
-            "required": true,
-            "schema": {
-              "title": "Workspaceid",
-              "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "x-csrf-token",
-            "required": true,
-            "schema": {
-              "title": "X-Csrf-Token",
-              "type": "string"
-            }
-          },
-          {
-            "in": "cookie",
-            "name": "surgepilot_session",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "SurgePilot Session"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/WorkspaceEnvelope"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Unauthorized"
-          },
-          "403": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Forbidden"
-          },
-          "404": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Not Found"
-          },
-          "409": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Conflict"
-          }
-        },
-        "summary": "Admin Archive Workspace",
-        "tags": [
-          "admin"
+          "test-plans"
         ]
       }
     },
