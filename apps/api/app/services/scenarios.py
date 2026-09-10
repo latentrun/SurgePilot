@@ -86,6 +86,21 @@ def validation_error(details: list[dict[str, str]]) -> AppError:
     return AppError("VALIDATION_ERROR", "Validation failed.", 422, details)
 
 
+def invalid_preview_mode(field: str) -> AppError:
+    return AppError(
+        "INVALID_EXECUTION_PREVIEW_MODE",
+        "Unsupported execution preview mode.",
+        400,
+        [
+            field_error(
+                field,
+                "Unsupported execution preview mode.",
+                "invalid_execution_preview_mode",
+            )
+        ],
+    )
+
+
 def _pydantic_content(payload: dict[str, Any], *, patch: bool = False) -> dict[str, Any]:
     model = ScenarioPatchRequest if patch else ScenarioCreateRequest
     try:

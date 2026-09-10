@@ -117,6 +117,7 @@ def custom_openapi() -> dict:
             "LOAD_NODE_INIT_FAILED",
             "CREDENTIAL_DECRYPT_FAILED",
             "SCENARIO_REVISION_CONFLICT",
+            "INVALID_EXECUTION_PREVIEW_MODE",
             "RESOURCE_REQUEST_INVALID",
             "RUN_STOP_NOT_ALLOWED",
             "RUN_TERMINAL_STATE",
