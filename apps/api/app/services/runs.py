@@ -575,6 +575,7 @@ def create_run_execution(db: Session, execution: RunExecutionInput) -> Run:
         allocation = RunNodeAllocation(
             id=new_ulid(), workspace_id=execution.workspace_id, run_id=run.id,
             node_id=allocated_node.id, node_index=index, total_nodes=len(nodes),
+            expected_runtime_version=allocated_node.runtime_version,
             state="initializing", sla_result="not_evaluated", created_at=now, updated_at=now,
         )
         allocations.append(allocation)
@@ -599,6 +600,9 @@ def create_run_execution(db: Session, execution: RunExecutionInput) -> Run:
         db.flush()
     except IntegrityError as exc:
         raise AppError("LOAD_NODE_UNAVAILABLE", "Load Node is unavailable.", 409) from exc
+    from app.services.monitoring import create_run_monitoring_snapshot
+
+    create_run_monitoring_snapshot(db, run=run)
     return run
 
 
