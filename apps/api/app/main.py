@@ -15,6 +15,7 @@ from app.routes import (
     dependency_files,
     env_groups,
     load_nodes,
+    monitoring,
     overview,
     runner_internal,
     runs,
@@ -53,11 +54,13 @@ app.include_router(workspaces.router)
 app.include_router(env_groups.router)
 app.include_router(dependency_files.router)
 app.include_router(load_nodes.router)
+app.include_router(monitoring.router)
 app.include_router(overview.router)
 app.include_router(runs.router)
 app.include_router(scenarios.router)
 app.include_router(test_plans.router)
 app.include_router(runner_internal.router)
+app.include_router(monitoring.internal_router)
 
 
 def custom_openapi() -> dict:

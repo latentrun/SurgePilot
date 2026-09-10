@@ -3242,6 +3242,40 @@
         "title": "RunListResponse",
         "type": "object"
       },
+      "MonitoringEmbedResponse": {
+        "properties": {
+          "dashboardUid": {"title": "Dashboarduid", "type": "string"},
+          "enabled": {"title": "Enabled", "type": "boolean"},
+          "from": {"anyOf": [{"type": "string"}, {"type": "null"}], "title": "From"},
+          "iframeUrl": {"anyOf": [{"type": "string"}, {"type": "null"}], "title": "Iframeurl"},
+          "runId": {"anyOf": [{"type": "string"}, {"type": "null"}], "title": "Runid"},
+          "status": {"enum": ["ready", "not_configured", "disabled", "config_error"], "title": "Status", "type": "string"},
+          "to": {"anyOf": [{"type": "string"}, {"type": "null"}], "title": "To"},
+          "warnings": {"items": {"type": "string"}, "title": "Warnings", "type": "array"}
+        },
+        "required": ["enabled", "status", "dashboardUid"],
+        "title": "MonitoringEmbedResponse",
+        "type": "object"
+      },
+      "RunMonitoringLinkResponse": {
+        "properties": {
+          "dashboardUid": {"title": "Dashboarduid", "type": "string"},
+          "disabledReason": {"anyOf": [{"enum": ["debug_run_not_monitored", "monitoring_disabled", "not_configured"], "type": "string"}, {"type": "null"}], "title": "Disabledreason"},
+          "enabledForRun": {"title": "Enabledforrun", "type": "boolean"},
+          "grafanaFrom": {"anyOf": [{"type": "string"}, {"type": "null"}], "title": "Grafanafrom"},
+          "grafanaTo": {"anyOf": [{"type": "string"}, {"type": "null"}], "title": "Grafanato"},
+          "iframeUrl": {"anyOf": [{"type": "string"}, {"type": "null"}], "title": "Iframeurl"},
+          "platformMonitoringUrl": {"anyOf": [{"type": "string"}, {"type": "null"}], "title": "Platformmonitoringurl"},
+          "runEndedAt": {"anyOf": [{"type": "string"}, {"type": "null"}], "title": "Runendedat"},
+          "runId": {"title": "Runid", "type": "string"},
+          "runStartedAt": {"anyOf": [{"type": "string"}, {"type": "null"}], "title": "Runstartedat"},
+          "status": {"enum": ["not_configured", "disabled", "enabled", "config_error"], "title": "Status", "type": "string"},
+          "warnings": {"items": {"type": "string"}, "title": "Warnings", "type": "array"}
+        },
+        "required": ["runId", "enabledForRun", "status", "dashboardUid"],
+        "title": "RunMonitoringLinkResponse",
+        "type": "object"
+      },
       "RunReportDetail": {
         "properties": {
           "allocatedNodes": {
@@ -9903,6 +9937,27 @@
         ]
       }
     },
+    "/v1/monitoring/embed": {
+      "get": {
+        "operationId": "getMonitoringEmbed",
+        "parameters": [
+          {"in": "query", "name": "runId", "required": false, "schema": {"anyOf": [{"type": "string"}, {"type": "null"}], "title": "Runid"}},
+          {"in": "query", "name": "from", "required": false, "schema": {"anyOf": [{"type": "string"}, {"type": "null"}], "title": "From"}},
+          {"in": "query", "name": "to", "required": false, "schema": {"anyOf": [{"type": "string"}, {"type": "null"}], "title": "To"}},
+          {"in": "header", "name": "x-workspace-id", "required": false, "schema": {"anyOf": [{"type": "string"}, {"type": "null"}], "title": "X-Workspace-Id"}},
+          {"in": "cookie", "name": "surgepilot_session", "required": false, "schema": {"anyOf": [{"type": "string"}, {"type": "null"}], "title": "SurgePilot Session"}}
+        ],
+        "responses": {
+          "200": {"content": {"application/json": {"schema": {"$ref": "#/components/schemas/MonitoringEmbedResponse"}}}, "description": "Successful Response"},
+          "400": {"content": {"application/json": {"schema": {"$ref": "#/components/schemas/ErrorResponse"}}}, "description": "Bad Request"},
+          "401": {"content": {"application/json": {"schema": {"$ref": "#/components/schemas/ErrorResponse"}}}, "description": "Unauthorized"},
+          "403": {"content": {"application/json": {"schema": {"$ref": "#/components/schemas/ErrorResponse"}}}, "description": "Forbidden"},
+          "422": {"content": {"application/json": {"schema": {"$ref": "#/components/schemas/ErrorResponse"}}}, "description": "Unprocessable Entity"}
+        },
+        "summary": "Get Monitoring Embed Route",
+        "tags": ["monitoring"]
+      }
+    },
     "/v1/overview": {
       "get": {
         "operationId": "getOverview",
@@ -10829,6 +10884,26 @@
         "tags": [
           "runs"
         ]
+      }
+    },
+    "/v1/runs/{runId}/monitoring": {
+      "get": {
+        "operationId": "getRunMonitoringLink",
+        "parameters": [
+          {"in": "path", "name": "runId", "required": true, "schema": {"title": "Runid", "type": "string"}},
+          {"in": "header", "name": "x-workspace-id", "required": false, "schema": {"anyOf": [{"type": "string"}, {"type": "null"}], "title": "X-Workspace-Id"}},
+          {"in": "cookie", "name": "surgepilot_session", "required": false, "schema": {"anyOf": [{"type": "string"}, {"type": "null"}], "title": "SurgePilot Session"}}
+        ],
+        "responses": {
+          "200": {"content": {"application/json": {"schema": {"$ref": "#/components/schemas/RunMonitoringLinkResponse"}}}, "description": "Successful Response"},
+          "400": {"content": {"application/json": {"schema": {"$ref": "#/components/schemas/ErrorResponse"}}}, "description": "Bad Request"},
+          "401": {"content": {"application/json": {"schema": {"$ref": "#/components/schemas/ErrorResponse"}}}, "description": "Unauthorized"},
+          "403": {"content": {"application/json": {"schema": {"$ref": "#/components/schemas/ErrorResponse"}}}, "description": "Forbidden"},
+          "404": {"content": {"application/json": {"schema": {"$ref": "#/components/schemas/ErrorResponse"}}}, "description": "Not Found"},
+          "422": {"content": {"application/json": {"schema": {"$ref": "#/components/schemas/ErrorResponse"}}}, "description": "Unprocessable Entity"}
+        },
+        "summary": "Get Run Monitoring Link Route",
+        "tags": ["runs"]
       }
     },
     "/v1/runs/{runId}/stop": {
