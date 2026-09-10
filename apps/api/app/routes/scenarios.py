@@ -5,7 +5,7 @@ from fastapi import APIRouter, Path, Query, Request, Response, status
 from app.api.deps import CsrfDep, CurrentUserDep, CurrentWorkspaceDep, DbDep
 from app.core.errors import AppError
 from app.core.ids import is_ulid
-from app.schemas.common import ErrorResponse
+from app.schemas.common import CloneRequest, ErrorResponse
 from app.schemas.scenarios import (
     ScenarioCreateRequest,
     ScenarioDetail,
@@ -14,6 +14,7 @@ from app.schemas.scenarios import (
     ScenarioSummary,
 )
 from app.services.scenarios import (
+    clone_scenario as clone_scenario_service,
     create_scenario as create_scenario_service,
     delete_scenario as delete_scenario_service,
     get_scenario as get_scenario_service,
@@ -163,6 +164,44 @@ def create_scenario(
     return scenario_detail(scenario)
 
 
+@router.post(
+    "/{scenarioId}/clone",
+    operation_id="cloneScenario",
+    response_model=ScenarioDetail,
+    response_model_by_alias=True,
+    status_code=status.HTTP_201_CREATED,
+    summary="Clone Scenario",
+    description="Clone a visible Scenario in the current Workspace.",
+    responses={
+        400: ERROR_RESPONSE,
+        401: ERROR_RESPONSE,
+        403: ERROR_RESPONSE,
+        404: ERROR_RESPONSE,
+        422: ERROR_RESPONSE,
+    },
+)
+def clone_scenario(
+    scenario_id: ScenarioIdPath,
+    payload: CloneRequest,
+    response: Response,
+    db: DbDep,
+    user: CurrentUserDep,
+    workspace: CurrentWorkspaceDep,
+    _csrf: CsrfDep,
+) -> ScenarioDetail:
+    validate_scenario_id(scenario_id)
+    scenario = clone_scenario_service(
+        db,
+        workspace_id=workspace.id,
+        scenario_id=scenario_id,
+        actor=user,
+        name=payload.name,
+    )
+    db.commit()
+    attach_workspace_header(response, workspace.id)
+    return scenario_detail(scenario)
+
+
 @router.get(
     "/{scenarioId}",
     operation_id="getScenario",
@@ -231,10 +270,10 @@ def patch_scenario(
     "/{scenarioId}",
     operation_id="deleteScenario",
     status_code=status.HTTP_204_NO_CONTENT,
-    summary="Delete Scenario",
+    summary="Archive Scenario",
     description=(
-        "Soft-delete a Scenario. Deleted Scenarios are hidden from active lists; "
-        "historical Run Reports keep their saved snapshots."
+        "Archive a Scenario through the DELETE transport. Archived Scenarios are hidden "
+        "from active lists; historical Run Reports keep their saved snapshots."
     ),
     responses={
         400: ERROR_RESPONSE,
