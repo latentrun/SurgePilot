@@ -63,6 +63,14 @@ ACTIVE_RUN_STATES = {"initializing", "running", "stopping"}
 DEFAULT_DEDUP_WINDOW_SECONDS = 30
 SCENARIO_ALIAS = "surgepilot_scenario"
 UNSAFE_URL_CHAR_PATTERN = re.compile(r"[\x00-\x20\x7f]")
+RUNTIME_JMETER_VERSION = "5.6.3"
+
+
+def runtime_jmeter_path(runner_home: str) -> str:
+    return (
+        f"{runner_home.rstrip('/')}/current/apache-jmeter-{RUNTIME_JMETER_VERSION}"
+        "/bin/surgepilot-jmeter-wrapper"
+    )
 
 
 def request_label(method: str, path: str) -> str:
