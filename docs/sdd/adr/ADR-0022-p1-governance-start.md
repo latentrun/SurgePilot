@@ -48,3 +48,7 @@ If any of those files still mention P0-only after this ADR is merged, interpret 
 ## P1-03 Verification Backfill
 
 The P1-03 reconstruction remains within the governance boundary established here. Its final verification atomic is represented by focused API, Web, contract, E2E, and base-compose drift checks; those checks verify session/workspace authority, Admin protections, settings secrecy, and generated-contract boundaries without authorizing another P1 Slice or any P2 surface.
+
+## P1-01 Verification Backfill
+
+The P1-01 reconstruction remains within the governance boundary established here. Its verification atomic is represented by focused API, generated-contract, Web, and E2E checks for atomic multi-node allocation, allocation-backed terminal and SLA aggregation, node-bound callback validation, idempotent Stop, per-allocation timeout/quarantine cleanup, and public redaction. The API verification now executes the shared fake Runner once per allocation, feeds its callback and artifact events through allocation-aware handling, covers success and one-node failure, checks token-node mismatch rejection, and asserts report redaction. Real SSH two-node acceptance remains an environment-dependent gap. This backfill authorizes no P2 surface, Debug multi-node behavior, Monitoring semantics, or resource-matching capability.

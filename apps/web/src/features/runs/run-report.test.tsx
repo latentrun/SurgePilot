@@ -1,7 +1,7 @@
 import { render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 
-import { HttpTrace, runReportRefetchInterval } from "./pages/run-report-page";
+import { HttpTrace, Nodes, runReportRefetchInterval } from "./pages/run-report-page";
 import type { RunReportDetail } from "../../app/api-client";
 
 describe("Run Report Debug HTTP Trace checkpoint behavior", () => {
@@ -49,5 +49,35 @@ describe("Run Report Debug HTTP Trace checkpoint behavior", () => {
 
     expect(runReportRefetchInterval(report, 0)).toBe(5000);
     expect(runReportRefetchInterval(report, 12)).toBe(false);
+  });
+
+  it("renders allocation-backed node rows without execution internals", () => {
+    const report = {
+      verdict: { runType: "standard", sourceType: "test_plan", slaResult: "failed" },
+      snapshot: {
+        resourceRequest: { mode: "manual", poolType: "workspace", expectedConcurrencyPerNode: 20 },
+      },
+      allocatedNodes: [
+        {
+          id: "01HZX3Y9M0E9W7Z6M5QK9S8P7A",
+          name: "Load Node A",
+          nodeIndex: 1,
+          totalNodes: 2,
+          state: "finished",
+          lastHeartbeatAt: null,
+          slaResult: "passed",
+          cleanupStatus: "released",
+          terminalReason: "finished",
+          quarantineReason: null,
+        },
+      ],
+    } as never;
+
+    render(<Nodes report={report} />);
+
+    expect(screen.getByText("Run-level SLA:")).toBeTruthy();
+    expect(screen.getByText("Node 1 of 2 · finished")).toBeTruthy();
+    expect(screen.getByText("SLA: SLA passed")).toBeTruthy();
+    expect(screen.queryByText(/sshUser|runnerHome|private-node|\/opt\//i)).toBeNull();
   });
 });

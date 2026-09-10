@@ -1,87 +1,10 @@
 import { useEffect, useState } from "react";
-import { z } from "zod";
 import { getCsrfToken, getRunReport, listRunArtifacts, patchRunValidity, stopRun, downloadRunArtifact, type RunArtifactItem, type RunReportDetail, type RunValidity } from "../../../app/api-client";
 import { useAuthSession } from "../../../app/auth-session";
 import { activeRunStates, formatDate, formatDuration, formatEnum, formatMs, formatNumber, formatPercent, SectionCard, StatusPill } from "./run-shared";
 
-const nullableStringSchema = z.string().nullable().optional();
-const nullableNumberSchema = z.number().nullable().optional();
-const dateTimeSchema = z.iso.datetime({ offset: true });
-const nullableDateTimeSchema = dateTimeSchema.nullable().optional();
-const reportRowSchema = z.object({
-  label: nullableStringSchema,
-  successRequests: nullableNumberSchema,
-  totalRequests: nullableNumberSchema,
-  failedRequests: nullableNumberSchema,
-  errorRate: nullableNumberSchema,
-  averageResponseTimeMs: nullableNumberSchema,
-  p90Ms: nullableNumberSchema,
-  p95Ms: nullableNumberSchema,
-  p99Ms: nullableNumberSchema,
-  responseCodeCounts: z.record(z.string(), z.number()).optional(),
-}).passthrough();
-const debugTraceBodySchema = z.object({
-  contentType: nullableStringSchema,
-  text: nullableStringSchema,
-  inlinePreview: nullableStringSchema,
-  bodyStorage: z.string().optional(),
-  bodyTruncated: z.boolean().optional(),
-  sizeBytes: nullableNumberSchema,
-  sha256Prefix: nullableStringSchema,
-  dropReason: nullableStringSchema,
-}).passthrough();
-const debugTraceEntrySchema = z.object({
-  sequence: z.number(), label: nullableStringSchema, method: z.string(), url: z.string(),
-  requestHeaders: z.record(z.string(), z.string()).optional(), requestBody: debugTraceBodySchema,
-  responseStatus: nullableNumberSchema, responseHeaders: z.record(z.string(), z.string()).optional(),
-  responseBody: debugTraceBodySchema, durationMs: nullableNumberSchema, error: nullableStringSchema,
-}).passthrough();
-const runReportEnvelopeSchema = z.object({
-  id: z.string(),
-  verdict: z.object({
-    state: z.string(), runType: z.string(), sourceType: z.string(),
-    validity: z.string(), slaResult: z.string(), slaResultReason: nullableStringSchema,
-    durationMs: nullableNumberSchema, triggeredBy: z.object({ email: z.string() }).passthrough(),
-    createdAt: dateTimeSchema, startedAt: nullableDateTimeSchema, endedAt: nullableDateTimeSchema,
-    lastHeartbeatAt: nullableDateTimeSchema, failureReason: nullableStringSchema,
-    forcedConvergence: z.boolean(),
-  }).passthrough(),
-  kpiSummary: z.object({
-    status: z.string(), missingReasons: z.array(z.string()).optional(), totalRequests: nullableNumberSchema,
-    failedRequests: nullableNumberSchema, errorRate: nullableNumberSchema,
-    averageResponseTimeMs: nullableNumberSchema, p90Ms: nullableNumberSchema,
-    p95Ms: nullableNumberSchema, p99Ms: nullableNumberSchema,
-  }).passthrough(),
-  failureDiagnostics: z.object({
-    failureMessage: nullableStringSchema, failureReason: nullableStringSchema,
-    hasFailedRequestsPreview: z.boolean(), notes: z.array(z.string()).optional(),
-  }).passthrough(),
-  finalStatsPreview: z.object({
-    status: z.string(), rows: z.array(reportRowSchema), truncated: z.boolean(),
-    warnings: z.array(z.string()).optional(),
-  }).passthrough(),
-  debugHttpTrace: z.union([z.null(), z.object({
-    status: z.string(), sourceArtifactId: nullableStringSchema, entryCount: z.number(),
-    traceTruncated: z.boolean(), warnings: z.array(z.string()).optional(),
-    entries: z.array(debugTraceEntrySchema).optional(),
-  }).passthrough()]),
-  snapshot: z.object({
-    scenarioCount: z.number(), slaRuleCount: z.number(), dependencyFileCount: z.number(),
-    sourceName: nullableStringSchema, sourceRevision: nullableNumberSchema, envGroupName: nullableStringSchema,
-    runMode: nullableStringSchema, scenarioItems: z.array(z.object({ scenarioName: z.string() }).passthrough()).optional(),
-    scenarioNames: z.array(z.string()).optional(),
-    slaRules: z.array(z.object({ metric: nullableStringSchema, condition: nullableStringSchema, thresholdText: nullableStringSchema }).passthrough()).optional(),
-    dependencyFileNames: z.array(z.string()).optional(), envGroupVariableKeys: z.array(z.string()).optional(),
-    resourceRequest: z.union([z.null(), z.object({ mode: nullableStringSchema, poolType: nullableStringSchema, selectedNodeId: nullableStringSchema, expectedConcurrencyPerNode: nullableNumberSchema }).passthrough()]).optional(),
-  }).passthrough(),
-  artifactsSummary: z.object({ count: z.number(), hasArtifactsZip: z.boolean(), hasFinalStatsCsv: z.boolean(), latestAvailableAt: nullableDateTimeSchema }).passthrough(),
-}).passthrough();
-
 async function loadRunReport(runId: string, workspaceId: string) {
-  const report = await getRunReport(runId, workspaceId);
-  const parsed = runReportEnvelopeSchema.safeParse(report);
-  if (!parsed.success) throw new Error("Invalid Run Report response.");
-  return parsed.data as RunReportDetail;
+  return getRunReport(runId, workspaceId);
 }
 
 type Report = RunReportDetail;
@@ -104,10 +27,11 @@ function TraceBody({ title, body }: { title: string; body: NonNullable<NonNullab
 export function HttpTrace({ report }: { report: Report }) { const supported = report.verdict.runType === "debug" && (report.verdict.sourceType === "debug_scenario" || report.verdict.sourceType === "test_plan"); if (!supported) return null; const trace = report.debugHttpTrace; if (!trace) return <SectionCard title="HTTP Trace"><p role="alert">HTTP trace details are unavailable for this Debug Run.</p><p>Download available artifacts and logs for deeper troubleshooting.</p></SectionCard>; if (trace.status !== "available") return <SectionCard title="HTTP Trace"><p role="alert">HTTP trace details are unavailable for this Debug Run.</p>{trace.warnings?.map((warning) => <StatusPill key={warning} tone="warning">{formatEnum(warning)}</StatusPill>)}<p>Download available artifacts and logs for deeper troubleshooting.</p></SectionCard>; return <SectionCard title="HTTP Trace"><div><StatusPill tone="primary">{trace.entryCount} requests</StatusPill>{trace.traceTruncated && <StatusPill tone="warning">Trace truncated</StatusPill>}{trace.warnings?.map((warning) => <StatusPill key={warning} tone="warning">{formatEnum(warning)}</StatusPill>)}</div>{trace.entries?.map((entry) => <details key={entry.sequence} style={{ marginTop: 12 }}><summary><strong>{entry.method}</strong> {entry.url} · {entry.responseStatus ?? "N/A"} · {formatMs(entry.durationMs)}</summary><div><p>{entry.label ?? "HTTP request"}</p><h4>Request</h4><TraceHeaders headers={entry.requestHeaders}/><TraceBody title="Request body" body={entry.requestBody}/><h4>Response</h4><TraceHeaders headers={entry.responseHeaders}/><TraceBody title="Response body" body={entry.responseBody}/>{entry.error && <p role="alert">{entry.error}</p>}</div></details>)}{!trace.entries?.length && <p>No HTTP request entries were captured.</p>}</SectionCard>; }
 function FinalStats({ report }: { report: Report }) { const p = report.finalStatsPreview; return <SectionCard title="Final Stats Preview">{p.status !== "parsed" && <p>{p.status === "missing" ? "No final stats rows are available yet." : p.status === "failed" ? "Final stats summary is unavailable. Raw artifacts can still be downloaded." : "Summary is pending."}</p>}{p.warnings?.map((w) => <StatusPill key={w} tone="warning">{formatEnum(w)}</StatusPill>)}{p.status === "parsed" && <div style={{ overflowX: "auto" }}><table><thead><tr><th>Label</th><th>Total</th><th>Failed</th><th>Error Rate</th><th>Avg RT</th><th>P95</th><th>Codes</th></tr></thead><tbody>{p.rows.map((r, i) => <tr key={`${r.label}-${i}`}><td>{r.label ?? "Total"}</td><td>{formatNumber(r.totalRequests)}</td><td>{formatNumber(r.failedRequests)}</td><td>{formatPercent(r.errorRate)}</td><td>{formatMs(r.averageResponseTimeMs)}</td><td>{formatMs(r.p95Ms)}</td><td>{Object.entries(r.responseCodeCounts ?? {}).map(([code, n]) => `${code}: ${n}`).join(", ") || "N/A"}</td></tr>)}</tbody></table></div>}</SectionCard>; }
 function Snapshot({ report }: { report: Report }) { const s = report.snapshot; return <SectionCard title="Snapshot Summary"><dl><dt>Source</dt><dd>{s.sourceName ?? "N/A"}</dd><dt>Revision</dt><dd>{s.sourceRevision ?? "N/A"}</dd><dt>Environment</dt><dd>{s.envGroupName ?? "N/A"}</dd><dt>Run mode</dt><dd>{formatEnum(s.runMode)}</dd><dt>Scenarios</dt><dd>{s.scenarioCount}</dd><dt>SLA rules</dt><dd>{s.slaRuleCount}</dd><dt>Dependency files</dt><dd>{s.dependencyFileCount}</dd><dt>Node mode</dt><dd>{formatEnum(s.resourceRequest?.mode)}</dd><dt>Expected concurrency</dt><dd>{s.resourceRequest?.expectedConcurrencyPerNode ?? "N/A"}</dd></dl>{s.scenarioNames?.length && <p>Scenarios: {s.scenarioNames.join(", ")}</p>}{s.slaRules?.length && <p>SLA rules: {s.slaRules.map((r) => [r.metric, r.condition, r.thresholdText].filter(Boolean).join(" ")).join(" · ")}</p>}{s.dependencyFileNames?.length && <p>Dependency files: {s.dependencyFileNames.join(", ")}</p>}</SectionCard>; }
-function Artifacts({ report, runId, workspaceId }: { report: Report; runId: string; workspaceId: string }) { const [open, setOpen] = useState(false); const [items, setItems] = useState<RunArtifactItem[]>([]); const [error, setError] = useState<string | null>(null); useEffect(() => { if (!open || !report.artifactsSummary.count) return; void listRunArtifacts({ runId, workspaceId }).then((r) => setItems(r.items)).catch(() => setError("Artifacts could not be loaded.")); }, [open, report.artifactsSummary.count, runId, workspaceId]); async function download(item: RunArtifactItem) { try { const blob = await downloadRunArtifact(runId, item.id, workspaceId); const link = document.createElement("a"); link.href = URL.createObjectURL(blob); link.download = item.displayFilename; link.click(); URL.revokeObjectURL(link.href); } catch { setError("Artifact download failed."); } } return <SectionCard title="Artifacts"><p>{report.artifactsSummary.count} artifacts · {report.artifactsSummary.hasFinalStatsCsv ? "Final stats ready" : "Final stats pending"}{report.artifactsSummary.hasArtifactsZip ? " · Archive available" : ""}</p>{report.artifactsSummary.count > 0 && <button type="button" onClick={() => setOpen(!open)}>{open ? "Hide artifacts" : "Show artifacts"}</button>}{report.artifactsSummary.count === 0 && <p>No artifacts have been uploaded for this run yet.</p>}{error && <p role="alert">{error}</p>}{open && <div>{items.map((item) => <p key={item.id}><strong>{item.displayFilename}</strong> · {formatEnum(item.artifactType)} · {formatNumber(item.sizeBytes)} B <button type="button" onClick={() => void download(item)}>Download</button></p>)}</div>}</SectionCard>; }
-function Nodes({ report }: { report: RunReportDetail }) {
+function Artifacts({ report, runId, workspaceId }: { report: Report; runId: string; workspaceId: string }) { const [open, setOpen] = useState(false); const [items, setItems] = useState<RunArtifactItem[]>([]); const [error, setError] = useState<string | null>(null); useEffect(() => { if (!open || !report.artifactsSummary.count) return; void listRunArtifacts({ runId, workspaceId }).then((r) => setItems(r.items)).catch(() => setError("Artifacts could not be loaded.")); }, [open, report.artifactsSummary.count, runId, workspaceId]); async function download(item: RunArtifactItem) { try { const blob = await downloadRunArtifact(runId, item.id, workspaceId); const link = document.createElement("a"); link.href = URL.createObjectURL(blob); link.download = item.displayFilename; link.click(); URL.revokeObjectURL(link.href); } catch { setError("Artifact download failed."); } } function owner(item: RunArtifactItem) { const node = report.allocatedNodes?.find((candidate) => candidate.id === item.nodeId); return node ? `${node.name} · Node ${node.nodeIndex} of ${node.totalNodes}` : `Node ${item.nodeId}`; } return <SectionCard title="Artifacts"><p>{report.artifactsSummary.count} artifacts · {report.artifactsSummary.hasFinalStatsCsv ? "Final stats ready" : "Final stats pending"}{report.artifactsSummary.hasArtifactsZip ? " · Archive available" : ""}</p>{report.artifactsSummary.count > 0 && <button type="button" onClick={() => setOpen(!open)}>{open ? "Hide artifacts" : "Show artifacts"}</button>}{report.artifactsSummary.count === 0 && <p>No artifacts have been uploaded for this run yet.</p>}{error && <p role="alert">{error}</p>}{open && <div>{items.map((item) => <p key={item.id}><strong>{item.displayFilename}</strong> · {owner(item)} · {formatEnum(item.artifactType)} · {formatNumber(item.sizeBytes)} B <button type="button" onClick={() => void download(item)}>Download</button></p>)}</div>}</SectionCard>; }
+export function Nodes({ report }: { report: RunReportDetail }) {
+  const nodes = report.allocatedNodes ?? [];
   const request = report.snapshot.resourceRequest;
-  return <SectionCard title="Nodes"><div><strong>Selected Load Node</strong><dl><dt>Node ID</dt><dd>{request?.selectedNodeId ?? "N/A"}</dd><dt>Mode</dt><dd>{formatEnum(request?.mode)}</dd><dt>Pool</dt><dd>{formatEnum(request?.poolType)}</dd><dt>Expected concurrency</dt><dd>{request?.expectedConcurrencyPerNode ?? "N/A"}</dd></dl></div></SectionCard>;
+  return <SectionCard title="Nodes"><p><strong>Run-level SLA:</strong> {slaLabel(report.verdict.slaResult)}</p><dl><dt>Mode</dt><dd>{formatEnum(request?.mode)}</dd><dt>Pool</dt><dd>{formatEnum(request?.poolType)}</dd><dt>Expected concurrency</dt><dd>{request?.expectedConcurrencyPerNode ?? "N/A"}</dd></dl><div style={{ display: "grid", gap: 12, gridTemplateColumns: "repeat(auto-fit,minmax(240px,1fr))" }}>{nodes.map((node) => <div key={node.id} style={{ border: "1px solid rgba(255,255,255,.1)", padding: 12 }}><strong>{node.name}</strong><p>Node {node.nodeIndex} of {node.totalNodes} · {formatEnum(node.state)}</p><p>Last heartbeat: {formatDate(node.lastHeartbeatAt)}</p><p>SLA: {node.slaResult ? slaLabel(node.slaResult) : "Not evaluated"}</p><p>Cleanup: {formatEnum(node.cleanupStatus)}</p><p>Terminal reason: {formatEnum(node.terminalReason)}</p><p>Quarantine reason: {formatEnum(node.quarantineReason)}</p><small>{node.id}</small></div>)}</div>{nodes.length === 0 && <p>No allocated nodes are recorded.</p>}</SectionCard>;
 }
 
 export function RunReportPage({ runId }: { runId: string }) { const { session, csrfToken } = useAuthSession(); const workspaceId = session?.defaultWorkspace.id ?? ""; const [report, setReport] = useState<RunReportDetail | null>(null); const [error, setError] = useState<string | null>(null); const [polls, setPolls] = useState(0); const [summaryPolls, setSummaryPolls] = useState(0); const [saving, setSaving] = useState(false); useEffect(() => { let cancelled = false; async function load() { try { const next = await loadRunReport(runId, workspaceId); if (!cancelled) { setReport(next); setError(null); } } catch { if (!cancelled) setError("Run Report could not be loaded."); } } if (workspaceId && runId) void load(); return () => { cancelled = true; }; }, [runId, workspaceId, polls]); useEffect(() => { if (!report) return; if (!activeRunStates.has(report.verdict.state) && report.kpiSummary.status === "pending") setSummaryPolls((n) => Math.min(n + 1, 12)); else setSummaryPolls(0); }, [report]); useEffect(() => { if (!report || runReportRefetchInterval(report, summaryPolls) === false) return; const timer = window.setTimeout(() => setPolls((n) => n + 1), 5000); return () => window.clearTimeout(timer); }, [report, summaryPolls]); if (error && !report) return <main><p role="alert">{error}</p></main>; if (!report) return <main><p>Loading report…</p></main>; async function validity(value: RunValidity) { setSaving(true); try { const response = await patchRunValidity(runId, value, workspaceId, csrfToken ?? (await getCsrfToken()).csrfToken); setReport({ ...report, verdict: { ...report.verdict, validity: response.validity } }); } catch { setError("Unable to update validity."); } finally { setSaving(false); } } async function stop() { try { await stopRun(runId, workspaceId, csrfToken ?? (await getCsrfToken()).csrfToken); setPolls((n) => n + 1); } catch { setError("Unable to stop this run."); } } return <main><p><a href="/runs">Runs</a> / {runId}</p><h1>Run Report</h1><p>Immutable snapshot, verdicts, final stats summary, and downloadable artifacts for this run.</p><div><label>Validity <select disabled={saving} value={report.verdict.validity} onChange={(e) => void validity(e.target.value as RunValidity)}><option value="valid">Mark Valid</option><option value="invalid">Mark Invalid</option></select></label>{activeRunStates.has(report.verdict.state) && <button type="button" onClick={() => void stop()}>Stop Run</button>}<button type="button" onClick={() => setPolls((n) => n + 1)}>Refresh</button></div>{error && <p role="alert">{error}</p>}<Verdict report={report}/><KpiSummary report={report}/><FailureDiagnostics report={report}/><HttpTrace report={report}/><FinalStats report={report}/><Snapshot report={report}/><Artifacts report={report} runId={runId} workspaceId={workspaceId}/><Nodes report={report}/></main>; }

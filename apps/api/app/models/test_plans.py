@@ -40,6 +40,8 @@ class TestPlan(Base):
             "selected_node_id is null or length(selected_node_id) = 26",
             name="ck_test_plans_selected_node_id_len",
         ),
+        CheckConstraint("resource_mode in ('manual', 'auto')", name="ck_test_plans_resource_mode"),
+        CheckConstraint("node_count is null or node_count > 0", name="ck_test_plans_node_count"),
     )
 
     id: Mapped[str] = mapped_column(String(26), primary_key=True)
@@ -59,6 +61,11 @@ class TestPlan(Base):
     selected_node_id: Mapped[str | None] = mapped_column(
         String(26), ForeignKey("load_nodes.id", ondelete="RESTRICT")
     )
+    resource_mode: Mapped[str] = mapped_column(Text, nullable=False, default="manual")
+    selected_node_ids_json: Mapped[list[str]] = mapped_column(
+        JSONB().with_variant(JSON(), "sqlite"), nullable=False, default=list
+    )
+    node_count: Mapped[int | None] = mapped_column(nullable=True)
     revision: Mapped[int] = mapped_column(nullable=False, default=1)
     created_by: Mapped[str] = mapped_column(
         String(26), ForeignKey("users.id", ondelete="RESTRICT"), nullable=False
