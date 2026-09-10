@@ -7,12 +7,15 @@ from app.core.errors import AppError
 from app.core.ids import is_ulid
 from app.schemas.common import CloneRequest, ErrorResponse
 from app.schemas.scenarios import (
+    CurlImportParseRequest,
+    CurlImportParseResponse,
     ScenarioCreateRequest,
     ScenarioDetail,
     ScenarioListResponse,
     ScenarioPatchRequest,
     ScenarioSummary,
 )
+from app.services.curl_import import parse_curl_import
 from app.services.scenarios import (
     clone_scenario as clone_scenario_service,
     create_scenario as create_scenario_service,
@@ -87,6 +90,26 @@ def invalid_query(field: str, message: str) -> AppError:
         400,
         [{"field": field, "code": "INVALID_QUERY_PARAMETER", "message": message}],
     )
+
+
+@router.post(
+    "/curl-import/parse",
+    operation_id="parseScenarioCurlImport",
+    response_model=CurlImportParseResponse,
+    response_model_by_alias=True,
+    responses={400: ERROR_RESPONSE, 401: ERROR_RESPONSE, 403: ERROR_RESPONSE, 422: ERROR_RESPONSE},
+)
+def parse_scenario_curl_import(
+    payload: CurlImportParseRequest,
+    response: Response,
+    user: CurrentUserDep,
+    workspace: CurrentWorkspaceDep,
+    _csrf: CsrfDep,
+) -> CurlImportParseResponse:
+    _ = user
+    result = parse_curl_import(payload.raw_curl)
+    attach_workspace_header(response, workspace.id)
+    return result
 
 
 @router.get(

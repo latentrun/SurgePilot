@@ -598,6 +598,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/scenarios/curl-import/parse": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Parse Scenario Curl Import */
+        post: operations["parseScenarioCurlImport"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/scenarios/{scenarioId}": {
         parameters: {
             query?: never;
@@ -883,6 +900,95 @@ export interface components {
         CsrfTokenResponse: {
             /** Csrftoken */
             csrfToken: string;
+        };
+        CurlImportBodyDraft: {
+            /** Contenttype */
+            contentType?: string | null;
+            /** Formfields */
+            formFields?: components["schemas"]["CurlImportNamedValueDraft"][];
+            /** Rawtext */
+            rawText?: string | null;
+            /**
+             * Type
+             * @default none
+             * @enum {string}
+             */
+            type: "none" | "raw" | "form";
+        };
+        CurlImportNamedValueDraft: {
+            /**
+             * Enabled
+             * @default true
+             */
+            enabled: boolean;
+            /** Name */
+            name: string;
+            /**
+             * Value
+             * @default
+             */
+            value: string;
+        };
+        CurlImportParseRequest: {
+            /** Rawcurl */
+            rawCurl: string;
+        };
+        CurlImportParseResponse: {
+            /** Baseurlsuggestion */
+            baseUrlSuggestion: string | null;
+            step: components["schemas"]["CurlImportStepDraft"];
+            /** Unsupportedoptions */
+            unsupportedOptions: components["schemas"]["CurlImportUnsupportedOption"][];
+            /** Warnings */
+            warnings: components["schemas"]["CurlImportWarning"][];
+        };
+        CurlImportStepDraft: {
+            body?: components["schemas"]["CurlImportBodyDraft"];
+            /**
+             * Enabled
+             * @default true
+             */
+            enabled: boolean;
+            /** Headers */
+            headers?: components["schemas"]["CurlImportNamedValueDraft"][];
+            /**
+             * Method
+             * @enum {string}
+             */
+            method: "GET" | "POST" | "PUT" | "PATCH" | "DELETE" | "HEAD" | "OPTIONS";
+            /** Name */
+            name: string;
+            /** Path */
+            path: string;
+            /** Queryparams */
+            queryParams?: components["schemas"]["CurlImportNamedValueDraft"][];
+            settings?: components["schemas"]["CurlImportStepSettingsDraft"];
+        };
+        CurlImportStepSettingsDraft: {
+            /** Followredirects */
+            followRedirects?: boolean | null;
+            /** Keepalive */
+            keepAlive?: boolean | null;
+            /** Thinktimems */
+            thinkTimeMs?: null;
+            /** Timeoutms */
+            timeoutMs?: number | null;
+        };
+        CurlImportUnsupportedOption: {
+            /** Message */
+            message: string;
+            /** Option */
+            option: string;
+            /** Reasoncode */
+            reasonCode: string;
+        };
+        CurlImportWarning: {
+            /** Code */
+            code: string;
+            /** Field */
+            field?: string | null;
+            /** Message */
+            message: string;
         };
         CurrentUserResponse: {
             availableWorkspaces: components["schemas"]["AvailableWorkspaceSummary"][];
@@ -5658,6 +5764,71 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    parseScenarioCurlImport: {
+        parameters: {
+            query?: never;
+            header: {
+                "x-workspace-id"?: string | null;
+                "x-csrf-token": string;
+            };
+            path?: never;
+            cookie?: {
+                surgepilot_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CurlImportParseRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CurlImportParseResponse"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
             };
             /** @description Forbidden */
             403: {
