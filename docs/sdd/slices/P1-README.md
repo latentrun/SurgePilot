@@ -29,7 +29,8 @@ The following files are the current P1 Slice index. Real active Slice SDDs are a
 3. `docs/sdd/slices/P1-01-resource-multi-node.md` -- active Slice SDD for P1 Resource Multi-node; design frozen and Accepted for implementation.
 4. `docs/sdd/slices/P1-04-scenario-testplan-polish.md` -- active Slice SDD for P1 Scenario / Test Plan polish, amended by `ADR-0023` to retain Generated YAML Preview only on Test Plan.
 5. `docs/sdd/slices/P1-05-curl-import.md` -- active Slice SDD for P1 cURL Import.
-6. `docs/sdd/slices/P1-08-debug-http-trace.md` -- active Slice SDD for P1 Debug HTTP Trace.
+6. `docs/sdd/slices/P1-06-dependency-preview.md` -- active Slice SDD for P1 Dependency File Preview.
+7. `docs/sdd/slices/P1-08-debug-http-trace.md` -- active Slice SDD for P1 Debug HTTP Trace.
 
 Active P1 Slice SDDs at this revision:
 
@@ -38,6 +39,7 @@ Active P1 Slice SDDs at this revision:
 - `P1-01-resource-multi-node.md`, governed by `ADR-0009`.
 - `P1-04-scenario-testplan-polish.md`, governed by the P1 scope gate and amended by `ADR-0023` to keep only the Test Plan read-only Generated YAML Preview.
 - `P1-05-curl-import.md`, governed by the P1 scope gate.
+- `P1-06-dependency-preview.md`, governed by the P1 scope gate.
 - `P1-08-debug-http-trace.md`, governed by `ADR-0008`.
 
 Do not expand placeholders into implementation design, schemas, migrations, or generated-contract details inside this README.

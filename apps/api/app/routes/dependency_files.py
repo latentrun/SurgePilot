@@ -14,6 +14,7 @@ from app.schemas.common import ErrorResponse
 from app.schemas.dependency_files import (
     DependencyFileDetail,
     DependencyFileListResponse,
+    DependencyFilePreviewResponse,
     DependencyFileSummary,
 )
 from app.services.dependency_files import (
@@ -21,6 +22,7 @@ from app.services.dependency_files import (
     audit_details_for_upload,
     delete_dependency_file_metadata,
     get_dependency_file,
+    preview_dependency_file,
     safe_write_dependency_file_audit,
     upload_dependency_file,
 )
@@ -365,6 +367,41 @@ def get_dependency_file_route(
     file = get_dependency_file(db, workspace_id=workspace.id, dependency_file_id=dependencyFileId)
     db.commit()
     return detail_response(file, DependencyFileReferenceChecker(db))
+
+
+@router.get(
+    "/{dependencyFileId}/preview",
+    operation_id="previewDependencyFile",
+    response_model=DependencyFilePreviewResponse,
+    response_model_by_alias=True,
+    responses={
+        400: ERROR_RESPONSE,
+        401: ERROR_RESPONSE,
+        403: ERROR_RESPONSE,
+        404: ERROR_RESPONSE,
+        422: ERROR_RESPONSE,
+        503: STORAGE_UNAVAILABLE_RESPONSE,
+    },
+)
+def preview_dependency_file_route(
+    dependencyFileId: str,
+    response: Response,
+    db: DbDep,
+    workspace: CurrentWorkspaceDep,
+) -> DependencyFilePreviewResponse:
+    validate_dependency_file_id(dependencyFileId)
+    file = get_dependency_file(db, workspace_id=workspace.id, dependency_file_id=dependencyFileId)
+    policy = dependency_file_policy(db)
+    preview = preview_dependency_file(
+        file,
+        storage=get_storage_client(),
+        max_bytes=policy.preview_max_bytes,
+        binary_deny_extensions=policy.preview_binary_deny_extensions,
+    )
+    db.commit()
+    attach_workspace_header(response, workspace.id)
+    response.headers["Cache-Control"] = "private, no-store"
+    return preview
 
 
 def stream_iterator(stored: StoredObjectStream) -> Iterator[bytes]:

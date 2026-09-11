@@ -27,6 +27,10 @@ def test_dependency_file_openapi_paths_and_operation_ids() -> None:
         == "downloadDependencyFile"
     )
     assert (
+        paths["/v1/dependency-files/{dependencyFileId}/preview"]["get"]["operationId"]
+        == "previewDependencyFile"
+    )
+    assert (
         paths["/v1/dependency-files/{dependencyFileId}"]["delete"]["operationId"]
         == "deleteDependencyFile"
     )
@@ -34,7 +38,11 @@ def test_dependency_file_openapi_paths_and_operation_ids() -> None:
 
 def test_dependency_file_openapi_schemas_exclude_storage_internals() -> None:
     schemas = openapi()["components"]["schemas"]
-    for schema_name in ("DependencyFileSummary", "DependencyFileDetail"):
+    for schema_name in (
+        "DependencyFileSummary",
+        "DependencyFileDetail",
+        "DependencyFilePreviewResponse",
+    ):
         properties = schemas[schema_name]["properties"]
         assert "storageBucket" not in properties
         assert "storageObjectKey" not in properties
@@ -43,6 +51,15 @@ def test_dependency_file_openapi_schemas_exclude_storage_internals() -> None:
     assert schemas["DependencyFileListResponse"]["properties"]["items"]["items"]["$ref"].endswith(
         "/DependencyFileSummary"
     )
+    preview = schemas["DependencyFilePreviewResponse"]["properties"]
+    assert preview["previewKind"]["$ref"].endswith("/DependencyFilePreviewKind")
+    assert preview["reason"]["anyOf"][0]["$ref"].endswith("/DependencyFilePreviewUnavailableReason")
+    assert set(schemas["DependencyFilePreviewKind"]["enum"]) == {"text", "unsupported"}
+    assert set(schemas["DependencyFilePreviewUnavailableReason"]["enum"]) == {
+        "binary_content",
+        "decode_failed",
+        "storage_unavailable",
+    }
 
 
 def test_dependency_file_openapi_documents_upload_download_and_headers() -> None:
@@ -72,6 +89,15 @@ def test_dependency_file_openapi_documents_upload_download_and_headers() -> None
         "type": "string",
         "format": "binary",
     }
+    preview_params = parameters_for(paths["/v1/dependency-files/{dependencyFileId}/preview"]["get"])
+    assert "x-workspace-id" in preview_params
+    assert "x-csrf-token" not in preview_params
+    preview_200 = paths["/v1/dependency-files/{dependencyFileId}/preview"]["get"]["responses"][
+        "200"
+    ]
+    assert preview_200["content"]["application/json"]["schema"] == {
+        "$ref": "#/components/schemas/DependencyFilePreviewResponse"
+    }
 
 
 def test_dependency_file_openapi_uses_shared_error_shape_and_codes_are_documented() -> None:
@@ -81,6 +107,9 @@ def test_dependency_file_openapi_uses_shared_error_shape_and_codes_are_documente
         "schema"
     ] == {"$ref": "#/components/schemas/ErrorResponse"}
     assert paths["/v1/dependency-files/{dependencyFileId}/download"]["get"]["responses"]["503"][
+        "content"
+    ]["application/json"]["schema"] == {"$ref": "#/components/schemas/ErrorResponse"}
+    assert paths["/v1/dependency-files/{dependencyFileId}/preview"]["get"]["responses"]["503"][
         "content"
     ]["application/json"]["schema"] == {"$ref": "#/components/schemas/ErrorResponse"}
     document_text = json.dumps(openapi())
