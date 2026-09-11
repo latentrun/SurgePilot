@@ -12,13 +12,19 @@ from app.core.ids import is_ulid, new_ulid
 from app.core.time import utc_now
 from app.models.dependency_files import DependencyFile
 from app.models.scenarios import Scenario, ScenarioDependencyFileRef
+from app.schemas.dependency_files import (
+    DependencyFilePreviewKind,
+    DependencyFilePreviewResponse,
+    DependencyFilePreviewUnavailableReason,
+)
 from app.services.audit import write_audit_event_in_new_transaction
-from app.services.storage import PutResult, StorageClient
+from app.services.storage import PutResult, StorageClient, StoredObjectStream
 
 logger = logging.getLogger(__name__)
 
 SAFE_FILENAME_PATTERN = re.compile(r"^[A-Za-z0-9._-]{1,255}$")
 SHA256_PATTERN = re.compile(r"^[0-9a-f]{64}$")
+PREVIEW_READ_CHUNK_BYTES = 8192
 
 
 def field_error(field: str, message: str, code: str = "INVALID_FIELD") -> dict[str, str]:
@@ -39,6 +45,140 @@ def parse_allowed_extensions(raw_value: str) -> list[str]:
             value = f".{value}"
         extensions.append(value)
     return extensions
+
+
+def parse_preview_binary_deny_extensions(raw_value: str) -> set[str]:
+    return set(parse_allowed_extensions(raw_value))
+
+
+def _preview_response(
+    file: DependencyFile,
+    *,
+    preview_kind: DependencyFilePreviewKind,
+    can_preview: bool,
+    truncated: bool,
+    max_bytes: int,
+    text: str | None,
+    reason: DependencyFilePreviewUnavailableReason | None,
+) -> DependencyFilePreviewResponse:
+    return DependencyFilePreviewResponse(
+        id=file.id,
+        filename=file.filename,
+        content_type=file.content_type,
+        size_bytes=file.size_bytes,
+        sha256=file.sha256,
+        preview_kind=preview_kind,
+        can_preview=can_preview,
+        truncated=truncated,
+        max_bytes=max_bytes,
+        text=text,
+        reason=reason,
+    )
+
+
+def _unsupported_preview(
+    file: DependencyFile,
+    *,
+    max_bytes: int,
+    reason: DependencyFilePreviewUnavailableReason,
+) -> DependencyFilePreviewResponse:
+    return _preview_response(
+        file,
+        preview_kind=DependencyFilePreviewKind.unsupported,
+        can_preview=False,
+        truncated=False,
+        max_bytes=max_bytes,
+        text=None,
+        reason=reason,
+    )
+
+
+def _filename_extension(filename: str) -> str:
+    dot_index = filename.rfind(".")
+    return filename[dot_index:].lower() if dot_index > 0 else ""
+
+
+def _looks_binary(prefix: bytes) -> bool:
+    if b"\x00" in prefix:
+        return True
+    allowed_controls = {7, 8, 9, 10, 12, 13, 27}
+    control_count = sum(1 for byte in prefix if byte < 32 and byte not in allowed_controls)
+    return len(prefix) > 0 and control_count / len(prefix) > 0.10
+
+
+def _close_stored_stream(stored: StoredObjectStream) -> None:
+    close = getattr(stored.stream, "close", None)
+    if callable(close):
+        close()
+    release_conn = getattr(stored.stream, "release_conn", None)
+    if callable(release_conn):
+        release_conn()
+
+
+def _read_preview_prefix(stored: StoredObjectStream, *, max_bytes: int) -> tuple[bytes, bool]:
+    limit = max_bytes + 1
+    chunks = bytearray()
+    while len(chunks) < limit:
+        chunk = stored.stream.read(min(PREVIEW_READ_CHUNK_BYTES, limit - len(chunks)))
+        if not chunk:
+            break
+        chunks.extend(chunk)
+    truncated = len(chunks) > max_bytes
+    return bytes(chunks[:max_bytes]), truncated
+
+
+def _decode_preview_text(prefix: bytes, *, truncated: bool) -> str | None:
+    try:
+        return prefix.decode("utf-8")
+    except UnicodeDecodeError as exc:
+        if truncated and exc.reason == "unexpected end of data" and exc.end == len(prefix):
+            return prefix[: exc.start].decode("utf-8")
+        return None
+
+
+def preview_dependency_file(
+    file: DependencyFile,
+    *,
+    storage: StorageClient,
+    max_bytes: int,
+    binary_deny_extensions: set[str],
+) -> DependencyFilePreviewResponse:
+    effective_max_bytes = max(1, max_bytes)
+    if _filename_extension(file.filename) in binary_deny_extensions:
+        return _unsupported_preview(
+            file,
+            max_bytes=effective_max_bytes,
+            reason=DependencyFilePreviewUnavailableReason.binary_content,
+        )
+
+    stored = storage.get_stream(bucket=file.storage_bucket, object_key=file.storage_object_key)
+    try:
+        prefix, truncated = _read_preview_prefix(stored, max_bytes=effective_max_bytes)
+    finally:
+        _close_stored_stream(stored)
+
+    if _looks_binary(prefix):
+        return _unsupported_preview(
+            file,
+            max_bytes=effective_max_bytes,
+            reason=DependencyFilePreviewUnavailableReason.binary_content,
+        )
+    text = _decode_preview_text(prefix, truncated=truncated)
+    if text is None:
+        return _unsupported_preview(
+            file,
+            max_bytes=effective_max_bytes,
+            reason=DependencyFilePreviewUnavailableReason.decode_failed,
+        )
+    return _preview_response(
+        file,
+        preview_kind=DependencyFilePreviewKind.text,
+        can_preview=True,
+        truncated=truncated,
+        max_bytes=effective_max_bytes,
+        text=text,
+        reason=None,
+    )
 
 
 def _is_sensitive_filename(filename: str) -> bool:
