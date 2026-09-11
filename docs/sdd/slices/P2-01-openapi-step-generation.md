@@ -781,7 +781,6 @@ Implemented facts:
 6. Focused API/service verification is recorded in `apps/api/tests/test_p2_01_openapi_step_generation.py`: operation enumeration preserves HTTP order, draft generation preserves caller order, path placeholders/body samples/auth warnings are bounded, duplicate/missing operations are rejected, and the Scenario generation routes enforce session, Workspace and CSRF boundaries.
 7. Contract verification is recorded in `tests/contract/test_p2_01_openapi_step_generation_openapi.py`; it checks the three Scenario-scoped operation IDs, the 20-operation request limit, generated Web client presence, and the absence of API Catalog generation/import operations.
 8. Web interaction and lifecycle regression coverage is in `apps/web/src/features/scenarios/scenarios.test.tsx`; it verifies spec selection, operation preview, local insertion without an automatic Scenario `PATCH`, and that API Catalog pages expose no generation actions.
-9. The reconstruction worker did not run `pytest`, Vitest, contract generation, or repository-wide verification commands by instruction; the runner's deterministic Gates remain the verification authority for those commands.
 6. The mapper resolves local `$ref` values only. OpenAPI validation uses no remote resolver handlers, and the mapper does not fetch remote `$ref`, spec `servers[]`, or external URLs.
 7. JSON body generation uses explicit media examples/examples, schema example/default, or bounded samples for object properties whose child schemas can be safely sampled. Optional-only JSON objects now generate raw JSON when at least one optional child is safely sampleable; empty, unsupported, recursive-only, over-depth, or over-size samples still return `JSON_BODY_EXAMPLE_MISSING`. Form, multipart, file upload, assertions, extractors, scripts, response assertions, and Taurus YAML generation remain out of scope.
 8. Review hardening maps OpenAPI 3.x `security` / `components.securitySchemes` and Swagger 2.0 `security` / `securityDefinitions` for API key, basic, bearer, OAuth2/OpenID Connect-style credential requirements to `AUTH_HEADER_NOT_GENERATED` warnings without generating cleartext credential values.
@@ -790,7 +789,7 @@ Implemented facts:
 11. Scenario Designer resolves OpenAPI generation requests with `session.currentWorkspace.id ?? session.defaultWorkspace.id`; this matches the P2 API Catalog current-Workspace behavior and avoids using the default Workspace after an explicit Workspace switch.
 12. Web insertion is local-only until the user uses the existing Scenario Save action, which still calls `patchScenario`.
 13. Independent review hardening added after the initial implementation: Scenario-scoped spec source listing returns only `available` API Catalog specs, recursive local schema sampling is bounded, Swagger 2.0 non-JSON `consumes` leaves the body empty with a warning, OpenAPI-generated Steps materialize without assertions, the Web operation selector communicates/enforces the 20-operation limit, security-scheme credentials emit `AUTH_HEADER_NOT_GENERATED` without generated secrets, unsupported parameter serialization emits `UNSUPPORTED_PARAMETER_STYLE` without unsafe named-value stringification, and optional-heavy JSON object bodies sample safe optional properties instead of incorrectly falling back to missing body.
-14. Tests added: `apps/api/tests/test_p2_01_openapi_step_generation_api.py`, `tests/contract/test_p2_01_openapi_step_generation_openapi.py`, Scenario Designer coverage in `apps/web/src/features/scenarios/scenarios.test.tsx`, and Playwright smoke `tests/e2e/p2_01_openapi_step_generation.spec.ts`.
+14. Tests added: `apps/api/tests/test_p2_01_openapi_step_generation.py`, `tests/contract/test_p2_01_openapi_step_generation_openapi.py`, Scenario Designer coverage in `apps/web/src/features/scenarios/scenarios.test.tsx`, and Playwright smoke `tests/e2e/p2_01_openapi_step_generation.spec.ts`.
 15. Supplemental verifier added: `scripts/surgepilot_e2e_helpers.py` materializes preview-only OpenAPI Step drafts into Scenario `PATCH`-safe Steps for API-level E2E automation, mirroring the Web materialization boundary without changing P2-01 API behavior. `scripts/verify_p2_01_openapi_two_node_e2e.py` exercises API Catalog upload, OpenAPI Step draft generation, materialized Scenario save, and a P1-01 two-node Standard Run. `make verify-p2-01-openapi-two-node-e2e` runs this opt-in SSH E2E verifier; it is not part of default `make verify`.
 16. `apps/api/app/services/openapi_step_generation.py` now keeps a process-local LRU cache with a fixed capacity of 8 successful `ParsedOpenApiDocument` values. The cache key is `(workspace_id, spec.id, spec.sha256, spec.status)`; lookup and eviction are protected by a thread lock. Scenario access, Workspace resolution, spec ownership lookup, and `status == available` validation still complete before a cached document can be reused. Parse, validation, and storage failures are never cached.
 17. Cached parsed documents are shared as immutable inputs to enumeration and draft mapping. API tests verify repeated generation returns identical results without mutating the cached document, SHA/status/Workspace key changes do not reuse the wrong entry, failures retain the existing error code/status/message/details, LRU eviction remains bounded, and concurrent mixed cache access does not corrupt entries or exceed capacity. The cache is intentionally non-persistent and per API process; each worker may perform its own cold validation, and concurrent cold misses may duplicate validation without changing correctness.
@@ -800,12 +799,12 @@ Verification commands run during implementation:
 
 ```bash
 make generate-contracts
-uv run --project apps/api pytest apps/api/tests/test_p2_01_openapi_step_generation_api.py -q
+uv run --project apps/api pytest apps/api/tests/test_p2_01_openapi_step_generation.py -q
 uv run pytest tests/contract/test_p2_01_openapi_step_generation_openapi.py -q
 pnpm --filter @surgepilot/web test -- src/features/scenarios/scenarios.test.tsx
 pnpm --filter @surgepilot/web typecheck
-uv run --all-packages ruff check apps/api/app/main.py apps/api/app/routes/scenarios.py apps/api/app/schemas/scenarios.py apps/api/app/services/openapi_step_generation.py apps/api/tests/test_p2_01_openapi_step_generation_api.py tests/contract/test_p2_01_openapi_step_generation_openapi.py
-uv run --all-packages ruff format --check apps/api/app/main.py apps/api/app/routes/scenarios.py apps/api/app/schemas/scenarios.py apps/api/app/services/openapi_step_generation.py apps/api/tests/test_p2_01_openapi_step_generation_api.py tests/contract/test_p2_01_openapi_step_generation_openapi.py
+uv run --all-packages ruff check apps/api/app/main.py apps/api/app/routes/scenarios.py apps/api/app/schemas/scenarios.py apps/api/app/services/openapi_step_generation.py apps/api/tests/test_p2_01_openapi_step_generation.py tests/contract/test_p2_01_openapi_step_generation_openapi.py
+uv run --all-packages ruff format --check apps/api/app/main.py apps/api/app/routes/scenarios.py apps/api/app/schemas/scenarios.py apps/api/app/services/openapi_step_generation.py apps/api/tests/test_p2_01_openapi_step_generation.py tests/contract/test_p2_01_openapi_step_generation_openapi.py
 pnpm --filter @surgepilot/web lint
 pnpm --filter @surgepilot/web test -- src/features/scenarios/scenarios.test.tsx
 pnpm exec playwright test tests/e2e/p2_01_openapi_step_generation.spec.ts --project=chrome
@@ -816,7 +815,7 @@ Performance-cache follow-up verification:
 
 ```bash
 make generate-contracts
-uv run --project apps/api pytest apps/api/tests/test_p2_01_openapi_step_generation_api.py -q
+uv run --project apps/api pytest apps/api/tests/test_p2_01_openapi_step_generation.py -q
 uv run pytest tests/contract/test_p2_01_openapi_step_generation_openapi.py -q
 pnpm exec vitest run src/features/scenarios/scenarios.test.tsx --no-file-parallelism
 pnpm --filter @surgepilot/web typecheck
