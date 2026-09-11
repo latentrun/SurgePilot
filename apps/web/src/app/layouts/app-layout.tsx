@@ -28,6 +28,7 @@ const assetsGroup: NavGroup = {
   items: [
     { label: "Env Groups", path: "/assets/env-groups" },
     { label: "Dependency Files", path: "/assets/dependency-files" },
+    { label: "API Catalog", path: "/api-catalog" },
   ],
 };
 
@@ -70,6 +71,8 @@ export function AppLayout({
   if (session === null) {
     return null;
   }
+
+  const isApiCatalogDetailPage = /^\/api-catalog\/[^/]+/.test(pathname);
 
   const groups: NavGroup[] = [
     primaryGroup,
@@ -174,7 +177,15 @@ export function AppLayout({
           </button>
         </div>
       </aside>
-      <div>{children}</div>
+      <div
+        className={
+          isApiCatalogDetailPage
+            ? "min-h-screen px-0 pb-0 pt-0"
+            : undefined
+        }
+      >
+        {children}
+      </div>
       {pendingWorkspaceId !== null ? (
         <div role="dialog" aria-labelledby="workspace-switch-title">
           <h2 id="workspace-switch-title">Switch workspace?</h2>

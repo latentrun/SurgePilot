@@ -159,6 +159,13 @@ export type OverviewStatsScope =
 export type OverviewWorkspace =
   components["schemas"]["OverviewWorkspace"];
 
+export type ApiCatalogSpecListResponse =
+  components["schemas"]["ApiCatalogSpecListResponse"];
+export type ApiCatalogSpecResponse =
+  components["schemas"]["ApiCatalogSpecResponse"];
+export type ApiCatalogSpecSummary =
+  components["schemas"]["ApiCatalogSpecSummary"];
+
 export class ApiError extends Error {
   readonly body: ApiErrorBody;
   readonly status: number;
@@ -180,7 +187,9 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   let response: Response;
   const headers = new Headers(init?.headers);
   headers.set("Accept", "application/json");
-  if (init?.body) headers.set("Content-Type", "application/json");
+  if (init?.body && !(init.body instanceof FormData)) {
+    headers.set("Content-Type", "application/json");
+  }
   try {
     response = await fetch(apiUrl(path), {
       ...init,
@@ -242,6 +251,63 @@ export function getCurrentUser(preferredWorkspaceId?: string | null) {
 
 export function getCsrfToken() {
   return request<CsrfTokenResponse>("/v1/auth/csrf");
+}
+
+export function listApiCatalogSpecs(params: {
+  limit?: number;
+  offset?: number;
+  workspaceId: string;
+}) {
+  const query = new URLSearchParams({
+    limit: String(params.limit ?? 50),
+    offset: String(params.offset ?? 0),
+  });
+  return request<ApiCatalogSpecListResponse>(`/v1/api-catalog/specs?${query}`, {
+    headers: { "x-workspace-id": params.workspaceId },
+  });
+}
+
+export async function uploadApiCatalogSpec(params: {
+  file: File;
+  name?: string;
+  workspaceId: string;
+  csrfToken: string;
+}) {
+  const formData = new FormData();
+  formData.append("file", params.file);
+  if (params.name?.trim()) formData.append("name", params.name.trim());
+  return request<ApiCatalogSpecResponse>("/v1/api-catalog/specs", {
+    method: "POST",
+    headers: {
+      "x-csrf-token": params.csrfToken,
+      "x-workspace-id": params.workspaceId,
+    },
+    body: formData,
+  });
+}
+
+export function getApiCatalogSpec(specId: string, workspaceId: string) {
+  return request<ApiCatalogSpecResponse>(
+    `/v1/api-catalog/specs/${encodeURIComponent(specId)}`,
+    { headers: { "x-workspace-id": workspaceId } },
+  );
+}
+
+export function deleteApiCatalogSpec(
+  specId: string,
+  workspaceId: string,
+  csrfToken: string,
+) {
+  return request<void>(
+    `/v1/api-catalog/specs/${encodeURIComponent(specId)}`,
+    {
+      method: "DELETE",
+      headers: {
+        "x-csrf-token": csrfToken,
+        "x-workspace-id": workspaceId,
+      },
+    },
+  );
 }
 
 export function login(payload: LoginRequest) {
