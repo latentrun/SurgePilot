@@ -10,12 +10,17 @@ import {
   listDependencyFiles,
   listEnvGroups,
   listLoadNodes,
+  listScenarioOpenApiOperations,
+  listScenarioOpenApiSpecSources,
+  generateScenarioOpenApiStepDrafts,
   parseScenarioCurlImport,
   patchScenario,
   type CurlImportParseResponse,
   type DependencyFileSummary,
   type EnvGroupSummary,
   type LoadNodeSummary,
+  type OpenApiOperationRef,
+  type OpenApiStepDraftPreviewResponse,
   type ScenarioDetail,
   type ScenarioStep,
 } from "../../../app/api-client";
@@ -33,6 +38,7 @@ import {
   newStep,
   newUploadFile,
   stepFromCurlImportDraft,
+  stepFromOpenApiGeneratedDraft,
   toPatchPayload,
   type ScenarioAssertion,
   type ScenarioDataSource,
@@ -67,6 +73,15 @@ const DELIMITER_OPTIONS = [
   { label: "Tab", value: "tab" },
   { label: "Pipe (|)", value: "|" },
 ];
+const OPENAPI_MAX_OPERATION_SELECTION = 20;
+
+function openApiOperationKey(ref: OpenApiOperationRef) {
+  return `${ref.method} ${ref.path} ${ref.operationId ?? ""}`;
+}
+
+function openApiRefsEqual(a: OpenApiOperationRef, b: OpenApiOperationRef) {
+  return a.method === b.method && a.path === b.path;
+}
 
 type StepTabKey =
   | "params"
@@ -540,6 +555,15 @@ export function ScenarioDesignerPage() {
   const [archiveOpen, setArchiveOpen] = useState(false);
 
   const [showCurlImport, setShowCurlImport] = useState(false);
+  const [showOpenApiImport, setShowOpenApiImport] = useState(false);
+  const [openApiSpecs, setOpenApiSpecs] = useState<Awaited<ReturnType<typeof listScenarioOpenApiSpecSources>> | null>(null);
+  const [openApiOperations, setOpenApiOperations] = useState<Awaited<ReturnType<typeof listScenarioOpenApiOperations>> | null>(null);
+  const [selectedOpenApiSpecId, setSelectedOpenApiSpecId] = useState("");
+  const [selectedOpenApiRefs, setSelectedOpenApiRefs] = useState<OpenApiOperationRef[]>([]);
+  const [openApiPreview, setOpenApiPreview] = useState<OpenApiStepDraftPreviewResponse | null>(null);
+  const [openApiError, setOpenApiError] = useState<string | null>(null);
+  const [isLoadingOpenApi, setIsLoadingOpenApi] = useState(false);
+  const [isPreviewingOpenApi, setIsPreviewingOpenApi] = useState(false);
   const [curlImportText, setCurlImportText] = useState("");
   const [curlImportPreview, setCurlImportPreview] =
     useState<CurlImportParseResponse | null>(null);
@@ -628,6 +652,27 @@ export function ScenarioDesignerPage() {
       void fetchIdleNodes();
     }
   }, [showDebug, fetchIdleNodes]);
+
+  useEffect(() => {
+    if (!showOpenApiImport || !workspaceId || !scenarioId) return;
+    setIsLoadingOpenApi(true);
+    void listScenarioOpenApiSpecSources(scenarioId, workspaceId)
+      .then(setOpenApiSpecs)
+      .catch(() => setOpenApiSpecs(null))
+      .finally(() => setIsLoadingOpenApi(false));
+  }, [showOpenApiImport, scenarioId, workspaceId]);
+
+  useEffect(() => {
+    if (!showOpenApiImport || !workspaceId || !scenarioId || !selectedOpenApiSpecId) {
+      setOpenApiOperations(null);
+      return;
+    }
+    setIsLoadingOpenApi(true);
+    void listScenarioOpenApiOperations(scenarioId, selectedOpenApiSpecId, workspaceId)
+      .then(setOpenApiOperations)
+      .catch(() => setOpenApiOperations(null))
+      .finally(() => setIsLoadingOpenApi(false));
+  }, [showOpenApiImport, scenarioId, selectedOpenApiSpecId, workspaceId]);
 
   useEffect(() => {
     if (selectedEnvId) {
@@ -749,6 +794,79 @@ export function ScenarioDesignerPage() {
       }
       return { ...current, steps: remaining };
     });
+  }
+
+  function resetOpenApiImportModal() {
+    setShowOpenApiImport(false);
+    setSelectedOpenApiSpecId("");
+    setSelectedOpenApiRefs([]);
+    setOpenApiPreview(null);
+    setOpenApiError(null);
+  }
+
+  function toggleOpenApiOperation(ref: OpenApiOperationRef) {
+    setOpenApiPreview(null);
+    const selected = selectedOpenApiRefs.some((item) => openApiRefsEqual(item, ref));
+    if (!selected && selectedOpenApiRefs.length >= OPENAPI_MAX_OPERATION_SELECTION) {
+      setOpenApiError(`Select up to ${OPENAPI_MAX_OPERATION_SELECTION} operations at a time.`);
+      return;
+    }
+    setOpenApiError(null);
+    setSelectedOpenApiRefs((current) =>
+      current.some((item) => openApiRefsEqual(item, ref))
+        ? current.filter((item) => !openApiRefsEqual(item, ref))
+        : [...current, ref],
+    );
+  }
+
+  function moveOpenApiOperation(index: number, direction: -1 | 1) {
+    setOpenApiPreview(null);
+    setSelectedOpenApiRefs((current) => {
+      const target = index + direction;
+      if (target < 0 || target >= current.length) return current;
+      const next = [...current];
+      const [item] = next.splice(index, 1);
+      next.splice(target, 0, item);
+      return next;
+    });
+  }
+
+  async function previewOpenApiImport() {
+    if (!selectedOpenApiSpecId || selectedOpenApiRefs.length === 0) return;
+    setIsPreviewingOpenApi(true);
+    setOpenApiError(null);
+    try {
+      const preview = await generateScenarioOpenApiStepDrafts(
+        scenarioId,
+        {
+          specId: selectedOpenApiSpecId,
+          operationRefs: selectedOpenApiRefs,
+          insert: selectedStepId ? { mode: "after_step", stepId: selectedStepId } : { mode: "append" },
+        },
+        workspaceId,
+        await getWriteToken(),
+      );
+      setOpenApiPreview(preview);
+    } catch {
+      setOpenApiPreview(null);
+      setOpenApiError("OpenAPI preview failed. Refresh and try again.");
+    } finally {
+      setIsPreviewingOpenApi(false);
+    }
+  }
+
+  function confirmOpenApiImport() {
+    if (!openApiPreview) return;
+    updateDraft((current) => {
+      const selectedIndex = current.steps.findIndex((step) => step.id === selectedStepId);
+      const insertAt = selectedIndex >= 0 ? selectedIndex + 1 : current.steps.length;
+      const importedSteps = openApiPreview.items.map((item) => stepFromOpenApiGeneratedDraft(item.step));
+      const nextSteps = [...current.steps];
+      nextSteps.splice(insertAt, 0, ...importedSteps);
+      setSelectedStepId(importedSteps[0]?.id ?? selectedStepId);
+      return { ...current, steps: nextSteps };
+    });
+    resetOpenApiImportModal();
   }
 
   function stepTabCount(tab: StepTabKey) {
@@ -1196,7 +1314,7 @@ export function ScenarioDesignerPage() {
         <aside className="surgepilot-glass rounded-2xl p-4">
           <div className="mb-3">
             <h2 className="text-sm font-semibold text-white">Steps</h2>
-            <div className="mt-3 grid grid-cols-2 gap-2">
+            <div className="mt-3 grid grid-cols-3 gap-2">
               <button
                 aria-label="Add Step"
                 className="inline-flex items-center justify-center gap-2 rounded-lg bg-primary px-3 py-2 text-sm font-semibold text-on-primary transition hover:brightness-110"
@@ -1217,6 +1335,16 @@ export function ScenarioDesignerPage() {
               >
                 <Terminal className="h-4 w-4" />
                 cURL
+              </button>
+              <button
+                aria-label="From OpenAPI"
+                className="inline-flex items-center justify-center gap-2 rounded-lg border border-white/10 px-3 py-2 text-sm font-semibold text-text-main transition hover:bg-white/5 disabled:cursor-not-allowed disabled:opacity-40"
+                disabled={draft === null}
+                onClick={() => setShowOpenApiImport(true)}
+                title="Generate Steps from OpenAPI"
+                type="button"
+              >
+                OpenAPI
               </button>
             </div>
           </div>
@@ -2116,6 +2244,51 @@ export function ScenarioDesignerPage() {
               >
                 {isSaving ? "Saving..." : "Save"}
               </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {showOpenApiImport ? (
+        <div aria-label={scenarioCopy.openApiImportTitle} aria-modal="true" className="fixed inset-0 z-50 grid place-items-center bg-black/60 p-4" role="dialog">
+          <div className="max-h-[90vh] w-full max-w-5xl overflow-y-auto rounded-2xl border border-white/10 bg-surface-container-low p-6 shadow-2xl">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <h2 className="text-xl font-semibold text-white">{scenarioCopy.openApiImportTitle}</h2>
+                <p className="mt-1 text-sm text-text-muted">{scenarioCopy.openApiImportDescription}</p>
+              </div>
+              <button className="rounded-lg border border-white/10 px-3 py-1.5 text-sm text-text-main" onClick={resetOpenApiImportModal} type="button">Cancel</button>
+            </div>
+            <div className="mt-5 grid gap-5 lg:grid-cols-2">
+              <div className="space-y-4">
+                <label className="grid gap-1 text-sm text-text-muted">
+                  API Catalog spec
+                  <select aria-label="API Catalog spec" className={textInputClass()} disabled={isLoadingOpenApi} onChange={(event) => { setSelectedOpenApiSpecId(event.target.value); setSelectedOpenApiRefs([]); setOpenApiPreview(null); setOpenApiError(null); }} value={selectedOpenApiSpecId}>
+                    <option value="">{isLoadingOpenApi ? "Loading API Catalog specs…" : "Select a spec"}</option>
+                    {(openApiSpecs?.items ?? []).map((spec) => <option key={spec.id} value={spec.id}>{spec.name} · {spec.documentVersion}</option>)}
+                  </select>
+                </label>
+                {(openApiSpecs?.items ?? []).length === 0 && !isLoadingOpenApi ? <p className="rounded-xl border border-dashed border-white/15 p-4 text-sm text-text-muted">No API Catalog specs are available in this Workspace.</p> : null}
+                <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
+                  <p className="font-medium text-white">Operations</p>
+                  <p className="text-sm text-text-muted">Select one or more supported operations.</p>
+                  <div className="mt-3 max-h-64 space-y-2 overflow-y-auto">
+                    {(openApiOperations?.items ?? []).map((operation) => {
+                      const checked = selectedOpenApiRefs.some((ref) => openApiRefsEqual(ref, operation.ref));
+                      return <label className="flex items-start gap-3 rounded-xl border border-white/10 bg-white/5 p-3 text-sm" key={openApiOperationKey(operation.ref)}>
+                        <input checked={checked} className="mt-1" disabled={!operation.supportedForGeneration || (!checked && selectedOpenApiRefs.length >= OPENAPI_MAX_OPERATION_SELECTION)} onChange={() => toggleOpenApiOperation(operation.ref)} type="checkbox" />
+                        <span><span className="block font-medium text-white">{operation.displayName}</span><span className="mt-1 block font-mono text-xs text-text-muted">{operation.method} {operation.path}</span></span>
+                      </label>;
+                    })}
+                  </div>
+                </div>
+                {selectedOpenApiRefs.length > 0 ? <div className="rounded-2xl border border-white/10 bg-black/20 p-4"><p className="font-medium text-white">Generation order</p><div className="mt-3 space-y-2">{selectedOpenApiRefs.map((ref, index) => <div className="flex items-center justify-between gap-3 rounded-xl border border-white/10 bg-white/5 px-3 py-2" key={openApiOperationKey(ref)}><span className="font-mono text-xs text-white">{index + 1}. {ref.method} {ref.path}</span><span className="flex gap-1"><MiniButton disabled={index === 0} onClick={() => moveOpenApiOperation(index, -1)}>Up</MiniButton><MiniButton disabled={index === selectedOpenApiRefs.length - 1} onClick={() => moveOpenApiOperation(index, 1)}>Down</MiniButton></span></div>)}</div></div> : null}
+                {openApiError ? <p className="rounded-xl border border-error/30 bg-error-container p-3 text-sm text-on-error-container">{openApiError}</p> : null}
+                <button className="rounded-xl bg-primary px-4 py-2 text-sm font-semibold text-on-primary disabled:opacity-40" disabled={isPreviewingOpenApi || !selectedOpenApiSpecId || selectedOpenApiRefs.length === 0} onClick={() => void previewOpenApiImport()} type="button">{isPreviewingOpenApi ? "Generating…" : "Preview Step drafts"}</button>
+              </div>
+              <div className="space-y-3 rounded-2xl border border-white/10 bg-black/20 p-4">
+                {openApiPreview ? <><p className="font-mono text-[11px] uppercase tracking-[0.18em] text-secondary">Draft preview</p><p className="text-sm text-text-muted">These Steps are editable and are not saved until you save the Scenario.</p><div className="space-y-3">{openApiPreview.items.map((item, index) => <div className="rounded-xl border border-white/10 bg-white/5 p-3" key={`${openApiOperationKey(item.operationRef)}-${index}`}><p className="font-mono text-sm font-semibold text-primary">{index + 1}. {item.step.method} {item.step.path}</p><p className="mt-1 text-sm text-white">{item.step.name}</p>{item.warnings.length > 0 ? <ul className="mt-2 space-y-1 text-sm text-warning">{item.warnings.map((warning, warningIndex) => <li key={`${warning.code}-${warningIndex}`}>{warning.message}</li>)}</ul> : null}</div>)}</div><button className="w-full rounded-xl bg-primary px-4 py-2 text-sm font-semibold text-on-primary" onClick={confirmOpenApiImport} type="button">Insert Step drafts</button></> : <p className="rounded-xl border border-dashed border-white/15 p-6 text-center text-sm text-text-muted">Preview appears here before anything is added to the Scenario draft.</p>}
+              </div>
             </div>
           </div>
         </div>

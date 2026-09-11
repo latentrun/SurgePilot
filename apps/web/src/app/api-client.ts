@@ -123,6 +123,17 @@ export type CurlImportParseRequest =
 export type CurlImportParseResponse =
   components["schemas"]["CurlImportParseResponse"];
 export type CurlImportStepDraft = components["schemas"]["CurlImportStepDraft"];
+export type OpenApiSpecSourceListResponse =
+  components["schemas"]["OpenApiSpecSourceListResponse"];
+export type OpenApiOperationListResponse =
+  components["schemas"]["OpenApiOperationListResponse"];
+export type OpenApiOperationRef = components["schemas"]["OpenApiOperationRef"];
+export type OpenApiStepDraftGenerateRequest =
+  components["schemas"]["OpenApiStepDraftGenerateRequest"];
+export type OpenApiStepDraftPreviewResponse =
+  components["schemas"]["OpenApiStepDraftPreviewResponse"];
+export type OpenApiGeneratedStepDraft =
+  components["schemas"]["OpenApiGeneratedStepDraft"];
 
 export type TestPlanCreateRequest =
   components["schemas"]["TestPlanCreateRequest"];
@@ -992,6 +1003,46 @@ export function parseScenarioCurlImport(
 ) {
   return request<CurlImportParseResponse>(
     "/v1/scenarios/curl-import/parse",
+    {
+      method: "POST",
+      headers: {
+        "x-csrf-token": csrfToken,
+        "x-workspace-id": workspaceId,
+      },
+      body: JSON.stringify(payload),
+    },
+  );
+}
+
+export function listScenarioOpenApiSpecSources(
+  scenarioId: string,
+  workspaceId: string,
+) {
+  return request<OpenApiSpecSourceListResponse>(
+    `/v1/scenarios/${encodeURIComponent(scenarioId)}/openapi-step-generation/specs`,
+    { headers: { "x-workspace-id": workspaceId } },
+  );
+}
+
+export function listScenarioOpenApiOperations(
+  scenarioId: string,
+  specId: string,
+  workspaceId: string,
+) {
+  return request<OpenApiOperationListResponse>(
+    `/v1/scenarios/${encodeURIComponent(scenarioId)}/openapi-step-generation/specs/${encodeURIComponent(specId)}/operations`,
+    { headers: { "x-workspace-id": workspaceId } },
+  );
+}
+
+export function generateScenarioOpenApiStepDrafts(
+  scenarioId: string,
+  payload: OpenApiStepDraftGenerateRequest,
+  workspaceId: string,
+  csrfToken: string,
+) {
+  return request<OpenApiStepDraftPreviewResponse>(
+    `/v1/scenarios/${encodeURIComponent(scenarioId)}/openapi-step-generation/drafts`,
     {
       method: "POST",
       headers: {
