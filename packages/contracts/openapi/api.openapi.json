@@ -772,6 +772,105 @@
         "title": "DependencyFileListResponse",
         "type": "object"
       },
+      "DependencyFilePreviewKind": {
+        "enum": [
+          "text",
+          "unsupported"
+        ],
+        "title": "DependencyFilePreviewKind",
+        "type": "string"
+      },
+      "DependencyFilePreviewResponse": {
+        "properties": {
+          "canPreview": {
+            "title": "Canpreview",
+            "type": "boolean"
+          },
+          "contentType": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Contenttype"
+          },
+          "filename": {
+            "title": "Filename",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "maxBytes": {
+            "title": "Maxbytes",
+            "type": "integer"
+          },
+          "previewKind": {
+            "$ref": "#/components/schemas/DependencyFilePreviewKind"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DependencyFilePreviewUnavailableReason"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "sha256": {
+            "title": "Sha256",
+            "type": "string"
+          },
+          "sizeBytes": {
+            "title": "Sizebytes",
+            "type": "integer"
+          },
+          "text": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Text"
+          },
+          "truncated": {
+            "title": "Truncated",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "id",
+          "filename",
+          "contentType",
+          "sizeBytes",
+          "sha256",
+          "previewKind",
+          "canPreview",
+          "truncated",
+          "maxBytes",
+          "text",
+          "reason"
+        ],
+        "title": "DependencyFilePreviewResponse",
+        "type": "object"
+      },
+      "DependencyFilePreviewUnavailableReason": {
+        "enum": [
+          "binary_content",
+          "decode_failed",
+          "storage_unavailable"
+        ],
+        "title": "DependencyFilePreviewUnavailableReason",
+        "type": "string"
+      },
       "DependencyFileSummary": {
         "properties": {
           "contentType": {
@@ -9103,6 +9202,135 @@
           }
         },
         "summary": "Download Dependency File Route",
+        "tags": [
+          "dependency-files"
+        ]
+      }
+    },
+    "/v1/dependency-files/{dependencyFileId}/preview": {
+      "get": {
+        "operationId": "previewDependencyFile",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "dependencyFileId",
+            "required": true,
+            "schema": {
+              "title": "Dependencyfileid",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-workspace-id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Workspace-Id"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "surgepilot_session",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "SurgePilot Session"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DependencyFilePreviewResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "code": "STORAGE_UNAVAILABLE",
+                  "message": "Storage is unavailable.",
+                  "requestId": "req_example"
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "MinIO storage is unavailable or the configured bucket is inaccessible."
+          }
+        },
+        "summary": "Preview Dependency File Route",
         "tags": [
           "dependency-files"
         ]

@@ -201,6 +201,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/dependency-files/{dependencyFileId}/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Preview Dependency File Route */
+        get: operations["previewDependencyFile"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/env-groups": {
         parameters: {
             query?: never;
@@ -1025,6 +1042,39 @@ export interface components {
             /** Total */
             total: number;
         };
+        /**
+         * DependencyFilePreviewKind
+         * @enum {string}
+         */
+        DependencyFilePreviewKind: "text" | "unsupported";
+        /** DependencyFilePreviewResponse */
+        DependencyFilePreviewResponse: {
+            /** Canpreview */
+            canPreview: boolean;
+            /** Contenttype */
+            contentType: string | null;
+            /** Filename */
+            filename: string;
+            /** Id */
+            id: string;
+            /** Maxbytes */
+            maxBytes: number;
+            previewKind: components["schemas"]["DependencyFilePreviewKind"];
+            reason: components["schemas"]["DependencyFilePreviewUnavailableReason"] | null;
+            /** Sha256 */
+            sha256: string;
+            /** Sizebytes */
+            sizeBytes: number;
+            /** Text */
+            text: string | null;
+            /** Truncated */
+            truncated: boolean;
+        };
+        /**
+         * DependencyFilePreviewUnavailableReason
+         * @enum {string}
+         */
+        DependencyFilePreviewUnavailableReason: "binary_content" | "decode_failed" | "storage_unavailable";
         DependencyFileSummary: {
             /** Contenttype */
             contentType?: string | null;
@@ -6261,6 +6311,93 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    previewDependencyFile: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-workspace-id"?: string | null;
+            };
+            path: {
+                dependencyFileId: string;
+            };
+            cookie?: {
+                surgepilot_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DependencyFilePreviewResponse"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description MinIO storage is unavailable or the configured bucket is inaccessible. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "code": "STORAGE_UNAVAILABLE",
+                     *       "message": "Storage is unavailable.",
+                     *       "requestId": "req_example"
+                     *     }
+                     */
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
