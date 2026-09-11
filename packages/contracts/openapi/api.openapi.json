@@ -115,6 +115,306 @@
         "title": "CsrfTokenResponse",
         "type": "object"
       },
+      "CurlImportBodyDraft": {
+        "properties": {
+          "contentType": {
+            "anyOf": [
+              {
+                "maxLength": 120,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Contenttype"
+          },
+          "formFields": {
+            "items": {
+              "$ref": "#/components/schemas/CurlImportNamedValueDraft"
+            },
+            "maxItems": 200,
+            "title": "Formfields",
+            "type": "array"
+          },
+          "rawText": {
+            "anyOf": [
+              {
+                "maxLength": 262144,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rawtext"
+          },
+          "type": {
+            "default": "none",
+            "enum": [
+              "none",
+              "raw",
+              "form"
+            ],
+            "title": "Type",
+            "type": "string"
+          }
+        },
+        "title": "CurlImportBodyDraft",
+        "type": "object"
+      },
+      "CurlImportNamedValueDraft": {
+        "properties": {
+          "enabled": {
+            "default": true,
+            "title": "Enabled",
+            "type": "boolean"
+          },
+          "name": {
+            "maxLength": 255,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          },
+          "value": {
+            "default": "",
+            "maxLength": 65536,
+            "title": "Value",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "title": "CurlImportNamedValueDraft",
+        "type": "object"
+      },
+      "CurlImportParseRequest": {
+        "properties": {
+          "rawCurl": {
+            "maxLength": 300000,
+            "minLength": 1,
+            "title": "Rawcurl",
+            "type": "string"
+          }
+        },
+        "required": [
+          "rawCurl"
+        ],
+        "title": "CurlImportParseRequest",
+        "type": "object"
+      },
+      "CurlImportParseResponse": {
+        "properties": {
+          "baseUrlSuggestion": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Baseurlsuggestion"
+          },
+          "step": {
+            "$ref": "#/components/schemas/CurlImportStepDraft"
+          },
+          "unsupportedOptions": {
+            "items": {
+              "$ref": "#/components/schemas/CurlImportUnsupportedOption"
+            },
+            "title": "Unsupportedoptions",
+            "type": "array"
+          },
+          "warnings": {
+            "items": {
+              "$ref": "#/components/schemas/CurlImportWarning"
+            },
+            "title": "Warnings",
+            "type": "array"
+          }
+        },
+        "required": [
+          "step",
+          "baseUrlSuggestion",
+          "warnings",
+          "unsupportedOptions"
+        ],
+        "title": "CurlImportParseResponse",
+        "type": "object"
+      },
+      "CurlImportStepDraft": {
+        "properties": {
+          "body": {
+            "$ref": "#/components/schemas/CurlImportBodyDraft"
+          },
+          "enabled": {
+            "default": true,
+            "title": "Enabled",
+            "type": "boolean"
+          },
+          "headers": {
+            "items": {
+              "$ref": "#/components/schemas/CurlImportNamedValueDraft"
+            },
+            "maxItems": 200,
+            "title": "Headers",
+            "type": "array"
+          },
+          "method": {
+            "enum": [
+              "GET",
+              "POST",
+              "PUT",
+              "PATCH",
+              "DELETE",
+              "HEAD",
+              "OPTIONS"
+            ],
+            "title": "Method",
+            "type": "string"
+          },
+          "name": {
+            "maxLength": 120,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          },
+          "path": {
+            "maxLength": 2048,
+            "minLength": 1,
+            "title": "Path",
+            "type": "string"
+          },
+          "queryParams": {
+            "items": {
+              "$ref": "#/components/schemas/CurlImportNamedValueDraft"
+            },
+            "maxItems": 200,
+            "title": "Queryparams",
+            "type": "array"
+          },
+          "settings": {
+            "$ref": "#/components/schemas/CurlImportStepSettingsDraft"
+          }
+        },
+        "required": [
+          "name",
+          "method",
+          "path"
+        ],
+        "title": "CurlImportStepDraft",
+        "type": "object"
+      },
+      "CurlImportStepSettingsDraft": {
+        "properties": {
+          "followRedirects": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Followredirects"
+          },
+          "keepAlive": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Keepalive"
+          },
+          "thinkTimeMs": {
+            "title": "Thinktimems",
+            "type": "null"
+          },
+          "timeoutMs": {
+            "anyOf": [
+              {
+                "maximum": 300000.0,
+                "minimum": 100.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Timeoutms"
+          }
+        },
+        "title": "CurlImportStepSettingsDraft",
+        "type": "object"
+      },
+      "CurlImportUnsupportedOption": {
+        "properties": {
+          "message": {
+            "maxLength": 300,
+            "minLength": 1,
+            "title": "Message",
+            "type": "string"
+          },
+          "option": {
+            "maxLength": 80,
+            "minLength": 1,
+            "title": "Option",
+            "type": "string"
+          },
+          "reasonCode": {
+            "maxLength": 80,
+            "minLength": 1,
+            "title": "Reasoncode",
+            "type": "string"
+          }
+        },
+        "required": [
+          "option",
+          "reasonCode",
+          "message"
+        ],
+        "title": "CurlImportUnsupportedOption",
+        "type": "object"
+      },
+      "CurlImportWarning": {
+        "properties": {
+          "code": {
+            "maxLength": 80,
+            "minLength": 1,
+            "title": "Code",
+            "type": "string"
+          },
+          "field": {
+            "anyOf": [
+              {
+                "maxLength": 120,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Field"
+          },
+          "message": {
+            "maxLength": 300,
+            "minLength": 1,
+            "title": "Message",
+            "type": "string"
+          }
+        },
+        "required": [
+          "code",
+          "message"
+        ],
+        "title": "CurlImportWarning",
+        "type": "object"
+      },
       "CurrentUserResponse": {
         "properties": {
           "availableWorkspaces": {
@@ -13088,6 +13388,120 @@
           }
         },
         "summary": "Create Scenario",
+        "tags": [
+          "scenarios"
+        ]
+      }
+    },
+    "/v1/scenarios/curl-import/parse": {
+      "post": {
+        "operationId": "parseScenarioCurlImport",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "x-workspace-id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Workspace-Id"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-csrf-token",
+            "required": true,
+            "schema": {
+              "title": "X-Csrf-Token",
+              "type": "string"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "surgepilot_session",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "SurgePilot Session"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CurlImportParseRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CurlImportParseResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          }
+        },
+        "summary": "Parse Scenario Curl Import",
         "tags": [
           "scenarios"
         ]

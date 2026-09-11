@@ -10,7 +10,9 @@ import {
   listDependencyFiles,
   listEnvGroups,
   listLoadNodes,
+  parseScenarioCurlImport,
   patchScenario,
+  type CurlImportParseResponse,
   type DependencyFileSummary,
   type EnvGroupSummary,
   type LoadNodeSummary,
@@ -30,6 +32,7 @@ import {
   newScript,
   newStep,
   newUploadFile,
+  stepFromCurlImportDraft,
   toPatchPayload,
   type ScenarioAssertion,
   type ScenarioDataSource,
@@ -205,6 +208,14 @@ function scriptsEnabled(detail: ScenarioDetail) {
   );
 }
 
+function hasSensitiveCurlWarning(preview: CurlImportParseResponse | null) {
+  return (preview?.warnings ?? []).some((warning) =>
+    ["SENSITIVE_HEADER_PRESENT", "SENSITIVE_BODY_FIELD_PRESENT"].includes(
+      warning.code,
+    ),
+  );
+}
+
 function stepBody(step: ScenarioStep) {
   return (
     step.body ?? {
@@ -316,6 +327,26 @@ function Archive({ className }: { className?: string }) {
       <rect height="5" rx="1" width="20" x="2" y="3" />
       <path d="M4 8v11a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8" />
       <path d="M10 12h4" />
+    </svg>
+  );
+}
+
+function Terminal({ className }: { className?: string }) {
+  return (
+    <svg
+      aria-hidden="true"
+      className={className}
+      fill="none"
+      height="16"
+      stroke="currentColor"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      strokeWidth="2"
+      viewBox="0 0 24 24"
+      width="16"
+    >
+      <path d="m4 17 6-6-6-6" />
+      <path d="M12 19h8" />
     </svg>
   );
 }
@@ -507,6 +538,17 @@ export function ScenarioDesignerPage() {
   const [isCloning, setIsCloning] = useState(false);
   const [isArchiving, setIsArchiving] = useState(false);
   const [archiveOpen, setArchiveOpen] = useState(false);
+
+  const [showCurlImport, setShowCurlImport] = useState(false);
+  const [curlImportText, setCurlImportText] = useState("");
+  const [curlImportPreview, setCurlImportPreview] =
+    useState<CurlImportParseResponse | null>(null);
+  const [curlImportMode, setCurlImportMode] = useState<"append" | "replace">(
+    "append",
+  );
+  const [applyCurlBaseUrl, setApplyCurlBaseUrl] = useState(false);
+  const [curlImportError, setCurlImportError] = useState<string | null>(null);
+  const [isPreviewingCurl, setIsPreviewingCurl] = useState(false);
 
   const envStorageKey = `surgepilot:scenario:${scenarioId}:env`;
 
@@ -858,6 +900,72 @@ export function ScenarioDesignerPage() {
     setShowConfig(false);
   }
 
+  function resetCurlImportModal() {
+    setShowCurlImport(false);
+    setCurlImportText("");
+    setCurlImportPreview(null);
+    setCurlImportMode("append");
+    setApplyCurlBaseUrl(false);
+    setCurlImportError(null);
+  }
+
+  async function previewCurlImport() {
+    if (!curlImportText.trim()) return;
+    setIsPreviewingCurl(true);
+    setCurlImportError(null);
+    try {
+      const token = await getWriteToken();
+      const preview = await parseScenarioCurlImport(
+        { rawCurl: curlImportText },
+        workspaceId,
+        token,
+      );
+      setCurlImportPreview(preview);
+      setApplyCurlBaseUrl(false);
+    } catch (error) {
+      setCurlImportPreview(null);
+      setCurlImportError(
+        (error as ApiError | undefined)?.body?.code === "VALIDATION_ERROR"
+          ? "The cURL command could not be imported. Check the command and try again."
+          : "Import preview failed. Refresh and try again.",
+      );
+    } finally {
+      setIsPreviewingCurl(false);
+    }
+  }
+
+  function confirmCurlImport() {
+    if (!curlImportPreview) return;
+    updateDraft((current) => {
+      const selectedIndex = current.steps.findIndex(
+        (step) => step.id === selectedStepId,
+      );
+      const shouldReplace = curlImportMode === "replace" && selectedIndex >= 0;
+      const importedStep = stepFromCurlImportDraft(
+        curlImportPreview.step,
+        shouldReplace ? current.steps[selectedIndex].id : undefined,
+      );
+      const nextSteps = [...current.steps];
+      if (shouldReplace) {
+        nextSteps[selectedIndex] = importedStep;
+      } else {
+        const insertAt =
+          selectedIndex >= 0 ? selectedIndex + 1 : nextSteps.length;
+        nextSteps.splice(insertAt, 0, importedStep);
+      }
+      setSelectedStepId(importedStep.id);
+      return {
+        ...current,
+        baseUrlExpression:
+          applyCurlBaseUrl && curlImportPreview.baseUrlSuggestion
+            ? curlImportPreview.baseUrlSuggestion
+            : current.baseUrlExpression,
+        steps: nextSteps,
+      };
+    });
+    resetCurlImportModal();
+  }
+
   function openDebug() {
     setActionError(null);
     setNeedsReload(false);
@@ -1088,15 +1196,29 @@ export function ScenarioDesignerPage() {
         <aside className="surgepilot-glass rounded-2xl p-4">
           <div className="mb-3">
             <h2 className="text-sm font-semibold text-white">Steps</h2>
-            <button
-              aria-label="Add Step"
-              className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-lg bg-primary px-3 py-2 text-sm font-semibold text-on-primary transition hover:brightness-110"
-              onClick={addStep}
-              type="button"
-            >
-              <Plus className="h-4 w-4" />
-              Add Step
-            </button>
+            <div className="mt-3 grid grid-cols-2 gap-2">
+              <button
+                aria-label="Add Step"
+                className="inline-flex items-center justify-center gap-2 rounded-lg bg-primary px-3 py-2 text-sm font-semibold text-on-primary transition hover:brightness-110"
+                onClick={addStep}
+                title="Add a blank HTTP Step"
+                type="button"
+              >
+                <Plus className="h-4 w-4" />
+                Add Step
+              </button>
+              <button
+                aria-label="Import cURL"
+                className="inline-flex items-center justify-center gap-2 rounded-lg border border-white/10 px-3 py-2 text-sm font-semibold text-text-main transition hover:bg-white/5 disabled:cursor-not-allowed disabled:opacity-40"
+                disabled={draft === null}
+                onClick={() => setShowCurlImport(true)}
+                title="Import one Step from cURL"
+                type="button"
+              >
+                <Terminal className="h-4 w-4" />
+                cURL
+              </button>
+            </div>
           </div>
           {draft.steps.length === 0 ? (
             <p className="rounded-xl border border-dashed border-white/10 p-4 text-sm text-text-muted">
@@ -1994,6 +2116,236 @@ export function ScenarioDesignerPage() {
               >
                 {isSaving ? "Saving..." : "Save"}
               </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {showCurlImport ? (
+        <div
+          aria-label={scenarioCopy.curlImportTitle}
+          aria-modal="true"
+          className="fixed inset-0 z-50 grid place-items-center bg-black/60 p-4"
+          role="dialog"
+        >
+          <div className="max-h-[90vh] w-full max-w-4xl overflow-y-auto rounded-2xl border border-white/10 bg-surface-container-low p-6 shadow-2xl">
+            <div className="flex flex-wrap items-start justify-between gap-4">
+              <div>
+                <h2 className="text-xl font-semibold text-white">
+                  {scenarioCopy.curlImportTitle}
+                </h2>
+                <p className="mt-1 max-w-2xl text-sm text-text-muted">
+                  {scenarioCopy.curlImportDescription}
+                </p>
+              </div>
+              <button
+                className="rounded-lg border border-white/10 px-3 py-1.5 text-sm text-text-main transition hover:bg-white/5"
+                onClick={resetCurlImportModal}
+                type="button"
+              >
+                Close
+              </button>
+            </div>
+            <div className="mt-5 grid gap-5 lg:grid-cols-2">
+              <div className="space-y-3">
+                <Field label="cURL command">
+                  <textarea
+                    aria-label="cURL command"
+                    className={cn(
+                      inputClass(false),
+                      "min-h-44 resize-y py-2 font-mono text-xs text-text-main",
+                    )}
+                    onChange={(event) => setCurlImportText(event.target.value)}
+                    placeholder="curl -X POST https://api.example.test/v1/orders"
+                    spellCheck={false}
+                    value={curlImportText}
+                  />
+                </Field>
+                {curlImportError ? (
+                  <div className="rounded-xl border border-error/30 bg-error-container p-3 text-sm text-on-error-container">
+                    {curlImportError}
+                  </div>
+                ) : null}
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    className="rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-on-primary transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-40"
+                    disabled={isPreviewingCurl || !curlImportText.trim()}
+                    onClick={() => void previewCurlImport()}
+                    type="button"
+                  >
+                    {isPreviewingCurl ? "Previewing..." : "Preview import"}
+                  </button>
+                  <button
+                    className="rounded-lg border border-white/10 px-4 py-2 text-sm text-text-main transition hover:bg-white/5"
+                    onClick={() => {
+                      setCurlImportPreview(null);
+                      setCurlImportError(null);
+                    }}
+                    type="button"
+                  >
+                    Reset preview
+                  </button>
+                </div>
+              </div>
+              <div className="space-y-3 rounded-2xl border border-white/10 bg-black/20 p-4">
+                {curlImportPreview ? (
+                  <>
+                    <div>
+                      <p className="font-mono text-[11px] uppercase tracking-[0.18em] text-secondary">
+                        Step preview
+                      </p>
+                      <p className="mt-2 font-mono text-lg font-semibold text-primary">
+                        {curlImportPreview.step.method}{" "}
+                        {curlImportPreview.step.path}
+                      </p>
+                    </div>
+                    {curlImportPreview.baseUrlSuggestion ? (
+                      <div className="rounded-xl border border-primary/20 bg-primary/10 p-3">
+                        <p className="text-sm font-medium text-white">
+                          Base URL suggestion
+                        </p>
+                        <code className="mt-1 block break-all text-sm text-primary">
+                          {curlImportPreview.baseUrlSuggestion}
+                        </code>
+                        <label className="mt-2 flex items-center gap-2 text-sm text-text-muted">
+                          <input
+                            checked={applyCurlBaseUrl}
+                            onChange={(event) =>
+                              setApplyCurlBaseUrl(event.target.checked)
+                            }
+                            type="checkbox"
+                          />
+                          Apply to Global Config
+                        </label>
+                      </div>
+                    ) : null}
+                    <div className="grid gap-2 text-sm">
+                      <div>
+                        <p className="text-text-muted">Query params</p>
+                        {(curlImportPreview.step.queryParams ?? []).length >
+                        0 ? (
+                          <div className="mt-1 flex flex-wrap gap-2">
+                            {(curlImportPreview.step.queryParams ?? []).map(
+                              (item, index) => (
+                                <span
+                                  className="rounded-lg border border-white/10 bg-white/5 px-2 py-1 font-mono text-xs text-white"
+                                  key={`${item.name}-${index}`}
+                                >
+                                  {item.name}={item.value}
+                                </span>
+                              ),
+                            )}
+                          </div>
+                        ) : (
+                          <p className="mt-1 text-text-muted">None</p>
+                        )}
+                      </div>
+                      <div>
+                        <p className="text-text-muted">Headers</p>
+                        {(curlImportPreview.step.headers ?? []).length > 0 ? (
+                          <div className="mt-1 flex flex-wrap gap-2">
+                            {(curlImportPreview.step.headers ?? []).map(
+                              (item, index) => (
+                                <span
+                                  className="rounded-lg border border-white/10 bg-white/5 px-2 py-1 font-mono text-xs text-white"
+                                  key={`${item.name}-${index}`}
+                                >
+                                  {item.name}
+                                </span>
+                              ),
+                            )}
+                          </div>
+                        ) : (
+                          <p className="mt-1 text-text-muted">None</p>
+                        )}
+                      </div>
+                      <div>
+                        <p className="text-text-muted">Body</p>
+                        <p className="mt-1 break-all font-mono text-xs text-white">
+                          {curlImportPreview.step.body?.type === "raw"
+                            ? `${curlImportPreview.step.body.contentType ?? "raw"} · ${
+                                curlImportPreview.step.body.rawText?.length ?? 0
+                              } chars`
+                            : curlImportPreview.step.body?.type === "form"
+                              ? `${curlImportPreview.step.body.formFields?.length ?? 0} form fields`
+                              : "None"}
+                        </p>
+                      </div>
+                    </div>
+                    {hasSensitiveCurlWarning(curlImportPreview) ? (
+                      <div className="rounded-xl border border-warning/30 bg-warning/10 p-3">
+                        <p className="font-semibold text-warning">
+                          Sensitive information warning
+                        </p>
+                        <p className="mt-1 text-sm text-text-muted">
+                          {scenarioCopy.curlImportSensitiveWarning}
+                        </p>
+                      </div>
+                    ) : null}
+                    {(curlImportPreview.warnings ?? []).length > 0 ? (
+                      <div>
+                        <p className="text-sm font-medium text-white">
+                          Warnings
+                        </p>
+                        <ul className="mt-1 space-y-1 text-sm text-text-muted">
+                          {curlImportPreview.warnings.map((warning, index) => (
+                            <li key={`${warning.code}-${index}`}>
+                              {warning.message}
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    ) : null}
+                    {(curlImportPreview.unsupportedOptions ?? []).length > 0 ? (
+                      <div>
+                        <p className="text-sm font-medium text-white">
+                          Not imported
+                        </p>
+                        <div className="mt-1 flex flex-wrap gap-2">
+                          {curlImportPreview.unsupportedOptions.map((item) => (
+                            <span
+                              className="rounded-lg border border-warning/20 bg-warning/10 px-2 py-1 font-mono text-xs text-warning"
+                              key={`${item.option}-${item.reasonCode}`}
+                            >
+                              {item.option}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    ) : null}
+                    <div className="grid gap-2 rounded-xl border border-white/10 p-3">
+                      <label className="flex items-center gap-2 text-sm text-white">
+                        <input
+                          checked={curlImportMode === "append"}
+                          onChange={() => setCurlImportMode("append")}
+                          type="radio"
+                        />
+                        Append after selected Step
+                      </label>
+                      <label className="flex items-center gap-2 text-sm text-white">
+                        <input
+                          checked={curlImportMode === "replace"}
+                          onChange={() => setCurlImportMode("replace")}
+                          type="radio"
+                        />
+                        Replace selected Step
+                      </label>
+                    </div>
+                    <button
+                      className="w-full rounded-xl bg-primary px-4 py-2 text-sm font-semibold text-on-primary transition hover:brightness-110"
+                      onClick={confirmCurlImport}
+                      type="button"
+                    >
+                      Import Step
+                    </button>
+                  </>
+                ) : (
+                  <div className="rounded-xl border border-dashed border-white/15 p-6 text-center text-sm text-text-muted">
+                    Preview appears here before anything is added to the
+                    Scenario draft.
+                  </div>
+                )}
+              </div>
             </div>
           </div>
         </div>

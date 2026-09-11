@@ -337,3 +337,219 @@ describe("P1-04 scenarios polish", () => {
     );
   });
 });
+
+describe("P1-05 cURL import", () => {
+  it("previews a cURL import and appends the imported Step without auto-saving", async () => {
+    let patchBody: Record<string, unknown> | null = null;
+    let parseCalls = 0;
+    mockFetch(async (input, init) => {
+      const url = requestUrl(input);
+      const method = requestMethod(input, init);
+      if (url.endsWith("/api/v1/auth/me")) return jsonResponse(authSession);
+      if (url.endsWith("/api/v1/auth/csrf"))
+        return jsonResponse({ csrfToken: "csrf-token" });
+      if (url.endsWith("/api/v1/scenarios/curl-import/parse")) {
+        parseCalls += 1;
+        const body = await requestBody(input, init);
+        expect(body.rawCurl).toContain("curl");
+        return jsonResponse({
+          step: {
+            enabled: true,
+            name: "POST /v1/orders",
+            method: "POST",
+            path: "/v1/orders",
+            queryParams: [{ name: "region", value: "sg", enabled: true }],
+            headers: [
+              { name: "Authorization", value: "Bearer token", enabled: true },
+            ],
+            body: {
+              type: "raw",
+              contentType: "application/json",
+              rawText: '{"sku":"A1"}',
+              formFields: [],
+            },
+            settings: {
+              timeoutMs: 2500,
+              followRedirects: true,
+              keepAlive: null,
+              thinkTimeMs: null,
+            },
+          },
+          baseUrlSuggestion: "https://api.example.test",
+          warnings: [
+            {
+              code: "SENSITIVE_HEADER_PRESENT",
+              message:
+                "A sensitive header may be saved into the Scenario if you confirm and save.",
+              field: "headers[0].name",
+            },
+          ],
+          unsupportedOptions: [
+            {
+              option: "--compressed",
+              reasonCode: "unsupported_option",
+              message: "This cURL option was not imported.",
+            },
+          ],
+        });
+      }
+      if (
+        url.includes(`/api/v1/scenarios/${scenarioDetail.id}`) &&
+        method === "GET"
+      )
+        return jsonResponse(scenarioDetail);
+      if (
+        url.includes(`/api/v1/scenarios/${scenarioDetail.id}`) &&
+        method === "PATCH"
+      ) {
+        patchBody = await requestBody(input, init);
+        return jsonResponse({ ...scenarioDetail, ...patchBody, revision: 4 });
+      }
+      if (url.includes("/api/v1/env-groups"))
+        return jsonResponse(envListResponse);
+      if (url.includes("/api/v1/dependency-files"))
+        return jsonResponse(dependencyFileListResponse);
+      return jsonResponse({});
+    });
+
+    renderAt(`/scenarios/${scenarioDetail.id}`);
+
+    expect(
+      await screen.findByRole("heading", { name: "Checkout flow" }),
+    ).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Import cURL" }));
+    await userEvent.type(
+      await screen.findByLabelText("cURL command"),
+      "curl -H 'Authorization: Bearer token' https://api.example.test/v1/orders?region=sg",
+    );
+    await userEvent.click(
+      screen.getByRole("button", { name: "Preview import" }),
+    );
+
+    expect(await screen.findByText("POST /v1/orders")).toBeInTheDocument();
+    expect(screen.getByText("region=sg")).toBeInTheDocument();
+    expect(screen.getByText("Authorization")).toBeInTheDocument();
+    expect(
+      screen.getByText("Sensitive information warning"),
+    ).toBeInTheDocument();
+    expect(screen.getByText("--compressed")).toBeInTheDocument();
+    expect(screen.getByText("Saved", { exact: true })).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole("button", { name: "Import Step" }));
+    expect(screen.getByText("Unsaved changes")).toBeInTheDocument();
+    expect(parseCalls).toBe(1);
+
+    await userEvent.click(screen.getByRole("button", { name: "Save" }));
+    await waitFor(() => expect(patchBody).not.toBeNull());
+    const body = patchBody as unknown as {
+      steps: Array<Record<string, unknown>>;
+      baseUrlExpression: string;
+    };
+    expect(body.steps).toHaveLength(2);
+    expect(body.steps[1]).toMatchObject({
+      name: "POST /v1/orders",
+      method: "POST",
+      path: "/v1/orders",
+      queryParams: [{ name: "region", value: "sg", enabled: true }],
+      headers: [
+        { name: "Authorization", value: "Bearer token", enabled: true },
+      ],
+      body: {
+        type: "raw",
+        contentType: "application/json",
+        rawText: '{"sku":"A1"}',
+      },
+      settings: { timeoutMs: 2500, followRedirects: true },
+    });
+    expect(body.steps[1].id).not.toBe(scenarioDetail.steps[0].id);
+    expect(body.baseUrlExpression).toBe("${base_url}");
+  });
+
+  it("replaces the selected Step and applies the base URL only after explicit confirmation", async () => {
+    let patchBody: Record<string, unknown> | null = null;
+    mockFetch(async (input, init) => {
+      const url = requestUrl(input);
+      const method = requestMethod(input, init);
+      if (url.endsWith("/api/v1/auth/me")) return jsonResponse(authSession);
+      if (url.endsWith("/api/v1/auth/csrf"))
+        return jsonResponse({ csrfToken: "csrf-token" });
+      if (url.endsWith("/api/v1/scenarios/curl-import/parse"))
+        return jsonResponse({
+          step: {
+            enabled: true,
+            name: "GET /v1/replaced",
+            method: "GET",
+            path: "/v1/replaced",
+            queryParams: [],
+            headers: [],
+            body: {
+              type: "none",
+              contentType: null,
+              rawText: null,
+              formFields: [],
+            },
+            settings: {
+              timeoutMs: null,
+              followRedirects: null,
+              keepAlive: null,
+              thinkTimeMs: null,
+            },
+          },
+          baseUrlSuggestion: "https://replace.example.test",
+          warnings: [],
+          unsupportedOptions: [],
+        });
+      if (
+        url.includes(`/api/v1/scenarios/${scenarioDetail.id}`) &&
+        method === "GET"
+      )
+        return jsonResponse(scenarioDetail);
+      if (
+        url.includes(`/api/v1/scenarios/${scenarioDetail.id}`) &&
+        method === "PATCH"
+      ) {
+        patchBody = await requestBody(input, init);
+        return jsonResponse({ ...scenarioDetail, ...patchBody, revision: 4 });
+      }
+      if (url.includes("/api/v1/env-groups"))
+        return jsonResponse(envListResponse);
+      if (url.includes("/api/v1/dependency-files"))
+        return jsonResponse(dependencyFileListResponse);
+      return jsonResponse({});
+    });
+
+    renderAt(`/scenarios/${scenarioDetail.id}`);
+
+    expect(
+      await screen.findByRole("heading", { name: "Checkout flow" }),
+    ).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Import cURL" }));
+    await userEvent.type(
+      await screen.findByLabelText("cURL command"),
+      "curl https://replace.example.test/v1/replaced",
+    );
+    await userEvent.click(
+      screen.getByRole("button", { name: "Preview import" }),
+    );
+    await screen.findByText("GET /v1/replaced");
+    await userEvent.click(screen.getByLabelText("Replace selected Step"));
+    await userEvent.click(screen.getByLabelText("Apply to Global Config"));
+    await userEvent.click(screen.getByRole("button", { name: "Import Step" }));
+    await userEvent.click(screen.getByRole("button", { name: "Save" }));
+
+    await waitFor(() => expect(patchBody).not.toBeNull());
+    const body = patchBody as unknown as {
+      steps: Array<Record<string, unknown>>;
+      baseUrlExpression: string;
+    };
+    expect(body.baseUrlExpression).toBe("https://replace.example.test");
+    expect(body.steps).toHaveLength(1);
+    expect(body.steps[0]).toMatchObject({
+      id: scenarioDetail.steps[0].id,
+      name: "GET /v1/replaced",
+      method: "GET",
+      path: "/v1/replaced",
+    });
+    expect((body.steps[0].assertions as Array<unknown>).length).toBeGreaterThan(0);
+  });
+});

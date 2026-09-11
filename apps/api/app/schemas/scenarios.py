@@ -198,3 +198,64 @@ class ScenarioListResponse(ApiSchema):
     page: int
     page_size: int
     total: int
+
+
+class CurlImportParseRequest(ApiSchema):
+    raw_curl: str = Field(min_length=1, max_length=300_000)
+
+    @field_validator("raw_curl")
+    @classmethod
+    def raw_curl_is_not_blank(cls, value: str) -> str:
+        if not value.strip():
+            raise ValueError("cURL command is required.")
+        return value
+
+
+class CurlImportNamedValueDraft(ApiSchema):
+    name: str = Field(min_length=1, max_length=255)
+    value: str = Field(default="", max_length=SCENARIO_NAMED_VALUE_MAX_LENGTH)
+    enabled: bool = True
+
+
+class CurlImportBodyDraft(ApiSchema):
+    type: BodyType = "none"
+    content_type: str | None = Field(default=None, max_length=120)
+    raw_text: str | None = Field(default=None, max_length=262_144)
+    form_fields: list[CurlImportNamedValueDraft] = Field(default_factory=list, max_length=200)
+
+
+class CurlImportStepSettingsDraft(ApiSchema):
+    timeout_ms: int | None = Field(default=None, ge=100, le=300_000)
+    follow_redirects: bool | None = None
+    keep_alive: bool | None = None
+    think_time_ms: None = None
+
+
+class CurlImportStepDraft(ApiSchema):
+    enabled: bool = True
+    name: str = Field(min_length=1, max_length=120)
+    method: HttpMethod
+    path: str = Field(min_length=1, max_length=2048)
+    query_params: list[CurlImportNamedValueDraft] = Field(default_factory=list, max_length=200)
+    headers: list[CurlImportNamedValueDraft] = Field(default_factory=list, max_length=200)
+    body: CurlImportBodyDraft = Field(default_factory=CurlImportBodyDraft)
+    settings: CurlImportStepSettingsDraft = Field(default_factory=CurlImportStepSettingsDraft)
+
+
+class CurlImportWarning(ApiSchema):
+    code: str = Field(min_length=1, max_length=80)
+    message: str = Field(min_length=1, max_length=300)
+    field: str | None = Field(default=None, max_length=120)
+
+
+class CurlImportUnsupportedOption(ApiSchema):
+    option: str = Field(min_length=1, max_length=80)
+    reason_code: str = Field(min_length=1, max_length=80)
+    message: str = Field(min_length=1, max_length=300)
+
+
+class CurlImportParseResponse(ApiSchema):
+    step: CurlImportStepDraft
+    base_url_suggestion: str | None
+    warnings: list[CurlImportWarning]
+    unsupported_options: list[CurlImportUnsupportedOption]
