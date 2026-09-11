@@ -135,6 +135,14 @@ test("authenticated user uploads downloads and deletes Dependency Files", async 
 
   await expect(page.getByText("users.html", { exact: true })).toBeVisible();
 
+  await page.getByRole("button", { name: "Preview users.html" }).click();
+  const previewDialog = page.getByRole("dialog", { name: "Preview users.html" });
+  await expect(previewDialog.getByText("<strong>not bold</strong>")).toBeVisible();
+  await expect(previewDialog.locator("strong")).toHaveCount(0);
+  await expect(previewDialog.getByText("dependency-files/")).toHaveCount(0);
+  await expect(previewDialog.getByText("127.0.0.1:9000")).toHaveCount(0);
+  await previewDialog.getByRole("button", { name: "Close preview" }).click();
+
   const downloadPromise = page.waitForEvent("download");
   await page.getByRole("button", { name: "Download users.html" }).click();
   const download = await downloadPromise;
@@ -144,6 +152,14 @@ test("authenticated user uploads downloads and deletes Dependency Files", async 
   await page.locator('input[type="file"]').setInputFiles(binaryFilePath);
   await page.getByRole("button", { name: "Upload" }).click();
   await expect(page.getByText("image.png", { exact: true })).toBeVisible();
+
+  await page.getByRole("button", { name: "Preview image.png" }).click();
+  const binaryDialog = page.getByRole("dialog", { name: "Preview image.png" });
+  await expect(
+    binaryDialog.getByText("This file looks binary, so inline preview is disabled."),
+  ).toBeVisible();
+  await expect(binaryDialog.getByRole("button", { name: "Download image.png" })).toBeVisible();
+  await binaryDialog.getByRole("button", { name: "Close preview" }).click();
 
   await page.getByRole("button", { name: "Delete image.png" }).click();
   await expect(page.getByText("Delete image.png?")).toBeVisible();

@@ -10,7 +10,7 @@ from sqlalchemy.orm import Session
 from app.core.errors import AppError
 from app.models.auth import DEFAULT_WORKSPACE_ID, AuditEvent, User
 from app.models.dependency_files import DependencyFile
-from app.services.storage import PutResult, StorageClient
+from app.services.storage import PutResult, StorageClient, StoredObjectStream
 
 
 def test_safe_filename_and_sensitive_blocklist_rules() -> None:
@@ -297,6 +297,175 @@ def test_get_storage_client_caches_minio_adapter(monkeypatch: pytest.MonkeyPatch
     second = storage_module.get_storage_client()
 
     assert first is second
+
+
+class PreviewProbeStream(BytesIO):
+    def __init__(self, payload: bytes) -> None:
+        super().__init__(payload)
+        self.closed_called = False
+        self.release_called = False
+
+    def close(self) -> None:
+        self.closed_called = True
+        super().close()
+
+    def release_conn(self) -> None:
+        self.release_called = True
+
+
+class PreviewProbeStorage(StorageClient):
+    def __init__(self, payload: bytes) -> None:
+        self.payload = payload
+        self.get_calls: list[tuple[str, str]] = []
+        self.last_stream: PreviewProbeStream | None = None
+
+    def put_stream(self, *, bucket, object_key, stream, size_limit, content_type=None):
+        return PutResult(size_bytes=0, sha256="0" * 64)
+
+    def get_stream(self, *, bucket, object_key):
+        self.get_calls.append((bucket, object_key))
+        self.last_stream = PreviewProbeStream(self.payload)
+        return StoredObjectStream(
+            content_type="application/octet-stream",
+            size_bytes=len(self.payload),
+            stream=self.last_stream,
+        )
+
+    def delete_object_best_effort(self, *, bucket, object_key):
+        return None
+
+    def health_check(self):
+        return True
+
+
+def preview_file(filename: str, *, size_bytes: int = 100) -> DependencyFile:
+    return DependencyFile(
+        id="01HZX3Y9M0E9W7Z6M5QK9S8P7A",
+        workspace_id=DEFAULT_WORKSPACE_ID,
+        filename=filename,
+        content_type="text/plain",
+        size_bytes=size_bytes,
+        sha256="a" * 64,
+        storage_bucket="surgepilot",
+        storage_object_key=f"dependency-files/{DEFAULT_WORKSPACE_ID}/file/{filename}",
+        status="available",
+        created_by="01HZX3Y9M0E9W7Z6M5QK9S8P7B",
+        created_at=datetime.now(UTC),
+    )
+
+
+def test_preview_returns_text_for_common_text_no_extension_and_source_files() -> None:
+    from app.services.dependency_files import parse_preview_binary_deny_extensions
+    from app.services.dependency_files import preview_dependency_file
+
+    denylist = parse_preview_binary_deny_extensions(".png,.pdf,.zip")
+    for filename in [
+        "users.csv",
+        "Makefile",
+        "Dockerfile",
+        ".gitignore",
+        "script.py",
+        "main.go",
+        "handler.ts",
+        "surgepilot.groovy",
+        "schema.sql",
+        "settings.toml",
+    ]:
+        storage = PreviewProbeStorage(b"id,name\n1,Ada\n")
+
+        preview = preview_dependency_file(
+            preview_file(filename),
+            storage=storage,
+            max_bytes=65_536,
+            binary_deny_extensions=denylist,
+        )
+
+        assert preview.preview_kind == "text"
+        assert preview.can_preview is True
+        assert preview.text == "id,name\n1,Ada\n"
+        assert preview.reason is None
+        assert preview.truncated is False
+        assert storage.get_calls == [("surgepilot", preview_file(filename).storage_object_key)]
+        assert storage.last_stream is not None
+        assert storage.last_stream.closed_called is True
+        assert storage.last_stream.release_called is True
+
+
+def test_preview_known_binary_extension_returns_unavailable_without_storage_read() -> None:
+    from app.services.dependency_files import parse_preview_binary_deny_extensions
+    from app.services.dependency_files import preview_dependency_file
+
+    storage = PreviewProbeStorage(b"not read")
+    preview = preview_dependency_file(
+        preview_file("IMAGE.PNG"),
+        storage=storage,
+        max_bytes=65_536,
+        binary_deny_extensions=parse_preview_binary_deny_extensions(".png,.pdf"),
+    )
+
+    assert preview.preview_kind == "unsupported"
+    assert preview.can_preview is False
+    assert preview.text is None
+    assert preview.reason == "binary_content"
+    assert preview.truncated is False
+    assert storage.get_calls == []
+
+
+def test_preview_binary_markers_and_invalid_utf8_are_unavailable() -> None:
+    from app.services.dependency_files import parse_preview_binary_deny_extensions
+    from app.services.dependency_files import preview_dependency_file
+
+    denylist = parse_preview_binary_deny_extensions(".png")
+    binary_preview = preview_dependency_file(
+        preview_file("payload.bin.txt"),
+        storage=PreviewProbeStorage(b"abc\x00def"),
+        max_bytes=65_536,
+        binary_deny_extensions=denylist,
+    )
+    assert binary_preview.preview_kind == "unsupported"
+    assert binary_preview.reason == "binary_content"
+    assert binary_preview.text is None
+
+    decode_failed = preview_dependency_file(
+        preview_file("payload.txt"),
+        storage=PreviewProbeStorage(b"valid\n\xff"),
+        max_bytes=65_536,
+        binary_deny_extensions=denylist,
+    )
+    assert decode_failed.preview_kind == "unsupported"
+    assert decode_failed.reason == "decode_failed"
+    assert decode_failed.text is None
+
+
+def test_preview_truncates_ascii_and_multibyte_boundaries_without_lossy_replacement() -> None:
+    from app.services.dependency_files import parse_preview_binary_deny_extensions
+    from app.services.dependency_files import preview_dependency_file
+
+    denylist = parse_preview_binary_deny_extensions("")
+    ascii_preview = preview_dependency_file(
+        preview_file("long.txt", size_bytes=5),
+        storage=PreviewProbeStorage(b"abcde"),
+        max_bytes=4,
+        binary_deny_extensions=denylist,
+    )
+    assert ascii_preview.preview_kind == "text"
+    assert ascii_preview.can_preview is True
+    assert ascii_preview.text == "abcd"
+    assert ascii_preview.truncated is True
+    assert ascii_preview.max_bytes == 4
+
+    multibyte_preview = preview_dependency_file(
+        preview_file("emoji.txt", size_bytes=5),
+        storage=PreviewProbeStorage("ab\u20acz".encode()),
+        max_bytes=4,
+        binary_deny_extensions=denylist,
+    )
+    assert multibyte_preview.preview_kind == "text"
+    assert multibyte_preview.can_preview is True
+    assert multibyte_preview.text == "ab"
+    assert multibyte_preview.truncated is True
+    assert multibyte_preview.reason is None
+    assert "\ufffd" not in multibyte_preview.text
 
 
 @pytest.mark.skipif(

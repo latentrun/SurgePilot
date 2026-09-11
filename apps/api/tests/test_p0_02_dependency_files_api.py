@@ -235,6 +235,147 @@ async def test_upload_list_get_download_and_delete_dependency_file(
 
 
 @pytest.mark.anyio
+async def test_preview_dependency_file_returns_text_without_csrf_and_no_storage_internals(
+    client: AsyncClient, fake_storage: FakeStorage
+) -> None:
+    csrf_token, workspace_id = await register_user(client, email="preview-text@example.com")
+    data = b"id,name\n1,Ada\n"
+    created = await client.post(
+        "/api/v1/dependency-files",
+        headers={"x-csrf-token": csrf_token, "x-workspace-id": workspace_id},
+        files={"file": ("users.csv", data, "text/csv")},
+    )
+    assert created.status_code == 201
+    dependency_file_id = created.json()["id"]
+
+    preview = await client.get(
+        f"/api/v1/dependency-files/{dependency_file_id}/preview",
+        headers={"x-workspace-id": workspace_id},
+    )
+
+    assert preview.status_code == 200
+    assert preview.headers["x-workspace-id"] == workspace_id
+    assert preview.headers["cache-control"] == "private, no-store"
+    body = preview.json()
+    assert body == {
+        "id": dependency_file_id,
+        "filename": "users.csv",
+        "contentType": "text/csv",
+        "sizeBytes": len(data),
+        "sha256": sha256(data).hexdigest(),
+        "previewKind": "text",
+        "canPreview": True,
+        "truncated": False,
+        "maxBytes": 65_536,
+        "text": "id,name\n1,Ada\n",
+        "reason": None,
+    }
+    assert "storageBucket" not in preview.text
+    assert "storageObjectKey" not in preview.text
+    assert "dependency-files/" not in preview.text
+    assert "surgepilot" not in preview.text
+
+
+@pytest.mark.anyio
+async def test_preview_dependency_file_unavailable_and_error_states(
+    client: AsyncClient, fake_storage: FakeStorage, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("DEPENDENCY_FILE_PREVIEW_MAX_BYTES", "4")
+    csrf_token, workspace_id = await register_user(client, email="preview-states@example.com")
+
+    binary_created = await client.post(
+        "/api/v1/dependency-files",
+        headers={"x-csrf-token": csrf_token, "x-workspace-id": workspace_id},
+        files={"file": ("image.png", b"not-read", "image/png")},
+    )
+    assert binary_created.status_code == 201
+    before_get_count = len(fake_storage.objects)
+    binary_preview = await client.get(
+        f"/api/v1/dependency-files/{binary_created.json()['id']}/preview",
+        headers={"x-workspace-id": workspace_id},
+    )
+    assert binary_preview.status_code == 200
+    assert binary_preview.json()["previewKind"] == "unsupported"
+    assert binary_preview.json()["reason"] == "binary_content"
+    assert binary_preview.json()["text"] is None
+    assert len(fake_storage.objects) == before_get_count
+
+    invalid_created = await client.post(
+        "/api/v1/dependency-files",
+        headers={"x-csrf-token": csrf_token, "x-workspace-id": workspace_id},
+        files={"file": ("invalid.txt", b"\xffbad", "text/plain")},
+    )
+    assert invalid_created.status_code == 201
+    invalid_preview = await client.get(
+        f"/api/v1/dependency-files/{invalid_created.json()['id']}/preview",
+        headers={"x-workspace-id": workspace_id},
+    )
+    assert invalid_preview.status_code == 200
+    assert invalid_preview.json()["reason"] == "decode_failed"
+
+    long_created = await client.post(
+        "/api/v1/dependency-files",
+        headers={"x-csrf-token": csrf_token, "x-workspace-id": workspace_id},
+        files={"file": ("long.txt", b"abcde", "text/plain")},
+    )
+    assert long_created.status_code == 201
+    long_preview = await client.get(
+        f"/api/v1/dependency-files/{long_created.json()['id']}/preview",
+        headers={"x-workspace-id": workspace_id},
+    )
+    assert long_preview.status_code == 200
+    assert long_preview.json()["text"] == "abcd"
+    assert long_preview.json()["truncated"] is True
+    assert long_preview.json()["maxBytes"] == 4
+
+    fake_storage.fail_get = True
+    storage_error = await client.get(
+        f"/api/v1/dependency-files/{long_created.json()['id']}/preview",
+        headers={"x-workspace-id": workspace_id},
+    )
+    assert storage_error.status_code == 503
+    assert storage_error.json()["code"] == "STORAGE_UNAVAILABLE"
+    assert "dependency-files/" not in storage_error.text
+
+
+@pytest.mark.anyio
+async def test_preview_dependency_file_validation_and_workspace_isolation(
+    client: AsyncClient, db_session: Session, fake_storage: FakeStorage
+) -> None:
+    csrf_token, workspace_id = await register_user(client, email="preview-isolation@example.com")
+    created = await client.post(
+        "/api/v1/dependency-files",
+        headers={"x-csrf-token": csrf_token, "x-workspace-id": workspace_id},
+        files={"file": ("users.csv", b"id,name\n1,Ada\n", "text/csv")},
+    )
+    assert created.status_code == 201
+
+    invalid = await client.get("/api/v1/dependency-files/not-a-ulid/preview")
+    assert invalid.status_code == 422
+    assert invalid.json()["code"] == "VALIDATION_ERROR"
+
+    not_found = await client.get(
+        "/api/v1/dependency-files/01HZX3Y9M0E9W7Z6M5QK9S8P7Z/preview",
+        headers={"x-workspace-id": workspace_id},
+    )
+    assert not_found.status_code == 404
+    assert not_found.json()["code"] == "RESOURCE_NOT_FOUND"
+
+    user = db_session.scalar(select(User).where(User.email == "preview-isolation@example.com"))
+    assert user is not None
+    other_workspace_id = seed_other_workspace(db_session, user.id)
+    db_session.commit()
+
+    hidden = await client.get(
+        f"/api/v1/dependency-files/{created.json()['id']}/preview",
+        headers={"x-workspace-id": other_workspace_id},
+    )
+    assert hidden.status_code == 404
+    assert hidden.json()["code"] == "RESOURCE_NOT_FOUND"
+    assert "dependency-files/" not in hidden.text
+
+
+@pytest.mark.anyio
 async def test_upload_commits_metadata_before_dependency_file_audit(
     client: AsyncClient,
     db_session: Session,
