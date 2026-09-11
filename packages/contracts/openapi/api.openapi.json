@@ -1,6 +1,199 @@
 {
   "components": {
     "schemas": {
+      "ApiCatalogSpecListResponse": {
+      "properties": {
+        "items": {
+          "items": {
+            "$ref": "#/components/schemas/ApiCatalogSpecSummary"
+          },
+          "title": "Items",
+          "type": "array"
+        },
+        "limit": {
+          "title": "Limit",
+          "type": "integer"
+        },
+        "offset": {
+          "title": "Offset",
+          "type": "integer"
+        },
+        "total": {
+          "title": "Total",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "items",
+        "total",
+        "limit",
+        "offset"
+      ],
+      "title": "ApiCatalogSpecListResponse",
+      "type": "object"
+    },
+    "ApiCatalogSpecResponse": {
+      "properties": {
+        "contentUrl": {
+          "title": "Contenturl",
+          "type": "string"
+        },
+        "createdAt": {
+          "title": "Createdat",
+          "type": "string"
+        },
+        "documentTitle": {
+          "title": "Documenttitle",
+          "type": "string"
+        },
+        "documentVersion": {
+          "title": "Documentversion",
+          "type": "string"
+        },
+        "filename": {
+          "title": "Filename",
+          "type": "string"
+        },
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "openapiVersion": {
+          "title": "Openapiversion",
+          "type": "string"
+        },
+        "sha256": {
+          "title": "Sha256",
+          "type": "string"
+        },
+        "sizeBytes": {
+          "title": "Sizebytes",
+          "type": "integer"
+        },
+        "sourceFormat": {
+          "$ref": "#/components/schemas/ApiCatalogSpecSourceFormat"
+        },
+        "status": {
+          "$ref": "#/components/schemas/ApiCatalogSpecStatus"
+        },
+        "updatedAt": {
+          "title": "Updatedat",
+          "type": "string"
+        },
+        "validationMessage": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Validationmessage"
+        }
+      },
+      "required": [
+        "id",
+        "name",
+        "filename",
+        "sourceFormat",
+        "documentTitle",
+        "documentVersion",
+        "sizeBytes",
+        "sha256",
+        "status",
+        "createdAt",
+        "updatedAt",
+        "openapiVersion",
+        "contentUrl"
+      ],
+      "title": "ApiCatalogSpecResponse",
+      "type": "object"
+    },
+    "ApiCatalogSpecSourceFormat": {
+      "enum": [
+        "openapi_json",
+        "openapi_yaml",
+        "swagger_json",
+        "swagger_yaml"
+      ],
+      "title": "ApiCatalogSpecSourceFormat",
+      "type": "string"
+    },
+    "ApiCatalogSpecStatus": {
+      "enum": [
+        "available",
+        "invalid",
+        "storage_unavailable"
+      ],
+      "title": "ApiCatalogSpecStatus",
+      "type": "string"
+    },
+    "ApiCatalogSpecSummary": {
+      "properties": {
+        "createdAt": {
+          "title": "Createdat",
+          "type": "string"
+        },
+        "documentTitle": {
+          "title": "Documenttitle",
+          "type": "string"
+        },
+        "documentVersion": {
+          "title": "Documentversion",
+          "type": "string"
+        },
+        "filename": {
+          "title": "Filename",
+          "type": "string"
+        },
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "sha256": {
+          "title": "Sha256",
+          "type": "string"
+        },
+        "sizeBytes": {
+          "title": "Sizebytes",
+          "type": "integer"
+        },
+        "sourceFormat": {
+          "$ref": "#/components/schemas/ApiCatalogSpecSourceFormat"
+        },
+        "status": {
+          "$ref": "#/components/schemas/ApiCatalogSpecStatus"
+        },
+        "updatedAt": {
+          "title": "Updatedat",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "name",
+        "filename",
+        "sourceFormat",
+        "documentTitle",
+        "documentVersion",
+        "sizeBytes",
+        "sha256",
+        "status",
+        "createdAt",
+        "updatedAt"
+      ],
+      "title": "ApiCatalogSpecSummary",
+      "type": "object"
+    },
       "AuthSessionResponse": {
         "properties": {
           "availableWorkspaces": {
@@ -6952,6 +7145,9 @@
       "INVALID_FILENAME",
       "DEPENDENCY_FILE_NAME_CONFLICT",
       "PAYLOAD_TOO_LARGE",
+      "API_SPEC_TOO_LARGE",
+      "API_SPEC_PARSE_FAILED",
+      "UNSUPPORTED_API_SPEC_FORMAT",
       "STORAGE_UNAVAILABLE",
       "FILE_IN_USE",
       "LOAD_NODE_PUBLIC_ADMIN_REQUIRED",
@@ -6999,6 +7195,666 @@
   },
   "openapi": "3.1.0",
   "paths": {
+    "/v1/api-catalog/specs": {
+      "get": {
+        "operationId": "listApiCatalogSpecs",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "x-workspace-id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Workspace-Id"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "surgepilot_session",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "SurgePilot Session"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "maximum": 100,
+              "minimum": 1,
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "minimum": 0,
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiCatalogSpecListResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          }
+        },
+        "summary": "List Api Catalog Specs Route",
+        "tags": [
+          "api-catalog"
+        ]
+      },
+      "post": {
+        "operationId": "uploadApiCatalogSpec",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "x-workspace-id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Workspace-Id"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-csrf-token",
+            "required": true,
+            "schema": {
+              "title": "X-Csrf-Token",
+              "type": "string"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "surgepilot_session",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "SurgePilot Session"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "properties": {
+                  "file": {
+                    "format": "binary",
+                    "type": "string"
+                  },
+                  "name": {
+                    "maxLength": 120,
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "file"
+                ],
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiCatalogSpecResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "code": "API_SPEC_TOO_LARGE",
+                  "message": "Uploaded API spec is too large.",
+                  "requestId": "req_example"
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Uploaded API spec exceeds the configured size limit."
+          },
+          "415": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unsupported Media Type"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "examples": {
+                  "parseFailed": {
+                    "value": {
+                      "code": "API_SPEC_PARSE_FAILED",
+                      "message": "The uploaded API spec could not be parsed.",
+                      "requestId": "req_example"
+                    }
+                  },
+                  "unsupportedFormat": {
+                    "value": {
+                      "code": "UNSUPPORTED_API_SPEC_FORMAT",
+                      "message": "The uploaded file must be an OpenAPI or Swagger document.",
+                      "requestId": "req_example"
+                    }
+                  }
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "code": "STORAGE_UNAVAILABLE",
+                  "message": "Storage is unavailable.",
+                  "requestId": "req_example"
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "MinIO storage is unavailable or the configured bucket is inaccessible."
+          }
+        },
+        "summary": "Upload Api Catalog Spec Route",
+        "tags": [
+          "api-catalog"
+        ]
+      }
+    },
+    "/v1/api-catalog/specs/{specId}": {
+      "delete": {
+        "operationId": "deleteApiCatalogSpec",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "specId",
+            "required": true,
+            "schema": {
+              "title": "Specid",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-workspace-id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Workspace-Id"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-csrf-token",
+            "required": true,
+            "schema": {
+              "title": "X-Csrf-Token",
+              "type": "string"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "surgepilot_session",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "SurgePilot Session"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          }
+        },
+        "summary": "Delete Api Catalog Spec Route",
+        "tags": [
+          "api-catalog"
+        ]
+      },
+      "get": {
+        "operationId": "getApiCatalogSpec",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "specId",
+            "required": true,
+            "schema": {
+              "title": "Specid",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-workspace-id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Workspace-Id"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "surgepilot_session",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "SurgePilot Session"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiCatalogSpecResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          }
+        },
+        "summary": "Get Api Catalog Spec Route",
+        "tags": [
+          "api-catalog"
+        ]
+      }
+    },
+    "/v1/api-catalog/specs/{specId}/content": {
+      "get": {
+        "operationId": "getApiCatalogSpecContent",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "specId",
+            "required": true,
+            "schema": {
+              "title": "Specid",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-workspace-id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Workspace-Id"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "surgepilot_session",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "SurgePilot Session"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              },
+              "application/octet-stream": {
+                "schema": {
+                  "format": "binary",
+                  "type": "string"
+                }
+              },
+              "application/yaml": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "text/yaml": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "description": "Authorized OpenAPI or Swagger spec content."
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "code": "STORAGE_UNAVAILABLE",
+                  "message": "Storage is unavailable.",
+                  "requestId": "req_example"
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "MinIO storage is unavailable or the configured bucket is inaccessible."
+          }
+        },
+        "summary": "Get Api Catalog Spec Content Route",
+        "tags": [
+          "api-catalog"
+        ]
+      }
+    },
     "/v1/admin/setup-status": {
       "get": {
         "operationId": "getAdminSetupStatus",

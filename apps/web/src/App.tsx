@@ -24,6 +24,8 @@ import { AdminSetupStatusPage } from "./features/admin/pages/setup-status-page";
 import { AdminWorkspacesPage } from "./features/admin/pages/workspaces-page";
 import { AdminUsersPage } from "./features/admin/pages/users-page";
 import { AdminSystemSettingsPage } from "./features/admin/pages/system-settings-page";
+import { ApiCatalogListPage } from "./features/api-catalog/pages/api-catalog-list-page";
+import { ApiCatalogDetailPage } from "./features/api-catalog/pages/api-catalog-detail-page";
 
 function LoadingPage() {
   return (
@@ -53,6 +55,10 @@ function AppRoutes({
     page = <EnvGroupsPage />;
   } else if (pathname === "/assets/dependency-files") {
     page = <DependencyFilesPage />;
+  } else if (pathname.startsWith("/api-catalog/")) {
+    page = <ApiCatalogDetailPage specId={decodeURIComponent(pathname.slice("/api-catalog/".length))} />;
+  } else if (pathname === "/api-catalog") {
+    page = <ApiCatalogListPage />;
   } else if (pathname === "/resources/load-nodes/new") {
     page = <RegisterLoadNodePage />;
   } else if (pathname === "/resources/load-nodes") {

@@ -14,6 +14,9 @@ importers:
 
   apps/web:
     dependencies:
+      '@scalar/api-reference-react':
+        specifier: 0.9.47
+        version: 0.9.47(react@19.2.8)(typescript@5.9.3)
       '@surgepilot/contracts':
         specifier: workspace:*
         version: link:../../packages/contracts
