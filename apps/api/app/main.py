@@ -11,6 +11,7 @@ from app.core.errors import AppError, app_error_handler, validation_error_handle
 from app.core.middleware import request_context_middleware
 from app.routes import (
     admin,
+    api_catalog,
     auth,
     dependency_files,
     env_groups,
@@ -56,6 +57,7 @@ app.include_router(dependency_files.router)
 app.include_router(load_nodes.router)
 app.include_router(monitoring.router)
 app.include_router(overview.router)
+app.include_router(api_catalog.router)
 app.include_router(runs.router)
 app.include_router(scenarios.router)
 app.include_router(test_plans.router)
