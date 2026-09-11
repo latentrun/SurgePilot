@@ -1,6 +1,21 @@
 {
   "components": {
     "schemas": {
+      "OpenApiSpecSourceSummary": {"properties":{"id":{"type":"string"},"name":{"type":"string"},"filename":{"type":"string"},"sourceFormat":{"type":"string"},"documentTitle":{"type":"string"},"documentVersion":{"type":"string"},"status":{"enum":["available","invalid","storage_unavailable"],"type":"string"},"updatedAt":{"type":"string"}},"required":["id","name","filename","sourceFormat","documentTitle","documentVersion","status","updatedAt"],"type":"object"},
+      "OpenApiSpecSourceListResponse": {"properties":{"items":{"items":{"$ref":"#/components/schemas/OpenApiSpecSourceSummary"},"type":"array"},"total":{"type":"integer"},"limit":{"type":"integer"},"offset":{"type":"integer"}},"required":["items","total","limit","offset"],"type":"object"},
+      "OpenApiOperationRef": {"properties":{"method":{"enum":["GET","POST","PUT","PATCH","DELETE","HEAD","OPTIONS"],"type":"string"},"path":{"maxLength":2048,"minLength":1,"type":"string"},"operationId":{"anyOf":[{"maxLength":160,"type":"string"},{"type":"null"}]}},"required":["method","path"],"type":"object"},
+      "OpenApiOperationSummary": {"properties":{"ref":{"$ref":"#/components/schemas/OpenApiOperationRef"},"method":{"enum":["GET","POST","PUT","PATCH","DELETE","HEAD","OPTIONS"],"type":"string"},"path":{"type":"string"},"operationId":{"anyOf":[{"type":"string"},{"type":"null"}]},"summary":{"anyOf":[{"type":"string"},{"type":"null"}]},"tags":{"items":{"type":"string"},"type":"array"},"displayName":{"type":"string"},"hasRequestBody":{"type":"boolean"},"supportedForGeneration":{"type":"boolean"},"warningCodes":{"items":{"type":"string"},"type":"array"}},"required":["ref","method","path","tags","displayName","hasRequestBody","supportedForGeneration","warningCodes"],"type":"object"},
+      "OpenApiStepGenerationWarning": {"properties":{"code":{"maxLength":80,"minLength":1,"type":"string"},"message":{"maxLength":300,"minLength":1,"type":"string"},"field":{"anyOf":[{"maxLength":160,"type":"string"},{"type":"null"}]}},"required":["code","message"],"type":"object"},
+      "OpenApiOperationListResponse": {"properties":{"spec":{"$ref":"#/components/schemas/OpenApiSpecSourceSummary"},"items":{"items":{"$ref":"#/components/schemas/OpenApiOperationSummary"},"type":"array"},"warnings":{"items":{"$ref":"#/components/schemas/OpenApiStepGenerationWarning"},"type":"array"}},"required":["spec","items","warnings"],"type":"object"},
+      "OpenApiStepInsertPlan": {"properties":{"mode":{"enum":["append","before_step","after_step"],"type":"string"},"stepId":{"anyOf":[{"maxLength":26,"minLength":26,"type":"string"},{"type":"null"}]}},"required":["mode"],"type":"object"},
+      "OpenApiStepDraftGenerateRequest": {"properties":{"specId":{"maxLength":26,"minLength":26,"type":"string"},"operationRefs":{"items":{"$ref":"#/components/schemas/OpenApiOperationRef"},"maxItems":20,"minItems":1,"type":"array"},"insert":{"$ref":"#/components/schemas/OpenApiStepInsertPlan"}},"required":["specId","operationRefs","insert"],"type":"object"},
+      "OpenApiGeneratedNamedValueDraft": {"properties":{"name":{"maxLength":255,"minLength":1,"type":"string"},"value":{"default":"","maxLength":65536,"type":"string"},"enabled":{"default":true,"type":"boolean"}},"required":["name"],"type":"object"},
+      "OpenApiGeneratedBodyDraft": {"properties":{"type":{"default":"none","enum":["none","raw","form"],"type":"string"},"contentType":{"anyOf":[{"maxLength":120,"type":"string"},{"type":"null"}]},"rawText":{"anyOf":[{"maxLength":262144,"type":"string"},{"type":"null"}]},"formFields":{"items":{"$ref":"#/components/schemas/OpenApiGeneratedNamedValueDraft"},"maxItems":200,"type":"array"}},"type":"object"},
+      "OpenApiGeneratedStepSettingsDraft": {"properties":{"timeoutMs":{"type":"null"},"followRedirects":{"type":"null"},"keepAlive":{"type":"null"},"thinkTimeMs":{"type":"null"}},"type":"object"},
+      "OpenApiGeneratedStepDraft": {"properties":{"enabled":{"default":true,"type":"boolean"},"name":{"maxLength":120,"minLength":1,"type":"string"},"method":{"enum":["GET","POST","PUT","PATCH","DELETE","HEAD","OPTIONS"],"type":"string"},"path":{"maxLength":2048,"minLength":1,"type":"string"},"queryParams":{"items":{"$ref":"#/components/schemas/OpenApiGeneratedNamedValueDraft"},"maxItems":200,"type":"array"},"headers":{"items":{"$ref":"#/components/schemas/OpenApiGeneratedNamedValueDraft"},"maxItems":200,"type":"array"},"body":{"$ref":"#/components/schemas/OpenApiGeneratedBodyDraft"},"settings":{"$ref":"#/components/schemas/OpenApiGeneratedStepSettingsDraft"}},"required":["name","method","path"],"type":"object"},
+      "OpenApiGeneratedStepSource": {"properties":{"operationId":{"anyOf":[{"maxLength":160,"type":"string"},{"type":"null"}]},"summary":{"anyOf":[{"maxLength":120,"type":"string"},{"type":"null"}]}},"type":"object"},
+      "OpenApiGeneratedStepDraftItem": {"properties":{"operationRef":{"$ref":"#/components/schemas/OpenApiOperationRef"},"step":{"$ref":"#/components/schemas/OpenApiGeneratedStepDraft"},"source":{"$ref":"#/components/schemas/OpenApiGeneratedStepSource"},"warnings":{"items":{"$ref":"#/components/schemas/OpenApiStepGenerationWarning"},"type":"array"}},"required":["operationRef","step","source","warnings"],"type":"object"},
+      "OpenApiStepDraftPreviewResponse": {"properties":{"spec":{"$ref":"#/components/schemas/OpenApiSpecSourceSummary"},"items":{"items":{"$ref":"#/components/schemas/OpenApiGeneratedStepDraftItem"},"type":"array"},"insert":{"$ref":"#/components/schemas/OpenApiStepInsertPlan"},"warnings":{"items":{"$ref":"#/components/schemas/OpenApiStepGenerationWarning"},"type":"array"}},"required":["spec","items","insert","warnings"],"type":"object"},
       "ApiCatalogSpecListResponse": {
       "properties": {
         "items": {
@@ -14183,6 +14198,31 @@
         "tags": [
           "runs"
         ]
+      }
+    },
+    "/v1/scenarios/{scenarioId}/openapi-step-generation/specs": {
+      "get": {
+        "operationId": "listScenarioOpenApiSpecSources",
+        "parameters": [{"in":"path","name":"scenarioId","required":true,"schema":{"type":"string"}},{"in":"query","name":"limit","schema":{"default":50,"maximum":100,"minimum":1,"type":"integer"}},{"in":"query","name":"offset","schema":{"default":0,"maximum":100000,"minimum":0,"type":"integer"}},{"in":"header","name":"x-workspace-id","schema":{"type":["string","null"]}},{"in":"cookie","name":"surgepilot_session","schema":{"type":["string","null"]}}],
+        "responses":{"200":{"description":"Successful Response","content":{"application/json":{"schema":{"$ref":"#/components/schemas/OpenApiSpecSourceListResponse"}}}},"400":{"description":"Bad Request","content":{"application/json":{"schema":{"$ref":"#/components/schemas/ErrorResponse"}}}},"401":{"description":"Unauthorized","content":{"application/json":{"schema":{"$ref":"#/components/schemas/ErrorResponse"}}}},"403":{"description":"Forbidden","content":{"application/json":{"schema":{"$ref":"#/components/schemas/ErrorResponse"}}}},"404":{"description":"Not Found","content":{"application/json":{"schema":{"$ref":"#/components/schemas/ErrorResponse"}}}}},
+        "summary":"List Scenario Openapi Spec Sources","tags":["scenarios"]
+      }
+    },
+    "/v1/scenarios/{scenarioId}/openapi-step-generation/specs/{specId}/operations": {
+      "get": {
+        "operationId":"listScenarioOpenApiOperations",
+        "parameters":[{"in":"path","name":"scenarioId","required":true,"schema":{"type":"string"}},{"in":"path","name":"specId","required":true,"schema":{"type":"string"}},{"in":"header","name":"x-workspace-id","schema":{"type":["string","null"]}},{"in":"cookie","name":"surgepilot_session","schema":{"type":["string","null"]}}],
+        "responses":{"200":{"description":"Successful Response","content":{"application/json":{"schema":{"$ref":"#/components/schemas/OpenApiOperationListResponse"}}}},"400":{"description":"Bad Request","content":{"application/json":{"schema":{"$ref":"#/components/schemas/ErrorResponse"}}}},"401":{"description":"Unauthorized","content":{"application/json":{"schema":{"$ref":"#/components/schemas/ErrorResponse"}}}},"403":{"description":"Forbidden","content":{"application/json":{"schema":{"$ref":"#/components/schemas/ErrorResponse"}}}},"404":{"description":"Not Found","content":{"application/json":{"schema":{"$ref":"#/components/schemas/ErrorResponse"}}}},"422":{"description":"Unprocessable Entity","content":{"application/json":{"schema":{"$ref":"#/components/schemas/ErrorResponse"}}}},"503":{"description":"Service Unavailable","content":{"application/json":{"schema":{"$ref":"#/components/schemas/ErrorResponse"}}}}},
+        "summary":"List Scenario Openapi Operations","tags":["scenarios"]
+      }
+    },
+    "/v1/scenarios/{scenarioId}/openapi-step-generation/drafts": {
+      "post": {
+        "operationId":"generateScenarioOpenApiStepDrafts",
+        "parameters":[{"in":"path","name":"scenarioId","required":true,"schema":{"type":"string"}},{"in":"header","name":"x-workspace-id","schema":{"type":["string","null"]}},{"in":"header","name":"x-csrf-token","required":true,"schema":{"type":"string"}},{"in":"cookie","name":"surgepilot_session","schema":{"type":["string","null"]}}],
+        "requestBody":{"required":true,"content":{"application/json":{"schema":{"$ref":"#/components/schemas/OpenApiStepDraftGenerateRequest"}}}},
+        "responses":{"200":{"description":"Successful Response","content":{"application/json":{"schema":{"$ref":"#/components/schemas/OpenApiStepDraftPreviewResponse"}}}},"400":{"description":"Bad Request","content":{"application/json":{"schema":{"$ref":"#/components/schemas/ErrorResponse"}}}},"401":{"description":"Unauthorized","content":{"application/json":{"schema":{"$ref":"#/components/schemas/ErrorResponse"}}}},"403":{"description":"Forbidden","content":{"application/json":{"schema":{"$ref":"#/components/schemas/ErrorResponse"}}}},"404":{"description":"Not Found","content":{"application/json":{"schema":{"$ref":"#/components/schemas/ErrorResponse"}}}},"422":{"description":"Unprocessable Entity","content":{"application/json":{"schema":{"$ref":"#/components/schemas/ErrorResponse"}}}},"503":{"description":"Service Unavailable","content":{"application/json":{"schema":{"$ref":"#/components/schemas/ErrorResponse"}}}}},
+        "summary":"Generate Scenario Openapi Step Drafts","tags":["scenarios"]
       }
     },
     "/v1/scenarios": {

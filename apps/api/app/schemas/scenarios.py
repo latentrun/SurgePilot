@@ -1,6 +1,6 @@
 from typing import Literal
 
-from pydantic import ConfigDict, Field, field_validator
+from pydantic import ConfigDict, Field, field_validator, model_validator
 
 from app.schemas.common import ApiSchema
 
@@ -198,6 +198,153 @@ class ScenarioListResponse(ApiSchema):
     page: int
     page_size: int
     total: int
+
+
+OpenApiSpecGenerationStatus = Literal["available", "invalid", "storage_unavailable"]
+OpenApiStepInsertMode = Literal["append", "before_step", "after_step"]
+
+
+class OpenApiSpecSourceSummary(ApiSchema):
+    id: str
+    name: str
+    filename: str
+    source_format: str
+    document_title: str
+    document_version: str
+    status: OpenApiSpecGenerationStatus
+    updated_at: str
+
+
+class OpenApiSpecSourceListResponse(ApiSchema):
+    items: list[OpenApiSpecSourceSummary]
+    total: int
+    limit: int
+    offset: int
+
+
+class OpenApiOperationRef(ApiSchema):
+    method: HttpMethod
+    path: str = Field(min_length=1, max_length=2048)
+    operation_id: str | None = Field(default=None, max_length=160)
+
+    @field_validator("path")
+    @classmethod
+    def openapi_path_starts_with_slash(cls, value: str) -> str:
+        if not value.startswith("/"):
+            raise ValueError("Path must start with /.")
+        return value
+
+
+class OpenApiOperationSummary(ApiSchema):
+    ref: OpenApiOperationRef
+    method: HttpMethod
+    path: str
+    operation_id: str | None = None
+    summary: str | None = None
+    tags: list[str]
+    display_name: str
+    has_request_body: bool
+    supported_for_generation: bool
+    warning_codes: list[str]
+
+
+class OpenApiOperationListResponse(ApiSchema):
+    spec: OpenApiSpecSourceSummary
+    items: list[OpenApiOperationSummary]
+    warnings: list["OpenApiStepGenerationWarning"]
+
+
+class OpenApiStepInsertPlan(ApiSchema):
+    mode: OpenApiStepInsertMode
+    step_id: str | None = Field(default=None, min_length=26, max_length=26)
+
+    @model_validator(mode="after")
+    def step_id_is_required_for_relative_insert(self) -> "OpenApiStepInsertPlan":
+        if self.mode in {"before_step", "after_step"} and not self.step_id:
+            raise ValueError("stepId is required for before_step and after_step.")
+        return self
+
+
+class OpenApiStepDraftGenerateRequest(ApiSchema):
+    spec_id: str = Field(min_length=26, max_length=26)
+    operation_refs: list[OpenApiOperationRef] = Field(min_length=1, max_length=20)
+    insert: OpenApiStepInsertPlan
+
+    @field_validator("operation_refs")
+    @classmethod
+    def operation_refs_are_unique(
+        cls, value: list[OpenApiOperationRef]
+    ) -> list[OpenApiOperationRef]:
+        seen: set[tuple[str, str]] = set()
+        for ref in value:
+            key = (ref.method, ref.path)
+            if key in seen:
+                raise ValueError("Duplicate operation refs are not allowed.")
+            seen.add(key)
+        return value
+
+
+class OpenApiGeneratedNamedValueDraft(ApiSchema):
+    name: str = Field(min_length=1, max_length=255)
+    value: str = Field(default="", max_length=SCENARIO_NAMED_VALUE_MAX_LENGTH)
+    enabled: bool = True
+
+
+class OpenApiGeneratedBodyDraft(ApiSchema):
+    type: BodyType = "none"
+    content_type: str | None = Field(default=None, max_length=120)
+    raw_text: str | None = Field(default=None, max_length=262_144)
+    form_fields: list[OpenApiGeneratedNamedValueDraft] = Field(default_factory=list, max_length=200)
+
+
+class OpenApiGeneratedStepSettingsDraft(ApiSchema):
+    timeout_ms: None = None
+    follow_redirects: None = None
+    keep_alive: None = None
+    think_time_ms: None = None
+
+
+class OpenApiGeneratedStepDraft(ApiSchema):
+    enabled: bool = True
+    name: str = Field(min_length=1, max_length=120)
+    method: HttpMethod
+    path: str = Field(min_length=1, max_length=2048)
+    query_params: list[OpenApiGeneratedNamedValueDraft] = Field(default_factory=list, max_length=200)
+    headers: list[OpenApiGeneratedNamedValueDraft] = Field(default_factory=list, max_length=200)
+    body: OpenApiGeneratedBodyDraft = Field(default_factory=OpenApiGeneratedBodyDraft)
+    settings: OpenApiGeneratedStepSettingsDraft = Field(default_factory=OpenApiGeneratedStepSettingsDraft)
+
+    @field_validator("path")
+    @classmethod
+    def generated_path_starts_with_slash(cls, value: str) -> str:
+        if not value.startswith("/"):
+            raise ValueError("Path must start with /.")
+        return value
+
+
+class OpenApiGeneratedStepSource(ApiSchema):
+    operation_id: str | None = Field(default=None, max_length=160)
+    summary: str | None = Field(default=None, max_length=120)
+
+
+class OpenApiStepGenerationWarning(ApiSchema):
+    code: str = Field(min_length=1, max_length=80)
+    message: str = Field(min_length=1, max_length=300)
+    field: str | None = Field(default=None, max_length=160)
+
+
+class OpenApiGeneratedStepDraftItem(ApiSchema):
+    operation_ref: OpenApiOperationRef
+    step: OpenApiGeneratedStepDraft
+    source: OpenApiGeneratedStepSource
+    warnings: list[OpenApiStepGenerationWarning]
+
+
+class OpenApiStepDraftPreviewResponse(ApiSchema):
+    spec: OpenApiSpecSourceSummary
+    items: list[OpenApiGeneratedStepDraftItem]
+    insert: OpenApiStepInsertPlan
+    warnings: list[OpenApiStepGenerationWarning]
 
 
 class CurlImportParseRequest(ApiSchema):

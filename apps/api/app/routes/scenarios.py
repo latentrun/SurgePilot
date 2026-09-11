@@ -9,6 +9,10 @@ from app.schemas.common import CloneRequest, ErrorResponse
 from app.schemas.scenarios import (
     CurlImportParseRequest,
     CurlImportParseResponse,
+    OpenApiOperationListResponse,
+    OpenApiSpecSourceListResponse,
+    OpenApiStepDraftGenerateRequest,
+    OpenApiStepDraftPreviewResponse,
     ScenarioCreateRequest,
     ScenarioDetail,
     ScenarioListResponse,
@@ -16,6 +20,14 @@ from app.schemas.scenarios import (
     ScenarioSummary,
 )
 from app.services.curl_import import parse_curl_import
+from app.services.storage import get_storage_client
+from app.services.openapi_step_generation import (
+    generate_drafts as generate_openapi_step_drafts_service,
+    get_authorized_spec as get_authorized_openapi_spec_service,
+    list_openapi_spec_sources as list_openapi_spec_sources_service,
+    operations_response as openapi_operations_response_service,
+    parse_authorized_spec,
+)
 from app.services.scenarios import (
     clone_scenario as clone_scenario_service,
     create_scenario as create_scenario_service,
@@ -223,6 +235,121 @@ def clone_scenario(
     db.commit()
     attach_workspace_header(response, workspace.id)
     return scenario_detail(scenario)
+
+
+def validate_spec_id(spec_id: str) -> None:
+    if not is_ulid(spec_id):
+        raise AppError(
+            "VALIDATION_ERROR",
+            "Validation failed.",
+            422,
+            [
+                {
+                    "field": "specId",
+                    "code": "INVALID_FIELD",
+                    "message": "Invalid API Catalog spec ID.",
+                }
+            ],
+        )
+
+
+@router.get(
+    "/{scenarioId}/openapi-step-generation/specs",
+    operation_id="listScenarioOpenApiSpecSources",
+    response_model=OpenApiSpecSourceListResponse,
+    response_model_by_alias=True,
+    responses={400: ERROR_RESPONSE, 401: ERROR_RESPONSE, 403: ERROR_RESPONSE, 404: ERROR_RESPONSE},
+)
+def list_scenario_openapi_spec_sources(
+    scenario_id: ScenarioIdPath,
+    response: Response,
+    db: DbDep,
+    user: CurrentUserDep,
+    workspace: CurrentWorkspaceDep,
+    limit: Annotated[int, Query(ge=1, le=100)] = 50,
+    offset: Annotated[int, Query(ge=0, le=100_000)] = 0,
+) -> OpenApiSpecSourceListResponse:
+    _ = user
+    validate_scenario_id(scenario_id)
+    get_scenario_service(db, workspace_id=workspace.id, scenario_id=scenario_id)
+    result = list_openapi_spec_sources_service(
+        db, workspace_id=workspace.id, limit=limit, offset=offset
+    )
+    attach_workspace_header(response, workspace.id)
+    return result
+
+
+@router.get(
+    "/{scenarioId}/openapi-step-generation/specs/{specId}/operations",
+    operation_id="listScenarioOpenApiOperations",
+    response_model=OpenApiOperationListResponse,
+    response_model_by_alias=True,
+    responses={
+        400: ERROR_RESPONSE,
+        401: ERROR_RESPONSE,
+        403: ERROR_RESPONSE,
+        404: ERROR_RESPONSE,
+        422: ERROR_RESPONSE,
+        503: ERROR_RESPONSE,
+    },
+)
+def list_scenario_openapi_operations(
+    scenario_id: ScenarioIdPath,
+    specId: str,
+    response: Response,
+    db: DbDep,
+    user: CurrentUserDep,
+    workspace: CurrentWorkspaceDep,
+) -> OpenApiOperationListResponse:
+    _ = user
+    validate_scenario_id(scenario_id)
+    validate_spec_id(specId)
+    get_scenario_service(db, workspace_id=workspace.id, scenario_id=scenario_id)
+    spec = get_authorized_openapi_spec_service(db, workspace_id=workspace.id, spec_id=specId)
+    parsed = parse_authorized_spec(spec, storage=get_storage_client())
+    attach_workspace_header(response, workspace.id)
+    return openapi_operations_response_service(spec, parsed)
+
+
+@router.post(
+    "/{scenarioId}/openapi-step-generation/drafts",
+    operation_id="generateScenarioOpenApiStepDrafts",
+    response_model=OpenApiStepDraftPreviewResponse,
+    response_model_by_alias=True,
+    responses={
+        400: ERROR_RESPONSE,
+        401: ERROR_RESPONSE,
+        403: ERROR_RESPONSE,
+        404: ERROR_RESPONSE,
+        422: ERROR_RESPONSE,
+        503: ERROR_RESPONSE,
+    },
+)
+def generate_scenario_openapi_step_drafts(
+    scenario_id: ScenarioIdPath,
+    payload: OpenApiStepDraftGenerateRequest,
+    response: Response,
+    db: DbDep,
+    user: CurrentUserDep,
+    workspace: CurrentWorkspaceDep,
+    _csrf: CsrfDep,
+) -> OpenApiStepDraftPreviewResponse:
+    _ = user
+    validate_scenario_id(scenario_id)
+    validate_spec_id(payload.spec_id)
+    get_scenario_service(db, workspace_id=workspace.id, scenario_id=scenario_id)
+    spec = get_authorized_openapi_spec_service(
+        db, workspace_id=workspace.id, spec_id=payload.spec_id
+    )
+    parsed = parse_authorized_spec(spec, storage=get_storage_client())
+    result = generate_openapi_step_drafts_service(
+        spec=spec,
+        parsed=parsed,
+        operation_refs=payload.operation_refs,
+        insert=payload.insert,
+    )
+    attach_workspace_header(response, workspace.id)
+    return result
 
 
 @router.get(
