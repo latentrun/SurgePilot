@@ -46,7 +46,7 @@ describe("P2-00 API Catalog renderer boundary", () => {
     expect(await screen.findByRole("heading", { name: "API Catalog" })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "API Catalog" })).toHaveAttribute("aria-current", "page");
     expect(screen.getByText(/documentation only/i)).toBeInTheDocument();
-    expect(screen.queryByText(/Scenario generation|Test Plan generation/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Scenario generation|Test Plan generation|Import operations|From OpenAPI/i)).not.toBeInTheDocument();
   });
 
   it("disables request sending and external integrations", () => {

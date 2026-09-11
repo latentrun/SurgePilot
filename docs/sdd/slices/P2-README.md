@@ -29,5 +29,11 @@ services.
   `packages/contracts/tests/api-catalog-openapi.test.mjs`, and
   `apps/web/src/features/api-catalog/api-catalog.test.tsx`.
 
+## P2-01 factual backfill
+
+- Scenario-scoped generation is registered in `apps/api/app/routes/scenarios.py`; parsing and mapping are in `apps/api/app/services/openapi_step_generation.py`, with schemas in `apps/api/app/schemas/scenarios.py`.
+- The focused verification set is `apps/api/tests/test_p2_01_openapi_step_generation.py`, `tests/contract/test_p2_01_openapi_step_generation_openapi.py`, and the OpenAPI interaction test in `apps/web/src/features/scenarios/scenarios.test.tsx`.
+- P2-01 remains transient: confirming a preview changes only the in-memory Scenario draft; the existing Scenario save/PATCH flow remains the persistence boundary. API Catalog deletion or replacement does not rewrite generated Steps, and API Catalog detail has no generation/import action.
+
 Other P2 slices remain outside this checkpoint and require their own accepted scope and
 implementation history.

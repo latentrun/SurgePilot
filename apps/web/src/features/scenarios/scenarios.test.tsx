@@ -552,4 +552,52 @@ describe("P1-05 cURL import", () => {
     });
     expect((body.steps[0].assertions as Array<unknown>).length).toBeGreaterThan(0);
   });
+
+  it("previews and inserts OpenAPI drafts locally without saving or exposing Catalog actions", async () => {
+    const specId = "01HZX3Y9M0E9W7Z6M5QK9S8P7A";
+    let draftCalls = 0;
+    let patchCalls = 0;
+    mockFetch(async (input, init) => {
+      const url = requestUrl(input);
+      const method = requestMethod(input, init);
+      if (url.endsWith("/api/v1/auth/me")) return jsonResponse(authSession);
+      if (url.endsWith("/api/v1/auth/csrf")) return jsonResponse({ csrfToken: "csrf-token" });
+      if (url.includes(`/api/v1/scenarios/${scenarioDetail.id}/openapi-step-generation/specs/`) && url.endsWith("/operations")) {
+        return jsonResponse({
+          spec: { id: specId, name: "Orders API", filename: "orders.json", sourceFormat: "openapi_json", documentTitle: "Orders API", documentVersion: "1.0.0", status: "available", updatedAt: "2030-06-01T12:00:00Z" },
+          items: [{ ref: { method: "POST", path: "/orders", operationId: "createOrder" }, method: "POST", path: "/orders", operationId: "createOrder", summary: "Create order", tags: [], displayName: "Create order", hasRequestBody: true, supportedForGeneration: true, warningCodes: [] }],
+          warnings: [],
+        });
+      }
+      if (url.endsWith(`/api/v1/scenarios/${scenarioDetail.id}/openapi-step-generation/specs`)) {
+        return jsonResponse({ items: [{ id: specId, name: "Orders API", filename: "orders.json", sourceFormat: "openapi_json", documentTitle: "Orders API", documentVersion: "1.0.0", status: "available", updatedAt: "2030-06-01T12:00:00Z" }], total: 1, limit: 50, offset: 0 });
+      }
+      if (url.endsWith(`/api/v1/scenarios/${scenarioDetail.id}/openapi-step-generation/drafts`)) {
+        draftCalls += 1;
+        return jsonResponse({
+          spec: { id: specId, name: "Orders API", filename: "orders.json", sourceFormat: "openapi_json", documentTitle: "Orders API", documentVersion: "1.0.0", status: "available", updatedAt: "2030-06-01T12:00:00Z" },
+          items: [{ operationRef: { method: "POST", path: "/orders", operationId: "createOrder" }, step: { enabled: true, name: "Create order", method: "POST", path: "/orders", queryParams: [], headers: [], body: { type: "none", contentType: null, rawText: null, formFields: [] }, settings: { timeoutMs: null, followRedirects: null, keepAlive: null, thinkTimeMs: null } }, source: { operationId: "createOrder", summary: "Create order" }, warnings: [] }],
+          insert: { mode: "after_step", stepId: scenarioDetail.steps[0].id }, warnings: [],
+        });
+      }
+      if (url.includes(`/api/v1/scenarios/${scenarioDetail.id}`) && method === "GET") return jsonResponse(scenarioDetail);
+      if (url.includes(`/api/v1/scenarios/${scenarioDetail.id}`) && method === "PATCH") { patchCalls += 1; return jsonResponse(scenarioDetail); }
+      if (url.includes("/api/v1/env-groups")) return jsonResponse(envListResponse);
+      if (url.includes("/api/v1/dependency-files")) return jsonResponse(dependencyFileListResponse);
+      return jsonResponse({});
+    });
+
+    renderAt(`/scenarios/${scenarioDetail.id}`);
+    expect(await screen.findByRole("heading", { name: "Checkout flow" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Generate Scenario|Generate Test Plan|Import operations/i })).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "From OpenAPI" }));
+    await userEvent.selectOptions(await screen.findByLabelText("API Catalog spec"), specId);
+    await userEvent.click(await screen.findByRole("checkbox"));
+    await userEvent.click(screen.getByRole("button", { name: "Preview Step drafts" }));
+    expect(await screen.findByText("Create order")).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Insert Step drafts" }));
+    expect(screen.getByText("Unsaved changes")).toBeInTheDocument();
+    expect(draftCalls).toBe(1);
+    expect(patchCalls).toBe(0);
+  });
 });
