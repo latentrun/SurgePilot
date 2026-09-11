@@ -41,6 +41,8 @@ export type DependencyFileListResponse =
   components["schemas"]["DependencyFileListResponse"];
 export type DependencyFileSummary =
   components["schemas"]["DependencyFileSummary"];
+export type DependencyFilePreviewResponse =
+  components["schemas"]["DependencyFilePreviewResponse"];
 
 export type LoadNodeCreateRequest =
   components["schemas"]["LoadNodeCreateRequest"];
@@ -569,6 +571,18 @@ export async function downloadDependencyFile(
   }
 
   return await response.blob();
+}
+
+export function previewDependencyFile(
+  dependencyFileId: string,
+  workspaceId: string,
+) {
+  return request<DependencyFilePreviewResponse>(
+    `/v1/dependency-files/${encodeURIComponent(dependencyFileId)}/preview`,
+    {
+      headers: { "x-workspace-id": workspaceId },
+    },
+  );
 }
 
 export function deleteDependencyFile(

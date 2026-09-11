@@ -13,7 +13,9 @@ import {
   downloadDependencyFile,
   getCsrfToken,
   listDependencyFiles,
+  previewDependencyFile,
   uploadDependencyFile,
+  type DependencyFilePreviewResponse,
   type DependencyFileSummary,
 } from "../../../app/api-client";
 import { useAuthSession } from "../../../app/auth-session";
@@ -120,9 +122,31 @@ function uploadErrorMessage(error: unknown) {
   return "Upload failed.";
 }
 
+function previewUnavailableMessage(reason: string | null | undefined) {
+  if (reason === "binary_content") {
+    return "This file looks binary, so inline preview is disabled.";
+  }
+  if (reason === "decode_failed") {
+    return "This file is not valid UTF-8 text, so inline preview is disabled.";
+  }
+  return "Preview is not available for this file.";
+}
+
 function useCsrfToken() {
   const { csrfToken } = useAuthSession();
   return async () => csrfToken ?? (await getCsrfToken()).csrfToken;
+}
+
+async function copyText(text: string): Promise<{
+  ok: boolean;
+  reason?: string;
+}> {
+  try {
+    await navigator.clipboard.writeText(text);
+    return { ok: true };
+  } catch {
+    return { ok: false, reason: "Clipboard access is unavailable." };
+  }
 }
 
 const DialogContext = createContext<{ onClose: () => void }>({
@@ -364,6 +388,46 @@ function Download({ className }: { className?: string }) {
   );
 }
 
+function Eye({ className }: { className?: string }) {
+  return (
+    <svg
+      aria-hidden="true"
+      className={className}
+      fill="none"
+      height="16"
+      stroke="currentColor"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      strokeWidth="2"
+      viewBox="0 0 24 24"
+      width="16"
+    >
+      <path d="M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0" />
+      <circle cx="12" cy="12" r="3" />
+    </svg>
+  );
+}
+
+function Copy({ className }: { className?: string }) {
+  return (
+    <svg
+      aria-hidden="true"
+      className={className}
+      fill="none"
+      height="16"
+      stroke="currentColor"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      strokeWidth="2"
+      viewBox="0 0 24 24"
+      width="16"
+    >
+      <rect height="14" rx="2" ry="2" width="14" x="8" y="8" />
+      <path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2" />
+    </svg>
+  );
+}
+
 function Trash2({ className }: { className?: string }) {
   return (
     <svg
@@ -486,6 +550,15 @@ export function DependencyFilesPage() {
   const [downloadPendingId, setDownloadPendingId] = useState<string | null>(
     null,
   );
+  const [previewTarget, setPreviewTarget] =
+    useState<DependencyFileSummary | null>(null);
+  const [previewResult, setPreviewResult] =
+    useState<DependencyFilePreviewResponse | null>(null);
+  const [isPreviewLoading, setIsPreviewLoading] = useState(false);
+  const [previewError, setPreviewError] = useState<unknown | null>(null);
+  const [previewAttempt, setPreviewAttempt] = useState(0);
+  const [copyMessage, setCopyMessage] = useState<string | null>(null);
+  const [copyError, setCopyError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   const [rows, setRows] = useState<DependencyFileSummary[]>([]);
@@ -523,6 +596,43 @@ export function DependencyFilesPage() {
       void fetchList();
     }
   }, [session, fetchList]);
+
+  useEffect(() => {
+    if (previewTarget === null || !workspaceId) {
+      return;
+    }
+    let cancelled = false;
+    setIsPreviewLoading(true);
+    setPreviewError(null);
+    setPreviewResult(null);
+    void (async () => {
+      try {
+        const result = await previewDependencyFile(
+          previewTarget.id,
+          workspaceId,
+        );
+        if (!cancelled) {
+          setPreviewResult(result);
+        }
+      } catch (error) {
+        if (!cancelled) {
+          setPreviewError(error);
+        }
+      } finally {
+        if (!cancelled) {
+          setIsPreviewLoading(false);
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [previewTarget, previewAttempt, workspaceId]);
+
+  const previewData =
+    previewTarget !== null && previewResult?.id === previewTarget.id
+      ? previewResult
+      : null;
 
   if (session === null) {
     return null;
@@ -593,6 +703,32 @@ export function DependencyFilesPage() {
       setDownloadError(errorMessage(error));
     } finally {
       setDownloadPendingId(null);
+    }
+  }
+
+  function openPreview(file: DependencyFileSummary) {
+    setPreviewTarget(file);
+    setCopyMessage(null);
+    setCopyError(null);
+  }
+
+  function closePreview() {
+    setPreviewTarget(null);
+    setPreviewResult(null);
+    setPreviewError(null);
+    setIsPreviewLoading(false);
+    setCopyMessage(null);
+    setCopyError(null);
+  }
+
+  async function handleCopyPreview(text: string) {
+    setCopyMessage(null);
+    setCopyError(null);
+    const result = await copyText(text);
+    if (result.ok) {
+      setCopyMessage("Preview text copied.");
+    } else {
+      setCopyError(result.reason ?? "Copy failed.");
     }
   }
 
@@ -754,6 +890,12 @@ export function DependencyFilesPage() {
                       <td className="px-5 py-4">
                         <div className="flex justify-end gap-2">
                           <IconButton
+                            label={`Preview ${file.filename}`}
+                            onClick={() => openPreview(file)}
+                          >
+                            <Eye className="h-4 w-4" />
+                          </IconButton>
+                          <IconButton
                             disabled={downloadPendingId === file.id}
                             label={`Download ${file.filename}`}
                             onClick={() => void handleDownload(file)}
@@ -889,6 +1031,133 @@ export function DependencyFilesPage() {
                 </button>
               </div>
             </form>
+          </Dialog.Content>
+        </Dialog.Portal>
+      </Dialog.Root>
+
+      <Dialog.Root
+        open={previewTarget !== null}
+        onOpenChange={(open) => {
+          if (!open) {
+            closePreview();
+          }
+        }}
+      >
+        <Dialog.Portal>
+          <Dialog.Overlay className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm" />
+          <Dialog.Content
+            aria-label={`Preview ${previewTarget?.filename ?? "file"}`}
+            className="fixed inset-y-0 right-0 z-50 flex w-[min(100vw,720px)] flex-col border-l border-white/10 bg-surface-container shadow-2xl"
+          >
+            <div className="border-b border-white/10 p-6">
+              <div className="flex items-start justify-between gap-4">
+                <div className="min-w-0">
+                  <Dialog.Title className="truncate font-display text-2xl font-semibold text-white">
+                    Preview {previewTarget?.filename}
+                  </Dialog.Title>
+                  <Dialog.Description className="mt-2 text-sm leading-6 text-text-muted">
+                    Review a bounded read-only text preview. Download remains
+                    available for the full file.
+                  </Dialog.Description>
+                </div>
+                <Dialog.Close
+                  aria-label="Close preview"
+                  className="rounded-lg p-2 text-secondary transition hover:bg-white/10 hover:text-white"
+                >
+                  <X className="h-4 w-4" />
+                </Dialog.Close>
+              </div>
+              {previewTarget ? (
+                <div className="mt-4 grid gap-2 rounded-xl border border-white/10 bg-white/[0.03] p-3 text-xs text-text-muted sm:grid-cols-2">
+                  <div>
+                    Type:{" "}
+                    <span className="text-text-main">
+                      {previewTarget.contentType ?? "Unknown"}
+                    </span>
+                  </div>
+                  <div>
+                    Size:{" "}
+                    <span className="text-text-main">
+                      {formatBytes(previewTarget.sizeBytes)}
+                    </span>
+                  </div>
+                </div>
+              ) : null}
+            </div>
+
+            <div className="min-h-0 flex-1 overflow-y-auto p-6">
+              {previewTarget !== null && isPreviewLoading ? (
+                <p className="text-sm text-text-muted">
+                  Loading preview for {previewTarget.filename}...
+                </p>
+              ) : null}
+
+              {previewTarget !== null && previewError !== null ? (
+                <div className="space-y-4 rounded-xl border border-error/30 bg-error/10 p-4">
+                  <p className="text-sm text-error">
+                    {errorMessage(previewError)}
+                  </p>
+                  <button
+                    className="inline-flex items-center gap-2 rounded-lg border border-white/10 px-3 py-2 text-sm text-text-main"
+                    onClick={() => setPreviewAttempt((current) => current + 1)}
+                    type="button"
+                  >
+                    <RefreshCw className="h-4 w-4" />
+                    Retry preview
+                  </button>
+                </div>
+              ) : null}
+
+              {previewData?.canPreview && previewData.text !== null ? (
+                <div className="space-y-4">
+                  {previewData.truncated ? (
+                    <div className="rounded-xl border border-primary/30 bg-primary-container/10 p-3 text-sm text-primary">
+                      Preview truncated at {formatBytes(previewData.maxBytes)}.
+                    </div>
+                  ) : null}
+                  <pre className="max-h-[60vh] overflow-auto whitespace-pre-wrap break-words rounded-xl border border-white/10 bg-background/70 p-4 font-mono text-xs leading-5 text-text-main">
+                    {previewData.text}
+                  </pre>
+                  {copyMessage ? (
+                    <p className="text-sm text-success">{copyMessage}</p>
+                  ) : null}
+                  {copyError ? (
+                    <p className="text-sm text-error">{copyError}</p>
+                  ) : null}
+                </div>
+              ) : null}
+
+              {previewData !== null && !previewData.canPreview ? (
+                <div className="rounded-xl border border-white/10 bg-white/[0.03] p-4 text-sm text-text-muted">
+                  {previewUnavailableMessage(previewData.reason)}
+                </div>
+              ) : null}
+            </div>
+
+            <div className="flex flex-wrap justify-end gap-3 border-t border-white/10 p-6">
+              {previewData?.canPreview && previewData.text !== null ? (
+                <button
+                  className="inline-flex items-center gap-2 rounded-lg border border-white/10 px-4 py-2 text-sm text-text-main transition hover:border-primary/30 hover:text-primary disabled:cursor-not-allowed disabled:opacity-40"
+                  disabled={!previewData.text}
+                  onClick={() => void handleCopyPreview(previewData.text ?? "")}
+                  type="button"
+                >
+                  <Copy className="h-4 w-4" />
+                  Copy preview text
+                </button>
+              ) : null}
+              {previewTarget ? (
+                <button
+                  className="inline-flex items-center gap-2 rounded-lg border border-white/10 px-4 py-2 text-sm text-text-main transition hover:border-primary/30 hover:text-primary disabled:cursor-not-allowed disabled:opacity-40"
+                  disabled={downloadPendingId === previewTarget.id}
+                  onClick={() => void handleDownload(previewTarget)}
+                  type="button"
+                >
+                  <Download className="h-4 w-4" />
+                  Download {previewTarget.filename}
+                </button>
+              ) : null}
+            </div>
           </Dialog.Content>
         </Dialog.Portal>
       </Dialog.Root>
