@@ -1,0 +1,28 @@
+# P2 Slice index
+
+P2 capabilities require a named accepted Slice SDD and its governing ADR. This index does not
+activate later capabilities by itself.
+
+## Active reconstruction surface
+
+`P2-00-api-catalog-scalar.md` is active through `ADR-0010`. It covers documentation asset
+management only: upload, list, detail, authorized content proxy, delete, and read-only Scalar
+rendering. It does not authorize Scenario/Test Plan generation, operation import, request sending,
+or the P2-04 system OpenAPI bootstrap exception governed by `ADR-0016`.
+
+## P2-00 factual backfill
+
+- API routes live in `apps/api/app/routes/api_catalog.py` and are registered by `apps/api/app/main.py`.
+- Metadata is persisted by `apps/api/app/models/api_catalog.py` and migration
+  `apps/api/migrations/versions/0015_p2_00_api_catalog.py`; raw content remains behind the existing
+  server-side storage boundary under `api-catalog-specs/{workspaceId}/{specId}/{safeFilename}`.
+- The generated source of truth is `packages/contracts/openapi/api.openapi.json`, with generated
+  client/types consumed by the Web API client.
+- The Web routes are `/api-catalog` and `/api-catalog/:specId`; Scalar is pinned to
+  `@scalar/api-reference-react@0.9.47` and receives only the same-origin content URL.
+- Verification coverage is in `apps/api/tests/test_p2_00_api_catalog_api.py`,
+  `packages/contracts/tests/api-catalog-openapi.test.mjs`, and
+  `apps/web/src/features/api-catalog/api-catalog.test.tsx`.
+
+Other P2 slices remain outside this checkpoint and require their own accepted scope and
+implementation history.

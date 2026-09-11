@@ -59,4 +59,10 @@ Out of scope:
 - The current detail route fetches authorized API Catalog metadata to obtain the same-origin `contentUrl`, then renders the source-owned Scalar wrapper as the primary API Reference surface rather than duplicating a separate metadata/card view outside Scalar.
 - `AppLayout` treats `/api-catalog/:specId` as an embedded-content page: the global sidebar and top bar remain, while standard page padding is removed so Scalar can use the available viewport.
 - The Scalar wrapper remains documentation-only: it uses a Shadow DOM/style boundary, restores host `body` class/style mutations, handles explicit Scalar sidebar operation navigation through Scalar's supported callback without replacing global History API methods, delegates tag-only sidebar clicks to Scalar's own expand/collapse behavior, defaults the isolated reference canvas to Scalar dark mode, mirrors later theme behavior only inside the isolated renderer/teleport nodes, and keeps request sending, proxying, auth persistence, Agent/MCP, Try it/Test Request, and API Catalog generation actions disabled. Initial URL fragments and Scalar's passive section-to-hash synchronization do not trigger SurgePilot-owned scrolling.
-- Web and E2E coverage includes list/detail/upload/delete flows, current Workspace header usage, Scalar hardening/style containment/navigation behavior, and no API Catalog Scenario/Test Plan/OpenAPI generation entry points.
+- Web verification covers the active list/detail route surface and Scalar hardening boundary; API and contract verification cover list/detail/content/delete, current Workspace enforcement, storage containment, and no API Catalog Scenario/Test Plan/OpenAPI generation entry points.
+- R13 focused verification files are `apps/api/tests/test_p2_00_api_catalog_api.py`,
+  `packages/contracts/tests/api-catalog-openapi.test.mjs`, and
+  `apps/web/src/features/api-catalog/api-catalog.test.tsx`. They cover route/service/storage
+  boundaries, generated operation freshness, Web route/rendering boundaries, disabled request
+  sending, and no direct MinIO exposure. The ADR-0016 P2-04 bootstrap exception remains
+  documentation-only and is not implemented by P2-00.
