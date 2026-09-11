@@ -650,6 +650,21 @@ export interface paths {
         patch: operations["patchRunValidity"];
         trace?: never;
     };
+    "/v1/scenarios/{scenarioId}/openapi-step-generation/specs": {
+        parameters: { query?: never; header?: never; path?: { scenarioId: string }; cookie?: never; };
+        get: operations["listScenarioOpenApiSpecSources"];
+        put?: never; post?: never; delete?: never; options?: never; head?: never; patch?: never; trace?: never;
+    };
+    "/v1/scenarios/{scenarioId}/openapi-step-generation/specs/{specId}/operations": {
+        parameters: { query?: never; header?: never; path?: { scenarioId: string; specId: string }; cookie?: never; };
+        get: operations["listScenarioOpenApiOperations"];
+        put?: never; post?: never; delete?: never; options?: never; head?: never; patch?: never; trace?: never;
+    };
+    "/v1/scenarios/{scenarioId}/openapi-step-generation/drafts": {
+        parameters: { query?: never; header?: never; path?: { scenarioId: string }; cookie?: never; };
+        get?: never; put?: never; post: operations["generateScenarioOpenApiStepDrafts"];
+        delete?: never; options?: never; head?: never; patch?: never; trace?: never;
+    };
     "/v1/scenarios": {
         parameters: {
             query?: never;
@@ -864,6 +879,21 @@ export interface components {
         AdminWorkspaceListResponse: {
             workspaces: components["schemas"]["WorkspaceSummary"][];
         };
+        OpenApiSpecSourceSummary: { id: string; name: string; filename: string; sourceFormat: string; documentTitle: string; documentVersion: string; status: "available" | "invalid" | "storage_unavailable"; updatedAt: string; };
+        OpenApiSpecSourceListResponse: { items: components["schemas"]["OpenApiSpecSourceSummary"][]; total: number; limit: number; offset: number; };
+        OpenApiOperationRef: { method: "GET" | "POST" | "PUT" | "PATCH" | "DELETE" | "HEAD" | "OPTIONS"; path: string; operationId?: string | null; };
+        OpenApiOperationSummary: { ref: components["schemas"]["OpenApiOperationRef"]; method: components["schemas"]["OpenApiOperationRef"]["method"]; path: string; operationId?: string | null; summary?: string | null; tags: string[]; displayName: string; hasRequestBody: boolean; supportedForGeneration: boolean; warningCodes: string[]; };
+        OpenApiStepGenerationWarning: { code: string; message: string; field?: string | null; };
+        OpenApiOperationListResponse: { spec: components["schemas"]["OpenApiSpecSourceSummary"]; items: components["schemas"]["OpenApiOperationSummary"][]; warnings: components["schemas"]["OpenApiStepGenerationWarning"][]; };
+        OpenApiStepInsertPlan: { mode: "append" | "before_step" | "after_step"; stepId?: string | null; };
+        OpenApiStepDraftGenerateRequest: { specId: string; operationRefs: components["schemas"]["OpenApiOperationRef"][]; insert: components["schemas"]["OpenApiStepInsertPlan"]; };
+        OpenApiGeneratedNamedValueDraft: { name: string; value?: string; enabled?: boolean; };
+        OpenApiGeneratedBodyDraft: { type?: "none" | "raw" | "form"; contentType?: string | null; rawText?: string | null; formFields?: components["schemas"]["OpenApiGeneratedNamedValueDraft"][]; };
+        OpenApiGeneratedStepSettingsDraft: { timeoutMs?: null; followRedirects?: null; keepAlive?: null; thinkTimeMs?: null; };
+        OpenApiGeneratedStepDraft: { enabled?: boolean; name: string; method: components["schemas"]["OpenApiOperationRef"]["method"]; path: string; queryParams?: components["schemas"]["OpenApiGeneratedNamedValueDraft"][]; headers?: components["schemas"]["OpenApiGeneratedNamedValueDraft"][]; body?: components["schemas"]["OpenApiGeneratedBodyDraft"]; settings?: components["schemas"]["OpenApiGeneratedStepSettingsDraft"]; };
+        OpenApiGeneratedStepSource: { operationId?: string | null; summary?: string | null; };
+        OpenApiGeneratedStepDraftItem: { operationRef: components["schemas"]["OpenApiOperationRef"]; step: components["schemas"]["OpenApiGeneratedStepDraft"]; source: components["schemas"]["OpenApiGeneratedStepSource"]; warnings: components["schemas"]["OpenApiStepGenerationWarning"][]; };
+        OpenApiStepDraftPreviewResponse: { spec: components["schemas"]["OpenApiSpecSourceSummary"]; items: components["schemas"]["OpenApiGeneratedStepDraftItem"][]; insert: components["schemas"]["OpenApiStepInsertPlan"]; warnings: components["schemas"]["OpenApiStepGenerationWarning"][]; };
         ApiCatalogSpecListResponse: {
             /** Items */
             items: components["schemas"]["ApiCatalogSpecSummary"][];
@@ -6391,6 +6421,21 @@ export interface operations {
                 };
             };
         };
+    };
+    listScenarioOpenApiSpecSources: {
+        parameters: { query?: { limit?: number; offset?: number; }; header?: { "x-workspace-id"?: string | null; }; path: { scenarioId: string }; cookie?: { surgepilot_session?: string | null; }; };
+        requestBody?: never;
+        responses: { 200: { headers: { [name: string]: unknown }; content: { "application/json": components["schemas"]["OpenApiSpecSourceListResponse"]; }; }; 400: { headers: { [name: string]: unknown }; content: { "application/json": components["schemas"]["ErrorResponse"]; }; }; 401: { headers: { [name: string]: unknown }; content: { "application/json": components["schemas"]["ErrorResponse"]; }; }; 403: { headers: { [name: string]: unknown }; content: { "application/json": components["schemas"]["ErrorResponse"]; }; }; 404: { headers: { [name: string]: unknown }; content: { "application/json": components["schemas"]["ErrorResponse"]; }; }; };
+    };
+    listScenarioOpenApiOperations: {
+        parameters: { query?: never; header?: { "x-workspace-id"?: string | null; }; path: { scenarioId: string; specId: string }; cookie?: { surgepilot_session?: string | null; }; };
+        requestBody?: never;
+        responses: { 200: { headers: { [name: string]: unknown }; content: { "application/json": components["schemas"]["OpenApiOperationListResponse"]; }; }; 400: { headers: { [name: string]: unknown }; content: { "application/json": components["schemas"]["ErrorResponse"]; }; }; 401: { headers: { [name: string]: unknown }; content: { "application/json": components["schemas"]["ErrorResponse"]; }; }; 403: { headers: { [name: string]: unknown }; content: { "application/json": components["schemas"]["ErrorResponse"]; }; }; 404: { headers: { [name: string]: unknown }; content: { "application/json": components["schemas"]["ErrorResponse"]; }; }; 422: { headers: { [name: string]: unknown }; content: { "application/json": components["schemas"]["ErrorResponse"]; }; }; 503: { headers: { [name: string]: unknown }; content: { "application/json": components["schemas"]["ErrorResponse"]; }; }; };
+    };
+    generateScenarioOpenApiStepDrafts: {
+        parameters: { query?: never; header?: { "x-workspace-id"?: string | null; "x-csrf-token": string; }; path: { scenarioId: string }; cookie?: { surgepilot_session?: string | null; }; };
+        requestBody: { content: { "application/json": components["schemas"]["OpenApiStepDraftGenerateRequest"]; }; };
+        responses: { 200: { headers: { [name: string]: unknown }; content: { "application/json": components["schemas"]["OpenApiStepDraftPreviewResponse"]; }; }; 400: { headers: { [name: string]: unknown }; content: { "application/json": components["schemas"]["ErrorResponse"]; }; }; 401: { headers: { [name: string]: unknown }; content: { "application/json": components["schemas"]["ErrorResponse"]; }; }; 403: { headers: { [name: string]: unknown }; content: { "application/json": components["schemas"]["ErrorResponse"]; }; }; 404: { headers: { [name: string]: unknown }; content: { "application/json": components["schemas"]["ErrorResponse"]; }; }; 422: { headers: { [name: string]: unknown }; content: { "application/json": components["schemas"]["ErrorResponse"]; }; }; 503: { headers: { [name: string]: unknown }; content: { "application/json": components["schemas"]["ErrorResponse"]; }; }; };
     };
     listScenarios: {
         parameters: {

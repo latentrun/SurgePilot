@@ -15,6 +15,10 @@ export const scenarioCopy = {
     "Paste one cURL command to preview a request Step. The import updates only your unsaved draft.",
   curlImportSensitiveWarning:
     "Pasted credentials may be saved into the Scenario if you import this Step and save the Scenario.",
+  openApiImportShort: "From OpenAPI",
+  openApiImportTitle: "Generate from OpenAPI",
+  openApiImportDescription:
+    "Select operations from an API Catalog spec, preview editable Step drafts, then insert them into this unsaved Scenario draft.",
   noEnvironment: "No environment",
   clone: "Clone",
   archive: "Archive",
