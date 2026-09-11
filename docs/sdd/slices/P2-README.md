@@ -10,6 +10,11 @@ management only: upload, list, detail, authorized content proxy, delete, and rea
 rendering. It does not authorize Scenario/Test Plan generation, operation import, request sending,
 or the P2-04 system OpenAPI bootstrap exception governed by `ADR-0016`.
 
+`P2-01-openapi-step-generation.md` is active through `ADR-0011`. It covers Scenario-editor
+OpenAPI Step draft generation from authorized API Catalog spec assets; it does not authorize
+API Catalog generation actions, Scenario/Test Plan generation, remote fetches, or conversion
+services.
+
 ## P2-00 factual backfill
 
 - API routes live in `apps/api/app/routes/api_catalog.py` and are registered by `apps/api/app/main.py`.
