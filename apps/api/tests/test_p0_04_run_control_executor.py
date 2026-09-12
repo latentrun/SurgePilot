@@ -242,16 +242,17 @@ def test_start_env_carries_node_bound_token_and_api_base_url() -> None:
     assert "SURGEPILOT_API_BASE_URL='http://192.168.1.50:8080'" in env
 
 
-def test_start_env_omits_api_base_url_when_unset(
+def test_start_without_api_base_url_fails_closed_before_ssh(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.delenv("SURGEPILOT_NODE_API_BASE_URL")
     adapter = MemoryAdapter()
     result = executor(adapter).execute(command())
-    assert result.ok
-    env = env_content(adapter)
-    assert "SURGEPILOT_API_BASE_URL" not in env
-    assert "RUNNER_INTERNAL_TOKEN='node:" in env
+    assert result.ok is False
+    assert result.error_code == "RUN_CONTROL_INVALID_API_BASE_URL"
+    assert result.quarantine_node is False
+    assert adapter.uploads == []
+    assert adapter.commands == []
 
 
 @pytest.mark.parametrize(

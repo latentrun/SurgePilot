@@ -352,6 +352,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/load-nodes/connectivity-summary": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Load Node Connectivity Summary */
+        get: operations["getLoadNodeConnectivitySummary"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/load-nodes/ssh-host-key/scan": {
         parameters: {
             query?: never;
@@ -1410,6 +1427,23 @@ export interface components {
              * @default false
              */
             force: boolean;
+        };
+        /** LoadNodeConnectivitySummary */
+        LoadNodeConnectivitySummary: {
+            /** Effectiveurl */
+            effectiveUrl?: string | null;
+            /** Message */
+            message: string;
+            /**
+             * Readiness
+             * @enum {string}
+             */
+            readiness: "ready" | "invalid" | "missing";
+            /**
+             * Source
+             * @enum {string}
+             */
+            source: "configured" | "env_fallback" | "missing";
         };
         LoadNodeCreateRequest: {
             credential: components["schemas"]["LoadNodeCredentialInput"];
@@ -4726,6 +4760,37 @@ export interface operations {
             };
             /** @description Unprocessable Entity */
             422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    getLoadNodeConnectivitySummary: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                surgepilot_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LoadNodeConnectivitySummary"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
                 headers: {
                     [name: string]: unknown;
                 };

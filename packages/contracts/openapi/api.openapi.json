@@ -1735,6 +1735,50 @@
         "title": "InitializeLoadNodeRequest",
         "type": "object"
       },
+      "LoadNodeConnectivitySummary": {
+        "properties": {
+          "effectiveUrl": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Effectiveurl"
+          },
+          "message": {
+            "title": "Message",
+            "type": "string"
+          },
+          "readiness": {
+            "enum": [
+              "ready",
+              "invalid",
+              "missing"
+            ],
+            "title": "Readiness",
+            "type": "string"
+          },
+          "source": {
+            "enum": [
+              "configured",
+              "env_fallback",
+              "missing"
+            ],
+            "title": "Source",
+            "type": "string"
+          }
+        },
+        "required": [
+          "source",
+          "readiness",
+          "message"
+        ],
+        "title": "LoadNodeConnectivitySummary",
+        "type": "object"
+      },
       "LoadNodeCreateRequest": {
         "additionalProperties": false,
         "properties": {
@@ -11296,6 +11340,55 @@
           }
         },
         "summary": "Create Load Node Route",
+        "tags": [
+          "load-nodes"
+        ]
+      }
+    },
+    "/v1/load-nodes/connectivity-summary": {
+      "get": {
+        "operationId": "getLoadNodeConnectivitySummary",
+        "parameters": [
+          {
+            "in": "cookie",
+            "name": "surgepilot_session",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "SurgePilot Session"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LoadNodeConnectivitySummary"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          }
+        },
+        "summary": "Get Load Node Connectivity Summary",
         "tags": [
           "load-nodes"
         ]

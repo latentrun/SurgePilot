@@ -18,6 +18,16 @@ LoadNodeStatus = Literal[
 LoadNodeAuthType = Literal["password", "private_key", "generated_key"]
 InitAttemptStatus = Literal["queued", "running", "succeeded", "failed"]
 
+LoadNodeConnectivitySource = Literal["configured", "env_fallback", "missing"]
+LoadNodeConnectivityReadiness = Literal["ready", "invalid", "missing"]
+
+
+class LoadNodeConnectivitySummary(ApiSchema):
+    effective_url: str | None = None
+    source: LoadNodeConnectivitySource
+    readiness: LoadNodeConnectivityReadiness
+    message: str
+
 
 class LoadNodeCredentialInput(ApiSchema):
     model_config = ConfigDict(
