@@ -110,6 +110,34 @@ class SessionRecord(Base):
     user: Mapped[User] = relationship(back_populates="sessions")
 
 
+class ApiToken(Base):
+    __tablename__ = "api_tokens"
+    __table_args__ = (
+        CheckConstraint("length(id) = 26", name="ck_api_tokens_id_len"),
+        CheckConstraint("length(public_id) = 26", name="ck_api_tokens_public_id_len"),
+        UniqueConstraint("public_id", name="uq_api_tokens_public_id"),
+        Index("ix_api_tokens_actor_user", "actor_user_id", "revoked_at", "expires_at"),
+    )
+
+    id: Mapped[str] = mapped_column(String(26), primary_key=True)
+    public_id: Mapped[str] = mapped_column(String(26), nullable=False)
+    secret_hash: Mapped[str] = mapped_column(Text, nullable=False)
+    actor_user_id: Mapped[str] = mapped_column(
+        String(26), ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+    )
+    name: Mapped[str] = mapped_column(Text, nullable=False)
+    scopes: Mapped[list[str]] = mapped_column(
+        JSONB().with_variant(JSON(), "sqlite"), nullable=False
+    )
+    workspace_allowlist: Mapped[list[str]] = mapped_column(
+        JSONB().with_variant(JSON(), "sqlite"), nullable=False
+    )
+    created_at: Mapped[datetime] = mapped_column(nullable=False)
+    expires_at: Mapped[datetime] = mapped_column(nullable=False)
+    revoked_at: Mapped[datetime | None] = mapped_column(nullable=True)
+    last_used_at: Mapped[datetime | None] = mapped_column(nullable=True)
+
+
 class AuditEvent(Base):
     __tablename__ = "audit_events"
     __table_args__ = (

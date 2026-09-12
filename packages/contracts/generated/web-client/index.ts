@@ -4,6 +4,15 @@
  */
 
 export interface paths {
+    "/v1/account/api-tokens": {
+        parameters: { query?: never; header?: never; path?: never; cookie?: never; };
+        get: operations["listAccountApiTokens"];
+        put?: never; post: operations["createAccountApiToken"]; delete?: never; options?: never; head?: never; patch?: never; trace?: never;
+    };
+    "/v1/account/api-tokens/{tokenId}": {
+        parameters: { query?: never; header?: never; path: { tokenId: string }; cookie?: never; };
+        get?: never; put?: never; post?: never; delete: operations["deleteAccountApiToken"]; options?: never; head?: never; patch?: never; trace?: never;
+    };
     "/v1/admin/setup-status": {
         parameters: {
             query?: never;
@@ -966,6 +975,11 @@ export interface components {
             /** Updatedat */
             updatedAt: string;
         };
+        ApiTokenCreateRequest: { expiresAt: string; name: string; scopes: ("read" | "config:write" | "run" | "dependency:write")[]; workspaceAllowlist: string[]; };
+        ApiTokenCreateResponse: { token: components["schemas"]["ApiTokenCreated"]; };
+        ApiTokenCreated: { createdAt: string; expiresAt: string; id: string; lastUsedAt?: string | null; name: string; plaintext: string; publicId: string; revokedAt?: string | null; scopes: ("read" | "config:write" | "run" | "dependency:write")[]; workspaceAllowlist: string[]; };
+        ApiTokenListResponse: { items: components["schemas"]["ApiTokenMetadata"][]; };
+        ApiTokenMetadata: { createdAt: string; expiresAt: string; id: string; lastUsedAt?: string | null; name: string; publicId: string; revokedAt?: string | null; scopes: ("read" | "config:write" | "run" | "dependency:write")[]; workspaceAllowlist: string[]; };
         AuthSessionResponse: {
             availableWorkspaces: components["schemas"]["AvailableWorkspaceSummary"][];
             /** Csrftoken */
@@ -2984,6 +2998,21 @@ type generatedOperation<T, Request = never> = {
 };
 
 export interface operations {
+    listAccountApiTokens: {
+        parameters: { query?: never; header?: never; path?: never; cookie?: { surgepilot_session?: string | null; }; };
+        requestBody?: never;
+        responses: { 200: { headers: { [name: string]: unknown }; content: { "application/json": components["schemas"]["ApiTokenListResponse"]; }; }; 401: { headers: { [name: string]: unknown }; content: { "application/json": components["schemas"]["ErrorResponse"]; }; }; 422: { headers: { [name: string]: unknown }; content: { "application/json": components["schemas"]["ErrorResponse"]; }; }; };
+    };
+    createAccountApiToken: {
+        parameters: { query?: never; header: { "x-csrf-token": string; }; path?: never; cookie?: { surgepilot_session?: string | null; }; };
+        requestBody: { content: { "application/json": components["schemas"]["ApiTokenCreateRequest"]; }; };
+        responses: { 201: { headers: { [name: string]: unknown }; content: { "application/json": components["schemas"]["ApiTokenCreateResponse"]; }; }; 400: { headers: { [name: string]: unknown }; content: { "application/json": components["schemas"]["ErrorResponse"]; }; }; 401: { headers: { [name: string]: unknown }; content: { "application/json": components["schemas"]["ErrorResponse"]; }; }; 403: { headers: { [name: string]: unknown }; content: { "application/json": components["schemas"]["ErrorResponse"]; }; }; 422: { headers: { [name: string]: unknown }; content: { "application/json": components["schemas"]["ErrorResponse"]; }; }; };
+    };
+    deleteAccountApiToken: {
+        parameters: { query?: never; header: { "x-csrf-token": string; }; path: { tokenId: string; }; cookie?: { surgepilot_session?: string | null; }; };
+        requestBody?: never;
+        responses: { 204: { headers: { [name: string]: unknown }; content?: never; }; 401: { headers: { [name: string]: unknown }; content: { "application/json": components["schemas"]["ErrorResponse"]; }; }; 403: { headers: { [name: string]: unknown }; content: { "application/json": components["schemas"]["ErrorResponse"]; }; }; 404: { headers: { [name: string]: unknown }; content: { "application/json": components["schemas"]["ErrorResponse"]; }; }; 422: { headers: { [name: string]: unknown }; content: { "application/json": components["schemas"]["ErrorResponse"]; }; }; };
+    };
     adminGetSystemSettings: generatedOperation<components["schemas"]["SystemSettingsResponse"]>;
     adminPatchSystemSettings: generatedOperation<components["schemas"]["SystemSettingsResponse"], components["schemas"]["SystemSettingsPatchRequest"]>;
     adminListUsers: generatedOperation<components["schemas"]["AdminUserListResponse"]>;

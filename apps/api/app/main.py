@@ -10,6 +10,7 @@ from app.core.config import validate_ssh_credential_encryption_key
 from app.core.errors import AppError, app_error_handler, validation_error_handler
 from app.core.middleware import request_context_middleware
 from app.routes import (
+    account_api_tokens,
     admin,
     api_catalog,
     auth,
@@ -49,6 +50,7 @@ app.add_exception_handler(AppError, app_error_handler)
 app.add_exception_handler(RequestValidationError, validation_error_handler)
 
 app.include_router(setup.router)
+app.include_router(account_api_tokens.router)
 app.include_router(admin.router)
 app.include_router(auth.router)
 app.include_router(workspaces.router)

@@ -15,6 +15,14 @@ OpenAPI Step draft generation from authorized API Catalog spec assets; it does n
 API Catalog generation actions, Scenario/Test Plan generation, remote fetches, or conversion
 services.
 
+`P2-02-public-api-substrate.md` is active through `ADR-0012`. It covers Account self-service API
+keys on the browser session surface, PAT Bearer-authenticated public business operations under
+`/api/public/v1/*`, the separate public OpenAPI artifact, bounded public Dependency File
+operations, and one governed repo-maintained Public API AI skill source package. PAT
+create/list/revoke stays session-only and self-only; it does not authorize public key-management
+routes, admin-managed keys, an SDK, an MCP server, a skills runtime, or release publication of the
+skill.
+
 ## P2-00 factual backfill
 
 - API routes live in `apps/api/app/routes/api_catalog.py` and are registered by `apps/api/app/main.py`.
