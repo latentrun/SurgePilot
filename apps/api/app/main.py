@@ -19,6 +19,7 @@ from app.routes import (
     load_nodes,
     monitoring,
     overview,
+    public_api,
     runner_internal,
     runs,
     scenarios,
@@ -63,6 +64,7 @@ app.include_router(api_catalog.router)
 app.include_router(runs.router)
 app.include_router(scenarios.router)
 app.include_router(test_plans.router)
+app.include_router(public_api.router)
 app.include_router(runner_internal.router)
 app.include_router(monitoring.internal_router)
 
@@ -139,6 +141,7 @@ def custom_openapi() -> dict:
             "TEST_PLAN_REVISION_CONFLICT",
             "TEST_PLAN_NOT_RUNNABLE",
             "LOAD_SOFT_LIMIT_CONFIRMATION_REQUIRED",
+            "PUBLIC_TOKEN_SCOPE_DENIED",
         ]
     )
     schemas = openapi_schema.get("components", {}).get("schemas", {})

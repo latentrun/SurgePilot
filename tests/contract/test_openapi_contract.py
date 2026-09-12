@@ -1,9 +1,9 @@
 import json
-import runpy
 from pathlib import Path
 
+from app.services.openapi_export import _export_document as EXPORTER
+
 ROOT = Path(__file__).resolve().parents[2]
-EXPORTER = runpy.run_path(str(ROOT / "scripts" / "export_openapi.py"))["_export_document"]
 
 
 def test_openapi_artifact_uses_api_server_and_v1_business_paths() -> None:
@@ -29,7 +29,7 @@ def test_export_normalizes_runtime_routes_without_a_double_api_prefix() -> None:
         },
     }
 
-    exported = EXPORTER(source)
+    exported = EXPORTER(source, public=False)
 
     assert exported["servers"] == [{"url": "/api"}]
     assert set(exported["paths"]) == {"/v1/runs"}
