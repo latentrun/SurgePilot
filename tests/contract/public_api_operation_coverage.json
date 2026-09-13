@@ -1,0 +1,195 @@
+{
+  "description": "Auditable coverage map for every operationId exported in packages/contracts/openapi/public-api.openapi.json. successPathTests points to tests that exercise the operation's happy path; responseAssertions points to tests that validate schema or public-only exclusions. Shared auth/scope/workspace negative coverage remains in apps/api/tests/test_p2_02_public_api.py.",
+  "operations": {
+    "publicCreateEnvGroup": {
+      "successPathTests": [
+        "apps/api/tests/test_p2_02_public_api.py::test_public_config_crud_and_run_create_use_existing_services"
+      ],
+      "responseAssertions": [
+        "tests/contract/test_p2_02_public_api_openapi.py::test_public_openapi_env_group_plain_only_contract",
+        "apps/api/tests/test_p2_02_public_api.py::test_public_api_requires_pat_bearer_and_checks_scope_without_csrf"
+      ]
+    },
+    "publicDeleteEnvGroup": {
+      "successPathTests": [
+        "apps/api/tests/test_p2_02_public_api.py::test_public_config_crud_and_run_create_use_existing_services"
+      ],
+      "responseAssertions": [
+        "apps/api/tests/test_p2_02_public_api.py::test_public_config_crud_and_run_create_use_existing_services"
+      ]
+    },
+    "publicPatchEnvGroup": {
+      "successPathTests": [
+        "apps/api/tests/test_p2_02_public_api.py::test_public_config_crud_and_run_create_use_existing_services"
+      ],
+      "responseAssertions": [
+        "tests/contract/test_p2_02_public_api_openapi.py::test_public_openapi_env_group_plain_only_contract",
+        "apps/api/tests/test_p2_02_public_api.py::test_public_api_requires_pat_bearer_and_checks_scope_without_csrf"
+      ]
+    },
+    "publicCopyEnvGroup": {
+      "successPathTests": [
+        "apps/api/tests/test_p2_02_public_api.py::test_public_config_crud_and_run_create_use_existing_services"
+      ],
+      "responseAssertions": [
+        "tests/contract/test_p2_02_public_api_openapi.py::test_public_openapi_env_group_plain_only_contract",
+        "apps/api/tests/test_p2_02_public_api.py::test_public_api_requires_pat_bearer_and_checks_scope_without_csrf"
+      ]
+    },
+    "publicListLoadNodes": {
+      "successPathTests": [
+        "apps/api/tests/test_p2_02_public_api.py::test_public_load_nodes_summary_omits_credential_material"
+      ],
+      "responseAssertions": [
+        "apps/api/tests/test_p2_02_public_api.py::test_public_load_nodes_summary_omits_credential_material"
+      ]
+    },
+    "publicListRuns": {
+      "successPathTests": [
+        "apps/api/tests/test_p2_02_public_api.py::test_public_run_stop_uses_existing_idempotent_run_service_without_csrf"
+      ],
+      "responseAssertions": [
+        "apps/api/tests/test_p2_02_public_api.py::test_public_run_stop_uses_existing_idempotent_run_service_without_csrf"
+      ]
+    },
+    "publicCreateRun": {
+      "successPathTests": [
+        "apps/api/tests/test_p2_02_public_api.py::test_public_config_crud_and_run_create_use_existing_services"
+      ],
+      "responseAssertions": [
+        "apps/api/tests/test_p2_02_public_api.py::test_public_config_crud_and_run_create_use_existing_services"
+      ]
+    },
+    "publicGetRun": {
+      "successPathTests": [
+        "apps/api/tests/test_p2_02_public_api.py::test_public_config_crud_and_run_create_use_existing_services"
+      ],
+      "responseAssertions": [
+        "apps/api/tests/test_p2_02_public_api.py::test_public_config_crud_and_run_create_use_existing_services",
+        "tests/contract/test_p2_02_public_api_openapi.py::test_public_openapi_excludes_token_management_and_secret_material"
+      ]
+    },
+    "publicGetRunReport": {
+      "successPathTests": [
+        "apps/api/tests/test_p2_02_public_api.py::test_public_config_crud_and_run_create_use_existing_services"
+      ],
+      "responseAssertions": [
+        "apps/api/tests/test_p2_02_public_api.py::test_public_config_crud_and_run_create_use_existing_services",
+        "tests/contract/test_p2_02_public_api_openapi.py::test_public_openapi_excludes_token_management_and_secret_material"
+      ]
+    },
+    "publicStopRun": {
+      "successPathTests": [
+        "apps/api/tests/test_p2_02_public_api.py::test_public_run_stop_uses_existing_idempotent_run_service_without_csrf"
+      ],
+      "responseAssertions": [
+        "apps/api/tests/test_p2_02_public_api.py::test_public_run_stop_uses_existing_idempotent_run_service_without_csrf"
+      ]
+    },
+    "publicListScenarios": {
+      "successPathTests": [
+        "apps/api/tests/test_p2_02_public_api.py::test_public_config_crud_and_run_create_use_existing_services",
+        "tests/e2e/p2_02_public_api_substrate.spec.ts"
+      ],
+      "responseAssertions": [
+        "apps/api/tests/test_p2_02_public_api.py::test_public_api_resolves_only_explicit_or_single_allowlisted_workspace"
+      ]
+    },
+    "publicCreateScenario": {
+      "successPathTests": [
+        "apps/api/tests/test_p2_02_public_api.py::test_public_config_crud_and_run_create_use_existing_services"
+      ],
+      "responseAssertions": [
+        "tests/contract/test_p2_02_public_api_openapi.py::test_public_openapi_excludes_token_management_and_secret_material"
+      ]
+    },
+    "publicDeleteScenario": {
+      "successPathTests": [
+        "apps/api/tests/test_p2_02_public_api.py::test_public_config_crud_and_run_create_use_existing_services"
+      ],
+      "responseAssertions": [
+        "apps/api/tests/test_p2_02_public_api.py::test_public_config_crud_and_run_create_use_existing_services"
+      ]
+    },
+    "publicGetScenario": {
+      "successPathTests": [
+        "apps/api/tests/test_p2_02_public_api.py::test_public_config_crud_and_run_create_use_existing_services"
+      ],
+      "responseAssertions": [
+        "tests/contract/test_p2_02_public_api_openapi.py::test_public_openapi_excludes_token_management_and_secret_material"
+      ]
+    },
+    "publicPatchScenario": {
+      "successPathTests": [
+        "apps/api/tests/test_p2_02_public_api.py::test_public_config_crud_and_run_create_use_existing_services"
+      ],
+      "responseAssertions": [
+        "tests/contract/test_p2_02_public_api_openapi.py::test_public_openapi_excludes_token_management_and_secret_material"
+      ]
+    },
+    "publicListTestPlans": {
+      "successPathTests": [
+        "apps/api/tests/test_p2_02_public_api.py::test_public_config_crud_and_run_create_use_existing_services"
+      ],
+      "responseAssertions": [
+        "apps/api/tests/test_p2_02_public_api.py::test_public_config_crud_and_run_create_use_existing_services"
+      ]
+    },
+    "publicCreateTestPlan": {
+      "successPathTests": [
+        "apps/api/tests/test_p2_02_public_api.py::test_public_config_crud_and_run_create_use_existing_services"
+      ],
+      "responseAssertions": [
+        "apps/api/tests/test_p2_02_public_api.py::test_public_config_crud_and_run_create_use_existing_services"
+      ]
+    },
+    "publicDeleteTestPlan": {
+      "successPathTests": [
+        "apps/api/tests/test_p2_02_public_api.py::test_public_config_crud_and_run_create_use_existing_services"
+      ],
+      "responseAssertions": [
+        "apps/api/tests/test_p2_02_public_api.py::test_public_config_crud_and_run_create_use_existing_services"
+      ]
+    },
+    "publicGetTestPlan": {
+      "successPathTests": [
+        "apps/api/tests/test_p2_02_public_api.py::test_public_config_crud_and_run_create_use_existing_services"
+      ],
+      "responseAssertions": [
+        "apps/api/tests/test_p2_02_public_api.py::test_public_config_crud_and_run_create_use_existing_services"
+      ]
+    },
+    "publicPatchTestPlan": {
+      "successPathTests": [
+        "apps/api/tests/test_p2_02_public_api.py::test_public_config_crud_and_run_create_use_existing_services"
+      ],
+      "responseAssertions": [
+        "apps/api/tests/test_p2_02_public_api.py::test_public_config_crud_and_run_create_use_existing_services"
+      ]
+    },
+    "publicListDependencyFiles": {
+      "successPathTests": [
+        "apps/api/tests/test_p2_02_public_api.py::test_public_dependency_files_support_upload_list_reference_protection_and_delete"
+      ],
+      "responseAssertions": [
+        "tests/contract/test_p2_02_public_api_openapi.py::test_public_openapi_dependency_sla_and_resource_contracts_are_explicit"
+      ]
+    },
+    "publicUploadDependencyFile": {
+      "successPathTests": [
+        "apps/api/tests/test_p2_02_public_api.py::test_public_dependency_files_support_upload_list_reference_protection_and_delete"
+      ],
+      "responseAssertions": [
+        "tests/contract/test_p2_02_public_api_openapi.py::test_public_openapi_dependency_sla_and_resource_contracts_are_explicit"
+      ]
+    },
+    "publicDeleteDependencyFile": {
+      "successPathTests": [
+        "apps/api/tests/test_p2_02_public_api.py::test_public_dependency_files_support_upload_list_reference_protection_and_delete"
+      ],
+      "responseAssertions": [
+        "tests/contract/test_p2_02_public_api_openapi.py::test_public_openapi_dependency_sla_and_resource_contracts_are_explicit"
+      ]
+    }
+  }
+}

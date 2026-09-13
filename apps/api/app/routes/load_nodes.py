@@ -15,6 +15,7 @@ from app.schemas.load_nodes import (
     DisableLoadNodeRequest,
     InitializeLoadNodeRequest,
     LoadNodeCreateRequest,
+    LoadNodeConnectivitySummary,
     LoadNodeCredentialUpdateRequest,
     LoadNodeDetail,
     LoadNodeInitAttemptDetail,
@@ -51,6 +52,7 @@ from app.services.load_nodes import (
     update_load_node_credentials,
     visible_node_filters,
 )
+from app.services.load_node_connectivity import load_node_api_base_url_summary
 
 router = APIRouter(prefix="/api/v1/load-nodes", tags=["load-nodes"])
 logger = logging.getLogger(__name__)
@@ -118,6 +120,38 @@ LIST_QUERY_OPENAPI_PARAMETERS = [
         "schema": {"type": "string", "default": "-createdAt"},
     },
 ]
+
+
+@router.get(
+    "/connectivity-summary",
+    operation_id="getLoadNodeConnectivitySummary",
+    response_model=LoadNodeConnectivitySummary,
+    response_model_by_alias=True,
+    responses={401: ERROR_RESPONSE},
+)
+def get_load_node_connectivity_summary(
+    db: DbDep, user: CurrentUserDep
+) -> LoadNodeConnectivitySummary:
+    _ = user
+    summary = load_node_api_base_url_summary(db)
+    return LoadNodeConnectivitySummary(
+        effective_url=summary.effective_url,
+        source=summary.source,
+        readiness=summary.readiness,
+        message=summary.message,
+    )
+
+
+def warn_if_load_node_api_base_url_not_ready(db: DbDep) -> None:
+    summary = load_node_api_base_url_summary(db)
+    if summary.readiness == "ready":
+        return
+    logger.warning(
+        "Load Node API Base URL is %s at %s; registration and initialization continue, "
+        "but future remote runs will be blocked until it is fixed.",
+        summary.readiness,
+        summary.source,
+    )
 
 
 def iso_z(value) -> str | None:
@@ -521,6 +555,7 @@ def create_load_node_route(
     )
     write_audit(request, db, "load_node.created", user.id, node)
     write_audit(request, db, "load_node.credential_updated", user.id, node)
+    warn_if_load_node_api_base_url_not_ready(db)
     db.commit()
     attach_workspace_header(response, workspace.id)
     return detail_response(db, node)
@@ -719,6 +754,7 @@ def initialize_load_node_route(
         request_id=getattr(request.state, "request_id", None),
     )
     write_audit(request, db, "load_node.initialization_requested", user.id, node, attempt.id)
+    warn_if_load_node_api_base_url_not_ready(db)
     db.commit()
     return LoadNodeInitializeResponse(
         node=LoadNodeInitializeNodeStatus(id=node.id, status=node.status),

@@ -37,6 +37,11 @@ const resourcesGroup: NavGroup = {
   items: [{ label: "Load Nodes", path: "/resources/load-nodes" }],
 };
 
+const accountGroup: NavGroup = {
+  label: "Account",
+  items: [{ label: "API Keys", path: "/account/api-keys" }],
+};
+
 const adminGroup: NavGroup = {
   label: "Admin",
   items: [
@@ -78,6 +83,7 @@ export function AppLayout({
     primaryGroup,
     assetsGroup,
     resourcesGroup,
+    accountGroup,
   ];
   if (session.user.role === "admin") {
     groups.push(adminGroup);
@@ -155,7 +161,7 @@ export function AppLayout({
           <label>
             Workspace
             <select
-              aria-label="Current workspace"
+              aria-label="Current Workspace"
               disabled={isSwitchingWorkspace}
               onChange={(event) => handleWorkspaceChange(event.target.value)}
               value={session.currentWorkspace.id}

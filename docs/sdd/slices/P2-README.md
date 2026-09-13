@@ -15,6 +15,14 @@ OpenAPI Step draft generation from authorized API Catalog spec assets; it does n
 API Catalog generation actions, Scenario/Test Plan generation, remote fetches, or conversion
 services.
 
+`P2-02-public-api-substrate.md` is active through `ADR-0012`. It covers Account self-service API
+keys on the browser session surface, PAT Bearer-authenticated public business operations under
+`/api/public/v1/*`, the separate public OpenAPI artifact, bounded public Dependency File
+operations, and one governed repo-maintained Public API AI skill source package. PAT
+create/list/revoke stays session-only and self-only; it does not authorize public key-management
+routes, admin-managed keys, an SDK, an MCP server, a skills runtime, or release publication of the
+skill.
+
 ## P2-00 factual backfill
 
 - API routes live in `apps/api/app/routes/api_catalog.py` and are registered by `apps/api/app/main.py`.
@@ -34,6 +42,13 @@ services.
 - Scenario-scoped generation is registered in `apps/api/app/routes/scenarios.py`; parsing and mapping are in `apps/api/app/services/openapi_step_generation.py`, with schemas in `apps/api/app/schemas/scenarios.py`.
 - The focused verification set is `apps/api/tests/test_p2_01_openapi_step_generation.py`, `tests/contract/test_p2_01_openapi_step_generation_openapi.py`, and the OpenAPI interaction test in `apps/web/src/features/scenarios/scenarios.test.tsx`.
 - P2-01 remains transient: confirming a preview changes only the in-memory Scenario draft; the existing Scenario save/PATCH flow remains the persistence boundary. API Catalog deletion or replacement does not rewrite generated Steps, and API Catalog detail has no generation/import action.
+
+## P2-02 factual backfill
+
+- Session token management lives in `apps/api/app/routes/account_api_tokens.py` with operation IDs `listAccountApiTokens`, `createAccountApiToken`, and `deleteAccountApiToken`; the programmatic routes live in `apps/api/app/routes/public_api.py` under `/public/v1/*`.
+- The public OpenAPI artifact is `packages/contracts/openapi/public-api.openapi.json`, the internal artifact is `packages/contracts/openapi/api.openapi.json`, and the bundled skill snapshot is `packages/ai-skills/surgepilot-public-api/references/public-api.openapi.json`. `make generate-contracts` refreshes both artifacts and the skill snapshot, and `make contracts-stale-check` keeps them aligned.
+- Verification coverage is in `apps/api/tests/test_p2_02_api_tokens_api.py`, `apps/api/tests/test_p2_02_public_api.py`, `apps/api/tests/test_p2_02_load_node_connectivity.py`, `tests/contract/test_p2_02_public_api_openapi.py`, `apps/web/src/features/account/api-keys.test.tsx`, and `apps/web/src/features/load-nodes/load-node-connectivity-summary.test.tsx`.
+- Deployment `.env`/bootstrap/Makefile startup governance, the node-facing startup Make wiring, and the SSH lifecycle verifier (`scripts/verify_p2_02_public_api_lifecycle.py` and `tests/test_p2_02_public_api_lifecycle_verifier.py`) belong to the later startup checkpoint and are not part of R15.
 
 Other P2 slices remain outside this checkpoint and require their own accepted scope and
 implementation history.

@@ -10,6 +10,7 @@ from app.core.config import validate_ssh_credential_encryption_key
 from app.core.errors import AppError, app_error_handler, validation_error_handler
 from app.core.middleware import request_context_middleware
 from app.routes import (
+    account_api_tokens,
     admin,
     api_catalog,
     auth,
@@ -18,6 +19,7 @@ from app.routes import (
     load_nodes,
     monitoring,
     overview,
+    public_api,
     runner_internal,
     runs,
     scenarios,
@@ -49,6 +51,7 @@ app.add_exception_handler(AppError, app_error_handler)
 app.add_exception_handler(RequestValidationError, validation_error_handler)
 
 app.include_router(setup.router)
+app.include_router(account_api_tokens.router)
 app.include_router(admin.router)
 app.include_router(auth.router)
 app.include_router(workspaces.router)
@@ -61,6 +64,7 @@ app.include_router(api_catalog.router)
 app.include_router(runs.router)
 app.include_router(scenarios.router)
 app.include_router(test_plans.router)
+app.include_router(public_api.router)
 app.include_router(runner_internal.router)
 app.include_router(monitoring.internal_router)
 
@@ -137,6 +141,7 @@ def custom_openapi() -> dict:
             "TEST_PLAN_REVISION_CONFLICT",
             "TEST_PLAN_NOT_RUNNABLE",
             "LOAD_SOFT_LIMIT_CONFIRMATION_REQUIRED",
+            "PUBLIC_TOKEN_SCOPE_DENIED",
         ]
     )
     schemas = openapi_schema.get("components", {}).get("schemas", {})

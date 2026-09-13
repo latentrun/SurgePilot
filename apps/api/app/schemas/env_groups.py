@@ -36,3 +36,19 @@ class EnvGroupPatchRequest(ApiSchema):
     name: str | None = None
     description: str | None = None
     variables: dict[str, str] | None = None
+
+
+class PublicEnvGroupCreateRequest(ApiSchema):
+    name: str
+    description: str | None = None
+    variables: dict[str, str] = Field(default_factory=dict)
+
+
+class PublicEnvGroupPatchRequest(ApiSchema):
+    name: str | None = None
+    description: str | None = None
+    variables: dict[str, str] | None = None
+
+
+class PublicEnvGroupDetail(EnvGroupSummary):
+    variables: dict[str, str]

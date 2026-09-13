@@ -1,9 +1,9 @@
 import json
-import runpy
 from pathlib import Path
 
+from app.services.openapi_export import _export_document as EXPORTER
+
 ROOT = Path(__file__).resolve().parents[2]
-EXPORTER = runpy.run_path(str(ROOT / "scripts" / "export_openapi.py"))["_export_document"]
 
 
 def test_openapi_artifact_uses_api_server_and_v1_business_paths() -> None:
@@ -29,7 +29,7 @@ def test_export_normalizes_runtime_routes_without_a_double_api_prefix() -> None:
         },
     }
 
-    exported = EXPORTER(source)
+    exported = EXPORTER(source, public=False)
 
     assert exported["servers"] == [{"url": "/api"}]
     assert set(exported["paths"]) == {"/v1/runs"}
@@ -61,3 +61,28 @@ def test_p1_03_workspace_admin_contract_is_explicit_and_secret_safe() -> None:
     assert '"runnerInternalToken":' not in serialized
     assert "USER_LAST_ACTIVE_ADMIN" in serialized
     assert "SENSITIVE_SETTING_VALUE_FORBIDDEN" in serialized
+
+
+def test_p2_02_session_token_and_connectivity_contract_is_explicit() -> None:
+    document = json.loads(
+        (ROOT / "packages/contracts/openapi/api.openapi.json").read_text()
+    )
+    paths = document["paths"]
+
+    assert paths["/v1/account/api-tokens"]["get"]["operationId"] == "listAccountApiTokens"
+    assert paths["/v1/account/api-tokens"]["post"]["operationId"] == "createAccountApiToken"
+    assert (
+        paths["/v1/account/api-tokens/{tokenId}"]["delete"]["operationId"]
+        == "deleteAccountApiToken"
+    )
+    assert (
+        paths["/v1/load-nodes/connectivity-summary"]["get"]["operationId"]
+        == "getLoadNodeConnectivitySummary"
+    )
+    assert "LoadNodeConnectivitySummary" in document["components"]["schemas"]
+    assert "ApiTokenMetadata" in document["components"]["schemas"]
+
+    serialized = json.dumps(document)
+    assert "secretHash" not in serialized
+    assert not any(path.startswith("/internal/") for path in paths)
+    assert not any(path.startswith("/public/v1/") for path in paths)

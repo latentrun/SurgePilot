@@ -24,6 +24,11 @@ from app.services.execution_bundles import (
     build_test_plan_execution_bundle,
 )
 from app.services.load_node_initializer import safe_join
+from app.services.load_node_connectivity import (
+    LoadNodeApiBaseUrlInvalid,
+    effective_load_node_api_base_url,
+    validate_load_node_api_base_url,
+)
 from app.services.monitoring import build_monitoring_properties
 from app.services.runner_bundle import RunnerBundle
 from app.services.runs import (
@@ -95,6 +100,22 @@ class RemoteRunControlExecutor(RunControlExecutor):
         )
 
     def execute(self, command: RunControlCommand) -> RunControlExecutionResult:
+        try:
+            api_base_url = self._api_base_url_for(command)
+        except AppError as exc:
+            return RunControlExecutionResult(
+                ok=False,
+                error_code=exc.code,
+                message=exc.message,
+                quarantine_node=False,
+            )
+        except Exception:
+            return RunControlExecutionResult(
+                ok=False,
+                error_code="RUN_CONTROL_EXECUTION_FAILED",
+                message="Run control execution failed.",
+                quarantine_node=False,
+            )
         execution_bundle_files: list[ExecutionBundleFile] | None = None
         if command.action == "start" and command.source_type in {"debug_scenario", "test_plan"}:
             try:
@@ -131,7 +152,7 @@ class RemoteRunControlExecutor(RunControlExecutor):
             self.adapter.upload_text(
                 target,
                 remote_path=env_path,
-                content=self._env_file(command),
+                content=self._env_file(command, api_base_url=api_base_url),
                 mode=0o600,
             )
             self._upload_monitoring_properties_if_needed(target=target, command=command)
@@ -337,7 +358,24 @@ class RemoteRunControlExecutor(RunControlExecutor):
     def _remote_env_path(self, command: RunControlCommand) -> str:
         return posixpath.join(command.runner_home, "runs", command.run_id, ".surgepilot.env")
 
-    def _env_file(self, command: RunControlCommand) -> str:
+    def _api_base_url_for(self, command: RunControlCommand) -> str | None:
+        if command.action != "start":
+            return None
+        if self.session_factory is None:
+            try:
+                return validate_load_node_api_base_url(
+                    self.settings.surgepilot_node_api_base_url or ""
+                )
+            except LoadNodeApiBaseUrlInvalid as exc:
+                raise AppError(
+                    "RUN_CONTROL_INVALID_API_BASE_URL",
+                    "Load Node API Base URL is missing or invalid.",
+                    400,
+                ) from exc
+        with self.session_factory() as session:
+            return effective_load_node_api_base_url(session)
+
+    def _env_file(self, command: RunControlCommand, *, api_base_url: str | None = None) -> str:
         runner_token = self.settings.runner_internal_token or ""
         if runner_token:
             runner_token = sign_runner_node_token(command.node_id, secret=runner_token)
@@ -346,15 +384,9 @@ class RemoteRunControlExecutor(RunControlExecutor):
             "SURGEPILOT_NODE_ID": command.node_id,
             "RUNNER_HOME": command.runner_home,
         }
-        if command.action == "start":
-            api_base_url = self._api_base_url()
-            if api_base_url is not None:
-                values = {"SURGEPILOT_API_BASE_URL": api_base_url, **values}
+        if api_base_url is not None:
+            values = {"SURGEPILOT_API_BASE_URL": api_base_url, **values}
         return "".join(f"{name}={shlex.quote(value)}\n" for name, value in values.items())
-
-    def _api_base_url(self) -> str | None:
-        value = (self.settings.surgepilot_node_api_base_url or "").strip().rstrip("/")
-        return value or None
 
     def _shell_command(self, *, command: RunControlCommand, env_path: str) -> str:
         runner_command = shlex.join(command.argv)

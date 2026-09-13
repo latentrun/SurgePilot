@@ -209,6 +209,11 @@
       "title": "ApiCatalogSpecSummary",
       "type": "object"
     },
+      "ApiTokenCreateRequest": {"additionalProperties":false,"properties":{"expiresAt":{"format":"date-time","title":"Expiresat","type":"string"},"name":{"maxLength":120,"minLength":1,"title":"Name","type":"string"},"scopes":{"items":{"enum":["read","config:write","run","dependency:write"],"type":"string"},"maxItems":4,"minItems":1,"title":"Scopes","type":"array"},"workspaceAllowlist":{"items":{"type":"string"},"maxItems":50,"minItems":1,"title":"Workspaceallowlist","type":"array"}},"required":["name","scopes","workspaceAllowlist","expiresAt"],"title":"ApiTokenCreateRequest","type":"object"},
+      "ApiTokenCreateResponse": {"properties":{"token":{"$ref":"#/components/schemas/ApiTokenCreated"}},"required":["token"],"title":"ApiTokenCreateResponse","type":"object"},
+      "ApiTokenCreated": {"properties":{"createdAt":{"format":"date-time","title":"Createdat","type":"string"},"expiresAt":{"format":"date-time","title":"Expiresat","type":"string"},"id":{"title":"Id","type":"string"},"lastUsedAt":{"anyOf":[{"format":"date-time","type":"string"},{"type":"null"}],"title":"Lastusedat"},"name":{"title":"Name","type":"string"},"plaintext":{"title":"Plaintext","type":"string"},"publicId":{"title":"Publicid","type":"string"},"revokedAt":{"anyOf":[{"format":"date-time","type":"string"},{"type":"null"}],"title":"Revokedat"},"scopes":{"items":{"enum":["read","config:write","run","dependency:write"],"type":"string"},"title":"Scopes","type":"array"},"workspaceAllowlist":{"items":{"type":"string"},"title":"Workspaceallowlist","type":"array"}},"required":["id","publicId","name","scopes","workspaceAllowlist","createdAt","expiresAt","plaintext"],"title":"ApiTokenCreated","type":"object"},
+      "ApiTokenListResponse": {"properties":{"items":{"items":{"$ref":"#/components/schemas/ApiTokenMetadata"},"title":"Items","type":"array"}},"required":["items"],"title":"ApiTokenListResponse","type":"object"},
+      "ApiTokenMetadata": {"properties":{"createdAt":{"format":"date-time","title":"Createdat","type":"string"},"expiresAt":{"format":"date-time","title":"Expiresat","type":"string"},"id":{"title":"Id","type":"string"},"lastUsedAt":{"anyOf":[{"format":"date-time","type":"string"},{"type":"null"}],"title":"Lastusedat"},"name":{"title":"Name","type":"string"},"publicId":{"title":"Publicid","type":"string"},"revokedAt":{"anyOf":[{"format":"date-time","type":"string"},{"type":"null"}],"title":"Revokedat"},"scopes":{"items":{"enum":["read","config:write","run","dependency:write"],"type":"string"},"title":"Scopes","type":"array"},"workspaceAllowlist":{"items":{"type":"string"},"title":"Workspaceallowlist","type":"array"}},"required":["id","publicId","name","scopes","workspaceAllowlist","createdAt","expiresAt"],"title":"ApiTokenMetadata","type":"object"},
       "AuthSessionResponse": {
         "properties": {
           "availableWorkspaces": {
@@ -1728,6 +1733,50 @@
           }
         },
         "title": "InitializeLoadNodeRequest",
+        "type": "object"
+      },
+      "LoadNodeConnectivitySummary": {
+        "properties": {
+          "effectiveUrl": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Effectiveurl"
+          },
+          "message": {
+            "title": "Message",
+            "type": "string"
+          },
+          "readiness": {
+            "enum": [
+              "ready",
+              "invalid",
+              "missing"
+            ],
+            "title": "Readiness",
+            "type": "string"
+          },
+          "source": {
+            "enum": [
+              "configured",
+              "env_fallback",
+              "missing"
+            ],
+            "title": "Source",
+            "type": "string"
+          }
+        },
+        "required": [
+          "source",
+          "readiness",
+          "message"
+        ],
+        "title": "LoadNodeConnectivitySummary",
         "type": "object"
       },
       "LoadNodeCreateRequest": {
@@ -7210,6 +7259,29 @@
   },
   "openapi": "3.1.0",
   "paths": {
+    "/v1/account/api-tokens": {
+      "get": {
+        "operationId":"listAccountApiTokens",
+        "parameters":[{"in":"cookie","name":"surgepilot_session","required":false,"schema":{"anyOf":[{"type":"string"},{"type":"null"}],"title":"SurgePilot Session"}}],
+        "responses":{"200":{"content":{"application/json":{"schema":{"$ref":"#/components/schemas/ApiTokenListResponse"}}},"description":"Successful Response"},"401":{"content":{"application/json":{"schema":{"$ref":"#/components/schemas/ErrorResponse"}}},"description":"Unauthorized"},"422":{"content":{"application/json":{"schema":{"$ref":"#/components/schemas/ErrorResponse"}}},"description":"Unprocessable Entity"}},
+        "summary":"List Account Api Tokens","tags":["account-api-tokens"]
+      },
+      "post": {
+        "operationId":"createAccountApiToken",
+        "parameters":[{"in":"header","name":"x-csrf-token","required":true,"schema":{"title":"X-Csrf-Token","type":"string"}},{"in":"cookie","name":"surgepilot_session","required":false,"schema":{"anyOf":[{"type":"string"},{"type":"null"}],"title":"SurgePilot Session"}}],
+        "requestBody":{"required":true,"content":{"application/json":{"schema":{"$ref":"#/components/schemas/ApiTokenCreateRequest"}}}},
+        "responses":{"201":{"content":{"application/json":{"schema":{"$ref":"#/components/schemas/ApiTokenCreateResponse"}}},"description":"Successful Response"},"400":{"content":{"application/json":{"schema":{"$ref":"#/components/schemas/ErrorResponse"}}},"description":"Bad Request"},"401":{"content":{"application/json":{"schema":{"$ref":"#/components/schemas/ErrorResponse"}}},"description":"Unauthorized"},"403":{"content":{"application/json":{"schema":{"$ref":"#/components/schemas/ErrorResponse"}}},"description":"Forbidden"},"422":{"content":{"application/json":{"schema":{"$ref":"#/components/schemas/ErrorResponse"}}},"description":"Unprocessable Entity"}},
+        "summary":"Create Account Api Token","tags":["account-api-tokens"]
+      }
+    },
+    "/v1/account/api-tokens/{tokenId}": {
+      "delete": {
+        "operationId":"deleteAccountApiToken",
+        "parameters":[{"in":"path","name":"tokenId","required":true,"schema":{"title":"Tokenid","type":"string"}},{"in":"header","name":"x-csrf-token","required":true,"schema":{"title":"X-Csrf-Token","type":"string"}},{"in":"cookie","name":"surgepilot_session","required":false,"schema":{"anyOf":[{"type":"string"},{"type":"null"}],"title":"SurgePilot Session"}}],
+        "responses":{"204":{"description":"Successful Response"},"401":{"content":{"application/json":{"schema":{"$ref":"#/components/schemas/ErrorResponse"}}},"description":"Unauthorized"},"403":{"content":{"application/json":{"schema":{"$ref":"#/components/schemas/ErrorResponse"}}},"description":"Forbidden"},"404":{"content":{"application/json":{"schema":{"$ref":"#/components/schemas/ErrorResponse"}}},"description":"Not Found"},"422":{"content":{"application/json":{"schema":{"$ref":"#/components/schemas/ErrorResponse"}}},"description":"Unprocessable Entity"}},
+        "summary":"Delete Account Api Token","tags":["account-api-tokens"]
+      }
+    },
     "/v1/api-catalog/specs": {
       "get": {
         "operationId": "listApiCatalogSpecs",
@@ -11268,6 +11340,55 @@
           }
         },
         "summary": "Create Load Node Route",
+        "tags": [
+          "load-nodes"
+        ]
+      }
+    },
+    "/v1/load-nodes/connectivity-summary": {
+      "get": {
+        "operationId": "getLoadNodeConnectivitySummary",
+        "parameters": [
+          {
+            "in": "cookie",
+            "name": "surgepilot_session",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "SurgePilot Session"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LoadNodeConnectivitySummary"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          }
+        },
+        "summary": "Get Load Node Connectivity Summary",
         "tags": [
           "load-nodes"
         ]
