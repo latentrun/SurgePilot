@@ -20,16 +20,21 @@ import {
   type EnvGroupDetail,
   type EnvGroupPatchRequest,
   type EnvGroupSummary,
+  type EnvGroupVariableRead,
+  type EnvGroupVariableWrite,
 } from "../../../app/api-client";
 import { useAuthSession } from "../../../app/auth-session";
 import { useWorkspaceSwitchGuard } from "../../../app/workspace-switch-guard";
 
 type FormMode = "create" | "edit";
+type VariableType = "plain" | "secret";
 
 type VariableRow = {
   id: string;
   key: string;
+  type: VariableType;
   value: string;
+  hasExistingSecret?: boolean;
 };
 
 type FormState = {
@@ -53,26 +58,54 @@ function createClientId() {
 }
 
 function emptyVariableRow(): VariableRow {
-  return { id: createClientId(), key: "", value: "" };
+  return { id: createClientId(), key: "", type: "plain", value: "" };
 }
 
 function detailToForm(detail: EnvGroupDetail): FormState {
   return {
     name: detail.name,
     description: detail.description ?? "",
-    variables: Object.entries(detail.variables ?? {}).map(([key, value]) => ({
-      id: createClientId(),
-      key,
-      value: typeof value === "string" ? value : String(value ?? ""),
-    })),
+    variables: Object.entries(detail.variables ?? {}).map(([key, variable]) => {
+      const typed = variable as EnvGroupVariableRead;
+      if (typed.type === "secret") {
+        return {
+          id: createClientId(),
+          key,
+          type: "secret" as const,
+          value: "",
+          hasExistingSecret: typed.hasValue,
+        };
+      }
+      return {
+        id: createClientId(),
+        key,
+        type: "plain" as const,
+        value: typed.value,
+      };
+    }),
   };
 }
 
-function variablesFromRows(rows: VariableRow[]): Record<string, string> {
+function variablesFromRows(
+  rows: VariableRow[],
+): Record<string, EnvGroupVariableWrite> {
   return Object.fromEntries(
     rows
       .filter((row) => row.key.trim() !== "")
-      .map((row) => [row.key.trim(), row.value]),
+      .map((row) => {
+        const key = row.key.trim();
+        if (row.type === "secret") {
+          const entry: EnvGroupVariableWrite =
+            row.hasExistingSecret && row.value === ""
+              ? { type: "secret" }
+              : { type: "secret", value: row.value };
+          return [key, entry];
+        }
+        return [
+          key,
+          { type: "plain", value: row.value } satisfies EnvGroupVariableWrite,
+        ];
+      }),
   );
 }
 
@@ -80,7 +113,9 @@ function formHasDraft(form: FormState) {
   return (
     form.name.trim() !== "" ||
     form.description.trim() !== "" ||
-    form.variables.some((row) => row.key !== "" || row.value !== "")
+    form.variables.some(
+      (row) => row.key !== "" || row.value !== "" || row.type !== "plain",
+    )
   );
 }
 
@@ -684,7 +719,7 @@ export function EnvGroupsPage() {
 
   function updateVariable(
     id: string,
-    field: "key" | "value",
+    field: "key" | "value" | "type",
     value: string,
   ) {
     setForm((current) => ({
@@ -902,7 +937,8 @@ export function EnvGroupsPage() {
                     : "Edit Env Group"}
                 </Dialog.Title>
                 <Dialog.Description className="mt-1 text-sm text-text-muted">
-                  Add plain variables that scenarios and test plans can reuse.
+                  Add plain variables or write-only secrets that scenarios and
+                  test plans can reuse.
                 </Dialog.Description>
               </div>
               <Dialog.Close
@@ -1020,7 +1056,9 @@ export function EnvGroupsPage() {
                             />
                           </Field>
                           <Field
-                            label="Value"
+                            label={
+                              row.type === "secret" ? "Secret value" : "Value"
+                            }
                             error={formErrors[`variables.${row.id}.value`]}
                           >
                             <input
@@ -1036,7 +1074,12 @@ export function EnvGroupsPage() {
                                   event.target.value,
                                 )
                               }
-                              type="text"
+                              placeholder={
+                                row.type === "secret" && row.hasExistingSecret
+                                  ? "******** (leave blank to keep)"
+                                  : undefined
+                              }
+                              type={row.type === "secret" ? "password" : "text"}
                               value={row.value}
                             />
                           </Field>
@@ -1045,6 +1088,20 @@ export function EnvGroupsPage() {
                               Actions
                             </span>
                             <div className="flex h-10 items-center gap-3">
+                              <label className="inline-flex items-center gap-2 text-sm text-text-muted">
+                                <input
+                                  checked={row.type === "secret"}
+                                  onChange={(event) =>
+                                    updateVariable(
+                                      row.id,
+                                      "type",
+                                      event.target.checked ? "secret" : "plain",
+                                    )
+                                  }
+                                  type="checkbox"
+                                />
+                                Secret
+                              </label>
                               <IconButton
                                 label={`Remove ${row.key || "variable"}`}
                                 onClick={() => removeVariable(row.id)}

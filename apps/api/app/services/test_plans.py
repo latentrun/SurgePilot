@@ -1137,7 +1137,6 @@ class TestPlanRunResult:
 class ValidatedPlanContext:
     test_plan: TestPlan
     env_group: EnvGroup | None
-    env_variables: dict[str, str]
     scenario_rows: dict[str, Scenario]
     scenario_taurus_docs: dict[str, dict[str, Any]]
     dependency_files: list[dict[str, Any]]
@@ -1440,7 +1439,6 @@ def _validate_run_context(
     return ValidatedPlanContext(
         test_plan=plan,
         env_group=env_group,
-        env_variables=env_variables,
         scenario_rows=scenarios,
         scenario_taurus_docs=scenario_taurus_docs,
         dependency_files=dependency_files,
@@ -1461,7 +1459,7 @@ def _snapshot_payload(
         env_snapshot = {
             "id": ctx.env_group.id,
             "name": ctx.env_group.name,
-            "variables": ctx.env_variables,
+            "variables": env_group_runtime_values(ctx.env_group),
         }
     enabled_rules = [_sla_rule_dict(rule) for rule in rules if rule.enabled]
     if run_type == "debug":

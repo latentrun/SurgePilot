@@ -41,6 +41,12 @@ export type EnvGroupListResponse =
 export type EnvGroupPatchRequest =
   components["schemas"]["EnvGroupPatchRequest"];
 export type EnvGroupSummary = components["schemas"]["EnvGroupSummary"];
+export type EnvGroupVariableRead =
+  | components["schemas"]["EnvGroupPlainVariableRead"]
+  | components["schemas"]["EnvGroupSecretVariableRead"];
+export type EnvGroupVariableWrite =
+  | components["schemas"]["EnvGroupPlainVariableWrite"]
+  | components["schemas"]["EnvGroupSecretVariableWrite"];
 
 export type DependencyFileDetail =
   components["schemas"]["DependencyFileDetail"];
