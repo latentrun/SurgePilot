@@ -1,10 +1,12 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import {
   createLoadNode,
   getCsrfToken,
+  getLoadNodeConnectivitySummary,
   scanLoadNodeSshHostKey,
   type LoadNodeAuthType,
+  type LoadNodeConnectivitySummary,
   type LoadNodeCreateRequest,
   type LoadNodeDetail,
   type LoadNodeScope,
@@ -12,6 +14,7 @@ import {
 } from "../../../app/api-client";
 import { useAuthSession } from "../../../app/auth-session";
 import { useWorkspaceSwitchGuard } from "../../../app/workspace-switch-guard";
+import { LoadNodeConnectivitySummaryCard } from "../components/load-node-connectivity-summary";
 import { loadNodeErrorMessage } from "./load-node-copy";
 
 type FormState = {
@@ -267,6 +270,9 @@ export function RegisterLoadNodePage() {
   const [copyFeedback, setCopyFeedback] = useState<string | null>(null);
   const [isScanning, setIsScanning] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [connectivitySummary, setConnectivitySummary] =
+    useState<LoadNodeConnectivitySummary>();
+  const [connectivityFailed, setConnectivityFailed] = useState(false);
 
   const workspaceSwitchGuard = useMemo(
     () => ({
@@ -283,6 +289,29 @@ export function RegisterLoadNodePage() {
     [created, form],
   );
   useWorkspaceSwitchGuard(workspaceSwitchGuard);
+
+  useEffect(() => {
+    if (session === null) {
+      return undefined;
+    }
+    let active = true;
+    getLoadNodeConnectivitySummary()
+      .then((summary) => {
+        if (active) {
+          setConnectivitySummary(summary);
+          setConnectivityFailed(false);
+        }
+      })
+      .catch(() => {
+        if (active) {
+          setConnectivitySummary(undefined);
+          setConnectivityFailed(true);
+        }
+      });
+    return () => {
+      active = false;
+    };
+  }, [session]);
 
   if (session === null) {
     return null;
@@ -367,6 +396,14 @@ export function RegisterLoadNodePage() {
             initializing, confirm the host meets the target requirements listed
             on the registration form.
           </p>
+          <div className="mt-6">
+            <LoadNodeConnectivitySummaryCard
+              isAdmin={isAdmin}
+              loadFailed={connectivityFailed}
+              successContext
+              summary={connectivitySummary}
+            />
+          </div>
           <div className="mt-6 rounded-2xl border border-white/10 bg-black/30 p-4">
             <div className="mb-2 flex items-center justify-between">
               <span className="font-mono text-xs uppercase tracking-[0.18em] text-primary">
@@ -645,6 +682,11 @@ export function RegisterLoadNodePage() {
         </form>
 
         <aside className="surgepilot-glass grid gap-6 rounded-2xl p-6">
+          <LoadNodeConnectivitySummaryCard
+            isAdmin={isAdmin}
+            loadFailed={connectivityFailed}
+            summary={connectivitySummary}
+          />
           <div>
             <div className="mb-4 flex items-center gap-2 text-white">
               <ShieldCheck className="h-4 w-4 text-primary" />

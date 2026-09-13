@@ -83,6 +83,8 @@ export type LoadNodeSshHostKeyScanRequest =
 export type LoadNodeSshHostKeyScanResponse =
   components["schemas"]["LoadNodeSshHostKeyScanResponse"];
 export type LoadNodeSummary = components["schemas"]["LoadNodeSummary"];
+export type LoadNodeConnectivitySummary =
+  components["schemas"]["LoadNodeConnectivitySummary"];
 
 export type RunCreateRequest = components["schemas"]["RunCreateRequest"];
 export type RunCreateResponse = components["schemas"]["RunCreateResponse"];
@@ -723,6 +725,12 @@ export function listLoadNodes(params: {
   return request<LoadNodeListResponse>(url, {
     headers: { "x-workspace-id": params.workspaceId },
   });
+}
+
+export function getLoadNodeConnectivitySummary() {
+  return request<LoadNodeConnectivitySummary>(
+    "/v1/load-nodes/connectivity-summary",
+  );
 }
 
 export function createLoadNode(

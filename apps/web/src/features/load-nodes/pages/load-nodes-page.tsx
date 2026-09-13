@@ -12,6 +12,7 @@ import {
   disableLoadNode,
   enableLoadNode,
   getCsrfToken,
+  getLoadNodeConnectivitySummary,
   getLoadNodeInitAttempt,
   initializeLoadNode,
   listLoadNodeInitAttempts,
@@ -21,6 +22,7 @@ import {
   trustLoadNodeSshHostKey,
   updateLoadNodeCredentials,
   type LoadNodeAuthType,
+  type LoadNodeConnectivitySummary,
   type LoadNodeInitAttemptDetail,
   type LoadNodeInitAttemptSummary,
   type LoadNodePatchRequest,
@@ -30,6 +32,7 @@ import {
   type LoadNodeSummary,
 } from "../../../app/api-client";
 import { useAuthSession } from "../../../app/auth-session";
+import { LoadNodeConnectivitySummaryCard } from "../components/load-node-connectivity-summary";
 import { loadNodeErrorMessage, statusCopy } from "./load-node-copy";
 
 const pageSize = 20;
@@ -561,6 +564,9 @@ export function LoadNodesPage() {
 
   const [actionError, setActionError] = useState<string | null>(null);
   const [copyFeedback, setCopyFeedback] = useState<string | null>(null);
+  const [connectivitySummary, setConnectivitySummary] =
+    useState<LoadNodeConnectivitySummary>();
+  const [connectivityFailed, setConnectivityFailed] = useState(false);
 
   const [editTarget, setEditTarget] = useState<LoadNodeSummary | null>(null);
   const [editForm, setEditForm] = useState<EditState | null>(null);
@@ -632,6 +638,29 @@ export function LoadNodesPage() {
       void fetchList();
     }
   }, [session, fetchList]);
+
+  useEffect(() => {
+    if (session === null) {
+      return undefined;
+    }
+    let active = true;
+    getLoadNodeConnectivitySummary()
+      .then((summary) => {
+        if (active) {
+          setConnectivitySummary(summary);
+          setConnectivityFailed(false);
+        }
+      })
+      .catch(() => {
+        if (active) {
+          setConnectivitySummary(undefined);
+          setConnectivityFailed(true);
+        }
+      });
+    return () => {
+      active = false;
+    };
+  }, [session]);
 
   const anyInitializing = rows.some((node) => node.status === "initializing");
   useEffect(() => {
@@ -919,6 +948,12 @@ export function LoadNodesPage() {
           Register Load Node
         </a>
       </div>
+
+      <LoadNodeConnectivitySummaryCard
+        isAdmin={role === "admin"}
+        loadFailed={connectivityFailed}
+        summary={connectivitySummary}
+      />
 
       {actionError ? (
         <div className="rounded-xl border border-error/30 bg-error/10 p-4 text-sm text-error">

@@ -43,5 +43,12 @@ skill.
 - The focused verification set is `apps/api/tests/test_p2_01_openapi_step_generation.py`, `tests/contract/test_p2_01_openapi_step_generation_openapi.py`, and the OpenAPI interaction test in `apps/web/src/features/scenarios/scenarios.test.tsx`.
 - P2-01 remains transient: confirming a preview changes only the in-memory Scenario draft; the existing Scenario save/PATCH flow remains the persistence boundary. API Catalog deletion or replacement does not rewrite generated Steps, and API Catalog detail has no generation/import action.
 
+## P2-02 factual backfill
+
+- Session token management lives in `apps/api/app/routes/account_api_tokens.py` with operation IDs `listAccountApiTokens`, `createAccountApiToken`, and `deleteAccountApiToken`; the programmatic routes live in `apps/api/app/routes/public_api.py` under `/public/v1/*`.
+- The public OpenAPI artifact is `packages/contracts/openapi/public-api.openapi.json`, the internal artifact is `packages/contracts/openapi/api.openapi.json`, and the bundled skill snapshot is `packages/ai-skills/surgepilot-public-api/references/public-api.openapi.json`. `make generate-contracts` refreshes both artifacts and the skill snapshot, and `make contracts-stale-check` keeps them aligned.
+- Verification coverage is in `apps/api/tests/test_p2_02_api_tokens_api.py`, `apps/api/tests/test_p2_02_public_api.py`, `apps/api/tests/test_p2_02_load_node_connectivity.py`, `tests/contract/test_p2_02_public_api_openapi.py`, `apps/web/src/features/account/api-keys.test.tsx`, and `apps/web/src/features/load-nodes/load-node-connectivity-summary.test.tsx`.
+- Deployment `.env`/bootstrap/Makefile startup governance, the node-facing startup Make wiring, and the SSH lifecycle verifier (`scripts/verify_p2_02_public_api_lifecycle.py` and `tests/test_p2_02_public_api_lifecycle_verifier.py`) belong to the later startup checkpoint and are not part of R15.
+
 Other P2 slices remain outside this checkpoint and require their own accepted scope and
 implementation history.
