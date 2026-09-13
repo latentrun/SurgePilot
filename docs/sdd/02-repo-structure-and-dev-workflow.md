@@ -1,6 +1,6 @@
 # 02. Repository Structure and Development Workflow
 
-- Current delivery target: P1 governance start / P1 Slice kickoff under `docs/sdd/adr/ADR-0022-p1-governance-start.md`
+- Current delivery target: P2-02 Public API Substrate and P2-03 Env Group Secret under `docs/sdd/adr/ADR-0012-p2-public-api-substrate.md` and `docs/sdd/adr/ADR-0014-p2-env-group-secret.md`
 
 ## Repository layout
 
@@ -46,4 +46,18 @@ Dependencies run in Docker Compose while Web, API, api-worker, and Runner may ru
 
 Each change follows design -> schema/contracts -> backend -> Runner/Web -> generated artifacts -> tests -> factual documentation. Repository scaffolding must not introduce routes, services, dependencies, tables, or configuration for excluded future capability.
 
-P0 is the completed baseline. P1 work may start only when the task names a real P1 Slice SDD and its accepted scope source; each Slice must include verifiable Done When criteria. P1 must not regress the P0 execution loop, P0-Stability, contract-first workflow, Workspace isolation, permission enforcement, Runner/API/Web boundaries, or verification gates. P2 remains out of scope unless separately authorized by an accepted ADR or PRD update.
+P0 is the completed baseline. P1 work may start only when the task names a real P1 Slice SDD and its accepted scope source; each Slice must include verifiable Done When criteria. P1 must not regress the P0 execution loop, P0-Stability, contract-first workflow, Workspace isolation, permission enforcement, Runner/API/Web boundaries, or verification gates. P2 remains out of scope unless separately authorized by an accepted ADR or PRD update; the active P2 Slice surfaces are listed in `docs/sdd/00-product-scope-and-priority.md` §7 and `docs/sdd/slices/P2-README.md`.
+
+## 12. AI Coding / AGENTS.md Workflow
+
+`AGENTS.md` is a synced operational copy of this document and must be updated whenever the active Slice or ADR authorization surface changes.
+
+### 12.1 Required AGENTS.md files
+
+The repository keeps a root `AGENTS.md` plus the application/package-level `AGENTS.md` files created during M0.
+
+### 12.2 Root AGENTS.md minimum content
+
+During P1/P2, `AGENTS.md` must list the current real P1/P2 Slice SDD. Accepted capabilities can only be implemented through the respective real Slice SDD and must not be directly authorized by placeholder or index content. Monitoring can only be implemented through `docs/sdd/slices/P1-00-monitoring.md`; Resource Multi-node only through `docs/sdd/slices/P1-01-resource-multi-node.md` and `docs/sdd/adr/ADR-0009-p1-resource-multi-node.md`; Scenario/Test Plan Polish only through `docs/sdd/slices/P1-04-scenario-testplan-polish.md` as amended by `docs/sdd/adr/ADR-0023-remove-scenario-execution-preview.md`; cURL Import only through `docs/sdd/slices/P1-05-curl-import.md`; Dependency File Preview only through `docs/sdd/slices/P1-06-dependency-preview.md`; Debug HTTP Trace only through `docs/sdd/slices/P1-08-debug-http-trace.md`.
+
+P2-00 API Catalog Scalar can only be implemented through `docs/sdd/adr/ADR-0010-p2-api-catalog-scalar.md` and `docs/sdd/slices/P2-00-api-catalog-scalar.md`. P2-01 OpenAPI Step Generation can only be implemented through `docs/sdd/adr/ADR-0011-p2-openapi-step-generation.md` and `docs/sdd/slices/P2-01-openapi-step-generation.md`. P2-02 Public API Substrate can only be implemented through `docs/sdd/adr/ADR-0012-p2-public-api-substrate.md` and `docs/sdd/slices/P2-02-public-api-substrate.md`. P2-03 Env Group Secret can only be implemented through `docs/sdd/adr/ADR-0014-p2-env-group-secret.md` and `docs/sdd/slices/P2-03-env-group-secret.md`; it authorizes only Env Group typed variables, session masked reads, session-only secret writes, plain-only public DTOs, the required one-time migration, and public API secret exclusion, and does not authorize Snapshot encryption, key rotation, a reveal API, external Secret Manager integration, or a generic redaction framework. No other P2 capability is activated.
