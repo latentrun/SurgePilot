@@ -23,6 +23,12 @@ create/list/revoke stays session-only and self-only; it does not authorize publi
 routes, admin-managed keys, an SDK, an MCP server, a skills runtime, or release publication of the
 skill.
 
+`P2-03-env-group-secret.md` is active through `ADR-0014`. It covers Env Group `plain | secret`
+typed variables, session masked secret read models, session-only secret writes, plain-only public
+DTOs, the required one-time string-map-to-plain migration `0017_p2_03_env_group_secret`, and public
+API secret exclusion. It does not authorize Snapshot encryption, key rotation, a reveal API, or
+external Secret Manager integration.
+
 ## P2-00 factual backfill
 
 - API routes live in `apps/api/app/routes/api_catalog.py` and are registered by `apps/api/app/main.py`.

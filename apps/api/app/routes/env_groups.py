@@ -21,6 +21,7 @@ from app.services.env_groups import (
     delete_env_group,
     duplicate_env_group,
     get_env_group,
+    mask_variables,
     update_env_group,
 )
 
@@ -96,7 +97,7 @@ def detail_response(
 ) -> EnvGroupDetail:
     return EnvGroupDetail(
         **summary_response(group, reference_checker).model_dump(),
-        variables=dict(group.variables or {}),
+        variables=mask_variables(group.variables),
     )
 
 

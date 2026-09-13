@@ -1290,7 +1290,7 @@ export interface components {
             name: string;
             /** Variables */
             variables?: {
-                [key: string]: string;
+                [key: string]: components["schemas"]["EnvGroupPlainVariableWrite"] | components["schemas"]["EnvGroupSecretVariableWrite"];
             };
         };
         EnvGroupDetail: {
@@ -1314,7 +1314,7 @@ export interface components {
             variableCount: number;
             /** Variables */
             variables: {
-                [key: string]: string;
+                [key: string]: components["schemas"]["EnvGroupPlainVariableRead"] | components["schemas"]["EnvGroupSecretVariableRead"];
             };
         };
         EnvGroupListResponse: {
@@ -1334,8 +1334,46 @@ export interface components {
             name?: string | null;
             /** Variables */
             variables?: {
-                [key: string]: string;
+                [key: string]: components["schemas"]["EnvGroupPlainVariableWrite"] | components["schemas"]["EnvGroupSecretVariableWrite"];
             } | null;
+        };
+        EnvGroupPlainVariableRead: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "plain";
+            /** Value */
+            value: string;
+        };
+        EnvGroupPlainVariableWrite: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "plain";
+            /** Value */
+            value: string;
+        };
+        EnvGroupSecretVariableRead: {
+            /** Displayvalue */
+            displayValue: string;
+            /** Hasvalue */
+            hasValue: boolean;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "secret";
+        };
+        EnvGroupSecretVariableWrite: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "secret";
+            /** Value */
+            value?: string;
         };
         EnvGroupSummary: {
             /** Createdat */
