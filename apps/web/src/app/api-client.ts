@@ -12,6 +12,13 @@ export type CsrfTokenResponse = components["schemas"]["CsrfTokenResponse"];
 export type CurrentUser = components["schemas"]["CurrentUserResponse"];
 export type LoginRequest = components["schemas"]["LoginRequest"];
 export type RegisterRequest = components["schemas"]["RegisterRequest"];
+export type ApiTokenCreateRequest =
+  components["schemas"]["ApiTokenCreateRequest"];
+export type ApiTokenCreateResponse =
+  components["schemas"]["ApiTokenCreateResponse"];
+export type ApiTokenListResponse =
+  components["schemas"]["ApiTokenListResponse"];
+export type ApiTokenMetadata = components["schemas"]["ApiTokenMetadata"];
 export type SetupStatus = components["schemas"]["SetupStatusResponse"];
 export type UserSummary = components["schemas"]["UserSummary"];
 export type WorkspaceWriteRequest = components["schemas"]["WorkspaceWriteRequest"];
@@ -1307,4 +1314,29 @@ export function getMonitoringEmbed(params: {
   return request<MonitoringEmbedResponse>(url, {
     headers: { "x-workspace-id": params.workspaceId },
   });
+}
+
+export function listAccountApiTokens() {
+  return request<ApiTokenListResponse>("/v1/account/api-tokens");
+}
+
+export function createAccountApiToken(
+  payload: ApiTokenCreateRequest,
+  csrfToken: string,
+) {
+  return request<ApiTokenCreateResponse>("/v1/account/api-tokens", {
+    method: "POST",
+    headers: { "x-csrf-token": csrfToken },
+    body: JSON.stringify(payload),
+  });
+}
+
+export function deleteAccountApiToken(tokenId: string, csrfToken: string) {
+  return request<void>(
+    `/v1/account/api-tokens/${encodeURIComponent(tokenId)}`,
+    {
+      method: "DELETE",
+      headers: { "x-csrf-token": csrfToken },
+    },
+  );
 }

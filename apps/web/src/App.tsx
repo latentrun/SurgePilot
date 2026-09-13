@@ -26,6 +26,7 @@ import { AdminUsersPage } from "./features/admin/pages/users-page";
 import { AdminSystemSettingsPage } from "./features/admin/pages/system-settings-page";
 import { ApiCatalogListPage } from "./features/api-catalog/pages/api-catalog-list-page";
 import { ApiCatalogDetailPage } from "./features/api-catalog/pages/api-catalog-detail-page";
+import { ApiKeysPage } from "./features/account/pages/api-keys-page";
 
 function LoadingPage() {
   return (
@@ -78,6 +79,8 @@ function AppRoutes({
     page = <RunReportPage runId={runId} />;
   } else if (pathname === "/observability/monitoring") {
     page = <MonitoringPage />;
+  } else if (pathname === "/account/api-keys") {
+    page = <ApiKeysPage />;
   } else if (pathname === "/admin/setup-status") {
     page = <AdminSetupStatusPage />;
   } else if (pathname === "/admin/workspaces") {
