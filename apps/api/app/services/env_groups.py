@@ -1,7 +1,8 @@
 import copy
 import re
-from typing import Any
+from typing import Any, Literal, TypedDict
 
+from pydantic import BaseModel
 from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
@@ -16,6 +17,14 @@ MAX_VARIABLES = 200
 MAX_NAME_LENGTH = 120
 MAX_DESCRIPTION_LENGTH = 500
 MAX_VARIABLE_VALUE_BYTES = 4096
+MASKED_SECRET_DISPLAY_VALUE = "********"
+
+EnvGroupVariableType = Literal["plain", "secret"]
+
+
+class StoredEnvGroupVariable(TypedDict):
+    type: EnvGroupVariableType
+    value: str
 
 
 def field_error(field: str, message: str, code: str = "INVALID_FIELD") -> dict[str, str]:
@@ -52,9 +61,41 @@ def variable_field_path(key: str) -> str:
     return f"variables[{key}]"
 
 
+def _entry_to_dict(entry: Any) -> dict[str, Any] | None:
+    if isinstance(entry, BaseModel):
+        return entry.model_dump(exclude_unset=True, by_alias=False)
+    if isinstance(entry, dict):
+        return dict(entry)
+    return None
+
+
+def _validate_value(value: Any, *, path: str, details: list[dict[str, str]]) -> str | None:
+    if not isinstance(value, str):
+        details.append(field_error(path, "Variable value must be a string."))
+        return None
+    if len(value.encode("utf-8")) > MAX_VARIABLE_VALUE_BYTES:
+        details.append(field_error(path, "Variable value must be 4096 bytes or less."))
+        return None
+    return value
+
+
+def _stored_secret_value(entry: Any) -> str | None:
+    if (
+        isinstance(entry, dict)
+        and entry.get("type") == "secret"
+        and isinstance(entry.get("value"), str)
+    ):
+        return entry["value"]
+    return None
+
+
 def normalize_variables(
     value: Any,
-) -> dict[str, str]:
+    *,
+    existing_variables: dict[str, Any] | None = None,
+    allow_secret: bool = True,
+    allow_secret_preserve: bool = False,
+) -> dict[str, StoredEnvGroupVariable]:
     if value is None:
         raise validation_error([field_error("variables", "Variables are required when present.")])
     if not isinstance(value, dict):
@@ -65,39 +106,142 @@ def normalize_variables(
         )
 
     details: list[dict[str, str]] = []
-    variables: dict[str, str] = {}
-    for key, val in value.items():
+    variables: dict[str, StoredEnvGroupVariable] = {}
+    existing = existing_variables or {}
+    for key, raw_entry in value.items():
         key_text = str(key)
         path = variable_field_path(key_text)
         if not isinstance(key, str) or not VARIABLE_KEY_PATTERN.fullmatch(key):
             details.append(field_error(path, "Variable key is invalid."))
             continue
 
-        if not isinstance(val, str):
-            details.append(field_error(path, "Variable value must be a string."))
+        entry = _entry_to_dict(raw_entry)
+        if entry is None:
+            details.append(field_error(path, "Variable entry must be an object."))
+            continue
+        entry_type = entry.get("type")
+        if entry_type not in {"plain", "secret"}:
+            details.append(field_error(f"{path}.type", "Variable type must be plain or secret."))
+            continue
+        if entry_type == "secret" and not allow_secret:
+            details.append(field_error(f"{path}.type", "Public API supports plain variables only."))
             continue
 
-        if len(val.encode("utf-8")) > MAX_VARIABLE_VALUE_BYTES:
-            details.append(field_error(path, "Variable value must be 4096 bytes or less."))
+        allowed_fields = {"type", "value"}
+        unknown = sorted(set(entry) - allowed_fields)
+        if unknown:
+            details.extend(
+                field_error(f"{path}.{field}", "Unknown variable entry field.") for field in unknown
+            )
             continue
 
-        variables[key] = val
+        if entry_type == "plain":
+            if "value" not in entry:
+                details.append(field_error(f"{path}.value", "Plain variable value is required."))
+                continue
+            normalized_value = _validate_value(
+                entry.get("value"), path=f"{path}.value", details=details
+            )
+            if normalized_value is not None:
+                variables[key] = {"type": "plain", "value": normalized_value}
+            continue
+
+        if "value" in entry:
+            normalized_value = _validate_value(
+                entry.get("value"), path=f"{path}.value", details=details
+            )
+            if normalized_value is not None:
+                variables[key] = {"type": "secret", "value": normalized_value}
+            continue
+
+        preserved_value = _stored_secret_value(existing.get(key))
+        if allow_secret_preserve and preserved_value is not None:
+            variables[key] = {"type": "secret", "value": preserved_value}
+        else:
+            details.append(field_error(f"{path}.value", "Secret variable value is required."))
 
     if details:
         raise validation_error(details)
     return variables
 
 
-def validate_variables(value: Any) -> dict[str, str]:
+def validate_variables(value: Any) -> dict[str, StoredEnvGroupVariable]:
     return normalize_variables(value)
 
 
+def validate_public_variables(value: Any) -> dict[str, StoredEnvGroupVariable]:
+    return normalize_variables(value, allow_secret=False)
+
+
+def mask_variables(variables: dict[str, Any] | None) -> dict[str, dict[str, Any]]:
+    result: dict[str, dict[str, Any]] = {}
+    for key, raw_entry in dict(variables or {}).items():
+        entry = raw_entry if isinstance(raw_entry, dict) else {}
+        if entry.get("type") == "secret":
+            result[str(key)] = {
+                "type": "secret",
+                "hasValue": isinstance(entry.get("value"), str),
+                "displayValue": MASKED_SECRET_DISPLAY_VALUE,
+            }
+        elif entry.get("type") == "plain" and isinstance(entry.get("value"), str):
+            result[str(key)] = {"type": "plain", "value": entry["value"]}
+    return result
+
+
+def public_plain_variables(variables: dict[str, Any] | None) -> dict[str, dict[str, str]]:
+    result: dict[str, dict[str, str]] = {}
+    for key, raw_entry in dict(variables or {}).items():
+        entry = raw_entry if isinstance(raw_entry, dict) else {}
+        if entry.get("type") == "plain" and isinstance(entry.get("value"), str):
+            result[str(key)] = {"type": "plain", "value": entry["value"]}
+    return result
+
+
 def internal_env_values(variables: dict[str, Any] | None) -> dict[str, str]:
-    return {str(k): str(v) for k, v in dict(variables or {}).items() if isinstance(v, str)}
+    values: dict[str, str] = {}
+    for key, raw_entry in dict(variables or {}).items():
+        if isinstance(raw_entry, str):
+            # Internal snapshots use a flat env map; this is not a runtime write contract
+            # for env_groups.variables after P2-03 migration.
+            values[str(key)] = raw_entry
+            continue
+        entry = raw_entry if isinstance(raw_entry, dict) else {}
+        if entry.get("type") in {"plain", "secret"} and isinstance(entry.get("value"), str):
+            values[str(key)] = entry["value"]
+    return values
 
 
 def env_group_runtime_values(group: EnvGroup | None) -> dict[str, str]:
     return internal_env_values(group.variables if group is not None else None)
+
+
+def env_group_has_secret_variables(group: EnvGroup | None) -> bool:
+    if group is None:
+        return False
+    return any(
+        isinstance(entry, dict) and entry.get("type") == "secret"
+        for entry in dict(group.variables or {}).values()
+    )
+
+
+def reject_public_secret_bearing_group(group: EnvGroup) -> None:
+    if env_group_has_secret_variables(group):
+        raise validation_error(
+            [
+                field_error(
+                    "variables",
+                    "Public API cannot modify Env Groups that contain secret variables.",
+                )
+            ]
+        )
+
+
+def raise_public_secret_copy_denied() -> None:
+    raise AppError(
+        "ENV_GROUP_SECRET_PUBLIC_COPY_DENIED",
+        "Public API cannot copy Env Groups that contain secret variables.",
+        409,
+    )
 
 
 def _raise_name_conflict() -> None:
@@ -164,6 +308,7 @@ def create_env_group(
     name: str,
     description: str | None,
     variables: Any,
+    allow_secret: bool = True,
 ) -> EnvGroup:
     now = utc_now()
     normalized_name = normalize_name(name)
@@ -173,7 +318,7 @@ def create_env_group(
         workspace_id=workspace_id,
         name=normalized_name,
         description=normalize_description(description),
-        variables=normalize_variables(variables),
+        variables=normalize_variables(variables, allow_secret=allow_secret),
         created_by=actor_user_id,
         updated_by=actor_user_id,
         created_at=now,
@@ -202,6 +347,8 @@ def update_env_group(
     group: EnvGroup,
     actor_user_id: str,
     fields: dict[str, Any],
+    allow_secret: bool = True,
+    allow_secret_preserve: bool = True,
 ) -> EnvGroup:
     if "name" in fields:
         if fields["name"] is None:
@@ -217,7 +364,12 @@ def update_env_group(
     if "description" in fields:
         group.description = normalize_description(fields["description"])
     if "variables" in fields:
-        group.variables = normalize_variables(fields["variables"])
+        group.variables = normalize_variables(
+            fields["variables"],
+            existing_variables=group.variables,
+            allow_secret=allow_secret,
+            allow_secret_preserve=allow_secret_preserve,
+        )
     group.updated_by = actor_user_id
     group.updated_at = utc_now()
     try:

@@ -70,6 +70,11 @@ def test_public_openapi_excludes_token_management_and_secret_material() -> None:
         "LoadNodeConnectivitySummary",
         "loadNodeApiBaseUrl",
         "publicListEnvGroups",
+        "EnvGroupSecretVariableRead",
+        "EnvGroupSecretVariableWrite",
+        "hasValue",
+        "displayValue",
+        "********",
         "/v1/account/api-tokens",
         "/api/v1/account/api-tokens",
     ]
@@ -113,15 +118,18 @@ def test_public_openapi_env_group_plain_only_contract() -> None:
     document = load(PUBLIC_OPENAPI)
     schemas = document["components"]["schemas"]
 
+    assert "EnvGroupPlainVariableWrite" in schemas
     assert "PublicEnvGroupDetail" in schemas
-    assert "PublicEnvGroupCreateRequest" in schemas
-    assert "PublicEnvGroupPatchRequest" in schemas
+    assert "EnvGroupSecretVariableWrite" not in schemas
+    assert "EnvGroupSecretVariableRead" not in schemas
     create_variables = schemas["PublicEnvGroupCreateRequest"]["properties"]["variables"]
-    assert create_variables["additionalProperties"] == {"type": "string"}
-    patch_variables = schemas["PublicEnvGroupPatchRequest"]["properties"]["variables"]
-    assert patch_variables["anyOf"][0]["additionalProperties"] == {"type": "string"}
+    assert create_variables["additionalProperties"] == {
+        "$ref": "#/components/schemas/EnvGroupPlainVariableWrite"
+    }
     response_variables = schemas["PublicEnvGroupDetail"]["properties"]["variables"]
-    assert response_variables["additionalProperties"] == {"type": "string"}
+    assert response_variables["additionalProperties"] == {
+        "$ref": "#/components/schemas/EnvGroupPlainVariableRead"
+    }
 
 
 def test_public_openapi_dependency_sla_and_resource_contracts_are_explicit() -> None:

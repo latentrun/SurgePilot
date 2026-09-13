@@ -38,9 +38,22 @@ def test_env_group_openapi_schemas_separate_summary_and_detail() -> None:
     variable_write = schemas["EnvGroupCreateRequest"]["properties"]["variables"][
         "additionalProperties"
     ]
-    assert variable_write == {"type": "string"}
+    assert variable_write["oneOf"] == [
+        {"$ref": "#/components/schemas/EnvGroupPlainVariableWrite"},
+        {"$ref": "#/components/schemas/EnvGroupSecretVariableWrite"},
+    ]
+    assert variable_write["discriminator"]["propertyName"] == "type"
     variable_read = schemas["EnvGroupDetail"]["properties"]["variables"]["additionalProperties"]
-    assert variable_read == {"type": "string"}
+    assert variable_read["oneOf"] == [
+        {"$ref": "#/components/schemas/EnvGroupPlainVariableRead"},
+        {"$ref": "#/components/schemas/EnvGroupSecretVariableRead"},
+    ]
+    assert "hasValue" in schemas["EnvGroupSecretVariableRead"]["properties"]
+    assert "displayValue" in schemas["EnvGroupSecretVariableRead"]["properties"]
+    secret_write_value = schemas["EnvGroupSecretVariableWrite"]["properties"]["value"]
+    assert secret_write_value["type"] == "string"
+    assert "anyOf" not in secret_write_value
+    assert "default" not in secret_write_value
 
 
 def test_env_group_openapi_documents_workspace_and_csrf_headers() -> None:
@@ -81,4 +94,5 @@ def test_env_group_error_codes_are_registered() -> None:
     assert {
         "ENV_GROUP_NAME_CONFLICT",
         "ENV_GROUP_IN_USE",
+        "ENV_GROUP_SECRET_PUBLIC_COPY_DENIED",
     }.issubset(codes)

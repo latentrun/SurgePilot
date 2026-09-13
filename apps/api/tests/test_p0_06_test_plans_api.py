@@ -133,7 +133,7 @@ async def create_env_group(
     client: AsyncClient, csrf: str, workspace_id: str, *, variables: dict | None = None
 ) -> str:
     if variables is None:
-        variables = {"base_url": "https://api.example.internal"}
+        variables = {"base_url": {"type": "plain", "value": "https://api.example.internal"}}
     response = await client.post(
         "/api/v1/env-groups",
         headers={"x-csrf-token": csrf, "x-workspace-id": workspace_id},
@@ -669,7 +669,7 @@ async def test_test_plan_run_now_rejects_missing_env_variable(
         workspace_id=workspace_id,
         user_id=user_id,
         host_prefix="plan-variable-node",
-        env_group_variables={"other": "https://else.internal"},
+        env_group_variables={"other": {"type": "plain", "value": "https://else.internal"}},
     )
     run_now = await client.post(
         "/api/v1/runs",

@@ -148,7 +148,7 @@ async def create_debug_env_group(
         json={
             "name": name,
             "description": None,
-            "variables": {"base_url": "https://api.example.internal"},
+            "variables": {"base_url": {"type": "plain", "value": "https://api.example.internal"}},
         },
     )
     assert env_response.status_code == 201
@@ -264,7 +264,7 @@ async def test_debug_run_creates_snapshot_dedups_and_blocks_busy_node(
         json={
             "name": "Staging",
             "description": None,
-            "variables": {"base_url": "https://api.example.internal"},
+            "variables": {"base_url": {"type": "plain", "value": "https://api.example.internal"}},
         },
     )
     assert env_response.status_code == 201

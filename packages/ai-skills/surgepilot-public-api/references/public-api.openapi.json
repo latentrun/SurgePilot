@@ -86,6 +86,45 @@
         "title": "DependencyFileSummary",
         "type": "object"
       },
+      "EnvGroupPlainVariableRead": {
+        "properties": {
+          "type": {
+            "const": "plain",
+            "title": "Type",
+            "type": "string"
+          },
+          "value": {
+            "title": "Value",
+            "type": "string"
+          }
+        },
+        "required": [
+          "type",
+          "value"
+        ],
+        "title": "EnvGroupPlainVariableRead",
+        "type": "object"
+      },
+      "EnvGroupPlainVariableWrite": {
+        "additionalProperties": false,
+        "properties": {
+          "type": {
+            "const": "plain",
+            "title": "Type",
+            "type": "string"
+          },
+          "value": {
+            "title": "Value",
+            "type": "string"
+          }
+        },
+        "required": [
+          "type",
+          "value"
+        ],
+        "title": "EnvGroupPlainVariableWrite",
+        "type": "object"
+      },
       "ErrorResponse": {
         "properties": {
           "code": {
@@ -349,7 +388,7 @@
           },
           "variables": {
             "additionalProperties": {
-              "type": "string"
+              "$ref": "#/components/schemas/EnvGroupPlainVariableWrite"
             },
             "title": "Variables",
             "type": "object"
@@ -408,7 +447,7 @@
           },
           "variables": {
             "additionalProperties": {
-              "type": "string"
+              "$ref": "#/components/schemas/EnvGroupPlainVariableRead"
             },
             "title": "Variables",
             "type": "object"
@@ -456,7 +495,7 @@
             "anyOf": [
               {
                 "additionalProperties": {
-                  "type": "string"
+                  "$ref": "#/components/schemas/EnvGroupPlainVariableWrite"
                 },
                 "type": "object"
               },
@@ -3976,6 +4015,7 @@
     "x-surgepilot-error-codes": [
       "ENV_GROUP_NAME_CONFLICT",
       "ENV_GROUP_IN_USE",
+      "ENV_GROUP_SECRET_PUBLIC_COPY_DENIED",
       "INVALID_FILENAME",
       "DEPENDENCY_FILE_NAME_CONFLICT",
       "PAYLOAD_TOO_LARGE",

@@ -83,8 +83,8 @@ async def test_create_list_get_patch_duplicate_and_delete_env_group(
             "name": "  Staging  ",
             "description": "  Staging variables  ",
             "variables": {
-                "TOKEN": "fake-token",
-                "BASE_URL": "https://example.test",
+                "TOKEN": {"type": "plain", "value": "fake-token"},
+                "BASE_URL": {"type": "plain", "value": "https://example.test"},
             },
         },
     )
@@ -93,8 +93,8 @@ async def test_create_list_get_patch_duplicate_and_delete_env_group(
     assert body["name"] == "Staging"
     assert body["description"] == "Staging variables"
     assert body["variables"] == {
-        "TOKEN": "fake-token",
-        "BASE_URL": "https://example.test",
+        "TOKEN": {"type": "plain", "value": "fake-token"},
+        "BASE_URL": {"type": "plain", "value": "https://example.test"},
     }
     assert body["variableCount"] == 2
     assert body["inUse"] is False
@@ -108,20 +108,23 @@ async def test_create_list_get_patch_duplicate_and_delete_env_group(
 
     detail = await client.get(f"/api/v1/env-groups/{body['id']}")
     assert detail.status_code == 200
-    assert detail.json()["variables"]["BASE_URL"] == "https://example.test"
+    assert detail.json()["variables"]["BASE_URL"] == {
+        "type": "plain",
+        "value": "https://example.test",
+    }
 
     patched = await client.patch(
         f"/api/v1/env-groups/{body['id']}",
         headers={"x-csrf-token": csrf_token, "content-type": "application/merge-patch+json"},
         json={
             "description": None,
-            "variables": {"BASE_URL": "https://staging.example.test"},
+            "variables": {"BASE_URL": {"type": "plain", "value": "https://staging.example.test"}},
         },
     )
     assert patched.status_code == 200
     assert patched.json()["description"] is None
     assert patched.json()["variables"] == {
-        "BASE_URL": "https://staging.example.test"
+        "BASE_URL": {"type": "plain", "value": "https://staging.example.test"}
     }
 
     preserved = await client.patch(
@@ -131,7 +134,7 @@ async def test_create_list_get_patch_duplicate_and_delete_env_group(
     )
     assert preserved.status_code == 200
     assert preserved.json()["variables"] == {
-        "BASE_URL": "https://staging.example.test"
+        "BASE_URL": {"type": "plain", "value": "https://staging.example.test"}
     }
 
     duplicate = await client.post(
@@ -141,7 +144,7 @@ async def test_create_list_get_patch_duplicate_and_delete_env_group(
     assert duplicate.status_code == 201
     assert duplicate.json()["name"] == "Copy of Staging API"
     assert duplicate.json()["variables"] == {
-        "BASE_URL": "https://staging.example.test"
+        "BASE_URL": {"type": "plain", "value": "https://staging.example.test"}
     }
 
     deleted = await client.delete(
@@ -165,7 +168,7 @@ async def test_env_group_validation_conflict_query_and_patch_semantics(
         headers={"x-csrf-token": csrf_token},
         json={
             "name": "Production",
-            "variables": {"BASE_URL": "https://example.test"},
+            "variables": {"BASE_URL": {"type": "plain", "value": "https://example.test"}},
         },
     )
     assert created.status_code == 201
@@ -182,7 +185,7 @@ async def test_env_group_validation_conflict_query_and_patch_semantics(
     invalid_variables = await client.post(
         "/api/v1/env-groups",
         headers={"x-csrf-token": csrf_token, "x-workspace-id": workspace_id},
-        json={"name": "Invalid", "variables": {"bad-key": "value"}},
+        json={"name": "Invalid", "variables": {"bad-key": {"type": "plain", "value": "value"}}},
     )
     assert invalid_variables.status_code == 422
     assert invalid_variables.json()["details"][0]["field"] == "variables[bad-key]"

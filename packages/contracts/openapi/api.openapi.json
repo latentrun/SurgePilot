@@ -1174,7 +1174,21 @@
           },
           "variables": {
             "additionalProperties": {
-              "type": "string"
+              "discriminator": {
+                "mapping": {
+                  "plain": "#/components/schemas/EnvGroupPlainVariableWrite",
+                  "secret": "#/components/schemas/EnvGroupSecretVariableWrite"
+                },
+                "propertyName": "type"
+              },
+              "oneOf": [
+                {
+                  "$ref": "#/components/schemas/EnvGroupPlainVariableWrite"
+                },
+                {
+                  "$ref": "#/components/schemas/EnvGroupSecretVariableWrite"
+                }
+              ]
             },
             "title": "Variables",
             "type": "object"
@@ -1233,7 +1247,21 @@
           },
           "variables": {
             "additionalProperties": {
-              "type": "string"
+              "discriminator": {
+                "mapping": {
+                  "plain": "#/components/schemas/EnvGroupPlainVariableRead",
+                  "secret": "#/components/schemas/EnvGroupSecretVariableRead"
+                },
+                "propertyName": "type"
+              },
+              "oneOf": [
+                {
+                  "$ref": "#/components/schemas/EnvGroupPlainVariableRead"
+                },
+                {
+                  "$ref": "#/components/schemas/EnvGroupSecretVariableRead"
+                }
+              ]
             },
             "title": "Variables",
             "type": "object"
@@ -1312,7 +1340,21 @@
             "anyOf": [
               {
                 "additionalProperties": {
-                  "type": "string"
+                  "discriminator": {
+                    "mapping": {
+                      "plain": "#/components/schemas/EnvGroupPlainVariableWrite",
+                      "secret": "#/components/schemas/EnvGroupSecretVariableWrite"
+                    },
+                    "propertyName": "type"
+                  },
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/EnvGroupPlainVariableWrite"
+                    },
+                    {
+                      "$ref": "#/components/schemas/EnvGroupSecretVariableWrite"
+                    }
+                  ]
                 },
                 "type": "object"
               },
@@ -1324,6 +1366,88 @@
           }
         },
         "title": "EnvGroupPatchRequest",
+        "type": "object"
+      },
+      "EnvGroupPlainVariableRead": {
+        "properties": {
+          "type": {
+            "const": "plain",
+            "title": "Type",
+            "type": "string"
+          },
+          "value": {
+            "title": "Value",
+            "type": "string"
+          }
+        },
+        "required": [
+          "type",
+          "value"
+        ],
+        "title": "EnvGroupPlainVariableRead",
+        "type": "object"
+      },
+      "EnvGroupPlainVariableWrite": {
+        "additionalProperties": false,
+        "properties": {
+          "type": {
+            "const": "plain",
+            "title": "Type",
+            "type": "string"
+          },
+          "value": {
+            "title": "Value",
+            "type": "string"
+          }
+        },
+        "required": [
+          "type",
+          "value"
+        ],
+        "title": "EnvGroupPlainVariableWrite",
+        "type": "object"
+      },
+      "EnvGroupSecretVariableRead": {
+        "properties": {
+          "displayValue": {
+            "title": "Displayvalue",
+            "type": "string"
+          },
+          "hasValue": {
+            "title": "Hasvalue",
+            "type": "boolean"
+          },
+          "type": {
+            "const": "secret",
+            "title": "Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "type",
+          "hasValue",
+          "displayValue"
+        ],
+        "title": "EnvGroupSecretVariableRead",
+        "type": "object"
+      },
+      "EnvGroupSecretVariableWrite": {
+        "additionalProperties": false,
+        "properties": {
+          "type": {
+            "const": "secret",
+            "title": "Type",
+            "type": "string"
+          },
+          "value": {
+            "title": "Value",
+            "type": "string"
+          }
+        },
+        "required": [
+          "type"
+        ],
+        "title": "EnvGroupSecretVariableWrite",
         "type": "object"
       },
       "EnvGroupSummary": {
@@ -7206,6 +7330,7 @@
     "x-surgepilot-error-codes": [
       "ENV_GROUP_NAME_CONFLICT",
       "ENV_GROUP_IN_USE",
+      "ENV_GROUP_SECRET_PUBLIC_COPY_DENIED",
       "INVALID_FILENAME",
       "DEPENDENCY_FILE_NAME_CONFLICT",
       "PAYLOAD_TOO_LARGE",

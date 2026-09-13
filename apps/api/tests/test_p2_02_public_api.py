@@ -748,3 +748,67 @@ async def test_public_config_crud_and_run_create_use_existing_services(
         f"/api/public/v1/test-plans/{plan_id}", headers=auth_header(config_token)
     )
     assert plan_deleted.status_code == 409
+
+
+@pytest.mark.anyio
+async def test_public_env_group_secret_inputs_are_rejected_and_never_echoed(
+    client: AsyncClient,
+) -> None:
+    csrf, workspace_id, _user_id = await register(client, "public-secret-exclusion@example.com")
+    config_token = await create_pat(client, csrf, [workspace_id], scopes=["config:write"])
+
+    secret_create = await client.post(
+        "/api/public/v1/env-groups",
+        headers=auth_header(config_token),
+        json={
+            "name": "Public Secret Rejected",
+            "variables": {"API_TOKEN": {"type": "secret", "value": "should-not-enter"}},
+        },
+    )
+    assert secret_create.status_code == 422
+
+    plain_created = await client.post(
+        "/api/public/v1/env-groups",
+        headers=auth_header(config_token),
+        json={
+            "name": "Public Plain Only",
+            "variables": {"BASE_URL": {"type": "plain", "value": "https://example.test"}},
+        },
+    )
+    assert plain_created.status_code == 201
+    plain_text = plain_created.text
+    assert "displayValue" not in plain_text
+    assert "hasValue" not in plain_text
+    assert "should-not-enter" not in plain_text
+
+    secret_patch = await client.patch(
+        f"/api/public/v1/env-groups/{plain_created.json()['id']}",
+        headers=auth_header(config_token),
+        json={"variables": {"API_TOKEN": {"type": "secret", "value": "should-not-enter"}}},
+    )
+    assert secret_patch.status_code == 422
+
+    session_secret = await client.post(
+        "/api/v1/env-groups",
+        headers={"x-csrf-token": csrf, "x-workspace-id": workspace_id},
+        json={
+            "name": "Session Secret Source",
+            "variables": {"API_TOKEN": {"type": "secret", "value": "session-secret"}},
+        },
+    )
+    assert session_secret.status_code == 201
+    source_id = session_secret.json()["id"]
+
+    secret_copy = await client.post(
+        f"/api/public/v1/env-groups/{source_id}/copy",
+        headers=auth_header(config_token),
+    )
+    assert secret_copy.status_code == 409
+    assert secret_copy.json()["code"] == "ENV_GROUP_SECRET_PUBLIC_COPY_DENIED"
+
+    secret_group_patch = await client.patch(
+        f"/api/public/v1/env-groups/{source_id}",
+        headers=auth_header(config_token),
+        json={"variables": {"BASE_URL": {"type": "plain", "value": "https://example.test"}}},
+    )
+    assert secret_group_patch.status_code == 422

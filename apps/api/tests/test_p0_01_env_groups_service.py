@@ -13,9 +13,11 @@ from app.services.env_groups import (
     create_env_group,
     duplicate_name_for,
     duplicate_env_group,
+    env_group_has_secret_variables,
     normalize_description,
     normalize_name,
     normalize_variables,
+    validate_public_variables,
     validate_variables,
 )
 
@@ -57,18 +59,18 @@ def test_env_group_name_and_description_validation() -> None:
 def test_variable_validation_rules_and_field_paths() -> None:
     assert validate_variables(
         {
-            "BASE_URL": "https://example.test",
-            "EMPTY": "",
+            "BASE_URL": {"type": "plain", "value": "https://example.test"},
+            "EMPTY": {"type": "plain", "value": ""},
         }
     ) == {
-        "BASE_URL": "https://example.test",
-        "EMPTY": "",
+        "BASE_URL": {"type": "plain", "value": "https://example.test"},
+        "EMPTY": {"type": "plain", "value": ""},
     }
 
     invalid_payload = {
-        "bad-key": "value",
-        "NUMBER": 1,
-        "TOO_LONG": "x" * 4097,
+        "bad-key": {"type": "plain", "value": "value"},
+        "NUMBER": {"type": "plain", "value": 1},
+        "TOO_LONG": {"type": "plain", "value": "x" * 4097},
     }
     with pytest.raises(AppError) as invalid:
         validate_variables(invalid_payload)
@@ -76,17 +78,68 @@ def test_variable_validation_rules_and_field_paths() -> None:
     assert invalid.value.code == "VALIDATION_ERROR"
     assert {detail["field"] for detail in invalid.value.details or []} == {
         "variables[bad-key]",
-        "variables.NUMBER",
-        "variables.TOO_LONG",
+        "variables.NUMBER.value",
+        "variables.TOO_LONG.value",
     }
 
     with pytest.raises(AppError) as too_many:
-        validate_variables({f"KEY_{index}": "" for index in range(201)})
+        validate_variables({f"KEY_{index}": {"type": "plain", "value": ""} for index in range(201)})
     assert too_many.value.details[0]["field"] == "variables"
 
     with pytest.raises(AppError) as not_object:
         validate_variables(["KEY=value"])
     assert not_object.value.details[0]["field"] == "variables"
+
+
+def test_typed_variable_validation_rejects_invalid_entry_shapes() -> None:
+    with pytest.raises(AppError) as invalid_entries:
+        validate_variables(
+            {
+                "OLD": "legacy-value",
+                "TYPE": {"type": "protected", "value": "value"},
+                "UNKNOWN": {"type": "secret", "value": "secret-value", "displayValue": "********"},
+                "MISSING": {"type": "plain"},
+            }
+        )
+
+    assert {detail["field"] for detail in invalid_entries.value.details or []} == {
+        "variables.OLD",
+        "variables.TYPE.type",
+        "variables.UNKNOWN.displayValue",
+        "variables.MISSING.value",
+    }
+    assert "secret-value" not in str(invalid_entries.value.details)
+
+
+def test_secret_preserve_requires_existing_secret_value() -> None:
+    with pytest.raises(AppError) as missing_existing_secret:
+        normalize_variables(
+            {"TOKEN": {"type": "secret"}},
+            existing_variables={"TOKEN": {"type": "plain", "value": "plain-value"}},
+            allow_secret_preserve=True,
+        )
+
+    assert missing_existing_secret.value.details == [
+        {
+            "field": "variables.TOKEN.value",
+            "code": "INVALID_FIELD",
+            "message": "Secret variable value is required.",
+        }
+    ]
+
+
+def test_public_variable_validation_rejects_secret_and_none_secret_check_is_false() -> None:
+    with pytest.raises(AppError) as public_secret:
+        validate_public_variables({"TOKEN": {"type": "secret", "value": "secret-value"}})
+
+    assert public_secret.value.details == [
+        {
+            "field": "variables.TOKEN.type",
+            "code": "INVALID_FIELD",
+            "message": "Public API supports plain variables only.",
+        }
+    ]
+    assert env_group_has_secret_variables(None) is False
 
 
 def test_duplicate_name_generation_preserves_prefix_suffix_and_length() -> None:
@@ -108,7 +161,7 @@ def test_duplicate_env_group_retries_generated_name_conflict(
         name="Staging",
         workspace_id=DEFAULT_WORKSPACE_ID,
         description=None,
-        variables={"BASE_URL": "https://example.test"},
+        variables={"BASE_URL": {"type": "plain", "value": "https://example.test"}},
     )
 
     monkeypatch.setattr(
@@ -141,7 +194,7 @@ def test_duplicate_env_group_propagates_unexpected_create_error(
         name="Staging",
         workspace_id=DEFAULT_WORKSPACE_ID,
         description=None,
-        variables={"BASE_URL": "https://example.test"},
+        variables={"BASE_URL": {"type": "plain", "value": "https://example.test"}},
     )
 
     monkeypatch.setattr(
@@ -172,7 +225,7 @@ def test_duplicate_env_group_reports_conflict_after_retry_budget(
         name="Staging",
         workspace_id=DEFAULT_WORKSPACE_ID,
         description=None,
-        variables={"BASE_URL": "https://example.test"},
+        variables={"BASE_URL": {"type": "plain", "value": "https://example.test"}},
     )
 
     monkeypatch.setattr(
@@ -270,6 +323,35 @@ def test_reference_checker_is_false_for_p0_01() -> None:
     checker = EnvGroupReferenceChecker()
 
     assert checker.is_in_use("01HZX3Y9M0E9W7Z6M5QK9S8P7A") is False
+
+
+def test_reference_checker_passes_workspace_scope_to_test_plan_checker(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    captured: dict[str, str] = {}
+
+    def fake_test_plan_references_env_group(db, *, workspace_id, env_group_id):  # noqa: ANN001
+        captured["db"] = db.name
+        captured["workspace_id"] = workspace_id
+        captured["env_group_id"] = env_group_id
+        return True
+
+    monkeypatch.setattr(
+        "app.services.test_plans.test_plan_references_env_group",
+        fake_test_plan_references_env_group,
+    )
+
+    checker = EnvGroupReferenceChecker(
+        SimpleNamespace(name="db"),
+        workspace_id="01HZX3Y9M0E9W7Z6M5QK9S8P7W",
+    )
+
+    assert checker.is_in_use("01HZX3Y9M0E9W7Z6M5QK9S8P7E") is True
+    assert captured == {
+        "db": "db",
+        "workspace_id": "01HZX3Y9M0E9W7Z6M5QK9S8P7W",
+        "env_group_id": "01HZX3Y9M0E9W7Z6M5QK9S8P7E",
+    }
 
 
 def test_case_insensitive_name_uniqueness_is_workspace_scoped(db_session: Session) -> None:

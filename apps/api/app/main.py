@@ -95,6 +95,7 @@ def custom_openapi() -> dict:
         [
             "ENV_GROUP_NAME_CONFLICT",
             "ENV_GROUP_IN_USE",
+            "ENV_GROUP_SECRET_PUBLIC_COPY_DENIED",
             "INVALID_FILENAME",
             "DEPENDENCY_FILE_NAME_CONFLICT",
             "PAYLOAD_TOO_LARGE",
