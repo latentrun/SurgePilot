@@ -91,7 +91,11 @@ from app.services.env_groups import (
     create_env_group,
     delete_env_group,
     duplicate_env_group,
+    env_group_has_secret_variables,
     get_env_group,
+    public_plain_variables,
+    raise_public_secret_copy_denied,
+    reject_public_secret_bearing_group,
     update_env_group,
 )
 from app.services.load_nodes import visible_node_filters
@@ -126,7 +130,7 @@ RunIdPath = Annotated[str, Path(alias="runId")]
 def public_env_group_detail(
     group, checker: EnvGroupReferenceChecker | None = None
 ) -> PublicEnvGroupDetail:
-    variables = dict(group.variables or {})
+    variables = public_plain_variables(group.variables)
     summary = env_group_summary_response(group, checker).model_dump()
     summary["variable_count"] = len(variables)
     return PublicEnvGroupDetail(
@@ -319,6 +323,7 @@ def public_create_env_group(
         name=payload.name,
         description=payload.description,
         variables=payload.variables,
+        allow_secret=False,
     )
     db.commit()
     attach_workspace_header(response, context.workspace.id)
@@ -348,11 +353,15 @@ def public_patch_env_group(
 ) -> PublicEnvGroupDetail:
     validate_env_group_id(envGroupId)
     group = get_env_group(db, workspace_id=context.workspace.id, env_group_id=envGroupId)
+    if payload.model_fields_set and "variables" in payload.model_fields_set:
+        reject_public_secret_bearing_group(group)
     updated = update_env_group(
         db,
         group=group,
         actor_user_id=context.user.id,
         fields=payload.model_dump(exclude_unset=True, by_alias=False),
+        allow_secret=False,
+        allow_secret_preserve=False,
     )
     checker = EnvGroupReferenceChecker(db, workspace_id=context.workspace.id)
     db.commit()
@@ -408,6 +417,8 @@ def public_copy_env_group(
 ) -> PublicEnvGroupDetail:
     validate_env_group_id(envGroupId)
     source = get_env_group(db, workspace_id=context.workspace.id, env_group_id=envGroupId)
+    if env_group_has_secret_variables(source):
+        raise_public_secret_copy_denied()
     duplicated = duplicate_env_group(db, source=source, actor_user_id=context.user.id)
     db.commit()
     attach_workspace_header(response, context.workspace.id)

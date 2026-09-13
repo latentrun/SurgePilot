@@ -7,7 +7,8 @@
       ],
       "responseAssertions": [
         "tests/contract/test_p2_02_public_api_openapi.py::test_public_openapi_env_group_plain_only_contract",
-        "apps/api/tests/test_p2_02_public_api.py::test_public_api_requires_pat_bearer_and_checks_scope_without_csrf"
+        "apps/api/tests/test_p2_02_public_api.py::test_public_api_requires_pat_bearer_and_checks_scope_without_csrf",
+        "apps/api/tests/test_p2_02_public_api.py::test_public_env_group_secret_inputs_are_rejected_and_never_echoed"
       ]
     },
     "publicDeleteEnvGroup": {
@@ -24,7 +25,7 @@
       ],
       "responseAssertions": [
         "tests/contract/test_p2_02_public_api_openapi.py::test_public_openapi_env_group_plain_only_contract",
-        "apps/api/tests/test_p2_02_public_api.py::test_public_api_requires_pat_bearer_and_checks_scope_without_csrf"
+        "apps/api/tests/test_p2_02_public_api.py::test_public_env_group_secret_inputs_are_rejected_and_never_echoed"
       ]
     },
     "publicCopyEnvGroup": {
@@ -33,7 +34,7 @@
       ],
       "responseAssertions": [
         "tests/contract/test_p2_02_public_api_openapi.py::test_public_openapi_env_group_plain_only_contract",
-        "apps/api/tests/test_p2_02_public_api.py::test_public_api_requires_pat_bearer_and_checks_scope_without_csrf"
+        "apps/api/tests/test_p2_02_public_api.py::test_public_env_group_secret_inputs_are_rejected_and_never_echoed"
       ]
     },
     "publicListLoadNodes": {
