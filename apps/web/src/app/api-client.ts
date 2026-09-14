@@ -1334,6 +1334,25 @@ export function listAccountApiTokens() {
   return request<ApiTokenListResponse>("/v1/account/api-tokens");
 }
 
+export function downloadPublicApiAiSkill() {
+  const request = new Request(apiUrl("/v1/account/ai-skill/download"), {
+    credentials: "include",
+    headers: { Accept: "application/zip" },
+  });
+  return fetch(request).then(async (response) => {
+    if (!response.ok) {
+      let body: ApiErrorBody;
+      try {
+        body = (await response.json()) as ApiErrorBody;
+      } catch {
+        body = { code: "REQUEST_FAILED", message: "Request failed." };
+      }
+      throw new ApiError(response.status, body);
+    }
+    return response.blob();
+  });
+}
+
 export function createAccountApiToken(
   payload: ApiTokenCreateRequest,
   csrfToken: string,
