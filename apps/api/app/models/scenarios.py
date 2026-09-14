@@ -35,6 +35,12 @@ class Scenario(Base):
     default_settings_json: Mapped[dict[str, Any]] = mapped_column(
         JSONB().with_variant(JSON(), "sqlite"), nullable=False
     )
+    global_headers_json: Mapped[list[dict[str, Any]]] = mapped_column(
+        JSONB().with_variant(JSON(), "sqlite"), nullable=False, default=list
+    )
+    variables_json: Mapped[list[dict[str, Any]]] = mapped_column(
+        JSONB().with_variant(JSON(), "sqlite"), nullable=False, default=list
+    )
     data_sources_json: Mapped[list[dict[str, Any]]] = mapped_column(
         JSONB().with_variant(JSON(), "sqlite"), nullable=False, default=list
     )

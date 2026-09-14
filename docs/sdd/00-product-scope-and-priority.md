@@ -54,15 +54,17 @@ The retained P1 range includes:
 - Scenario and Test Plan polish, including Clone, Archive, lightweight tags, and Test Plan-only read-only execution configuration preview. Scenario Preview remains excluded.
 - Resource Multi-node, Workspace/Admin, cURL Import, Dependency File Preview, Run Report Preview, Monitoring, and Debug HTTP Trace when each is activated by its own accepted Slice source.
 - Debug HTTP Trace only for Debug Run, governed by `docs/sdd/adr/ADR-0008-p1-debug-http-trace.md` and `docs/sdd/slices/P1-08-debug-http-trace.md`.
+- Scenario Global Configuration Phase A, governed by `docs/sdd/adr/ADR-0015-p1-scenario-global-configuration.md` and `docs/sdd/slices/P1-09-scenario-global-configuration.md`, adds only Scenario-level structured `Settings`, `Headers`, `Variables`, and `Data Sources` Tabs; `globalHeaders` and non-secret Scenario-local `variables` are new.
 
 P1 fixed boundaries are:
 
 - P1 Import means cURL import only. P1 does not activate API Catalog or any OpenAPI/API Catalog-to-Scenario or Test Plan generation flow.
 - P1 does not include Schedule Run, Scheduled Job, an in-product Help page, Dependency File archive extraction, or enterprise authentication/security extensions.
 - Debug HTTP Trace applies only to Debug Run. It does not add Standard Run tracing, JMeter plugins, Backend Listener, Monitoring, a generic logging or sanitization framework, or runtime tar changes.
+- P1-09 does not activate `globalScripts`, Secret Scenario variables, editable Taurus YAML, JMeter expert panels, or new runtime dependencies.
 - A P1 capability must not become a prerequisite for the P0 closed loop.
 
-Recommended Slice boundaries are Monitoring, Resource Multi-node, Workspace/Admin, Scenario/Test Plan Polish, cURL Import, Dependency Preview, Run Report Preview, and Debug HTTP Trace. Each implementation requires a named real Slice SDD with verifiable Done When criteria; this scope section does not authorize implementation by itself.
+Recommended Slice boundaries are Monitoring, Resource Multi-node, Workspace/Admin, Scenario/Test Plan Polish, cURL Import, Dependency Preview, Run Report Preview, Debug HTTP Trace, and Scenario Global Configuration Phase A. Each implementation requires a named real Slice SDD with verifiable Done When criteria; this scope section does not authorize implementation by itself.
 
 ## 7. P2 range
 
