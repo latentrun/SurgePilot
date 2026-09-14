@@ -489,7 +489,7 @@ The implementation PR must record:
 The implementation uses these final anchors:
 
 1. Help Web:
-   - `apps/web/src/features/help/routes.tsx`
+   - the Help pathname switch in `apps/web/src/App.tsx`
    - `apps/web/src/features/help/pages/help-page.tsx`
    - `apps/web/src/features/help/copy.ts`
    - `apps/web/src/features/help/help.test.tsx`
