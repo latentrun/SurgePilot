@@ -57,6 +57,10 @@ P1 capabilities must not become prerequisites for the P0 execution loop.
 
 `P1-09` must not be expanded from Scenario Global Configuration Phase A into `globalScripts`, Secret Scenario variables, editable YAML, JMeter expert panels, or new dependencies.
 
+## P1-09 Verification Backfill
+
+The P1-09 reconstruction remains within the `ADR-0015` boundary. Its verification atomic is represented by `apps/api/tests/test_p1_09_scenario_global_configuration.py`, `tests/contract/test_p1_09_scenario_global_configuration_openapi.py`, and `tests/e2e/p1_09_scenario_global_configuration.spec.ts`, with focused extensions to the P0-05 Scenario, P1-04 preview, and P2-02 public API/contract tests. These checks cover Scenario-local global headers and variables, effective-variable precedence and validation, clone/materialization, generated-contract/public-artifact boundaries, and the four-tab Web draft/save flow. Verification uses the focused `uv run --all-packages pytest ... -q`, contract freshness, and Playwright commands recorded in the active Slice SDD. This backfill authorizes no Phase B scripts, Secret Scenario variables, editable YAML, expert JMeter settings, later migrations, or P2 capability.
+
 ## Revision Protocol
 
 This README must not independently enlarge P1 scope. Any new or changed P1 capability must first update the PRD or add a confirmed ADR, then synchronize `docs/sdd/00-product-scope-and-priority.md`, `docs/sdd/02-repo-structure-and-dev-workflow.md`, `AGENTS.md`, and this index where applicable.

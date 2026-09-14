@@ -45,6 +45,10 @@ If any of those files still mention P0-only after this ADR is merged, interpret 
 - API Catalog / OpenAPI generated Scenario or Test Plan flows remain excluded from P1.
 - Schedule Run, Scheduled Job, product Help page, Dependency archive extraction, and enterprise auth/security extensions remain P2 unless separately changed.
 
+## P1-09 Verification Backfill
+
+The P1-09 reconstruction remains within the governance boundary established here and `ADR-0015`. Focused API, contract, and E2E checks verify the reconstructed Scenario Global Configuration paths: non-secret Scenario-local variables and global headers, validation and effective-variable precedence, clone/detail materialization, lightweight list summaries, public OpenAPI exclusion boundaries, and the Settings / Headers / Variables / Data Sources draft-and-save flow. The recorded helper and verification paths are authoritative in `docs/sdd/slices/P1-09-scenario-global-configuration.md`; this backfill does not authorize `globalScripts`, Secret Scenario variables, editable YAML, expert JMeter settings, later migrations, or any P2 surface.
+
 ## P1-03 Verification Backfill
 
 The P1-03 reconstruction remains within the governance boundary established here. Its final verification atomic is represented by focused API, Web, contract, E2E, and base-compose drift checks; those checks verify session/workspace authority, Admin protections, settings secrecy, and generated-contract boundaries without authorizing another P1 Slice or any P2 surface.

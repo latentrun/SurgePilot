@@ -46,6 +46,8 @@ Dependencies run in Docker Compose while Web, API, api-worker, and Runner may ru
 
 Each change follows design -> schema/contracts -> backend -> Runner/Web -> generated artifacts -> tests -> factual documentation. Repository scaffolding must not introduce routes, services, dependencies, tables, or configuration for excluded future capability.
 
+For the accepted P1-09 Scenario Global Configuration Phase A, factual verification is kept in the active Slice SDD and its focused tests: `apps/api/tests/test_p1_09_scenario_global_configuration.py`, `tests/contract/test_p1_09_scenario_global_configuration_openapi.py`, and `tests/e2e/p1_09_scenario_global_configuration.spec.ts`. The focused API/contract command and Playwright command recorded there are the verification paths for Scenario global headers, non-secret local variables, effective-variable validation, public artifact boundaries, and the draft `Done` versus page `Save` workflow.
+
 P0 is the completed baseline. P1 work may start only when the task names a real P1 Slice SDD and its accepted scope source; each Slice must include verifiable Done When criteria. P1 must not regress the P0 execution loop, P0-Stability, contract-first workflow, Workspace isolation, permission enforcement, Runner/API/Web boundaries, or verification gates. P2 remains out of scope unless separately authorized by an accepted ADR or PRD update; the active P2 Slice surfaces are listed in `docs/sdd/00-product-scope-and-priority.md` §7 and `docs/sdd/slices/P2-README.md`.
 
 ## 12. AI Coding / AGENTS.md Workflow

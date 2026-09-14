@@ -57,6 +57,22 @@ def scenario_payload(name: str = "Checkout flow") -> dict:
             "storeCookie": True,
             "retrieveResources": False,
         },
+        "globalHeaders": [
+            {
+                "id": "01HZX3Y9M0E9W7Z6M5QK9S8P7H",
+                "name": "X-Scenario",
+                "value": "enabled",
+                "enabled": True,
+            }
+        ],
+        "variables": [
+            {
+                "id": "01HZX3Y9M0E9W7Z6M5QK9S8P7J",
+                "name": "scenario_name",
+                "value": "checkout",
+                "enabled": True,
+            }
+        ],
         "dataSources": [],
         "steps": [
             {
@@ -186,6 +202,8 @@ async def test_scenario_crud_is_workspace_scoped_and_revision_safe(
     scenario = created.json()
     assert scenario["revision"] == 1
     assert scenario["scenarioType"] == "visual"
+    assert scenario["globalHeaders"][0]["name"] == "X-Scenario"
+    assert scenario["variables"][0]["name"] == "scenario_name"
 
     listed = await client.get("/api/v1/scenarios", headers={"x-workspace-id": workspace_id})
     assert listed.status_code == 200
@@ -225,6 +243,8 @@ async def test_scenario_crud_is_workspace_scoped_and_revision_safe(
     assert patched.status_code == 200
     assert patched.json()["revision"] == 2
     assert patched.json()["name"] == "Checkout smoke"
+    assert patched.json()["globalHeaders"][0]["value"] == "enabled"
+    assert patched.json()["variables"][0]["value"] == "checkout"
 
     other = Workspace(
         id="01HZX3Y9M0E9W7Z6M5QK9S8P7Z",
