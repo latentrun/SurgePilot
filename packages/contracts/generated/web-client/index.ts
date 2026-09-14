@@ -2382,12 +2382,16 @@ export interface components {
             defaultSettings?: components["schemas"]["ScenarioDefaultSettings"];
             /** Description */
             description?: string | null;
+            /** Globalheaders */
+            globalHeaders?: components["schemas"]["ScenarioNamedValue"][];
             /** Name */
             name: string;
             /** Steps */
             steps?: components["schemas"]["ScenarioStep"][];
             /** Tags */
             tags?: string[];
+            /** Variables */
+            variables?: components["schemas"]["ScenarioVariable"][];
         };
         ScenarioDataSource: {
             /** Delimiter */
@@ -2469,6 +2473,8 @@ export interface components {
             description?: string | null;
             /** Enabledstepcount */
             enabledStepCount: number;
+            /** Globalheaders */
+            globalHeaders: components["schemas"]["ScenarioNamedValue"][];
             /** Id */
             id: string;
             /** Name */
@@ -2488,6 +2494,8 @@ export interface components {
             tags: string[];
             /** Updatedat */
             updatedAt: string;
+            /** Variables */
+            variables: components["schemas"]["ScenarioVariable"][];
         };
         ScenarioExtractor: {
             /**
@@ -2566,6 +2574,23 @@ export interface components {
              */
             value: string;
         };
+        /** ScenarioVariable */
+        ScenarioVariable: {
+            /**
+             * Enabled
+             * @default true
+             */
+            enabled: boolean;
+            /** Id */
+            id: string;
+            /** Name */
+            name: string;
+            /**
+             * Value
+             * @default
+             */
+            value: string;
+        };
         ScenarioPatchRequest: {
             /**
              * Baseurlexpression
@@ -2579,12 +2604,16 @@ export interface components {
             description?: string | null;
             /** Expectedrevision */
             expectedRevision: number;
+            /** Globalheaders */
+            globalHeaders?: components["schemas"]["ScenarioNamedValue"][];
             /** Name */
             name: string;
             /** Steps */
             steps?: components["schemas"]["ScenarioStep"][];
             /** Tags */
             tags?: string[];
+            /** Variables */
+            variables?: components["schemas"]["ScenarioVariable"][];
         };
         ScenarioScript: {
             /**

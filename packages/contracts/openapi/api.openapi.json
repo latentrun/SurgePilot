@@ -5331,6 +5331,12 @@
             ],
             "title": "Description"
           },
+          "globalHeaders": {
+            "items": { "$ref": "#/components/schemas/ScenarioNamedValue" },
+            "maxItems": 200,
+            "title": "Globalheaders",
+            "type": "array"
+          },
           "name": {
             "maxLength": 120,
             "minLength": 1,
@@ -5352,6 +5358,12 @@
             },
             "maxItems": 10,
             "title": "Tags",
+            "type": "array"
+          },
+          "variables": {
+            "items": { "$ref": "#/components/schemas/ScenarioVariable" },
+            "maxItems": 200,
+            "title": "Variables",
             "type": "array"
           }
         },
@@ -5523,6 +5535,11 @@
             "title": "Enabledstepcount",
             "type": "integer"
           },
+          "globalHeaders": {
+            "items": { "$ref": "#/components/schemas/ScenarioNamedValue" },
+            "title": "Globalheaders",
+            "type": "array"
+          },
           "id": {
             "title": "Id",
             "type": "string"
@@ -5561,6 +5578,11 @@
           "updatedAt": {
             "title": "Updatedat",
             "type": "string"
+          },
+          "variables": {
+            "items": { "$ref": "#/components/schemas/ScenarioVariable" },
+            "title": "Variables",
+            "type": "array"
           }
         },
         "required": [
@@ -5576,6 +5598,8 @@
           "updatedAt",
           "baseUrlExpression",
           "defaultSettings",
+          "globalHeaders",
+          "variables",
           "dataSources",
           "steps"
         ],
@@ -5770,6 +5794,40 @@
         "title": "ScenarioNamedValue",
         "type": "object"
       },
+      "ScenarioVariable": {
+        "additionalProperties": false,
+        "properties": {
+          "enabled": {
+            "default": true,
+            "title": "Enabled",
+            "type": "boolean"
+          },
+          "id": {
+            "maxLength": 26,
+            "minLength": 26,
+            "title": "Id",
+            "type": "string"
+          },
+          "name": {
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          },
+          "value": {
+            "default": "",
+            "maxLength": 65536,
+            "title": "Value",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name"
+        ],
+        "title": "ScenarioVariable",
+        "type": "object"
+      },
       "ScenarioPatchRequest": {
         "additionalProperties": false,
         "properties": {
@@ -5808,6 +5866,12 @@
             "title": "Expectedrevision",
             "type": "integer"
           },
+          "globalHeaders": {
+            "items": { "$ref": "#/components/schemas/ScenarioNamedValue" },
+            "maxItems": 200,
+            "title": "Globalheaders",
+            "type": "array"
+          },
           "name": {
             "maxLength": 120,
             "minLength": 1,
@@ -5829,6 +5893,12 @@
             },
             "maxItems": 10,
             "title": "Tags",
+            "type": "array"
+          },
+          "variables": {
+            "items": { "$ref": "#/components/schemas/ScenarioVariable" },
+            "maxItems": 200,
+            "title": "Variables",
             "type": "array"
           }
         },
