@@ -29,6 +29,14 @@ DTOs, the required one-time string-map-to-plain migration `0017_p2_03_env_group_
 API secret exclusion. It does not authorize Snapshot encryption, key rotation, a reveal API, or
 external Secret Manager integration.
 
+`P2-04-help-ai-agents-system-openapi-bootstrap.md` is active through `ADR-0016`. It covers
+authenticated Help AI Agents guidance, a session-authenticated request-built Public API AI skill
+source download, shared runtime/script OpenAPI export, and a best-effort first-Admin import of
+SurgePilot's own curated Web/business OpenAPI into the Default Workspace API Catalog. It does not
+authorize user/external automatic ingestion, retries/workers, SDK, MCP, marketplace, installer,
+release publication, built-in agent runtime, AI generation/tuning/analysis, or API Catalog to
+Scenario/Test Plan generation.
+
 ## P2-00 factual backfill
 
 - API routes live in `apps/api/app/routes/api_catalog.py` and are registered by `apps/api/app/main.py`.
