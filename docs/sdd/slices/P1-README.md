@@ -14,6 +14,7 @@ Use only these references for P1 Slice drafting decisions:
 
 - P1 governance start: `docs/sdd/adr/ADR-0022-p1-governance-start.md`.
 - P1 Debug HTTP Trace scope addition: `docs/sdd/adr/ADR-0008-p1-debug-http-trace.md`.
+- P1 Scenario Global Configuration Phase A authorization: `docs/sdd/adr/ADR-0015-p1-scenario-global-configuration.md`.
 - P1 Scenario execution preview removal: `docs/sdd/adr/ADR-0023-remove-scenario-execution-preview.md`.
 - P1 scope: `docs/sdd/00-product-scope-and-priority.md` §6.
 - P1 fixed boundaries: `docs/sdd/00-product-scope-and-priority.md` §6 fixed-boundary list.
@@ -31,6 +32,7 @@ The following files are the current P1 Slice index. Real active Slice SDDs are a
 5. `docs/sdd/slices/P1-05-curl-import.md` -- active Slice SDD for P1 cURL Import.
 6. `docs/sdd/slices/P1-06-dependency-preview.md` -- active Slice SDD for P1 Dependency File Preview.
 7. `docs/sdd/slices/P1-08-debug-http-trace.md` -- active Slice SDD for P1 Debug HTTP Trace.
+8. `docs/sdd/slices/P1-09-scenario-global-configuration.md` -- active Slice SDD for Scenario Global Configuration Phase A, authorized by `ADR-0015`; this is a Scenario/Test Plan polish add-on Slice and does not replace `P1-04`.
 
 Active P1 Slice SDDs at this revision:
 
@@ -41,6 +43,7 @@ Active P1 Slice SDDs at this revision:
 - `P1-05-curl-import.md`, governed by the P1 scope gate.
 - `P1-06-dependency-preview.md`, governed by the P1 scope gate.
 - `P1-08-debug-http-trace.md`, governed by `ADR-0008`.
+- `P1-09-scenario-global-configuration.md`, governed by `ADR-0015` and limited to Scenario Global Configuration Phase A as a Scenario/Test Plan polish add-on; it does not replace `P1-04`.
 
 Do not expand placeholders into implementation design, schemas, migrations, or generated-contract details inside this README.
 
@@ -51,6 +54,12 @@ Contract-first rules, Workspace isolation, permission checks, Runner/Web/API bou
 P1 placeholder or index documents must not create clickable P1 UI, callable P1 API behavior, or P1 execution dependencies. Implementation requires a real active P1 Slice SDD.
 
 P1 capabilities must not become prerequisites for the P0 execution loop.
+
+`P1-09` must not be expanded from Scenario Global Configuration Phase A into `globalScripts`, Secret Scenario variables, editable YAML, JMeter expert panels, or new dependencies.
+
+## P1-09 Verification Backfill
+
+The P1-09 reconstruction remains within the `ADR-0015` boundary. Its verification atomic is represented by `apps/api/tests/test_p1_09_scenario_global_configuration.py`, `tests/contract/test_p1_09_scenario_global_configuration_openapi.py`, and `tests/e2e/p1_09_scenario_global_configuration.spec.ts`, with focused extensions to the P0-05 Scenario, P1-04 preview, and P2-02 public API/contract tests. These checks cover Scenario-local global headers and variables, effective-variable precedence and validation, clone/materialization, generated-contract/public-artifact boundaries, and the four-tab Web draft/save flow. Verification uses the focused `uv run --all-packages pytest ... -q`, contract freshness, and Playwright commands recorded in the active Slice SDD. This backfill authorizes no Phase B scripts, Secret Scenario variables, editable YAML, expert JMeter settings, later migrations, or P2 capability.
 
 ## Revision Protocol
 

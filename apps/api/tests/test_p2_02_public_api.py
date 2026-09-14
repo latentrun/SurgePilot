@@ -812,3 +812,103 @@ async def test_public_env_group_secret_inputs_are_rejected_and_never_echoed(
         json={"variables": {"BASE_URL": {"type": "plain", "value": "https://example.test"}}},
     )
     assert secret_group_patch.status_code == 422
+
+
+@pytest.mark.anyio
+async def test_public_scenario_global_config_accepts_phase_a_and_rejects_forbidden_fields(
+    client: AsyncClient,
+) -> None:
+    csrf, workspace_id, _user_id = await register(client, "public-scenario-globals@example.com")
+    config_token = await create_pat(client, csrf, [workspace_id], scopes=["config:write"])
+    read_token = await create_pat(client, csrf, [workspace_id], scopes=["read"])
+
+    payload = {
+        **scenario_payload("Public globals", "/v1/globals"),
+        "globalHeaders": [
+            {
+                "id": "01HZX3Y9M0E9W7Z6M5QK9S8P7H",
+                "name": "x-public-global",
+                "value": "enabled",
+                "enabled": True,
+            }
+        ],
+        "variables": [
+            {
+                "id": "01HZX3Y9M0E9W7Z6M5QK9S8P7V",
+                "name": "client_name",
+                "value": "public",
+                "enabled": True,
+            }
+        ],
+    }
+
+    created = await client.post(
+        "/api/public/v1/scenarios", headers=auth_header(config_token), json=payload
+    )
+    assert created.status_code == 201
+    scenario_id = created.json()["id"]
+    assert created.json()["globalHeaders"] == payload["globalHeaders"]
+    assert created.json()["variables"] == payload["variables"]
+
+    detail = await client.get(
+        f"/api/public/v1/scenarios/{scenario_id}", headers=auth_header(read_token)
+    )
+    assert detail.status_code == 200
+    assert detail.json()["globalHeaders"] == payload["globalHeaders"]
+    assert detail.json()["variables"] == payload["variables"]
+    assert "globalScripts" not in detail.text
+
+    patched_payload = {
+        **payload,
+        "name": "Public globals patched",
+        "expectedRevision": 1,
+        "globalHeaders": [
+            {
+                "id": "01HZX3Y9M0E9W7Z6M5QK9S8P7J",
+                "name": "x-public-global",
+                "value": "patched",
+                "enabled": True,
+            }
+        ],
+        "variables": [
+            {
+                "id": "01HZX3Y9M0E9W7Z6M5QK9S8P7W",
+                "name": "client_name",
+                "value": "patched",
+                "enabled": True,
+            }
+        ],
+    }
+    patched = await client.patch(
+        f"/api/public/v1/scenarios/{scenario_id}",
+        headers=auth_header(config_token),
+        json=patched_payload,
+    )
+    assert patched.status_code == 200
+    assert patched.json()["globalHeaders"] == patched_payload["globalHeaders"]
+    assert patched.json()["variables"] == patched_payload["variables"]
+
+    forbidden_scripts = await client.post(
+        "/api/public/v1/scenarios",
+        headers=auth_header(config_token),
+        json={**scenario_payload("Forbidden scripts", "/v1/forbidden"), "globalScripts": []},
+    )
+    assert forbidden_scripts.status_code == 422
+
+    forbidden_secret_variable = await client.post(
+        "/api/public/v1/scenarios",
+        headers=auth_header(config_token),
+        json={
+            **scenario_payload("Forbidden secret variable", "/v1/secret-variable"),
+            "variables": [
+                {
+                    "id": "01HZX3Y9M0E9W7Z6M5QK9S8P7X",
+                    "name": "api_token",
+                    "type": "secret",
+                    "value": "should-not-enter",
+                    "enabled": True,
+                }
+            ],
+        },
+    )
+    assert forbidden_secret_variable.status_code == 422

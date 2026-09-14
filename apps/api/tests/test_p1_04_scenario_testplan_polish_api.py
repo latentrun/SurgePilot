@@ -491,7 +491,15 @@ async def test_test_plan_preview_is_read_only_safe_and_reports_static_warnings(
     csrf, workspace_id, user_id = await register(client, "p1-plan-preview@example.com")
     env_group_id = await create_env_group(client, csrf=csrf, workspace_id=workspace_id)
     node = seed_idle_node(db_session, user_id=user_id)
-    preview_scenario_payload = scenario_payload(base_url_expression="${base_url}")
+    preview_scenario_payload = scenario_payload(base_url_expression="${scenario_host}")
+    preview_scenario_payload["variables"] = [
+        {
+            "id": "01HZX3Y9M0E9W7Z6M5QK9S8P8F",
+            "name": "scenario_host",
+            "value": "https://scenario-local-sensitive.example.test",
+            "enabled": True,
+        }
+    ]
     scenario = await client.post(
         "/api/v1/scenarios",
         headers={"x-csrf-token": csrf, "x-workspace-id": workspace_id},
@@ -528,8 +536,8 @@ async def test_test_plan_preview_is_read_only_safe_and_reports_static_warnings(
     assert "soft_limit_exceeded" in {warning["code"] for warning in body["warnings"]}
     assert "passfail" in body["content"]
     assert "https://secret-env.example.test" not in body["content"]
+    assert "https://scenario-local-sensitive.example.test" not in body["content"]
     assert "/opt/surgepilot" not in body["content"]
-    assert "env_value_redacted" in {warning["code"] for warning in body["warnings"]}
 
     debug_preview = await client.get(
         f"/api/v1/test-plans/{plan_id}/execution-preview",

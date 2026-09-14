@@ -61,6 +61,10 @@ class ScenarioFormField(ScenarioNamedValue):
     pass
 
 
+class ScenarioVariable(ScenarioNamedValue):
+    name: str = Field(min_length=1, max_length=64)
+
+
 class ScenarioBody(ApiSchema):
     model_config = SCENARIO_MODEL_CONFIG
 
@@ -160,6 +164,8 @@ class ScenarioEditableContent(ApiSchema):
     tags: list[str] = Field(default_factory=list, max_length=10)
     base_url_expression: str = Field(default="${base_url}", min_length=1, max_length=2048)
     default_settings: ScenarioDefaultSettings = Field(default_factory=ScenarioDefaultSettings)
+    global_headers: list[ScenarioNamedValue] = Field(default_factory=list, max_length=200)
+    variables: list[ScenarioVariable] = Field(default_factory=list, max_length=200)
     data_sources: list[ScenarioDataSource] = Field(default_factory=list, max_length=50)
     steps: list[ScenarioStep] = Field(default_factory=list, max_length=200)
 
@@ -189,6 +195,8 @@ class ScenarioSummary(ApiSchema):
 class ScenarioDetail(ScenarioSummary):
     base_url_expression: str
     default_settings: ScenarioDefaultSettings
+    global_headers: list[ScenarioNamedValue]
+    variables: list[ScenarioVariable]
     data_sources: list[ScenarioDataSource]
     steps: list[ScenarioStep]
 

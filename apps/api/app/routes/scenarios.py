@@ -86,6 +86,8 @@ def scenario_detail(scenario) -> ScenarioDetail:
         **summary,
         base_url_expression=scenario.base_url_expression,
         default_settings=scenario.default_settings_json,
+        global_headers=scenario.global_headers_json,
+        variables=scenario.variables_json,
         data_sources=scenario.data_sources_json,
         steps=scenario.steps_json,
     )

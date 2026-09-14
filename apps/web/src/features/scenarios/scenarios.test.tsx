@@ -1,4 +1,4 @@
-import { cleanup, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -39,6 +39,8 @@ const scenarioDetail = {
     storeCookie: true,
     retrieveResources: false,
   },
+  globalHeaders: [],
+  variables: [],
   dataSources: [],
   steps: [
     {
@@ -164,6 +166,118 @@ afterEach(() => {
 });
 
 describe("P1-04 scenarios polish", () => {
+  it("edits global headers and non-secret Scenario variables through the four-tab configuration", async () => {
+    let patchBody: Record<string, unknown> | null = null;
+    mockFetch(async (input, init) => {
+      const url = requestUrl(input);
+      const method = requestMethod(input, init);
+      if (url.endsWith("/api/v1/auth/me")) return jsonResponse(authSession);
+      if (
+        url.includes(`/api/v1/scenarios/${scenarioDetail.id}`) &&
+        method === "GET"
+      )
+        return jsonResponse(scenarioDetail);
+      if (
+        url.includes(`/api/v1/scenarios/${scenarioDetail.id}`) &&
+        method === "PATCH"
+      ) {
+        patchBody = await requestBody(input, init);
+        return jsonResponse({ ...scenarioDetail, ...patchBody, revision: 4 });
+      }
+      if (url.includes("/api/v1/env-groups")) return jsonResponse(envListResponse);
+      if (url.includes("/api/v1/dependency-files"))
+        return jsonResponse(dependencyFileListResponse);
+      return jsonResponse({});
+    });
+
+    renderAt(`/scenarios/${scenarioDetail.id}`);
+    expect(
+      await screen.findByRole("heading", { name: "Checkout flow" }),
+    ).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Global Config" }));
+
+    const dialog = screen.getByRole("dialog", {
+      name: "Global Configuration",
+    });
+    expect(within(dialog).getAllByRole("tab").map((tab) => tab.textContent)).toEqual([
+      "Settings",
+      "Headers",
+      "Variables",
+      "Data Sources",
+    ]);
+    expect(within(dialog).getByRole("tab", { name: "Settings" })).toHaveAttribute(
+      "aria-selected",
+      "true",
+    );
+    expect(
+      within(dialog).queryByRole("button", { name: "Save" }),
+    ).not.toBeInTheDocument();
+
+    await userEvent.click(within(dialog).getByRole("tab", { name: "Headers" }));
+    expect(within(dialog).getByText("No global headers.")).toBeInTheDocument();
+    await userEvent.click(
+      within(dialog).getByRole("button", { name: "Add global header" }),
+    );
+    await userEvent.type(screen.getByLabelText("Global header 1 name"), "X-Trace");
+    await userEvent.type(screen.getByLabelText("Global header 1 value"), "enabled");
+
+    await userEvent.click(within(dialog).getByRole("tab", { name: "Variables" }));
+    expect(within(dialog).getByText("No scenario variables.")).toBeInTheDocument();
+    expect(
+      within(dialog).getByText(/ordinary non-secret Scenario defaults/i),
+    ).toBeInTheDocument();
+    await userEvent.click(within(dialog).getByRole("button", { name: "Add variable" }));
+    await userEvent.type(screen.getByLabelText("Scenario variable 1 name"), "trace");
+    await userEvent.type(screen.getByLabelText("Scenario variable 1 value"), "on");
+    await userEvent.click(within(dialog).getByRole("button", { name: "Done" }));
+
+    expect(patchBody).toBeNull();
+    expect(screen.getByText("Unsaved changes")).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Save" }));
+    await waitFor(() => expect(patchBody).not.toBeNull());
+    expect(patchBody).toMatchObject({
+      globalHeaders: [expect.objectContaining({ name: "X-Trace", enabled: true })],
+      variables: [expect.objectContaining({ name: "trace", value: "on", enabled: true })],
+    });
+  });
+
+  it("keeps invalid Global Configuration open and selects the first errored tab on Done", async () => {
+    mockFetch(async (input, init) => {
+      const url = requestUrl(input);
+      const method = requestMethod(input, init);
+      if (url.endsWith("/api/v1/auth/me")) return jsonResponse(authSession);
+      if (
+        url.includes(`/api/v1/scenarios/${scenarioDetail.id}`) &&
+        method === "GET"
+      ) {
+        return jsonResponse(scenarioDetail);
+      }
+      if (url.includes("/api/v1/env-groups")) return jsonResponse(envListResponse);
+      if (url.includes("/api/v1/dependency-files")) {
+        return jsonResponse(dependencyFileListResponse);
+      }
+      return jsonResponse({});
+    });
+
+    renderAt(`/scenarios/${scenarioDetail.id}`);
+    await screen.findByRole("heading", { name: "Checkout flow" });
+    await userEvent.click(screen.getByRole("button", { name: "Global Config" }));
+    const dialog = screen.getByRole("dialog", { name: "Global Configuration" });
+    await userEvent.click(within(dialog).getByRole("tab", { name: "Headers" }));
+    await userEvent.click(
+      within(dialog).getByRole("button", { name: "Add global header" }),
+    );
+    await userEvent.click(within(dialog).getByRole("button", { name: "Done" }));
+
+    expect(screen.getByRole("dialog", { name: "Global Configuration" })).toBeInTheDocument();
+    expect(
+      within(screen.getByRole("dialog", { name: "Global Configuration" })).getByRole(
+        "tab",
+        { name: "Headers" },
+      ),
+    ).toHaveAttribute("aria-selected", "true");
+  });
+
   it("shows Clone and Archive actions, clones to the new designer, and renders empty tag state", async () => {
     const clonedScenario = {
       ...scenarioDetail,

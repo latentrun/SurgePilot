@@ -4,9 +4,9 @@ Authoritative source: `docs/sdd/02-repo-structure-and-dev-workflow.md` §12. Thi
 
 ## Current target
 
-P0 is the completed baseline. P1 work may start only through a named P1 Slice SDD that references `docs/sdd/00-product-scope-and-priority.md` §6 and `docs/sdd/slices/P1-README.md`. The completed P1 Slice surfaces are `docs/sdd/slices/P1-00-monitoring.md`, `docs/sdd/slices/P1-01-resource-multi-node.md` with `docs/sdd/adr/ADR-0009-p1-resource-multi-node.md`, `docs/sdd/slices/P1-03-workspace-admin.md`, `docs/sdd/slices/P1-04-scenario-testplan-polish.md` as amended by `docs/sdd/adr/ADR-0023-remove-scenario-execution-preview.md`, `docs/sdd/slices/P1-05-curl-import.md`, `docs/sdd/slices/P1-06-dependency-preview.md`, and `docs/sdd/slices/P1-08-debug-http-trace.md` through `docs/sdd/adr/ADR-0008-p1-debug-http-trace.md`. P1 work must not regress the P0 execution loop, P0-Stability, contract-first workflow, Workspace isolation, permission enforcement, Runner/API/Web boundaries, and verification gates.
+P0 is the completed baseline. P1 work may start only through a named P1 Slice SDD that references `docs/sdd/00-product-scope-and-priority.md` §6 and `docs/sdd/slices/P1-README.md`. The completed P1 Slice surfaces are `docs/sdd/slices/P1-00-monitoring.md`, `docs/sdd/slices/P1-01-resource-multi-node.md` with `docs/sdd/adr/ADR-0009-p1-resource-multi-node.md`, `docs/sdd/slices/P1-03-workspace-admin.md`, `docs/sdd/slices/P1-04-scenario-testplan-polish.md` as amended by `docs/sdd/adr/ADR-0023-remove-scenario-execution-preview.md`, `docs/sdd/slices/P1-05-curl-import.md`, `docs/sdd/slices/P1-06-dependency-preview.md`, and `docs/sdd/slices/P1-08-debug-http-trace.md` through `docs/sdd/adr/ADR-0008-p1-debug-http-trace.md`. P1-09 Scenario Global Configuration Phase A is authorized only through `docs/sdd/slices/P1-09-scenario-global-configuration.md` and `docs/sdd/adr/ADR-0015-p1-scenario-global-configuration.md`. P1 work must not regress the P0 execution loop, P0-Stability, contract-first workflow, Workspace isolation, permission enforcement, Runner/API/Web boundaries, and verification gates.
 
-The current delivery target is **P2-02 Public API Substrate and governed Public API AI skill source package implementation plus P2-03 Env Group Secret implementation plus P2-04 Help AI Agents and System OpenAPI Bootstrap**. P2 work may start only when a task names the active P2 Slice SDD and its accepted ADR. The active P2 surfaces are:
+The current delivery target is **P1-09 Scenario Global Configuration Phase A**, followed by **P2-02 Public API Substrate and governed Public API AI skill source package implementation plus P2-03 Env Group Secret implementation plus P2-04 Help AI Agents and System OpenAPI Bootstrap**. P2 work may start only when a task names the active P2 Slice SDD and its accepted ADR. The active P1 surface is `docs/sdd/slices/P1-09-scenario-global-configuration.md` through `docs/sdd/adr/ADR-0015-p1-scenario-global-configuration.md`; the active P2 surfaces are:
 
 - `docs/sdd/slices/P2-00-api-catalog-scalar.md` through `docs/sdd/adr/ADR-0010-p2-api-catalog-scalar.md`;
 - `docs/sdd/slices/P2-01-openapi-step-generation.md` through `docs/sdd/adr/ADR-0011-p2-openapi-step-generation.md`;
@@ -27,8 +27,8 @@ P1-08 is limited to Debug Run HTTP Trace; it does not authorize Standard Run tra
 - Workflow source: `docs/sdd/02-repo-structure-and-dev-workflow.md`
 - P1 governance ADR: `docs/sdd/adr/ADR-0022-p1-governance-start.md`
 - P1 Slice index: `docs/sdd/slices/P1-README.md`
-- Active Slice: `docs/sdd/slices/P1-08-debug-http-trace.md`
-- Active Slice ADR: `docs/sdd/adr/ADR-0008-p1-debug-http-trace.md`
+- Active Slice: `docs/sdd/slices/P1-09-scenario-global-configuration.md`
+- Active Slice ADR: `docs/sdd/adr/ADR-0015-p1-scenario-global-configuration.md`
 - P2 Slice index: `docs/sdd/slices/P2-README.md`
 - P2 API Catalog activation ADR: `docs/sdd/adr/ADR-0010-p2-api-catalog-scalar.md`
 - P2 API Catalog Slice: `docs/sdd/slices/P2-00-api-catalog-scalar.md`
@@ -40,6 +40,8 @@ P1-08 is limited to Debug Run HTTP Trace; it does not authorize Standard Run tra
 - P2 Env Group Secret Slice: `docs/sdd/slices/P2-03-env-group-secret.md`
 - P2 Help AI Agents and System OpenAPI Bootstrap activation ADR: `docs/sdd/adr/ADR-0016-p2-help-ai-agents-system-openapi-bootstrap.md`
 - P2 Help AI Agents and System OpenAPI Bootstrap Slice: `docs/sdd/slices/P2-04-help-ai-agents-system-openapi-bootstrap.md`
+
+P1-09 is limited to Phase A Scenario Global Configuration Tabs for `Settings`, `Headers`, `Variables`, and `Data Sources`, with non-secret Scenario-local variables. It excludes `globalScripts`, Secret Scenario variables, editable Taurus YAML, JMeter expert panels, and new dependencies.
 
 ## Execution rules
 

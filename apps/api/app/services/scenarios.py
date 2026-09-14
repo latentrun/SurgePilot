@@ -236,6 +236,18 @@ def _extract_enabled_step_variables(step: dict[str, Any]) -> set[str]:
     return found
 
 
+def _scenario_variable_map(content: dict[str, Any]) -> dict[str, str]:
+    return {
+        item["name"]: item.get("value", "") for item in _active_items(content.get("variables", []))
+    }
+
+
+def _effective_variables(content: dict[str, Any], env_variables: dict[str, str]) -> dict[str, str]:
+    merged = _scenario_variable_map(content)
+    merged.update(env_variables)
+    return merged
+
+
 def _regexp_group_count(expression: str) -> int | None:
     try:
         return re.compile(expression).groups
@@ -329,6 +341,47 @@ def validate_scenario_content(
     if not content.get("name", "").strip():
         details.append(field_error("name", "Scenario name is required.", "required_field"))
     content["tags"] = _validate_tags(content.get("tags", []))
+    global_headers_seen: set[str] = set()
+    for header_index, header in enumerate(content.get("globalHeaders", [])):
+        name = header.get("name", "")
+        lower_name = name.lower()
+        if not HTTP_TOKEN_PATTERN.fullmatch(name):
+            details.append(
+                field_error(
+                    f"globalHeaders[{header_index}].name",
+                    "Header name is invalid.",
+                    "invalid_header_name",
+                )
+            )
+        if lower_name in global_headers_seen:
+            details.append(
+                field_error(
+                    f"globalHeaders[{header_index}].name",
+                    "Global header names must be unique.",
+                    "duplicate_header",
+                )
+            )
+        global_headers_seen.add(lower_name)
+    variable_names_seen: set[str] = set()
+    for variable_index, variable in enumerate(content.get("variables", [])):
+        name = variable.get("name", "")
+        if not VARIABLE_NAME_PATTERN.fullmatch(name):
+            details.append(
+                field_error(
+                    f"variables[{variable_index}].name",
+                    "Variable name is invalid.",
+                    "invalid_variable_name",
+                )
+            )
+        if name in variable_names_seen:
+            details.append(
+                field_error(
+                    f"variables[{variable_index}].name",
+                    "Scenario variable names must be unique.",
+                    "duplicate_variable",
+                )
+            )
+        variable_names_seen.add(name)
     for data_source_index, data_source in enumerate(content.get("dataSources", [])):
         delimiter = data_source.get("delimiter")
         if delimiter is not None and delimiter != "tab" and len(delimiter) != 1:
@@ -349,7 +402,7 @@ def validate_scenario_content(
                     )
                 )
     enabled_step_count = 0
-    reserved_variable_names: set[str] = set()
+    reserved_variable_names: set[str] = set(variable_names_seen)
     for data_source in _active_items(content.get("dataSources", [])):
         reserved_variable_names.update(data_source.get("variableNames", []) or [])
     extractor_names: set[str] = set()
@@ -624,6 +677,8 @@ def create_scenario(
         tags_json=content["tags"],
         base_url_expression=content["baseUrlExpression"],
         default_settings_json=content["defaultSettings"],
+        global_headers_json=content["globalHeaders"],
+        variables_json=content["variables"],
         data_sources_json=content["dataSources"],
         steps_json=content["steps"],
         visual_schema_version=1,
@@ -650,6 +705,8 @@ def clone_scenario(
         "tags": list(source.tags_json or []),
         "baseUrlExpression": source.base_url_expression,
         "defaultSettings": source.default_settings_json,
+        "globalHeaders": source.global_headers_json,
+        "variables": source.variables_json,
         "dataSources": source.data_sources_json,
         "steps": source.steps_json,
     }
@@ -665,6 +722,8 @@ def clone_scenario(
         tags_json=content["tags"],
         base_url_expression=content["baseUrlExpression"],
         default_settings_json=content["defaultSettings"],
+        global_headers_json=content["globalHeaders"],
+        variables_json=content["variables"],
         data_sources_json=content["dataSources"],
         steps_json=content["steps"],
         visual_schema_version=source.visual_schema_version,
@@ -731,6 +790,8 @@ def patch_scenario(
     scenario.tags_json = content["tags"]
     scenario.base_url_expression = content["baseUrlExpression"]
     scenario.default_settings_json = content["defaultSettings"]
+    scenario.global_headers_json = content["globalHeaders"]
+    scenario.variables_json = content["variables"]
     scenario.data_sources_json = content["dataSources"]
     scenario.steps_json = content["steps"]
     scenario.revision += 1
@@ -831,7 +892,7 @@ def _resolve_expression(expression: str, variables: dict[str, str]) -> str:
             [
                 field_error(
                     "baseUrlExpression",
-                    "Variable is not provided by the selected Env Group.",
+        "Variable is not provided by Scenario variables or the selected Env Group.",
                     "missing_variable",
                 )
                 for _name in missing
@@ -863,7 +924,8 @@ def _validate_resolved_base_url(value: str) -> None:
 
 def _validate_debug_variables(content: dict[str, Any], env_variables: dict[str, str]) -> None:
     details: list[dict[str, str]] = []
-    available = set(env_variables.keys())
+    scenario_variables = _scenario_variable_map(content)
+    available = set(scenario_variables.keys()) | set(env_variables.keys())
     extractor_names: set[str] = set()
     has_header_based_csv_source = False
     for data_source in _active_items(content.get("dataSources", [])):
@@ -873,13 +935,16 @@ def _validate_debug_variables(content: dict[str, Any], env_variables: dict[str, 
         else:
             has_header_based_csv_source = True
     initial_references = _extract_variables(content.get("baseUrlExpression"))
+    for header in _active_items(content.get("globalHeaders", [])):
+        initial_references.update(_extract_variables(header.get("value")))
     if not has_header_based_csv_source:
         for name in sorted(initial_references - available):
             details.append(
                 field_error(
                     "baseUrlExpression",
                     (
-                        f"Variable {name} is not provided by the selected Env Group, "
+                        f"Variable {name} is not provided by Scenario variables, "
+                        "the selected Env Group, "
                         "CSV variables or earlier extractors."
                     ),
                     "missing_variable",
@@ -893,7 +958,8 @@ def _validate_debug_variables(content: dict[str, Any], env_variables: dict[str, 
                     field_error(
                         f"steps[{step_index}]",
                         (
-                            f"Variable {name} is not provided by the selected Env Group, "
+                            f"Variable {name} is not provided by Scenario variables, "
+                            "the selected Env Group, "
                             "CSV variables or earlier extractors."
                         ),
                         "missing_variable",
@@ -1055,7 +1121,10 @@ def build_debug_taurus_document_from_content(
     """Translate an already-authorized Scenario into a Taurus YAML document."""
     validate_scenario_content(scenario_content, require_enabled_step=True)
     _validate_debug_variables(scenario_content, env_variables)
-    default_address = _resolve_expression(scenario_content["baseUrlExpression"], env_variables)
+    effective_variables = _effective_variables(scenario_content, env_variables)
+    default_address = _resolve_expression(
+        scenario_content["baseUrlExpression"], effective_variables
+    )
     _validate_resolved_base_url(default_address)
     files = {file.id: file for file in dependency_files}
     settings = scenario_content["defaultSettings"]
@@ -1068,8 +1137,14 @@ def build_debug_taurus_document_from_content(
         "retrieve-resources": settings["retrieveResources"],
         "think-time": ms_to_taurus_time(settings["thinkTimeMs"]),
         "timeout": ms_to_taurus_time(settings["timeoutMs"]),
-        "variables": env_variables,
+        "variables": effective_variables,
     }
+    global_headers = {
+        item["name"]: item.get("value", "")
+        for item in _active_items(scenario_content.get("globalHeaders", []))
+    }
+    if global_headers:
+        scenario_doc["headers"] = global_headers
     data_sources = []
     for data_source in _active_items(scenario_content["dataSources"]):
         file = files[data_source["dependencyFileId"]]
@@ -1166,6 +1241,8 @@ def build_debug_taurus_document(
         "name": scenario.name,
         "baseUrlExpression": scenario.base_url_expression,
         "defaultSettings": scenario.default_settings_json,
+        "globalHeaders": scenario.global_headers_json,
+        "variables": scenario.variables_json,
         "dataSources": scenario.data_sources_json,
         "steps": scenario.steps_json,
     }
@@ -1217,6 +1294,8 @@ def _scenario_snapshot(scenario: Scenario) -> dict[str, Any]:
         "scenarioType": scenario.scenario_type,
         "baseUrlExpression": scenario.base_url_expression,
         "defaultSettings": scenario.default_settings_json,
+        "globalHeaders": _active_items(scenario.global_headers_json or []),
+        "variables": _active_items(scenario.variables_json or []),
         "dataSources": _active_items(scenario.data_sources_json or []),
         "steps": _active_items(scenario.steps_json or []),
     }
@@ -1367,12 +1446,16 @@ def create_debug_run(
         "name": scenario.name,
         "baseUrlExpression": scenario.base_url_expression,
         "defaultSettings": scenario.default_settings_json,
+        "globalHeaders": scenario.global_headers_json,
+        "variables": scenario.variables_json,
         "dataSources": scenario.data_sources_json,
         "steps": scenario.steps_json,
     }
     validate_scenario_content(content, require_enabled_step=True)
     _validate_debug_variables(content, env_variables)
-    _validate_resolved_base_url(_resolve_expression(content["baseUrlExpression"], env_variables))
+    _validate_resolved_base_url(
+        _resolve_expression(content["baseUrlExpression"], _effective_variables(content, env_variables))
+    )
     snapshot_payload = _run_response_snapshot(
         scenario=scenario, env_group=env_group, dependency_rows=dependency_rows
     )
