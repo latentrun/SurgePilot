@@ -4,6 +4,11 @@
  */
 
 export interface paths {
+    "/v1/account/ai-skill/download": {
+        parameters: { query?: never; header?: never; path?: never; cookie?: never; };
+        get: operations["downloadPublicApiAiSkill"];
+        put?: never; post?: never; delete?: never; options?: never; head?: never; patch?: never; trace?: never;
+    };
     "/v1/account/api-tokens": {
         parameters: { query?: never; header?: never; path?: never; cookie?: never; };
         get: operations["listAccountApiTokens"];
@@ -3070,6 +3075,53 @@ type generatedOperation<T, Request = never> = {
 };
 
 export interface operations {
+    downloadPublicApiAiSkill: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                surgepilot_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Official SurgePilot Public API AI skill source archive. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/zip": string;
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description The official AI skill source is not available. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "code": "AI_SKILL_SOURCE_NOT_AVAILABLE",
+                     *       "message": "AI skill source is not available.",
+                     *       "requestId": "01J00000000000000000000000"
+                     *     }
+                     */
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
     listAccountApiTokens: {
         parameters: { query?: never; header?: never; path?: never; cookie?: { surgepilot_session?: string | null; }; };
         requestBody?: never;

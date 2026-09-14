@@ -28,6 +28,7 @@ from app.services.sessions import (
     set_session_cookie,
     verify_csrf,
 )
+from app.services.system_openapi_bootstrap import bootstrap_system_openapi_best_effort
 
 router = APIRouter(prefix="/api/v1/auth", tags=["auth"])
 SessionCookieDep = Annotated[
@@ -63,13 +64,19 @@ def register(
     response: Response,
     db: DbDep,
 ) -> AuthSessionResponse:
-    user, workspace, created_session = register_user(
+    user, workspace, created_session, first_user = register_user(
         db,
         email=str(payload.email),
         display_name=payload.display_name,
         password=payload.password,
         request=request,
     )
+    if first_user:
+        bootstrap_system_openapi_best_effort(
+            application=request.app,
+            workspace_id=workspace.id,
+            admin_user_id=user.id,
+        )
     set_session_cookie(response, created_session.session_token)
     _attach_workspace_header(response, workspace.id)
     return auth_response(db, user, workspace, created_session)

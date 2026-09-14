@@ -29,6 +29,14 @@ DTOs, the required one-time string-map-to-plain migration `0017_p2_03_env_group_
 API secret exclusion. It does not authorize Snapshot encryption, key rotation, a reveal API, or
 external Secret Manager integration.
 
+`P2-04-help-ai-agents-system-openapi-bootstrap.md` is active through `ADR-0016`. It covers
+authenticated Help AI Agents guidance, a session-authenticated request-built Public API AI skill
+source download, shared runtime/script OpenAPI export, and a best-effort first-Admin import of
+SurgePilot's own curated Web/business OpenAPI into the Default Workspace API Catalog. It does not
+authorize user/external automatic ingestion, retries/workers, SDK, MCP, marketplace, installer,
+release publication, built-in agent runtime, AI generation/tuning/analysis, or API Catalog to
+Scenario/Test Plan generation.
+
 ## P2-00 factual backfill
 
 - API routes live in `apps/api/app/routes/api_catalog.py` and are registered by `apps/api/app/main.py`.
@@ -63,6 +71,14 @@ external Secret Manager integration.
 - Session routes in `apps/api/app/routes/env_groups.py` return masked detail, and `apps/api/app/routes/public_api.py` keeps public Env Group create/patch/copy plain-only with `ENV_GROUP_SECRET_PUBLIC_COPY_DENIED` for secret-bearing copy.
 - Verification coverage is in `apps/api/tests/test_p2_03_env_group_secret.py`, the typed updates in `apps/api/tests/test_p0_01_env_groups_api.py`, `apps/api/tests/test_p0_01_env_groups_service.py`, `apps/api/tests/test_p0_05_scenarios_api.py`, `apps/api/tests/test_p0_06_test_plans_api.py`, `apps/api/tests/test_p1_04_scenario_testplan_polish_api.py`, and `apps/api/tests/test_p2_02_public_api.py`, the contract assertions in `tests/contract/test_p0_01_env_groups_openapi.py` and `tests/contract/test_p2_02_public_api_openapi.py`, and the Web assertions in `apps/web/src/features/env-groups/env-groups.test.tsx`.
 - `ENV_GROUP_SECRET_PUBLIC_COPY_DENIED` is registered in `apps/api/app/main.py` and both OpenAPI artifacts, and the bundled `packages/ai-skills/surgepilot-public-api/references/public-api.openapi.json` snapshot stays byte-identical to `packages/contracts/openapi/public-api.openapi.json`.
+
+## P2-04 factual backfill
+
+- Help is registered by the pathname switch in `apps/web/src/App.tsx` and rendered by `apps/web/src/features/help/pages/help-page.tsx`; the account download wrapper is `downloadPublicApiAiSkill` and the API route is `apps/api/app/routes/account_ai_skill.py`.
+- `apps/api/app/services/skill_bundle.py` owns `default_skill_bundle_dir()` and resolves the container path first, then the repository fallback. Each authenticated request builds `surgepilot-public-api-skill.zip` from the governed source package without a Workspace header, persistence, or cache.
+- `apps/api/app/services/openapi_export.py` owns normalization, Web/public path filtering, schema reachability pruning, public error-code pruning, and `_export_document`; `scripts/export_openapi.py` and `apps/api/app/services/system_openapi_bootstrap.py` use that shared implementation.
+- `apps/api/app/services/system_openapi_bootstrap.py` owns `build_curated_openapi_payload()`, `import_system_openapi()`, and `bootstrap_system_openapi_best_effort()`. The auth route invokes the wrapper only after an explicit `first_user=True` result, using an independent session and best-effort MinIO compensation.
+- Focused verification is recorded in `apps/api/tests/test_p2_04_openapi_export.py`, `apps/api/tests/test_p2_04_ai_skill.py`, `apps/api/tests/test_p2_04_system_openapi_bootstrap.py`, `tests/contract/test_p2_04_help_ai_agents_openapi.py`, `apps/web/src/features/help/help.test.tsx`, and `tests/e2e/p2_04_help_ai_agents.spec.ts`. Contract refresh uses `make generate-contracts`; the checkpoint's targeted verification commands are `make test`, `make lint`, `make contracts-stale-check`, `make verify`, and the focused Playwright command recorded in the Slice SDD.
 
 Other P2 slices remain outside this checkpoint and require their own accepted scope and
 implementation history.

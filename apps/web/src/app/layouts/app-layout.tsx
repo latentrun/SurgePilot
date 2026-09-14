@@ -42,6 +42,11 @@ const accountGroup: NavGroup = {
   items: [{ label: "API Keys", path: "/account/api-keys" }],
 };
 
+const helpGroup: NavGroup = {
+  label: "Support",
+  items: [{ label: "Help", path: "/help" }],
+};
+
 const adminGroup: NavGroup = {
   label: "Admin",
   items: [
@@ -84,6 +89,7 @@ export function AppLayout({
     assetsGroup,
     resourcesGroup,
     accountGroup,
+    helpGroup,
   ];
   if (session.user.role === "admin") {
     groups.push(adminGroup);

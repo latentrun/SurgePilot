@@ -27,6 +27,7 @@ import { AdminSystemSettingsPage } from "./features/admin/pages/system-settings-
 import { ApiCatalogListPage } from "./features/api-catalog/pages/api-catalog-list-page";
 import { ApiCatalogDetailPage } from "./features/api-catalog/pages/api-catalog-detail-page";
 import { ApiKeysPage } from "./features/account/pages/api-keys-page";
+import { HelpPage } from "./features/help/pages/help-page";
 
 function LoadingPage() {
   return (
@@ -81,6 +82,8 @@ function AppRoutes({
     page = <MonitoringPage />;
   } else if (pathname === "/account/api-keys") {
     page = <ApiKeysPage />;
+  } else if (pathname === "/help") {
+    page = <HelpPage />;
   } else if (pathname === "/admin/setup-status") {
     page = <AdminSetupStatusPage />;
   } else if (pathname === "/admin/workspaces") {

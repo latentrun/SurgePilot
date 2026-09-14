@@ -82,7 +82,7 @@ def register_user(
     display_name: str,
     password: str,
     request: Request,
-) -> tuple[User, Workspace, CreatedSession]:
+) -> tuple[User, Workspace, CreatedSession, bool]:
     normalized_email = normalize_email(email)
     trimmed_display_name = display_name.strip()
     if not trimmed_display_name:
@@ -145,7 +145,7 @@ def register_user(
             details={"role": user.role},
         )
     db.commit()
-    return user, workspace, session
+    return user, workspace, session, first_user
 
 
 def _lock_duration(failed_login_count: int) -> timedelta | None:

@@ -17,6 +17,7 @@ COPY apps/api/alembic.ini ./alembic.ini
 COPY apps/api/app ./app
 COPY apps/api/migrations ./migrations
 COPY apps/runner /opt/surgepilot/runner-bundle
+COPY packages/ai-skills/surgepilot-public-api /opt/surgepilot/ai-skills/surgepilot-public-api
 COPY packages/contracts/runner/runner-callback.schema.json /opt/surgepilot/contracts/runner/runner-callback.schema.json
 
 RUN uv sync --no-dev

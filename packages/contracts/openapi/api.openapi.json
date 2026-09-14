@@ -7384,6 +7384,14 @@
   },
   "openapi": "3.1.0",
   "paths": {
+    "/v1/account/ai-skill/download": {
+      "get": {
+        "operationId": "downloadPublicApiAiSkill",
+        "parameters": [{"in":"cookie","name":"surgepilot_session","required":false,"schema":{"anyOf":[{"type":"string"},{"type":"null"}],"title":"SurgePilot Session"}}],
+        "responses": {"200":{"content":{"application/zip":{"schema":{"format":"binary","type":"string"}}},"description":"Official SurgePilot Public API AI skill source archive."},"401":{"content":{"application/json":{"schema":{"$ref":"#/components/schemas/ErrorResponse"}}},"description":"Unauthorized"},"503":{"content":{"application/json":{"example":{"code":"AI_SKILL_SOURCE_NOT_AVAILABLE","message":"AI skill source is not available.","requestId":"01J00000000000000000000000"},"schema":{"$ref":"#/components/schemas/ErrorResponse"}}},"description":"The official AI skill source is not available."}},
+        "summary":"Download Public Api Ai Skill","tags":["account-ai-skill"]
+      }
+    },
     "/v1/account/api-tokens": {
       "get": {
         "operationId":"listAccountApiTokens",
