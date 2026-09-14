@@ -46,6 +46,7 @@ import {
   type ScenarioFormField,
   type ScenarioNamedValue,
   type ScenarioScript,
+  type ScenarioVariable,
   type ScenarioUploadFile,
 } from "../model";
 
@@ -104,11 +105,47 @@ const stepTabs: Array<{ key: StepTabKey; label: string }> = [
   { key: "settings", label: "Settings" },
 ];
 
-type ConfigTabKey = "settings" | "dataSources";
+type ConfigTabKey = "settings" | "headers" | "variables" | "dataSources";
 const configTabs: Array<{ key: ConfigTabKey; label: string }> = [
   { key: "settings", label: "Settings" },
+  { key: "headers", label: "Headers" },
+  { key: "variables", label: "Variables" },
   { key: "dataSources", label: "Data Sources" },
 ];
+
+function firstInvalidConfigTab(detail: ScenarioDetail): ConfigTabKey | null {
+  if (!detail.baseUrlExpression.trim()) return "settings";
+
+  const headerNames = new Set<string>();
+  for (const header of detail.globalHeaders ?? []) {
+    if (!/^[!#$%&'*+.^_`|~0-9A-Za-z-]+$/.test(header.name)) return "headers";
+    const normalizedName = header.name.toLowerCase();
+    if (headerNames.has(normalizedName)) return "headers";
+    headerNames.add(normalizedName);
+  }
+
+  const variableNames = new Set<string>();
+  for (const variable of detail.variables ?? []) {
+    if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(variable.name)) return "variables";
+    if (variableNames.has(variable.name)) return "variables";
+    variableNames.add(variable.name);
+  }
+
+  for (const dataSource of detail.dataSources ?? []) {
+    if (
+      dataSource.delimiter !== null &&
+      dataSource.delimiter !== "tab" &&
+      dataSource.delimiter.length !== 1
+    ) {
+      return "dataSources";
+    }
+    for (const variableName of dataSource.variableNames ?? []) {
+      if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(variableName)) return "dataSources";
+    }
+  }
+
+  return null;
+}
 
 function currentScenarioId() {
   const segments = window.location.pathname.split("/").filter(Boolean);
@@ -449,11 +486,13 @@ function NamedValueRows({
   items,
   onChange,
   onRemove,
+  emptyText,
 }: {
   label: string;
   items: ScenarioNamedValue[] | undefined;
   onChange: (id: string, fields: Partial<ScenarioNamedValue>) => void;
   onRemove: (id: string) => void;
+  emptyText?: string;
 }) {
   const rows = items ?? [];
   return (
@@ -501,7 +540,9 @@ function NamedValueRows({
         </div>
       ))}
       {rows.length === 0 ? (
-        <p className="text-sm text-text-muted">No {label.toLowerCase()} yet.</p>
+        <p className="text-sm text-text-muted">
+          {emptyText ?? `No ${label.toLowerCase()} yet.`}
+        </p>
       ) : null}
     </div>
   );
@@ -583,7 +624,12 @@ export function ScenarioDesignerPage() {
       setLoadError(null);
       try {
         const data = await getScenario(scenarioId, workspaceId);
-        setDraft(data);
+        setDraft({
+          ...data,
+          globalHeaders: data.globalHeaders ?? [],
+          variables: data.variables ?? [],
+          dataSources: data.dataSources ?? [],
+        });
         setTagText(data.tags.join(", "));
         setSelectedStepId(data.steps[0]?.id ?? null);
         setDirty(false);
@@ -750,6 +796,30 @@ export function ScenarioDesignerPage() {
     }));
   }
 
+  function updateGlobalHeader(
+    headerId: string,
+    fields: Partial<ScenarioNamedValue>,
+  ) {
+    updateDraft((current) => ({
+      ...current,
+      globalHeaders: (current.globalHeaders ?? []).map((header) =>
+        header.id === headerId ? { ...header, ...fields } : header,
+      ),
+    }));
+  }
+
+  function updateScenarioVariable(
+    variableId: string,
+    fields: Partial<ScenarioVariable>,
+  ) {
+    updateDraft((current) => ({
+      ...current,
+      variables: (current.variables ?? []).map((variable) =>
+        variable.id === variableId ? { ...variable, ...fields } : variable,
+      ),
+    }));
+  }
+
   function addStep() {
     if (!draft) return;
     const step = newStep();
@@ -892,13 +962,42 @@ export function ScenarioDesignerPage() {
         workspaceId,
         token,
       );
-      setDraft(updated);
+      setDraft({
+        ...updated,
+        globalHeaders: updated.globalHeaders ?? [],
+        variables: updated.variables ?? [],
+        dataSources: updated.dataSources ?? [],
+      });
       setTagText(updated.tags.join(", "));
       setDirty(false);
       setRenamingName(false);
       return updated;
     } catch (error) {
       setActionError(errorMessage(error, "save"));
+      const details = (error as ApiError | undefined)?.body?.details ?? [];
+      const firstGlobalField = details
+        .map((detail) =>
+          typeof detail === "object" && detail && "field" in detail
+            ? String(detail.field)
+            : "",
+        )
+        .find((field) =>
+          /^(baseUrlExpression|defaultSettings|globalHeaders|variables|dataSources)/.test(
+            field,
+          ),
+        );
+      if (firstGlobalField) {
+        setShowConfig(true);
+        if (firstGlobalField.startsWith("globalHeaders")) {
+          setActiveConfigTab("headers");
+        } else if (firstGlobalField.startsWith("variables")) {
+          setActiveConfigTab("variables");
+        } else if (firstGlobalField.startsWith("dataSources")) {
+          setActiveConfigTab("dataSources");
+        } else {
+          setActiveConfigTab("settings");
+        }
+      }
       if (isRevisionConflict(error)) {
         setNeedsReload(true);
       }
@@ -1014,6 +1113,13 @@ export function ScenarioDesignerPage() {
   }
 
   function doneGlobalConfiguration() {
+    if (!draft) return;
+    const invalidTab = firstInvalidConfigTab(draft);
+    if (invalidTab) {
+      setActionError("Scenario needs attention before it can be saved.");
+      setActiveConfigTab(invalidTab);
+      return;
+    }
     configBackupRef.current = null;
     setShowConfig(false);
   }
@@ -2000,7 +2106,7 @@ export function ScenarioDesignerPage() {
 
       {showConfig && draft ? (
         <div
-          aria-label="Global configuration"
+          aria-label="Global Configuration"
           aria-modal="true"
           className="fixed inset-0 z-50 flex items-start justify-end bg-black/50 p-0"
           role="dialog"
@@ -2009,10 +2115,10 @@ export function ScenarioDesignerPage() {
             <div className="flex items-start justify-between border-b border-white/10 p-6">
               <div>
                 <h2 className="text-xl font-semibold text-white">
-                  Global Config
+                  Global Configuration
                 </h2>
                 <p className="mt-1 text-sm text-text-muted">
-                  Scenario settings, defaults and CSV data sources.
+                  Configure Scenario defaults, global headers, non-secret variables, and CSV data sources for generated JMeter runs.
                 </p>
               </div>
               <button
@@ -2178,6 +2284,80 @@ export function ScenarioDesignerPage() {
                   </div>
                 </div>
               ) : null}
+              {activeConfigTab === "headers" ? (
+                <FieldSection
+                  title="Global Headers"
+                  description="Apply HTTP headers to every enabled request. Step headers with the same name override these values."
+                  action={
+                    <MiniButton
+                      onClick={() =>
+                        updateDraft((current) => ({
+                          ...current,
+                          globalHeaders: [
+                            ...(current.globalHeaders ?? []),
+                            newNamedValue(),
+                          ],
+                        }))
+                      }
+                      tone="primary"
+                    >
+                      Add global header
+                    </MiniButton>
+                  }
+                >
+                  <NamedValueRows
+                    emptyText="No global headers."
+                    items={draft.globalHeaders}
+                    label="Global header"
+                    onChange={updateGlobalHeader}
+                    onRemove={(id) =>
+                      updateDraft((current) => ({
+                        ...current,
+                        globalHeaders: (current.globalHeaders ?? []).filter(
+                          (item) => item.id !== id,
+                        ),
+                      }))
+                    }
+                  />
+                </FieldSection>
+              ) : null}
+              {activeConfigTab === "variables" ? (
+                <FieldSection
+                  title="Scenario Variables"
+                  description="Values are ordinary non-secret Scenario defaults. Env Group variables override duplicate names during execution."
+                  action={
+                    <MiniButton
+                      onClick={() =>
+                        updateDraft((current) => ({
+                          ...current,
+                          variables: [
+                            ...(current.variables ?? []),
+                            newNamedValue(),
+                          ],
+                        }))
+                      }
+                      tone="primary"
+                    >
+                      Add variable
+                    </MiniButton>
+                  }
+                >
+                  <NamedValueRows
+                    emptyText="No scenario variables."
+                    items={draft.variables}
+                    label="Scenario variable"
+                    onChange={updateScenarioVariable}
+                    onRemove={(id) =>
+                      updateDraft((current) => ({
+                        ...current,
+                        variables: (current.variables ?? []).filter(
+                          (item) => item.id !== id,
+                        ),
+                      }))
+                    }
+                  />
+                </FieldSection>
+              ) : null}
               {activeConfigTab === "dataSources" ? (
                 <FieldSection
                   title="CSV Data Sources"
@@ -2195,7 +2375,7 @@ export function ScenarioDesignerPage() {
                       }
                       tone="primary"
                     >
-                      Add data source
+                      Add CSV data source
                     </MiniButton>
                   }
                 >
@@ -2237,12 +2417,11 @@ export function ScenarioDesignerPage() {
                 Cancel
               </button>
               <button
-                className="rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-on-primary transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-60"
-                disabled={isSaving}
-                onClick={() => void handleSave()}
+                className="rounded-lg border border-primary/40 bg-primary/10 px-4 py-2 text-sm font-semibold text-primary transition hover:bg-primary/20"
+                onClick={doneGlobalConfiguration}
                 type="button"
               >
-                {isSaving ? "Saving..." : "Save"}
+                Done
               </button>
             </div>
           </div>

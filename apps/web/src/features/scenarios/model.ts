@@ -19,6 +19,7 @@ export type ScenarioUploadFile = NonNullable<
 export type ScenarioDataSource = NonNullable<
   ScenarioDetail["dataSources"]
 >[number];
+export type ScenarioVariable = NonNullable<ScenarioDetail["variables"]>[number];
 export type ScenarioExtractor = NonNullable<
   ScenarioStep["extractors"]
 >[number];
@@ -284,6 +285,8 @@ export function blankScenarioPayload(
     tags: [],
     baseUrlExpression,
     defaultSettings,
+    globalHeaders: [],
+    variables: [],
     dataSources: [],
     steps: [],
   };
@@ -299,7 +302,9 @@ export function toPatchPayload(
     tags: detail.tags,
     baseUrlExpression: detail.baseUrlExpression,
     defaultSettings: detail.defaultSettings,
-    dataSources: detail.dataSources,
+    globalHeaders: detail.globalHeaders ?? [],
+    variables: detail.variables ?? [],
+    dataSources: detail.dataSources ?? [],
     steps: detail.steps,
   };
 }
