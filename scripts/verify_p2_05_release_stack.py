@@ -43,9 +43,9 @@ def target_origin() -> str:
 
 def scenario_payload() -> dict:
     return {
-        "name": "P2-05 Release LAN Debug",
+        "name": "P2-06 Release LAN Debug",
         "description": "Validate the released Runtime through the published LAN API origin.",
-        "tags": ["p2-05", "release", "lan"],
+        "tags": ["p2-06", "release", "lan"],
         "baseUrlExpression": "${base_url}",
         "defaultSettings": {
             "thinkTimeMs": 0,
@@ -96,9 +96,9 @@ def scenario_payload() -> dict:
 
 def standard_plan_payload(*, scenario_id: str, env_group_id: str, node_id: str) -> dict:
     return {
-        "name": "P2-05 Release LAN Monitoring",
+        "name": "P2-06 Release LAN Monitoring",
         "description": "Validate Standard Run monitoring through the published LAN origins.",
-        "tags": ["p2-05", "release", "lan"],
+        "tags": ["p2-06", "release", "lan"],
         "envGroupId": env_group_id,
         "runMode": "sequential",
         "resource": {"poolType": "private", "selectedNodeId": node_id},
@@ -227,7 +227,7 @@ def verify_release_stack() -> None:
         session,
         "/api/v1/env-groups",
         {
-            "name": "P2-05 Release LAN Target",
+            "name": "P2-06 Release LAN Target",
             "description": "Published LAN release acceptance target.",
             "variables": {"base_url": {"type": "plain", "value": target_origin()}},
         },
@@ -305,7 +305,7 @@ def main() -> int:
         print(f"P2-05 release acceptance failed: {exc}", file=sys.stderr)
         return 1
     print(
-        "P2-05 release LAN acceptance passed: node initialization, Debug Run, Standard Run, "
+        "P2-06 release LAN acceptance passed: node initialization, Debug Run, Standard Run, "
         "InfluxDB measurements, report, and completed-Run Monitoring."
     )
     return 0

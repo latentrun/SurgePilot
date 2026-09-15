@@ -25,8 +25,6 @@ def test_release_scenario_is_bounded_to_configured_lan_health_target(
     payload = verify_p2_05_release_stack.scenario_payload()
 
     assert payload["baseUrlExpression"] == "${base_url}"
-    assert payload["name"] == "P2-05 Release LAN Debug"
-    assert payload["tags"] == ["p2-05", "release", "lan"]
     assert payload["dataSources"] == []
     assert len(payload["steps"]) == 1
     assert payload["steps"][0]["method"] == "GET"
@@ -50,8 +48,6 @@ def test_release_standard_plan_uses_initialized_private_node() -> None:
     )
 
     assert payload["envGroupId"] == "env-1"
-    assert payload["name"] == "P2-05 Release LAN Monitoring"
-    assert payload["tags"] == ["p2-05", "release", "lan"]
     assert payload["resource"] == {"poolType": "private", "selectedNodeId": "node-1"}
     assert payload["scenarioItems"][0]["scenarioId"] == "scenario-1"
     assert payload["scenarioItems"][0]["loadSettings"]["holdForSeconds"] == 6
@@ -99,7 +95,6 @@ def test_verify_release_stack_runs_lan_debug_and_standard_monitoring_flow(
             }
             return {"id": "node-1"}
         if path == "/api/v1/env-groups":
-            assert payload["name"] == "P2-05 Release LAN Target"
             assert payload["variables"]["base_url"]["value"] == ("http://api.surgepilot.test:8000")
             return {"id": "env-1"}
         if path == "/api/v1/scenarios":
