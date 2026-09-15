@@ -47,6 +47,20 @@ does not authorize Kubernetes, package-manager or system installers, Docker Hub 
 all-in-one image, native macOS Load Nodes/Runtime, automatic upgrades, a Runtime UI/catalog,
 signing or SBOM publication, or standalone Public API AI skill release.
 
+`P2-06-lan-first-deployment-usability.md` is active through `ADR-0018`, its new-release Runtime
+default amendment `ADR-0020`, its release `up` configuration confirmation amendment `ADR-0021`,
+and its separate installation amendment `ADR-0024` as release-path amendments to P2-05. It covers
+the tagged-release LAN-first startup contract only: an interactive first-run host/port confirmation
+with a warned canonical-loopback evaluation exception, persisted node-facing URL/port consistency,
+Demo off by default, required node-facing origins, default authenticated InfluxDB publication, a
+strict session-cookie transport value, non-interactive complete-`.env` fixtures, a new-release
+`amd64,arm64` Runtime default without an architecture prompt, and read-only default-Yes release
+`up` configuration review with explicit interactive four-field standard-LAN updates. ADR-0017
+decisions 7 and 8 are superseded only as those amendments specify. It does not authorize network
+discovery, a Web/API configuration surface, automatic or non-interactive rewriting, advanced-HTTPS
+quick editing, non-network changes, source-startup changes, package-manager/system installers, or
+public workflow dispatch capability.
+
 ## P2-00 factual backfill
 
 - API routes live in `apps/api/app/routes/api_catalog.py` and are registered by `apps/api/app/main.py`.
