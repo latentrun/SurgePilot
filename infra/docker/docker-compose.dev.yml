@@ -1,0 +1,9 @@
+services:
+  postgres:
+    profiles: ["dev"]
+
+  minio:
+    profiles: ["dev"]
+
+  minio-init:
+    profiles: ["dev"]
