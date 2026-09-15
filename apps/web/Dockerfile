@@ -13,6 +13,12 @@ COPY apps/web ./apps/web
 RUN pnpm --filter @surgepilot/web build
 
 FROM nginx:1.27-alpine
+ARG SURGEPILOT_VERSION=dev
+ARG SURGEPILOT_REVISION=unknown
+ARG SURGEPILOT_SOURCE=https://github.com/latentrun/SurgePilot
+LABEL org.opencontainers.image.source=${SURGEPILOT_SOURCE} \
+      org.opencontainers.image.revision=${SURGEPILOT_REVISION} \
+      org.opencontainers.image.version=${SURGEPILOT_VERSION}
 COPY apps/web/nginx.conf /etc/nginx/conf.d/default.conf
 COPY --from=build /app/apps/web/dist /usr/share/nginx/html
 EXPOSE 80

@@ -1,0 +1,60 @@
+services:
+  ssh-load-node:
+    profiles: ["ssh-e2e"]
+    image: docker-ssh-load-node:latest
+    build:
+      context: ../..
+      dockerfile: infra/docker/ssh-load-node/Dockerfile
+      args:
+        HTTP_PROXY: ${SURGEPILOT_DOCKER_BUILD_HTTP_PROXY:-}
+        HTTPS_PROXY: ${SURGEPILOT_DOCKER_BUILD_HTTPS_PROXY:-}
+        NO_PROXY: ${SURGEPILOT_DOCKER_BUILD_NO_PROXY:-}
+        http_proxy: ${SURGEPILOT_DOCKER_BUILD_HTTP_PROXY:-}
+        https_proxy: ${SURGEPILOT_DOCKER_BUILD_HTTPS_PROXY:-}
+        no_proxy: ${SURGEPILOT_DOCKER_BUILD_NO_PROXY:-}
+        APT_MIRROR: ${SURGEPILOT_DOCKER_BUILD_UBUNTU_APT_MIRROR:-}
+        APT_SECURITY_MIRROR: ${SURGEPILOT_DOCKER_BUILD_UBUNTU_APT_SECURITY_MIRROR:-}
+      extra_hosts:
+        - "host.docker.internal:host-gateway"
+    ports:
+      - "${SURGEPILOT_SSH_E2E_PORT:-22322}:22"
+
+  ssh-load-node-2:
+    profiles: ["ssh-e2e"]
+    image: docker-ssh-load-node:latest
+    build:
+      context: ../..
+      dockerfile: infra/docker/ssh-load-node/Dockerfile
+      args:
+        HTTP_PROXY: ${SURGEPILOT_DOCKER_BUILD_HTTP_PROXY:-}
+        HTTPS_PROXY: ${SURGEPILOT_DOCKER_BUILD_HTTPS_PROXY:-}
+        NO_PROXY: ${SURGEPILOT_DOCKER_BUILD_NO_PROXY:-}
+        http_proxy: ${SURGEPILOT_DOCKER_BUILD_HTTP_PROXY:-}
+        https_proxy: ${SURGEPILOT_DOCKER_BUILD_HTTPS_PROXY:-}
+        no_proxy: ${SURGEPILOT_DOCKER_BUILD_NO_PROXY:-}
+        APT_MIRROR: ${SURGEPILOT_DOCKER_BUILD_UBUNTU_APT_MIRROR:-}
+        APT_SECURITY_MIRROR: ${SURGEPILOT_DOCKER_BUILD_UBUNTU_APT_SECURITY_MIRROR:-}
+      extra_hosts:
+        - "host.docker.internal:host-gateway"
+    ports:
+      - "${SURGEPILOT_SSH_E2E_2_PORT:-22323}:22"
+
+  ssh-load-node-debian12:
+    profiles: ["runtime-compat"]
+    image: docker-ssh-load-node-debian12:latest
+    build:
+      context: ../..
+      dockerfile: infra/docker/ssh-load-node-debian12/Dockerfile
+      args:
+        HTTP_PROXY: ${SURGEPILOT_DOCKER_BUILD_HTTP_PROXY:-}
+        HTTPS_PROXY: ${SURGEPILOT_DOCKER_BUILD_HTTPS_PROXY:-}
+        NO_PROXY: ${SURGEPILOT_DOCKER_BUILD_NO_PROXY:-}
+        http_proxy: ${SURGEPILOT_DOCKER_BUILD_HTTP_PROXY:-}
+        https_proxy: ${SURGEPILOT_DOCKER_BUILD_HTTPS_PROXY:-}
+        no_proxy: ${SURGEPILOT_DOCKER_BUILD_NO_PROXY:-}
+        APT_MIRROR: ${SURGEPILOT_DOCKER_BUILD_DEBIAN_APT_MIRROR:-}
+        APT_SECURITY_MIRROR: ${SURGEPILOT_DOCKER_BUILD_DEBIAN_APT_SECURITY_MIRROR:-}
+      extra_hosts:
+        - "host.docker.internal:host-gateway"
+    ports:
+      - "${SURGEPILOT_SSH_E2E_DEBIAN12_PORT:-22324}:22"

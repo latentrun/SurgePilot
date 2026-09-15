@@ -1,0 +1,92 @@
+name: Release Package Bootstrap
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - "package-bootstrap-*"
+
+permissions:
+  contents: read
+  packages: write
+
+env:
+  CANONICAL_REPOSITORY: latentrun/SurgePilot
+  API_IMAGE: ghcr.io/latentrun/surgepilot-api
+  WEB_IMAGE: ghcr.io/latentrun/surgepilot-web
+  DEMO_IMAGE: ghcr.io/latentrun/surgepilot-demo-node
+
+jobs:
+  create-packages:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Validate canonical repository
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = "$CANONICAL_REPOSITORY" || {
+            echo "Package bootstrap must run from $CANONICAL_REPOSITORY after the repository rename; current repository is $GITHUB_REPOSITORY." >&2
+            exit 1
+          }
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          fetch-depth: 0
+      - name: Validate trusted package bootstrap tag
+        if: github.event_name == 'push'
+        run: |
+          set -euo pipefail
+          git fetch --no-tags --force origin main:refs/remotes/origin/main
+          suffix=${GITHUB_REF_NAME#package-bootstrap-}
+          [[ "$GITHUB_REF_NAME" =~ ^package-bootstrap-[0-9a-f]{12,40}$ ]] || {
+            echo "Package bootstrap tag must use package-bootstrap-<12-to-40 lowercase commit hex>." >&2
+            exit 1
+          }
+          [[ "$GITHUB_SHA" == "$suffix"* ]] || {
+            echo "Package bootstrap tag suffix must be a prefix of the tagged commit SHA." >&2
+            exit 1
+          }
+          git merge-base --is-ancestor "$GITHUB_SHA" refs/remotes/origin/main || {
+            echo "Package bootstrap tags may reference only commits already contained in main." >&2
+            exit 1
+          }
+      - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
+      - uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ github.token }}
+      - name: Create bounded non-release package bootstrap images
+        run: |
+          set -euo pipefail
+          context="$RUNNER_TEMP/package-bootstrap"
+          mkdir -p "$context"
+          cat > "$context/Dockerfile" <<'EOF'
+          FROM scratch
+          ARG SOURCE
+          LABEL org.opencontainers.image.source=$SOURCE
+          LABEL org.opencontainers.image.title="SurgePilot package visibility bootstrap (not a release image)"
+          EOF
+          for image in "$API_IMAGE" "$WEB_IMAGE" "$DEMO_IMAGE"; do
+            docker buildx build \
+              --platform linux/amd64 \
+              --provenance=false \
+              --sbom=false \
+              --build-arg SOURCE="https://github.com/$CANONICAL_REPOSITORY" \
+              --tag "$image:package-bootstrap" \
+              --push \
+              "$context"
+          done
+      - name: Record required one-time visibility action
+        run: |
+          cat >> "$GITHUB_STEP_SUMMARY" <<'EOF'
+          ## Required before the first semantic release
+
+          Open each package in GitHub **Package settings** and set its visibility to **Public**:
+
+          - `surgepilot-api`
+          - `surgepilot-web`
+          - `surgepilot-demo-node`
+
+          The tag-only Release workflow verifies `package-bootstrap` anonymously before it creates
+          any semantic or staging release tags. This bootstrap workflow does not create a SurgePilot
+          release and its bootstrap images are not runnable product artifacts.
+          EOF

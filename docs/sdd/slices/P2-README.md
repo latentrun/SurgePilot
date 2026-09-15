@@ -37,6 +37,16 @@ authorize user/external automatic ingestion, retries/workers, SDK, MCP, marketpl
 release publication, built-in agent runtime, AI generation/tuning/analysis, or API Catalog to
 Scenario/Test Plan generation.
 
+`P2-05-cross-platform-distribution.md` is active through `ADR-0017`, its source-preview amendment
+`ADR-0019`, and its user-local platform Release installer amendment `ADR-0024`. It covers one
+complete tagged-release mode: GHCR multi-architecture SurgePilot application images, a bounded
+GitHub Release bundle, a version-pinned user-local installer and bundle checksum, native-built
+Linux amd64/arm64 Runtime assets, release Compose plus `surgepilot up`, complete source Compose plus
+`make start-full-stack`, and a source-only control-plane preview through `make start-preview`. It
+does not authorize Kubernetes, package-manager or system installers, Docker Hub mirroring, an
+all-in-one image, native macOS Load Nodes/Runtime, automatic upgrades, a Runtime UI/catalog,
+signing or SBOM publication, or standalone Public API AI skill release.
+
 ## P2-00 factual backfill
 
 - API routes live in `apps/api/app/routes/api_catalog.py` and are registered by `apps/api/app/main.py`.

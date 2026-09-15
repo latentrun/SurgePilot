@@ -1,0 +1,528 @@
+#!/bin/sh
+set -eu
+
+RELEASE_VERSION="@@RELEASE_VERSION@@"
+API_IMAGE="@@API_IMAGE@@"
+COMMAND_NAME=${SURGEPILOT_COMMAND_NAME:-./surgepilot}
+ROOT=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+BASE_COMPOSE="$ROOT/compose/docker-compose.yml"
+ENV_FILE="$ROOT/.env"
+HELPER_TEMP_DIR=
+HELPER_PASSWD=
+HELPER_OUTPUT=
+
+usage() {
+    cat <<USAGE
+Usage:
+  $COMMAND_NAME up
+  $COMMAND_NAME down
+  $COMMAND_NAME status
+  $COMMAND_NAME logs
+USAGE
+}
+
+fail() {
+    printf "SurgePilot: %s\n" "$*" >&2
+    exit 1
+}
+
+cleanup_helper_passwd() {
+    if [ -n "$HELPER_PASSWD" ]; then
+        rm -f "$HELPER_PASSWD"
+        HELPER_PASSWD=
+    fi
+}
+
+cleanup_helper_output() {
+    if [ -n "$HELPER_OUTPUT" ]; then
+        rm -f "$HELPER_OUTPUT"
+        HELPER_OUTPUT=
+    fi
+}
+
+cleanup_helper_state() {
+    cleanup_helper_passwd
+    cleanup_helper_output
+    if [ -n "$HELPER_TEMP_DIR" ]; then
+        rm -rf "$HELPER_TEMP_DIR"
+        HELPER_TEMP_DIR=
+    fi
+}
+
+trap cleanup_helper_state 0
+trap 'exit 129' HUP
+trap 'exit 130' INT
+trap 'exit 143' TERM
+
+require_docker() {
+    command -v docker >/dev/null 2>&1 || fail "Docker Engine or Docker Desktop is required."
+    docker compose version >/dev/null 2>&1 || fail "Docker Compose v2 is required."
+    docker info >/dev/null 2>&1 || fail "The Docker daemon is not reachable."
+}
+
+require_minimum_version() {
+    name=$1
+    actual=$2
+    minimum=$3
+    actual_number=$(printf '%s\n' "$actual" | sed 's/^v//' | awk -F. '/^[0-9]+\.[0-9]+\.[0-9]+/ {printf "%d%03d%03d", $1, $2, $3}')
+    minimum_number=$(printf '%s\n' "$minimum" | awk -F. '{printf "%d%03d%03d", $1, $2, $3}')
+    if [ -z "$actual_number" ] || [ "$actual_number" -lt "$minimum_number" ]; then
+        fail "$name $minimum or newer is required; found $actual"
+    fi
+}
+
+env_value() {
+    key=$1
+    if [ ! -f "$ENV_FILE" ]; then
+        return 0
+    fi
+    sed -n "s/^${key}=//p" "$ENV_FILE" | sed -n '$p' | sed "s/^'//;s/'$//"
+}
+
+is_local_only_origin() {
+    case "$(printf '%s' "$1" | tr '[:upper:]' '[:lower:]')" in
+        http://localhost:*|http://localhost.:*|http://127.0.0.1:*|http://127.0.0.1.:*|http://\[::1\]:*) return 0 ;;
+        *) return 1 ;;
+    esac
+}
+
+compose() {
+    demo_enabled=$(env_value SURGEPILOT_DEMO_LOAD_NODE_ENABLED | tr '[:upper:]' '[:lower:]')
+    if [ "$demo_enabled" = "true" ]; then
+        docker compose --env-file "$ENV_FILE" -f "$BASE_COMPOSE" --profile demo "$@"
+    else
+        docker compose --env-file "$ENV_FILE" -f "$BASE_COMPOSE" "$@"
+    fi
+}
+
+ensure_helper_temp_dir() {
+    if [ -n "$HELPER_TEMP_DIR" ]; then
+        return 0
+    fi
+    HELPER_TEMP_DIR=$(mktemp -d "${TMPDIR:-/tmp}/surgepilot-helper.XXXXXX") || \
+        fail "Cannot prepare private helper state."
+    chmod 700 "$HELPER_TEMP_DIR" || fail "Cannot protect private helper state."
+}
+
+helper() {
+    ensure_helper_temp_dir
+    HELPER_PASSWD=$(mktemp "$HELPER_TEMP_DIR/helper-passwd.XXXXXX") || \
+        fail "Cannot prepare helper user identity."
+    helper_uid=$(id -u)
+    helper_gid=$(id -g)
+    printf 'root:x:0:0:root:/root:/bin/sh\nsurgepilot-helper:x:%s:%s:SurgePilot helper:/tmp:/usr/sbin/nologin\n' \
+        "$helper_uid" "$helper_gid" > "$HELPER_PASSWD"
+    if docker run --rm \
+        --user "$(id -u):$(id -g)" \
+        --env HOME=/tmp \
+        --env COMPOSE_PROJECT_NAME \
+        --env DEFAULT_WORKSPACE_NAME \
+        --env RUNNER_INTERNAL_TOKEN \
+        --env SSH_CREDENTIAL_ENCRYPTION_KEY \
+        --env MINIO_BUCKET \
+        --env MINIO_ACCESS_KEY \
+        --env MINIO_SECRET_KEY \
+        --env MINIO_ROOT_USER \
+        --env MINIO_ROOT_PASSWORD \
+        --env SURGEPILOT_MONITORING_INFLUXDB_USERNAME \
+        --env SURGEPILOT_MONITORING_INFLUXDB_PASSWORD \
+        --env SURGEPILOT_MONITORING_INFLUXDB_TOKEN_FILE_HOST \
+        --env SURGEPILOT_MONITORING_INFLUXDB_ORG \
+        --env SURGEPILOT_MONITORING_INFLUXDB_BUCKET \
+        --env SURGEPILOT_GRAFANA_ADMIN_USER \
+        --volume "$ROOT:/release" \
+        --volume "$HELPER_PASSWD:/etc/passwd:ro" \
+        --workdir /release \
+        "$API_IMAGE" \
+        /app/.venv/bin/python "$@" </dev/null; then
+        helper_status=0
+    else
+        helper_status=$?
+    fi
+    cleanup_helper_passwd
+    return "$helper_status"
+}
+
+reject_process_overrides() {
+    if [ "${SURGEPILOT_HTTP_PORT+x}" = x ]; then
+        fail "SURGEPILOT_HTTP_PORT process-level overrides are not supported; edit .env instead."
+    fi
+    if [ "${SURGEPILOT_NODE_API_BASE_URL+x}" = x ]; then
+        fail "SURGEPILOT_NODE_API_BASE_URL process-level overrides are not supported; edit .env instead."
+    fi
+    if [ "${SURGEPILOT_MONITORING_INFLUXDB_HOST_PORT+x}" = x ]; then
+        fail "SURGEPILOT_MONITORING_INFLUXDB_HOST_PORT process-level overrides are not supported; edit .env instead."
+    fi
+    if [ "${SURGEPILOT_MONITORING_INFLUXDB_NODE_WRITE_URL+x}" = x ]; then
+        fail "SURGEPILOT_MONITORING_INFLUXDB_NODE_WRITE_URL process-level overrides are not supported; edit .env instead."
+    fi
+    if [ "${SURGEPILOT_RUNTIME_ARCHITECTURES+x}" = x ]; then
+        fail "SURGEPILOT_RUNTIME_ARCHITECTURES process-level overrides are not supported; edit .env instead."
+    fi
+    if [ "${SURGEPILOT_DEMO_LOAD_NODE_ENABLED+x}" = x ]; then
+        fail "SURGEPILOT_DEMO_LOAD_NODE_ENABLED process-level overrides are not supported; edit .env instead."
+    fi
+    if [ "${SESSION_COOKIE_SECURE+x}" = x ]; then
+        fail "SESSION_COOKIE_SECURE process-level overrides are not supported; edit .env instead."
+    fi
+}
+
+normalized_value() {
+    key=$1
+    value=$(sed -n "s/^${key}=//p" "$HELPER_OUTPUT" | sed -n '$p')
+    [ -n "$value" ] || fail "Release bootstrap normalization did not return $key."
+    printf '%s\n' "$value"
+}
+
+load_release_description() {
+    ensure_helper_temp_dir
+    HELPER_OUTPUT=$(mktemp "$HELPER_TEMP_DIR/helper-output.XXXXXX") || \
+        fail "Cannot prepare helper output."
+    if ! helper /opt/surgepilot/release-tools/release_preflight.py describe-release \
+        --root /release \
+        --expected-version "$RELEASE_VERSION" \
+        --daemon-arch "$daemon_arch" \
+        --forced-platform "${DOCKER_DEFAULT_PLATFORM:-}" > "$HELPER_OUTPUT"; then
+        cat "$HELPER_OUTPUT" >&2 || true
+        cleanup_helper_output
+        fail "Existing release configuration is invalid."
+    fi
+
+    config_mode=$(normalized_value SURGEPILOT_CONFIG_MODE)
+    config_host=$(sed -n 's/^SURGEPILOT_CONFIG_HOST=//p' "$HELPER_OUTPUT" | sed -n '$p')
+    http_port=$(normalized_value SURGEPILOT_HTTP_PORT)
+    api_url=$(normalized_value SURGEPILOT_NODE_API_BASE_URL)
+    influx_port=$(normalized_value SURGEPILOT_MONITORING_INFLUXDB_HOST_PORT)
+    influx_url=$(normalized_value SURGEPILOT_MONITORING_INFLUXDB_NODE_WRITE_URL)
+    configured_architectures=$(normalized_value SURGEPILOT_RUNTIME_ARCHITECTURES)
+    architectures=$(normalized_value SURGEPILOT_SELECTED_RUNTIME_ARCHITECTURES)
+    demo_enabled=$(normalized_value SURGEPILOT_DEMO_LOAD_NODE_ENABLED)
+    env_sha256=$(normalized_value SURGEPILOT_ENV_SHA256)
+    cleanup_helper_output
+}
+
+print_release_summary() {
+    printf "\nWeb and API: %s\n" "$api_url"
+    printf "InfluxDB node write: %s\n" "$influx_url"
+    printf "Runtime architectures: %s\n" "$configured_architectures"
+    case "$(printf '%s' "$demo_enabled" | tr '[:upper:]' '[:lower:]')" in
+        true) printf "Demo Load Node: enabled\n" ;;
+        *) printf "Demo Load Node: disabled\n" ;;
+    esac
+    if is_local_only_origin "$api_url"; then
+        printf "Configured node-facing URLs: this computer only.\n"
+        printf "Warning: other computers and external Load Nodes cannot reach these configured URLs.\n"
+        printf "Docker still publishes these ports on host interfaces; use the host firewall if local-only network exposure is required.\n"
+    fi
+}
+
+confirm_release_summary() {
+    while true; do
+        printf "Use this configuration? [Y/n]: "
+        IFS= read -r confirmation || fail "Release configuration confirmation ended unexpectedly."
+        confirmation=$(printf '%s' "$confirmation" | tr '[:upper:]' '[:lower:]')
+        case "$confirmation" in
+            ''|y|yes) return 0 ;;
+            n|no) return 1 ;;
+            *) printf "Please enter y or n.\n" ;;
+        esac
+    done
+}
+
+collect_lan_proposal() {
+    default_host=$1
+    default_http_port=$2
+    default_influx_port=$3
+    proposal_architectures=$4
+
+    if [ -n "$default_host" ]; then
+        printf "LAN host or IP [%s]: " "$default_host"
+    else
+        printf "LAN host or IP [required]: "
+    fi
+    IFS= read -r lan_host || fail "LAN host or IP input ended unexpectedly."
+    if [ -z "$lan_host" ]; then lan_host=$default_host; fi
+    [ -n "$lan_host" ] || fail "LAN host or IP is required."
+
+    printf "HTTP port [%s]: " "$default_http_port"
+    IFS= read -r proposal_http_port || fail "HTTP port input ended unexpectedly."
+    if [ -z "$proposal_http_port" ]; then proposal_http_port=$default_http_port; fi
+    printf "InfluxDB node-write port [%s]: " "$default_influx_port"
+    IFS= read -r proposal_influx_port || fail "InfluxDB port input ended unexpectedly."
+    if [ -z "$proposal_influx_port" ]; then proposal_influx_port=$default_influx_port; fi
+
+    ensure_helper_temp_dir
+    HELPER_OUTPUT=$(mktemp "$HELPER_TEMP_DIR/helper-output.XXXXXX") || \
+        fail "Cannot prepare helper output."
+    if helper /opt/surgepilot/release-tools/release_preflight.py normalize-bootstrap \
+        --host "$lan_host" \
+        --http-port "$proposal_http_port" \
+        --influx-port "$proposal_influx_port" \
+        --runtime-architectures "$proposal_architectures" \
+        --daemon-arch "$daemon_arch" \
+        --forced-platform "${DOCKER_DEFAULT_PLATFORM:-}" > "$HELPER_OUTPUT"; then
+        proposal_status=0
+    else
+        proposal_status=$?
+    fi
+    if [ "$proposal_status" -ne 0 ]; then
+        cat "$HELPER_OUTPUT" >&2 || true
+        cleanup_helper_output
+        return "$proposal_status"
+    fi
+
+    http_port=$(normalized_value SURGEPILOT_HTTP_PORT)
+    api_url=$(normalized_value SURGEPILOT_NODE_API_BASE_URL)
+    influx_port=$(normalized_value SURGEPILOT_MONITORING_INFLUXDB_HOST_PORT)
+    influx_url=$(normalized_value SURGEPILOT_MONITORING_INFLUXDB_NODE_WRITE_URL)
+    cleanup_helper_output
+}
+
+check_required_port() {
+    label=$1
+    port=$2
+    case "$port" in
+        ''|*[!0-9]*)
+            printf "SurgePilot: %s host port must be an integer; found %s\n" \
+                "$label" "${port:-<empty>}" >&2
+            return 1
+            ;;
+    esac
+    if [ "$port" -lt 1 ] || [ "$port" -gt 65535 ]; then
+        printf "SurgePilot: %s host port must be between 1 and 65535; found %s\n" \
+            "$label" "$port" >&2
+        return 1
+    fi
+    if ! docker run --rm --publish "$port:80" "$API_IMAGE" /usr/bin/true >/dev/null 2>&1; then
+        project_name=${COMPOSE_PROJECT_NAME:-$(env_value COMPOSE_PROJECT_NAME)}
+        if [ -z "$project_name" ]; then project_name=surgepilot; fi
+        owned_ports=$(docker ps \
+            --filter "label=com.docker.compose.project=$project_name" \
+            --format "{{.Ports}}" 2>/dev/null || true)
+        if ! printf '%s\n' "$owned_ports" | grep -Eq "(^|[ ,])([^,]*:)?${port}->"; then
+            printf "SurgePilot: %s host port %s is unavailable; choose another persisted port before retrying.\n" \
+                "$label" "$port" >&2
+            return 1
+        fi
+    fi
+}
+
+warn_resources() {
+    memory=$(docker info --format "{{.MemTotal}}" 2>/dev/null || printf 0)
+    case "$memory" in *[!0-9]*|'') memory=0 ;; esac
+    if [ "$memory" -gt 0 ] && [ "$memory" -lt 7516192768 ]; then
+        printf "Warning: the complete SurgePilot stack has less than 7 GiB of Docker memory available.\n" >&2
+    fi
+}
+
+up() {
+    reject_process_overrides
+    require_docker
+    engine_version=$(docker version --format "{{.Server.Version}}")
+    compose_version=$(docker compose version --short)
+    daemon_arch=$(docker info --format "{{.Architecture}}")
+    require_minimum_version "Docker Engine" "$engine_version" "26.0.0"
+    require_minimum_version "Docker Compose" "$compose_version" "2.27.0"
+    warn_resources
+
+    first_run=false
+    if [ ! -f "$ENV_FILE" ]; then
+        first_run=true
+        if [ ! -t 0 ] || [ ! -t 1 ]; then
+            fail "first-run release setup requires an interactive terminal. Create and validate .env before running non-interactively."
+        fi
+    fi
+
+    docker pull "$API_IMAGE"
+    helper /opt/surgepilot/release-tools/release_preflight.py preflight \
+        --root /release \
+        --expected-version "$RELEASE_VERSION" \
+        --engine-version "$engine_version" \
+        --compose-version "$compose_version" \
+        --daemon-arch "$daemon_arch"
+
+    if [ "$first_run" = "true" ]; then
+        demo_enabled=false
+        configured_architectures=amd64,arm64
+        cookie_secure=false
+        while true; do
+            if collect_lan_proposal "" 8080 8086 amd64,arm64; then
+                :
+            else
+                proposal_status=$?
+                if [ "$proposal_status" -eq 2 ]; then
+                    continue
+                fi
+                exit "$proposal_status"
+            fi
+            print_release_summary
+            if ! confirm_release_summary; then
+                continue
+            fi
+            if ! check_required_port "SurgePilot HTTP" "$http_port"; then
+                continue
+            fi
+            if ! check_required_port "InfluxDB" "$influx_port"; then
+                continue
+            fi
+            helper /opt/surgepilot/release-tools/bootstrap_deployment_env.py \
+                --root /release \
+                --release-http-port "$http_port" \
+                --release-node-api-base-url "$api_url" \
+                --release-influxdb-host-port "$influx_port" \
+                --release-influxdb-node-write-url "$influx_url" \
+                --release-demo-enabled "$demo_enabled" \
+                --release-runtime-architectures "$configured_architectures" \
+                --session-cookie-secure "$cookie_secure"
+            break
+        done
+    else
+        load_release_description
+        print_release_summary
+        if [ -t 0 ] && [ -t 1 ]; then
+            if ! confirm_release_summary; then
+                if [ "$config_mode" = "advanced_https" ]; then
+                    printf "SurgePilot: Advanced HTTPS configuration cannot be changed by this prompt.\n" >&2
+                    printf "SurgePilot: Edit .env explicitly, then run %s up again.\n" "$COMMAND_NAME" >&2
+                    exit 1
+                fi
+                current_config_host=$config_host
+                current_http_port=$http_port
+                current_influx_port=$influx_port
+                current_architectures=$configured_architectures
+                while true; do
+                    if collect_lan_proposal \
+                        "$current_config_host" "$current_http_port" "$current_influx_port" \
+                        "$current_architectures"; then
+                        :
+                    else
+                        proposal_status=$?
+                        if [ "$proposal_status" -eq 2 ]; then
+                            continue
+                        fi
+                        exit "$proposal_status"
+                    fi
+                    print_release_summary
+                    if ! confirm_release_summary; then
+                        continue
+                    fi
+                    if ! check_required_port "SurgePilot HTTP" "$http_port"; then
+                        continue
+                    fi
+                    if ! check_required_port "InfluxDB" "$influx_port"; then
+                        continue
+                    fi
+                    helper /opt/surgepilot/release-tools/bootstrap_deployment_env.py \
+                        --root /release \
+                        --reconfigure-release-network \
+                        --daemon-arch "$daemon_arch" \
+                        --forced-platform "${DOCKER_DEFAULT_PLATFORM:-}" \
+                        --expected-env-sha256 "$env_sha256" \
+                        --release-http-port "$http_port" \
+                        --release-node-api-base-url "$api_url" \
+                        --release-influxdb-host-port "$influx_port" \
+                        --release-influxdb-node-write-url "$influx_url"
+                    load_release_description
+                    break
+                done
+            fi
+        fi
+
+        check_required_port "SurgePilot HTTP" "$http_port"
+        check_required_port "InfluxDB" "$influx_port"
+        helper /opt/surgepilot/release-tools/bootstrap_deployment_env.py --root /release
+    fi
+
+    if [ "$first_run" = "true" ]; then
+        ensure_helper_temp_dir
+        HELPER_OUTPUT=$(mktemp "$HELPER_TEMP_DIR/helper-output.XXXXXX") || \
+            fail "Cannot prepare helper output."
+        helper /opt/surgepilot/release-tools/release_preflight.py select-runtime \
+            --root /release \
+            --expected-version "$RELEASE_VERSION" \
+            --daemon-arch "$daemon_arch" \
+            --forced-platform "${DOCKER_DEFAULT_PLATFORM:-}" > "$HELPER_OUTPUT"
+        architectures=$(cat "$HELPER_OUTPUT")
+        cleanup_helper_output
+    fi
+
+    helper /opt/surgepilot/release-tools/fetch_runtime_release.py \
+        --root /release \
+        --version "$RELEASE_VERSION" \
+        --architectures "$architectures" \
+        --target-directory /release/.surgepilot/runtime-artifacts \
+        --env-host-directory "$ROOT/.surgepilot/runtime-artifacts"
+
+    export LOAD_NODE_RUNTIME_VERSION="$RELEASE_VERSION"
+    compose config >/dev/null
+    compose pull
+    if ! compose up -d --wait --wait-timeout "${SURGEPILOT_HEALTH_TIMEOUT_SECONDS:-300}"; then
+        printf "SurgePilot: the release stack did not become healthy. Current service state:\n" >&2
+        compose ps >&2 || true
+        printf "Run %s status and %s logs for bounded diagnostics.\n" \
+            "$COMMAND_NAME" "$COMMAND_NAME" >&2
+        exit 1
+    fi
+
+    api_url=$(env_value SURGEPILOT_NODE_API_BASE_URL)
+    influx_url=$(env_value SURGEPILOT_MONITORING_INFLUXDB_NODE_WRITE_URL)
+    cookie_secure=$(env_value SESSION_COOKIE_SECURE | tr '[:upper:]' '[:lower:]')
+    printf "SurgePilot %s is ready.\n" "$RELEASE_VERSION"
+    printf "Web: %s\n" "$api_url"
+    printf "Grafana: %s/grafana/\n" "$api_url"
+    if is_local_only_origin "$api_url"; then
+        printf "Configured node-facing URLs: this computer only.\n"
+        printf "Docker still publishes these ports on host interfaces; use the host firewall if local-only network exposure is required.\n"
+        printf "SurgePilot: external Load Nodes are unavailable with loopback URLs. Update both node-facing URLs in .env before using them.\n" >&2
+    else
+        printf "External Load Nodes must reach:\n"
+        printf "  API: %s\n" "$api_url"
+        printf "  InfluxDB: %s\n" "$influx_url"
+    fi
+    printf "Commands: %s status | %s logs | %s down\n" \
+        "$COMMAND_NAME" "$COMMAND_NAME" "$COMMAND_NAME"
+    if [ "$cookie_secure" = "false" ]; then
+        printf "Warning: direct HTTP is intended for a trusted LAN and does not provide transport encryption.\n" >&2
+    fi
+    if [ "$(env_value SURGEPILOT_DEMO_LOAD_NODE_ENABLED | tr '[:upper:]' '[:lower:]')" = "true" ]; then
+        printf "Demo Load Node: host=demo-load-node port=22 username=surgepilot\n"
+        printf "Demo password file: %s/.surgepilot/secrets/demo-load-node-password.secret\n" "$ROOT"
+        printf "Demo SSH public key: %s/.surgepilot/demo-load-node/ssh_host_ed25519_key.pub\n" "$ROOT"
+    fi
+}
+
+command=${1:-}
+case "$command" in
+    up)
+        [ "$#" -eq 1 ] || fail "up does not accept additional arguments"
+        up
+        ;;
+    down)
+        [ "$#" -eq 1 ] || fail "down does not accept additional arguments"
+        reject_process_overrides
+        require_docker
+        [ -f "$ENV_FILE" ] || fail "No deployment .env exists; run $COMMAND_NAME up first."
+        compose down
+        ;;
+    status)
+        [ "$#" -eq 1 ] || fail "status does not accept additional arguments"
+        reject_process_overrides
+        require_docker
+        [ -f "$ENV_FILE" ] || fail "No deployment .env exists; run $COMMAND_NAME up first."
+        compose ps
+        ;;
+    logs)
+        [ "$#" -eq 1 ] || fail "logs does not accept additional arguments"
+        reject_process_overrides
+        require_docker
+        [ -f "$ENV_FILE" ] || fail "No deployment .env exists; run $COMMAND_NAME up first."
+        compose logs --tail 200
+        ;;
+    -h|--help|help)
+        usage
+        ;;
+    *)
+        usage >&2
+        exit 2
+        ;;
+esac

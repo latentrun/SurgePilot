@@ -1,0 +1,515 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+
+permissions:
+  contents: read
+  packages: read
+
+env:
+  CANONICAL_REPOSITORY: latentrun/SurgePilot
+  API_IMAGE: ghcr.io/latentrun/surgepilot-api
+  WEB_IMAGE: ghcr.io/latentrun/surgepilot-web
+  DEMO_IMAGE: ghcr.io/latentrun/surgepilot-demo-node
+
+jobs:
+  preflight:
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      packages: read
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          fetch-depth: 0
+      - uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ github.token }}
+      - name: Validate create-only release inputs
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = "$CANONICAL_REPOSITORY" || {
+            echo "Release workflow must run from $CANONICAL_REPOSITORY after the repository rename; current repository is $GITHUB_REPOSITORY." >&2
+            exit 1
+          }
+          [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "Release tag must use exact vX.Y.Z form."; exit 1; }
+          test "$TAG" != "v0.0.0" || {
+            echo "v0.0.0 is reserved for development validation and cannot be published."
+            exit 1
+          }
+          test "$(git rev-list -n 1 "$TAG")" = "$GITHUB_SHA"
+
+          release_probe=$(gh api --include "repos/$GITHUB_REPOSITORY/releases/tags/$TAG" 2>&1) && {
+            echo "GitHub Release $TAG already exists; publish a new semantic version."
+            exit 1
+          }
+          case "$release_probe" in
+            *" 404 "*) ;;
+            *)
+              echo "Unable to determine whether GitHub Release $TAG already exists; failing closed."
+              printf '%s\n' "$release_probe"
+              exit 1
+              ;;
+          esac
+
+          anonymous_config=$(mktemp -d)
+          trap 'rm -rf "$anonymous_config"' EXIT
+          printf '{"auths":{}}\n' > "$anonymous_config/config.json"
+
+          assert_image_absent() {
+            image_ref=$1
+            if output=$(docker buildx imagetools inspect "$image_ref" 2>&1); then
+              echo "Container image tag $image_ref already exists; publish a new semantic version."
+              exit 1
+            fi
+            lower=$(printf '%s' "$output" | tr '[:upper:]' '[:lower:]')
+            case "$lower" in
+              *"manifest unknown"*|*"not found"*|*"no such manifest"*) ;;
+              *)
+                echo "Unable to determine whether container image tag $image_ref exists; failing closed."
+                printf '%s\n' "$output"
+                exit 1
+                ;;
+            esac
+          }
+          for image in "$API_IMAGE" "$WEB_IMAGE" "$DEMO_IMAGE"; do
+            if ! DOCKER_CONFIG="$anonymous_config" docker buildx imagetools inspect "$image:package-bootstrap" >/dev/null; then
+              echo "GHCR package $image is not ready for anonymous public releases." >&2
+              echo "Run the Release Package Bootstrap workflow, then set the package visibility to Public in GitHub Package settings before creating a semantic tag." >&2
+              exit 1
+            fi
+            assert_image_absent "$image:$TAG"
+            assert_image_absent "$image:staging-$GITHUB_SHA"
+            for arch in amd64 arm64; do
+              assert_image_absent "$image:staging-$GITHUB_SHA-$arch"
+            done
+          done
+
+  verify:
+    needs: preflight
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: "3.12"
+      - uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e # v6
+      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4
+        with:
+          version: "11.3.0"
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: "22"
+          cache: pnpm
+      - run: make setup
+      - run: make generate-contracts
+      - run: make verify
+
+  runtime:
+    needs: preflight
+    strategy:
+      fail-fast: true
+      matrix:
+        include:
+          - arch: amd64
+            runner: ubuntu-24.04
+          - arch: arm64
+            runner: ubuntu-24.04-arm
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: "3.12"
+      - uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e # v6
+      - name: Build native Linux Runtime
+        run: |
+          python scripts/run_runtime_builder.py \
+            --output-dir "$RUNNER_TEMP/runtime" \
+            --build-dir "$RUNNER_TEMP/runtime-build" \
+            --cache-dir "$RUNNER_TEMP/runtime-cache" \
+            --env-file "$RUNNER_TEMP/runtime/runtime.env" \
+            --fixed-version "$GITHUB_REF_NAME"
+      - name: Verify native Ubuntu 24.04 and Debian 12 compatibility
+        env:
+          RUNTIME_COMPAT_RUNTIME_VERSION: ${{ github.ref_name }}
+          RUNTIME_COMPAT_RUNTIME_ARTIFACT_DIR: ${{ runner.temp }}/runtime
+          RUNTIME_COMPAT_RUNTIME_BUILD_DIR: ${{ runner.temp }}/runtime-build
+          RUNTIME_COMPAT_RUNTIME_CACHE_DIR: ${{ runner.temp }}/runtime-cache
+          RUNTIME_COMPAT_RUNTIME_ENV_FILE: ${{ runner.temp }}/runtime/runtime.env
+        run: make verify-runtime-compat
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: runtime-${{ matrix.arch }}
+          path: ${{ runner.temp }}/runtime/surgepilot-runtime-*
+          if-no-files-found: error
+          retention-days: 1
+
+  images:
+    needs: preflight
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      fail-fast: true
+      matrix:
+        include:
+          - arch: amd64
+            platform: linux/amd64
+            runner: ubuntu-24.04
+          - arch: arm64
+            platform: linux/arm64
+            runner: ubuntu-24.04-arm
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
+      - uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ github.token }}
+      - name: Build and push native architecture images
+        env:
+          TAG: staging-${{ github.sha }}-${{ matrix.arch }}
+          PLATFORM: ${{ matrix.platform }}
+        run: |
+          set -euo pipefail
+          docker buildx build --platform "$PLATFORM" --push \
+            --build-arg SURGEPILOT_VERSION="$GITHUB_REF_NAME" \
+            --build-arg SURGEPILOT_REVISION="$GITHUB_SHA" \
+            --tag "$API_IMAGE:$TAG" --file apps/api/Dockerfile .
+          docker buildx build --platform "$PLATFORM" --push \
+            --build-arg SURGEPILOT_VERSION="$GITHUB_REF_NAME" \
+            --build-arg SURGEPILOT_REVISION="$GITHUB_SHA" \
+            --tag "$WEB_IMAGE:$TAG" --file apps/web/Dockerfile .
+          docker buildx build --platform "$PLATFORM" --push \
+            --build-arg SURGEPILOT_VERSION="$GITHUB_REF_NAME" \
+            --build-arg SURGEPILOT_REVISION="$GITHUB_SHA" \
+            --tag "$DEMO_IMAGE:$TAG" --file infra/docker/demo-load-node/Dockerfile .
+
+  image-indexes:
+    needs: images
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
+      - uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ github.token }}
+      - name: Create staging multi-architecture indexes and record immutable digests
+        run: |
+          set -euo pipefail
+          printf '{\n' > image-digests.json
+          separator=''
+          for item in "api:$API_IMAGE" "web:$WEB_IMAGE" "demoNode:$DEMO_IMAGE"; do
+            key=${item%%:*}
+            image=${item#*:}
+            docker buildx imagetools create \
+              --tag "$image:staging-$GITHUB_SHA" \
+              "$image:staging-$GITHUB_SHA-amd64" \
+              "$image:staging-$GITHUB_SHA-arm64"
+            inspect=$(docker buildx imagetools inspect "$image:staging-$GITHUB_SHA" --format '{{json .Manifest}}')
+            digest=$(printf '%s' "$inspect" | jq -r .digest)
+            docker buildx imagetools inspect "$image@$digest" > image-index.txt
+            grep -q 'linux/amd64' image-index.txt
+            grep -q 'linux/arm64' image-index.txt
+            printf '%s  "%s": {"repository": "%s", "digest": "%s"}' "$separator" "$key" "$image" "$digest" >> image-digests.json
+            separator=$',\n'
+          done
+          printf '\n}\n' >> image-digests.json
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: image-digests
+          path: image-digests.json
+          retention-days: 1
+
+  bundle:
+    needs: [verify, runtime, image-indexes]
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          pattern: runtime-*
+          path: release-inputs/runtime
+          merge-multiple: true
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: image-digests
+          path: release-inputs
+      - name: Assemble and validate release bundle
+        run: |
+          python -m scripts.build_release_bundle \
+            --version "$GITHUB_REF_NAME" \
+            --revision "$GITHUB_SHA" \
+            --images-json release-inputs/image-digests.json \
+            --runtime-directory release-inputs/runtime \
+            --output-directory release-output
+          sh -n release-output/install.sh
+          (cd release-output && sha256sum -c "surgepilot-$GITHUB_REF_NAME.tar.gz.sha256")
+          tar -xzf "release-output/surgepilot-$GITHUB_REF_NAME.tar.gz" -C release-output
+          sh -n release-output/surgepilot/surgepilot
+          cp release-output/surgepilot/.env.example release-output/surgepilot/.env
+          RUNNER_INTERNAL_TOKEN=release-validation-token \
+          SSH_CREDENTIAL_ENCRYPTION_KEY=MDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDA= \
+          docker compose --env-file release-output/surgepilot/.env \
+            -f release-output/surgepilot/compose/docker-compose.yml --profile demo config >/dev/null
+          ! tar -tzf "release-output/surgepilot-$GITHUB_REF_NAME.tar.gz" | grep -E '(^|/)(\.env$|\.surgepilot/|apps/|packages/ai-skills/|surgepilot-runtime-.*\.tar\.gz$)'
+          cp release-inputs/runtime/surgepilot-runtime-* release-output/
+          rm -rf release-output/surgepilot
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: release-assets
+          path: release-output/*
+          if-no-files-found: error
+          retention-days: 1
+
+  installer-smoke:
+    needs: bundle
+    strategy:
+      fail-fast: false
+      matrix:
+        runner: [ubuntu-24.04, macos-14]
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: release-assets
+          path: release-assets
+      - name: Install through the released script without host changes
+        run: |
+          set -eu
+          asset_port=18765
+          python3 -m http.server "$asset_port" --bind 127.0.0.1 --directory release-assets \
+            >"$RUNNER_TEMP/surgepilot-installer-http.log" 2>&1 &
+          asset_server_pid=$!
+          trap 'kill "$asset_server_pid" 2>/dev/null || true' EXIT
+          HOME="$RUNNER_TEMP/surgepilot-home"
+          XDG_DATA_HOME="$RUNNER_TEMP/surgepilot-data"
+          export HOME XDG_DATA_HOME
+          mkdir -p "$HOME"
+          printf 'preserve-profile\n' > "$HOME/.profile"
+          cp "$HOME/.profile" "$RUNNER_TEMP/profile.before"
+          installer_url="http://127.0.0.1:$asset_port/install.sh"
+          attempt=0
+          until curl -fsSL "$installer_url" -o /dev/null; do
+            attempt=$((attempt + 1))
+            [ "$attempt" -lt 20 ] || exit 1
+            sleep 1
+          done
+          curl -fsSL "$installer_url" | \
+            SURGEPILOT_INSTALLER_RELEASE_BASE_URL="http://127.0.0.1:$asset_port" sh
+          "$HOME/.local/bin/surgepilot" --help
+          cmp "$HOME/.profile" "$RUNNER_TEMP/profile.before"
+          test ! -e /usr/local/bin/surgepilot
+
+  release-smoke:
+    needs: bundle
+    permissions:
+      contents: read
+      packages: read
+    strategy:
+      fail-fast: true
+      matrix:
+        include:
+          - arch: amd64
+            runner: ubuntu-24.04
+          - arch: arm64
+            runner: ubuntu-24.04-arm
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: "3.12"
+      - uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e # v6
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: release-assets
+          path: release-assets
+      - name: Start digest-pinned release and verify Demo Debug Run
+        run: |
+          set -euo pipefail
+          asset_port=18765
+          python3 -m http.server "$asset_port" --bind 127.0.0.1 --directory release-assets \
+            >"$RUNNER_TEMP/surgepilot-stack-http.log" 2>&1 &
+          asset_server_pid=$!
+          trap 'kill "$asset_server_pid" 2>/dev/null || true' EXIT
+          HOME="$RUNNER_TEMP/surgepilot-home"
+          XDG_DATA_HOME="$RUNNER_TEMP/surgepilot-data"
+          export HOME XDG_DATA_HOME
+          mkdir -p "$HOME"
+          installer_url="http://127.0.0.1:$asset_port/install.sh"
+          attempt=0
+          until curl -fsSL "$installer_url" -o /dev/null; do
+            attempt=$((attempt + 1))
+            [ "$attempt" -lt 20 ] || exit 1
+            sleep 1
+          done
+          curl -fsSL "$installer_url" | \
+            SURGEPILOT_INSTALLER_RELEASE_BASE_URL="http://127.0.0.1:$asset_port" sh
+          INSTALL_ROOT="$XDG_DATA_HOME/surgepilot"
+          SURGEPILOT="$HOME/.local/bin/surgepilot"
+          anonymous_config=$(mktemp -d)
+          printf '{"auths":{}}\n' > "$anonymous_config/config.json"
+          while IFS= read -r image; do
+            if ! DOCKER_CONFIG="$anonymous_config" docker buildx imagetools inspect "$image" >/dev/null; then
+              echo "GHCR packages must allow anonymous pulls before publishing a public release: $image" >&2
+              exit 1
+            fi
+          done < <(jq -r '.images[] | "\(.repository)@\(.digest)"' "$INSTALL_ROOT/release-manifest.json")
+          smoke_host=$(ip -4 route get 1.1.1.1 | awk '{for (i=1; i<=NF; i++) if ($i=="src") {print $(i+1); exit}}')
+          test -n "$smoke_host"
+          RUNNER_INTERNAL_TOKEN=release-validation-token \
+          SSH_CREDENTIAL_ENCRYPTION_KEY=MDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDA= \
+          python "$INSTALL_ROOT/scripts/bootstrap_deployment_env.py" \
+            --root "$INSTALL_ROOT" \
+            --release-http-port 8080 \
+            --release-node-api-base-url "http://$smoke_host:8080" \
+            --release-influxdb-host-port 8086 \
+            --release-influxdb-node-write-url "http://$smoke_host:8086" \
+            --release-demo-enabled true \
+            --release-runtime-architectures amd64,arm64 \
+            --session-cookie-secure false
+          docker compose --env-file "$INSTALL_ROOT/.env" \
+            -f "$INSTALL_ROOT/compose/docker-compose.yml" --profile demo config >/dev/null
+          install -d -m 700 "$INSTALL_ROOT/.surgepilot" "$INSTALL_ROOT/.surgepilot/runtime-artifacts"
+          cp release-assets/surgepilot-runtime-linux-* "$INSTALL_ROOT/.surgepilot/runtime-artifacts/"
+          cleanup() {
+            cleanup_status=$?
+            if [ "$cleanup_status" -ne 0 ]; then
+              "$SURGEPILOT" logs || true
+            fi
+            kill "$asset_server_pid" 2>/dev/null || true
+            rm -rf "$anonymous_config"
+            "$SURGEPILOT" down || true
+          }
+          trap cleanup EXIT
+          "$SURGEPILOT" up
+          uv sync --all-packages --all-groups
+          SURGEPILOT_E2E_API_ORCHESTRATION_URL="http://$smoke_host:8080" \
+          SURGEPILOT_E2E_TARGET_URL="http://$smoke_host:8080/api/healthz" \
+          SURGEPILOT_E2E_INFLUXDB_QUERY_URL="http://$smoke_host:8086" \
+          SURGEPILOT_E2E_INFLUXDB_TOKEN_FILE="$INSTALL_ROOT/.surgepilot/secrets/influxdb-token.secret" \
+          SURGEPILOT_E2E_NODE_SSH_HOST=demo-load-node \
+          SURGEPILOT_E2E_NODE_SSH_PORT=22 \
+          SURGEPILOT_E2E_NODE_SSH_PASSWORD_FILE="$INSTALL_ROOT/.surgepilot/secrets/demo-load-node-password.secret" \
+          make verify-p2-05-release-stack
+
+  publish:
+    needs: [bundle, installer-smoke, release-smoke]
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+      packages: write
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          fetch-depth: 0
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: release-assets
+          path: release-assets
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: image-digests
+          path: release-inputs
+      - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
+      - uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ github.token }}
+      - name: Stage assets, publish semantic image tags, then complete Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          assert_release_tag_unchanged() {
+            git fetch --no-tags --force origin "refs/tags/$TAG:refs/tags/$TAG"
+            test "$(git rev-parse "$TAG^{commit}")" = "$GITHUB_SHA" || {
+              echo "Release tag $TAG no longer points to the workflow commit; refusing to publish." >&2
+              exit 1
+            }
+          }
+
+          release_probe=$(gh api --include "repos/$GITHUB_REPOSITORY/releases/tags/$TAG" 2>&1) && {
+            echo "GitHub Release $TAG already exists; refusing to replace it."
+            exit 1
+          }
+          case "$release_probe" in
+            *" 404 "*) ;;
+            *)
+              echo "Unable to determine whether GitHub Release $TAG already exists; failing closed."
+              printf '%s\n' "$release_probe"
+              exit 1
+              ;;
+          esac
+
+          assert_image_absent() {
+            image_ref=$1
+            if output=$(docker buildx imagetools inspect "$image_ref" 2>&1); then
+              echo "Semantic image tag $image_ref already exists; refusing to replace it."
+              exit 1
+            fi
+            lower=$(printf '%s' "$output" | tr '[:upper:]' '[:lower:]')
+            case "$lower" in
+              *"manifest unknown"*|*"not found"*|*"no such manifest"*) ;;
+              *)
+                echo "Unable to determine whether semantic image tag $image_ref exists; failing closed."
+                printf '%s\n' "$output"
+                exit 1
+                ;;
+            esac
+          }
+
+          bundle_manifest="$RUNNER_TEMP/release-manifest.json"
+          tar -xOf "release-assets/surgepilot-$TAG.tar.gz" surgepilot/release-manifest.json > "$bundle_manifest"
+          for item in "api:$API_IMAGE" "web:$WEB_IMAGE" "demoNode:$DEMO_IMAGE"; do
+            key=${item%%:*}
+            image=${item#*:}
+            digest=$(jq -r --arg key "$key" '.[$key].digest' release-inputs/image-digests.json)
+            recorded_repository=$(jq -r --arg key "$key" '.images[$key].repository' "$bundle_manifest")
+            recorded_digest=$(jq -r --arg key "$key" '.images[$key].digest' "$bundle_manifest")
+            test "$recorded_repository" = "$image"
+            test "$recorded_digest" = "$digest"
+            assert_image_absent "$image:$TAG"
+          done
+
+          assert_release_tag_unchanged
+          gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --verify-tag --draft --title "SurgePilot $TAG" release-assets/*
+          anonymous_config=$(mktemp -d)
+          trap 'rm -rf "$anonymous_config"' EXIT
+          printf '{"auths":{}}\n' > "$anonymous_config/config.json"
+          for image in "$API_IMAGE" "$WEB_IMAGE" "$DEMO_IMAGE"; do
+            case "$image" in
+              "$API_IMAGE") key=api ;;
+              "$WEB_IMAGE") key=web ;;
+              "$DEMO_IMAGE") key=demoNode ;;
+            esac
+            digest=$(jq -r --arg key "$key" '.[$key].digest' release-inputs/image-digests.json)
+            docker buildx imagetools create --tag "$image:$TAG" "$image@$digest"
+            published=$(docker buildx imagetools inspect "$image:$TAG" --format '{{json .Manifest}}' | jq -r .digest)
+            test "$published" = "$digest"
+            if ! DOCKER_CONFIG="$anonymous_config" docker buildx imagetools inspect "$image@$digest" >/dev/null; then
+              echo "GHCR packages must allow anonymous pulls before completing the public release: $image@$digest" >&2
+              exit 1
+            fi
+          done
+          assert_release_tag_unchanged
+          gh release edit "$TAG" --repo "$GITHUB_REPOSITORY" --draft=false

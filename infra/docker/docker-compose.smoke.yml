@@ -1,0 +1,24 @@
+services:
+  postgres:
+    profiles: ["smoke"]
+
+  minio:
+    profiles: ["smoke"]
+
+  minio-init:
+    profiles: ["smoke"]
+
+  api-migrate:
+    profiles: ["smoke"]
+
+  api:
+    profiles: ["smoke"]
+
+  api-worker:
+    profiles: ["smoke"]
+
+  web:
+    profiles: ["smoke"]
+
+  nginx:
+    profiles: ["smoke"]

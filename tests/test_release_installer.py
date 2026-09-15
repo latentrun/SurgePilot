@@ -1,0 +1,525 @@
+from __future__ import annotations
+
+from collections.abc import Iterator
+from contextlib import contextmanager
+import functools
+import hashlib
+from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
+import json
+import os
+from pathlib import Path
+import platform
+import re
+import shutil
+import subprocess
+import tarfile
+import threading
+
+import pytest
+
+
+ROOT = Path(__file__).resolve().parents[1]
+INSTALLER_TEMPLATE = ROOT / "infra/release/install.sh"
+VERSION = "v0.3.0"
+
+
+class QuietHandler(SimpleHTTPRequestHandler):
+    def log_message(self, format: str, *args: object) -> None:
+        del format, args
+
+
+@contextmanager
+def serve(directory: Path) -> Iterator[str]:
+    handler = functools.partial(QuietHandler, directory=str(directory))
+    server = ThreadingHTTPServer(("127.0.0.1", 0), handler)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    try:
+        host, port = server.server_address
+        yield f"http://{host}:{port}"
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=5)
+
+
+def render_installer(directory: Path, version: str = VERSION) -> Path:
+    if not INSTALLER_TEMPLATE.is_file():
+        pytest.fail("release installer template is missing")
+    text = INSTALLER_TEMPLATE.read_text(encoding="utf-8")
+    assert text.count("@@RELEASE_VERSION@@") == 1
+    target = directory / "install.sh"
+    target.write_text(text.replace("@@RELEASE_VERSION@@", version), encoding="utf-8")
+    target.chmod(0o755)
+    return target
+
+
+def write_release_assets(
+    directory: Path,
+    *,
+    version: str = VERSION,
+    manifest_version: str | None = None,
+    nested_manifest_version: str | None = None,
+    manifest_text: str | None = None,
+    marker_version: str | None = None,
+    omit: str | None = None,
+    extra_file: str | None = None,
+    symlink_readme: bool = False,
+) -> tuple[Path, Path]:
+    payload = directory / "payload" / "surgepilot"
+    (payload / "compose").mkdir(parents=True)
+    manifest: dict[str, object] = {
+        "schemaVersion": 1,
+        "version": manifest_version or version,
+    }
+    if nested_manifest_version is not None:
+        manifest["nested"] = {"version": nested_manifest_version}
+    files = {
+        "surgepilot": "#!/bin/sh\nprintf 'wrapper:%s\\n' \"$*\"\n",
+        "compose/docker-compose.yml": "services: {}\n",
+        ".env.example": "COMPOSE_PROJECT_NAME=surgepilot\n",
+        "VERSION": f"{marker_version or version}\n",
+        "README.md": "# SurgePilot\n",
+        "release-manifest.json": manifest_text
+        or json.dumps(manifest, indent=2, sort_keys=True) + "\n",
+        "scripts/__init__.py": "",
+        "scripts/bootstrap_deployment_env.py": "",
+        "scripts/release_preflight.py": "",
+        "scripts/fetch_runtime_release.py": "",
+        "compose/nginx/default.conf": "",
+        "compose/minio/init-bucket.sh": "",
+        "compose/grafana/entrypoint.sh": "",
+        "compose/grafana/dashboards/surgepilot-jmeter-13644.json": "{}\n",
+        "compose/grafana/provisioning/dashboards/surgepilot.yml": "",
+        "compose/grafana/provisioning/datasources/influxdb.yml": "",
+    }
+    if extra_file is not None:
+        files[extra_file] = "unexpected\n"
+    for relative, content in files.items():
+        if relative == omit:
+            continue
+        path = payload / relative
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(content, encoding="utf-8")
+    if symlink_readme:
+        (payload / "README.md").unlink()
+        (payload / "README.md").symlink_to(".env.example")
+    if (payload / "surgepilot").exists():
+        (payload / "surgepilot").chmod(0o755)
+
+    archive = directory / f"surgepilot-{version}.tar.gz"
+    with tarfile.open(archive, "w:gz") as output:
+        output.add(payload, arcname="surgepilot")
+    digest = hashlib.sha256(archive.read_bytes()).hexdigest()
+    sidecar = directory / f"{archive.name}.sha256"
+    sidecar.write_text(f"{digest}  {archive.name}\n", encoding="utf-8")
+    return archive, sidecar
+
+
+def run_installer(
+    installer: Path,
+    *,
+    home: Path,
+    xdg_data_home: Path,
+    base_url: str,
+    path: str | None = None,
+) -> subprocess.CompletedProcess[str]:
+    environment = os.environ.copy()
+    environment.update(
+        {
+            "HOME": str(home),
+            "XDG_DATA_HOME": str(xdg_data_home),
+            "SURGEPILOT_INSTALLER_RELEASE_BASE_URL": base_url,
+        }
+    )
+    if path is not None:
+        environment["PATH"] = path
+    return subprocess.run(
+        ["sh"],
+        input=installer.read_text(encoding="utf-8"),
+        env=environment,
+        text=True,
+        capture_output=True,
+        timeout=30,
+    )
+
+
+def isolated_tool_path(
+    directory: Path,
+    *,
+    uname_output: str,
+    include_checksum_tool: bool,
+) -> str:
+    directory.mkdir()
+    for name in (
+        "sh",
+        "cat",
+        "curl",
+        "gzip",
+        "tar",
+        "mktemp",
+        "mkdir",
+        "rm",
+        "chmod",
+        "mv",
+        "grep",
+        "sed",
+        "sort",
+    ):
+        source = shutil.which(name)
+        assert source is not None
+        (directory / name).symlink_to(source)
+    if include_checksum_tool:
+        checksum_name = "shasum" if uname_output == "Darwin" else "sha256sum"
+        checksum = shutil.which(checksum_name)
+        assert checksum is not None
+        (directory / checksum_name).symlink_to(checksum)
+    uname = directory / "uname"
+    uname.write_text(f"#!/bin/sh\nprintf '%s\\n' '{uname_output}'\n", encoding="utf-8")
+    uname.chmod(0o755)
+    return str(directory)
+
+
+def test_installer_publishes_user_owned_release_and_location_independent_launcher(
+    tmp_path: Path,
+) -> None:
+    assets = tmp_path / "assets"
+    assets.mkdir()
+    installer = render_installer(assets)
+    write_release_assets(assets)
+    home = tmp_path / "home"
+    home.mkdir()
+    xdg_data_home = tmp_path / "data"
+    shell_rc = home / ".zshrc"
+    shell_rc.write_text("preserve-me\n", encoding="utf-8")
+
+    with serve(assets) as base_url:
+        result = run_installer(
+            installer,
+            home=home,
+            xdg_data_home=xdg_data_home,
+            base_url=base_url,
+        )
+
+    assert result.returncode == 0, result.stderr
+    install_root = xdg_data_home / "surgepilot"
+    launcher = home / ".local/bin/surgepilot"
+    assert install_root.is_dir()
+    assert launcher.stat().st_mode & 0o111
+    launched = subprocess.run(
+        [launcher, "--help"],
+        cwd=tmp_path,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    assert launched.returncode == 0, launched.stderr
+    assert launched.stdout == "wrapper:--help\n"
+    assert "Run surgepilot up" in result.stdout
+    assert str(launcher) in result.stdout
+    assert shell_rc.read_text(encoding="utf-8") == "preserve-me\n"
+
+
+@pytest.mark.parametrize(
+    ("case", "expected_error"),
+    [
+        ("checksum", "checksum"),
+        ("payload", "member"),
+        ("version", "version"),
+    ],
+)
+def test_installer_rejects_invalid_release_before_publication(
+    tmp_path: Path,
+    case: str,
+    expected_error: str,
+) -> None:
+    assets = tmp_path / "assets"
+    assets.mkdir()
+    installer = render_installer(assets)
+    _, sidecar = write_release_assets(
+        assets,
+        manifest_version="v9.9.9" if case == "version" else None,
+        omit="compose/docker-compose.yml" if case == "payload" else None,
+    )
+    if case == "checksum":
+        sidecar.write_text(f"{'0' * 64}  surgepilot-{VERSION}.tar.gz\n", encoding="utf-8")
+    home = tmp_path / "home"
+    home.mkdir()
+    xdg_data_home = tmp_path / "data"
+
+    with serve(assets) as base_url:
+        result = run_installer(
+            installer,
+            home=home,
+            xdg_data_home=xdg_data_home,
+            base_url=base_url,
+        )
+
+    assert result.returncode != 0
+    assert expected_error in result.stderr.lower()
+    assert not (xdg_data_home / "surgepilot").exists()
+    assert not (home / ".local/bin/surgepilot").exists()
+
+
+def test_installer_rejects_nested_matching_version_when_top_level_manifest_mismatches(
+    tmp_path: Path,
+) -> None:
+    assets = tmp_path / "assets"
+    assets.mkdir()
+    installer = render_installer(assets)
+    write_release_assets(
+        assets,
+        manifest_text=(
+            f'{{\n  "version": "v9.9.9",\n  "nested": {{\n  "version": "{VERSION}"\n  }}\n}}\n'
+        ),
+    )
+    home = tmp_path / "home"
+    home.mkdir()
+    xdg_data_home = tmp_path / "data"
+
+    with serve(assets) as base_url:
+        result = run_installer(
+            installer,
+            home=home,
+            xdg_data_home=xdg_data_home,
+            base_url=base_url,
+        )
+
+    assert result.returncode != 0
+    assert "version" in result.stderr.lower()
+    assert not (xdg_data_home / "surgepilot").exists()
+    assert not (home / ".local/bin/surgepilot").exists()
+
+
+@pytest.mark.parametrize(
+    ("asset_kwargs", "expected_error"),
+    [
+        ({"extra_file": "unexpected.txt"}, "unexpected"),
+        ({"symlink_readme": True}, "type"),
+        ({"omit": "scripts/release_preflight.py"}, "member"),
+    ],
+)
+def test_installer_rejects_unbounded_or_non_regular_archive_members(
+    tmp_path: Path,
+    asset_kwargs: dict[str, object],
+    expected_error: str,
+) -> None:
+    assets = tmp_path / "assets"
+    assets.mkdir()
+    installer = render_installer(assets)
+    write_release_assets(assets, **asset_kwargs)
+    home = tmp_path / "home"
+    home.mkdir()
+    xdg_data_home = tmp_path / "data"
+
+    with serve(assets) as base_url:
+        result = run_installer(
+            installer,
+            home=home,
+            xdg_data_home=xdg_data_home,
+            base_url=base_url,
+        )
+
+    assert result.returncode != 0
+    assert expected_error in result.stderr.lower()
+    assert not (xdg_data_home / "surgepilot").exists()
+    assert not (home / ".local/bin/surgepilot").exists()
+
+
+@pytest.mark.parametrize("signal_name", ["HUP", "INT", "TERM"])
+@pytest.mark.parametrize("move_number", [1, 2])
+def test_installer_signal_during_publication_never_leaves_partial_state(
+    tmp_path: Path,
+    signal_name: str,
+    move_number: int,
+) -> None:
+    assets = tmp_path / "assets"
+    assets.mkdir()
+    installer = render_installer(assets)
+    write_release_assets(assets)
+    home = tmp_path / "home"
+    home.mkdir()
+    xdg_data_home = tmp_path / "data"
+    tools = Path(
+        isolated_tool_path(
+            tmp_path / "tools",
+            uname_output=platform.system(),
+            include_checksum_tool=True,
+        )
+    )
+    real_mv = shutil.which("mv")
+    assert real_mv is not None
+    (tools / "mv").unlink()
+    (tools / "mv").write_text(
+        "#!/bin/sh\n"
+        f'{real_mv} "$@"\n'
+        "count=0\n"
+        'if [ -e "$SURGEPILOT_TEST_MV_COUNT" ]; then\n'
+        '  count=$(cat "$SURGEPILOT_TEST_MV_COUNT")\n'
+        "fi\n"
+        "count=$((count + 1))\n"
+        'printf \'%s\\n\' "$count" > "$SURGEPILOT_TEST_MV_COUNT"\n'
+        'if [ "$count" -eq "$SURGEPILOT_TEST_SIGNAL_MOVE" ]; then\n'
+        '  : > "$SURGEPILOT_TEST_MV_SIGNAL_SENT"\n'
+        '  kill -"$SURGEPILOT_TEST_SIGNAL_NAME" "$PPID"\n'
+        "fi\n",
+        encoding="utf-8",
+    )
+    (tools / "mv").chmod(0o755)
+    move_count = tmp_path / "mv-count"
+    signal_marker = tmp_path / "mv-signal-sent"
+
+    environment = os.environ.copy()
+    environment.update(
+        {
+            "HOME": str(home),
+            "XDG_DATA_HOME": str(xdg_data_home),
+            "PATH": str(tools),
+            "SURGEPILOT_INSTALLER_RELEASE_BASE_URL": "unused",
+            "SURGEPILOT_TEST_MV_COUNT": str(move_count),
+            "SURGEPILOT_TEST_MV_SIGNAL_SENT": str(signal_marker),
+            "SURGEPILOT_TEST_SIGNAL_MOVE": str(move_number),
+            "SURGEPILOT_TEST_SIGNAL_NAME": signal_name,
+        }
+    )
+    with serve(assets) as base_url:
+        environment["SURGEPILOT_INSTALLER_RELEASE_BASE_URL"] = base_url
+        result = subprocess.run(
+            ["sh"],
+            input=installer.read_text(encoding="utf-8"),
+            env=environment,
+            text=True,
+            capture_output=True,
+            timeout=30,
+        )
+
+    install_root = xdg_data_home / "surgepilot"
+    launcher = home / ".local/bin/surgepilot"
+    assert signal_marker.is_file()
+    assert move_count.read_text(encoding="utf-8") == "2\n"
+    assert result.returncode == 0, result.stderr
+    assert install_root.is_dir()
+    assert launcher.is_file()
+
+
+@pytest.mark.parametrize("occupied", ["install", "launcher"])
+def test_installer_never_overwrites_existing_destination(tmp_path: Path, occupied: str) -> None:
+    assets = tmp_path / "assets"
+    assets.mkdir()
+    installer = render_installer(assets)
+    write_release_assets(assets)
+    home = tmp_path / "home"
+    home.mkdir()
+    xdg_data_home = tmp_path / "data"
+    install_root = xdg_data_home / "surgepilot"
+    launcher = home / ".local/bin/surgepilot"
+    target = install_root if occupied == "install" else launcher
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_text("keep-me\n", encoding="utf-8")
+
+    with serve(assets) as base_url:
+        result = run_installer(
+            installer,
+            home=home,
+            xdg_data_home=xdg_data_home,
+            base_url=base_url,
+        )
+
+    assert result.returncode != 0
+    assert "already exists" in result.stderr.lower()
+    assert target.read_text(encoding="utf-8") == "keep-me\n"
+    other = launcher if occupied == "install" else install_root
+    assert not other.exists()
+
+
+def test_installer_rejects_unsupported_operating_system_before_download(tmp_path: Path) -> None:
+    assets = tmp_path / "assets"
+    assets.mkdir()
+    installer = render_installer(assets)
+    home = tmp_path / "home"
+    home.mkdir()
+    xdg_data_home = tmp_path / "data"
+    tools = isolated_tool_path(
+        tmp_path / "tools",
+        uname_output="FreeBSD",
+        include_checksum_tool=False,
+    )
+
+    result = run_installer(
+        installer,
+        home=home,
+        xdg_data_home=xdg_data_home,
+        base_url="http://127.0.0.1:1",
+        path=tools,
+    )
+
+    assert result.returncode != 0
+    assert "unsupported operating system" in result.stderr.lower()
+    assert not (xdg_data_home / "surgepilot").exists()
+    assert not (home / ".local/bin/surgepilot").exists()
+
+
+def test_installer_requires_platform_checksum_tool_before_download(tmp_path: Path) -> None:
+    assets = tmp_path / "assets"
+    assets.mkdir()
+    installer = render_installer(assets)
+    home = tmp_path / "home"
+    home.mkdir()
+    xdg_data_home = tmp_path / "data"
+    tools = isolated_tool_path(
+        tmp_path / "tools",
+        uname_output="Linux",
+        include_checksum_tool=False,
+    )
+
+    result = run_installer(
+        installer,
+        home=home,
+        xdg_data_home=xdg_data_home,
+        base_url="http://127.0.0.1:1",
+        path=tools,
+    )
+
+    assert result.returncode != 0
+    assert "sha256sum" in result.stderr
+    assert not (xdg_data_home / "surgepilot").exists()
+    assert not (home / ".local/bin/surgepilot").exists()
+
+
+def test_installer_reports_failed_download_without_publication(tmp_path: Path) -> None:
+    assets = tmp_path / "assets"
+    assets.mkdir()
+    installer = render_installer(assets)
+    home = tmp_path / "home"
+    home.mkdir()
+    xdg_data_home = tmp_path / "data"
+
+    with serve(assets) as base_url:
+        result = run_installer(
+            installer,
+            home=home,
+            xdg_data_home=xdg_data_home,
+            base_url=base_url,
+        )
+
+    assert result.returncode != 0
+    assert "download" in result.stderr.lower()
+    assert not (xdg_data_home / "surgepilot").exists()
+    assert not (home / ".local/bin/surgepilot").exists()
+
+
+def test_installer_is_posix_bounded_and_does_not_start_or_escalate() -> None:
+    if not INSTALLER_TEMPLATE.is_file():
+        pytest.fail("release installer template is missing")
+    installer = INSTALLER_TEMPLATE.read_text(encoding="utf-8")
+
+    assert installer.startswith("#!/bin/sh\n")
+    assert "@@RELEASE_VERSION@@" in installer
+    assert "sudo" not in installer
+    assert re.search(r"(^|\s)docker(\s|$)", installer) is None
+    assert ".zshrc" not in installer
+    assert ".bashrc" not in installer
+    assert "python" not in installer.lower()
+    assert "node" not in installer.lower()
+    assert "jq" not in installer
+    assert "gh " not in installer
