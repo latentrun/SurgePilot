@@ -27,8 +27,8 @@ from app.schemas.load_nodes import (
     LoadNodeLatestInitAttempt,
     LoadNodeListResponse,
     LoadNodePatchRequest,
-    LoadNodeSshHostKeyInput,
     LoadNodeSshHostKeyResponse,
+    LoadNodeSshHostKeyInput,
     LoadNodeSshHostKeyScanRequest,
     LoadNodeSshHostKeyScanResponse,
     LoadNodeSummary,
@@ -139,18 +139,6 @@ def get_load_node_connectivity_summary(
         source=summary.source,
         readiness=summary.readiness,
         message=summary.message,
-    )
-
-
-def warn_if_load_node_api_base_url_not_ready(db: DbDep) -> None:
-    summary = load_node_api_base_url_summary(db)
-    if summary.readiness == "ready":
-        return
-    logger.warning(
-        "Load Node API Base URL is %s at %s; registration and initialization continue, "
-        "but future remote runs will be blocked until it is fixed.",
-        summary.readiness,
-        summary.source,
     )
 
 
@@ -292,6 +280,7 @@ def summary_response(
         last_status_reason=node.last_status_reason,
         runner_version=node.runner_version,
         bundle_version=node.bundle_version,
+        runtime_version=node.runtime_version,
         last_initialized_at=iso_z(node.last_initialized_at),
         last_checked_at=iso_z(node.last_checked_at),
         last_heartbeat_at=iso_z(node.last_heartbeat_at),
@@ -345,6 +334,7 @@ def attempt_detail_response(attempt: LoadNodeInitializationAttempt) -> LoadNodeI
         sanitized_log_tail=attempt.sanitized_log_tail,
         runner_version=attempt.runner_version,
         bundle_version=attempt.bundle_version,
+        runtime_version=attempt.runtime_version,
         updated_at=iso_z(attempt.updated_at) or "",
     )
 
@@ -555,7 +545,6 @@ def create_load_node_route(
     )
     write_audit(request, db, "load_node.created", user.id, node)
     write_audit(request, db, "load_node.credential_updated", user.id, node)
-    warn_if_load_node_api_base_url_not_ready(db)
     db.commit()
     attach_workspace_header(response, workspace.id)
     return detail_response(db, node)
@@ -754,7 +743,6 @@ def initialize_load_node_route(
         request_id=getattr(request.state, "request_id", None),
     )
     write_audit(request, db, "load_node.initialization_requested", user.id, node, attempt.id)
-    warn_if_load_node_api_base_url_not_ready(db)
     db.commit()
     return LoadNodeInitializeResponse(
         node=LoadNodeInitializeNodeStatus(id=node.id, status=node.status),

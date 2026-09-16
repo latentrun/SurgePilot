@@ -1,219 +1,646 @@
 {
   "components": {
     "schemas": {
-      "OpenApiSpecSourceSummary": {"properties":{"id":{"type":"string"},"name":{"type":"string"},"filename":{"type":"string"},"sourceFormat":{"type":"string"},"documentTitle":{"type":"string"},"documentVersion":{"type":"string"},"status":{"enum":["available","invalid","storage_unavailable"],"type":"string"},"updatedAt":{"type":"string"}},"required":["id","name","filename","sourceFormat","documentTitle","documentVersion","status","updatedAt"],"type":"object"},
-      "OpenApiSpecSourceListResponse": {"properties":{"items":{"items":{"$ref":"#/components/schemas/OpenApiSpecSourceSummary"},"type":"array"},"total":{"type":"integer"},"limit":{"type":"integer"},"offset":{"type":"integer"}},"required":["items","total","limit","offset"],"type":"object"},
-      "OpenApiOperationRef": {"properties":{"method":{"enum":["GET","POST","PUT","PATCH","DELETE","HEAD","OPTIONS"],"type":"string"},"path":{"maxLength":2048,"minLength":1,"type":"string"},"operationId":{"anyOf":[{"maxLength":160,"type":"string"},{"type":"null"}]}},"required":["method","path"],"type":"object"},
-      "OpenApiOperationSummary": {"properties":{"ref":{"$ref":"#/components/schemas/OpenApiOperationRef"},"method":{"enum":["GET","POST","PUT","PATCH","DELETE","HEAD","OPTIONS"],"type":"string"},"path":{"type":"string"},"operationId":{"anyOf":[{"type":"string"},{"type":"null"}]},"summary":{"anyOf":[{"type":"string"},{"type":"null"}]},"tags":{"items":{"type":"string"},"type":"array"},"displayName":{"type":"string"},"hasRequestBody":{"type":"boolean"},"supportedForGeneration":{"type":"boolean"},"warningCodes":{"items":{"type":"string"},"type":"array"}},"required":["ref","method","path","tags","displayName","hasRequestBody","supportedForGeneration","warningCodes"],"type":"object"},
-      "OpenApiStepGenerationWarning": {"properties":{"code":{"maxLength":80,"minLength":1,"type":"string"},"message":{"maxLength":300,"minLength":1,"type":"string"},"field":{"anyOf":[{"maxLength":160,"type":"string"},{"type":"null"}]}},"required":["code","message"],"type":"object"},
-      "OpenApiOperationListResponse": {"properties":{"spec":{"$ref":"#/components/schemas/OpenApiSpecSourceSummary"},"items":{"items":{"$ref":"#/components/schemas/OpenApiOperationSummary"},"type":"array"},"warnings":{"items":{"$ref":"#/components/schemas/OpenApiStepGenerationWarning"},"type":"array"}},"required":["spec","items","warnings"],"type":"object"},
-      "OpenApiStepInsertPlan": {"properties":{"mode":{"enum":["append","before_step","after_step"],"type":"string"},"stepId":{"anyOf":[{"maxLength":26,"minLength":26,"type":"string"},{"type":"null"}]}},"required":["mode"],"type":"object"},
-      "OpenApiStepDraftGenerateRequest": {"properties":{"specId":{"maxLength":26,"minLength":26,"type":"string"},"operationRefs":{"items":{"$ref":"#/components/schemas/OpenApiOperationRef"},"maxItems":20,"minItems":1,"type":"array"},"insert":{"$ref":"#/components/schemas/OpenApiStepInsertPlan"}},"required":["specId","operationRefs","insert"],"type":"object"},
-      "OpenApiGeneratedNamedValueDraft": {"properties":{"name":{"maxLength":255,"minLength":1,"type":"string"},"value":{"default":"","maxLength":65536,"type":"string"},"enabled":{"default":true,"type":"boolean"}},"required":["name"],"type":"object"},
-      "OpenApiGeneratedBodyDraft": {"properties":{"type":{"default":"none","enum":["none","raw","form"],"type":"string"},"contentType":{"anyOf":[{"maxLength":120,"type":"string"},{"type":"null"}]},"rawText":{"anyOf":[{"maxLength":262144,"type":"string"},{"type":"null"}]},"formFields":{"items":{"$ref":"#/components/schemas/OpenApiGeneratedNamedValueDraft"},"maxItems":200,"type":"array"}},"type":"object"},
-      "OpenApiGeneratedStepSettingsDraft": {"properties":{"timeoutMs":{"type":"null"},"followRedirects":{"type":"null"},"keepAlive":{"type":"null"},"thinkTimeMs":{"type":"null"}},"type":"object"},
-      "OpenApiGeneratedStepDraft": {"properties":{"enabled":{"default":true,"type":"boolean"},"name":{"maxLength":120,"minLength":1,"type":"string"},"method":{"enum":["GET","POST","PUT","PATCH","DELETE","HEAD","OPTIONS"],"type":"string"},"path":{"maxLength":2048,"minLength":1,"type":"string"},"queryParams":{"items":{"$ref":"#/components/schemas/OpenApiGeneratedNamedValueDraft"},"maxItems":200,"type":"array"},"headers":{"items":{"$ref":"#/components/schemas/OpenApiGeneratedNamedValueDraft"},"maxItems":200,"type":"array"},"body":{"$ref":"#/components/schemas/OpenApiGeneratedBodyDraft"},"settings":{"$ref":"#/components/schemas/OpenApiGeneratedStepSettingsDraft"}},"required":["name","method","path"],"type":"object"},
-      "OpenApiGeneratedStepSource": {"properties":{"operationId":{"anyOf":[{"maxLength":160,"type":"string"},{"type":"null"}]},"summary":{"anyOf":[{"maxLength":120,"type":"string"},{"type":"null"}]}},"type":"object"},
-      "OpenApiGeneratedStepDraftItem": {"properties":{"operationRef":{"$ref":"#/components/schemas/OpenApiOperationRef"},"step":{"$ref":"#/components/schemas/OpenApiGeneratedStepDraft"},"source":{"$ref":"#/components/schemas/OpenApiGeneratedStepSource"},"warnings":{"items":{"$ref":"#/components/schemas/OpenApiStepGenerationWarning"},"type":"array"}},"required":["operationRef","step","source","warnings"],"type":"object"},
-      "OpenApiStepDraftPreviewResponse": {"properties":{"spec":{"$ref":"#/components/schemas/OpenApiSpecSourceSummary"},"items":{"items":{"$ref":"#/components/schemas/OpenApiGeneratedStepDraftItem"},"type":"array"},"insert":{"$ref":"#/components/schemas/OpenApiStepInsertPlan"},"warnings":{"items":{"$ref":"#/components/schemas/OpenApiStepGenerationWarning"},"type":"array"}},"required":["spec","items","insert","warnings"],"type":"object"},
-      "ApiCatalogSpecListResponse": {
-      "properties": {
-        "items": {
-          "items": {
-            "$ref": "#/components/schemas/ApiCatalogSpecSummary"
+      "AdminUserCreateRequest": {
+        "properties": {
+          "displayName": {
+            "maxLength": 120,
+            "minLength": 1,
+            "title": "Displayname",
+            "type": "string"
           },
-          "title": "Items",
-          "type": "array"
-        },
-        "limit": {
-          "title": "Limit",
-          "type": "integer"
-        },
-        "offset": {
-          "title": "Offset",
-          "type": "integer"
-        },
-        "total": {
-          "title": "Total",
-          "type": "integer"
-        }
-      },
-      "required": [
-        "items",
-        "total",
-        "limit",
-        "offset"
-      ],
-      "title": "ApiCatalogSpecListResponse",
-      "type": "object"
-    },
-    "ApiCatalogSpecResponse": {
-      "properties": {
-        "contentUrl": {
-          "title": "Contenturl",
-          "type": "string"
-        },
-        "createdAt": {
-          "title": "Createdat",
-          "type": "string"
-        },
-        "documentTitle": {
-          "title": "Documenttitle",
-          "type": "string"
-        },
-        "documentVersion": {
-          "title": "Documentversion",
-          "type": "string"
-        },
-        "filename": {
-          "title": "Filename",
-          "type": "string"
-        },
-        "id": {
-          "title": "Id",
-          "type": "string"
-        },
-        "name": {
-          "title": "Name",
-          "type": "string"
-        },
-        "openapiVersion": {
-          "title": "Openapiversion",
-          "type": "string"
-        },
-        "sha256": {
-          "title": "Sha256",
-          "type": "string"
-        },
-        "sizeBytes": {
-          "title": "Sizebytes",
-          "type": "integer"
-        },
-        "sourceFormat": {
-          "$ref": "#/components/schemas/ApiCatalogSpecSourceFormat"
-        },
-        "status": {
-          "$ref": "#/components/schemas/ApiCatalogSpecStatus"
-        },
-        "updatedAt": {
-          "title": "Updatedat",
-          "type": "string"
-        },
-        "validationMessage": {
-          "anyOf": [
-            {
+          "email": {
+            "format": "email",
+            "title": "Email",
+            "type": "string"
+          },
+          "password": {
+            "title": "Password",
+            "type": "string"
+          },
+          "role": {
+            "enum": [
+              "admin",
+              "user"
+            ],
+            "title": "Role",
+            "type": "string"
+          },
+          "status": {
+            "default": "active",
+            "enum": [
+              "active",
+              "disabled"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "workspaceIds": {
+            "items": {
               "type": "string"
             },
-            {
-              "type": "null"
-            }
-          ],
-          "title": "Validationmessage"
-        }
+            "title": "Workspaceids",
+            "type": "array"
+          }
+        },
+        "required": [
+          "email",
+          "displayName",
+          "role",
+          "password"
+        ],
+        "title": "AdminUserCreateRequest",
+        "type": "object"
       },
-      "required": [
-        "id",
-        "name",
-        "filename",
-        "sourceFormat",
-        "documentTitle",
-        "documentVersion",
-        "sizeBytes",
-        "sha256",
-        "status",
-        "createdAt",
-        "updatedAt",
-        "openapiVersion",
-        "contentUrl"
-      ],
-      "title": "ApiCatalogSpecResponse",
-      "type": "object"
-    },
-    "ApiCatalogSpecSourceFormat": {
-      "enum": [
-        "openapi_json",
-        "openapi_yaml",
-        "swagger_json",
-        "swagger_yaml"
-      ],
-      "title": "ApiCatalogSpecSourceFormat",
-      "type": "string"
-    },
-    "ApiCatalogSpecStatus": {
-      "enum": [
-        "available",
-        "invalid",
-        "storage_unavailable"
-      ],
-      "title": "ApiCatalogSpecStatus",
-      "type": "string"
-    },
-    "ApiCatalogSpecSummary": {
-      "properties": {
-        "createdAt": {
-          "title": "Createdat",
-          "type": "string"
+      "AdminUserEnvelope": {
+        "properties": {
+          "user": {
+            "$ref": "#/components/schemas/AdminUserSummary"
+          }
         },
-        "documentTitle": {
-          "title": "Documenttitle",
-          "type": "string"
-        },
-        "documentVersion": {
-          "title": "Documentversion",
-          "type": "string"
-        },
-        "filename": {
-          "title": "Filename",
-          "type": "string"
-        },
-        "id": {
-          "title": "Id",
-          "type": "string"
-        },
-        "name": {
-          "title": "Name",
-          "type": "string"
-        },
-        "sha256": {
-          "title": "Sha256",
-          "type": "string"
-        },
-        "sizeBytes": {
-          "title": "Sizebytes",
-          "type": "integer"
-        },
-        "sourceFormat": {
-          "$ref": "#/components/schemas/ApiCatalogSpecSourceFormat"
-        },
-        "status": {
-          "$ref": "#/components/schemas/ApiCatalogSpecStatus"
-        },
-        "updatedAt": {
-          "title": "Updatedat",
-          "type": "string"
-        }
+        "required": [
+          "user"
+        ],
+        "title": "AdminUserEnvelope",
+        "type": "object"
       },
-      "required": [
-        "id",
-        "name",
-        "filename",
-        "sourceFormat",
-        "documentTitle",
-        "documentVersion",
-        "sizeBytes",
-        "sha256",
-        "status",
-        "createdAt",
-        "updatedAt"
-      ],
-      "title": "ApiCatalogSpecSummary",
-      "type": "object"
-    },
-      "ApiTokenCreateRequest": {"additionalProperties":false,"properties":{"expiresAt":{"format":"date-time","title":"Expiresat","type":"string"},"name":{"maxLength":120,"minLength":1,"title":"Name","type":"string"},"scopes":{"items":{"enum":["read","config:write","run","dependency:write"],"type":"string"},"maxItems":4,"minItems":1,"title":"Scopes","type":"array"},"workspaceAllowlist":{"items":{"type":"string"},"maxItems":50,"minItems":1,"title":"Workspaceallowlist","type":"array"}},"required":["name","scopes","workspaceAllowlist","expiresAt"],"title":"ApiTokenCreateRequest","type":"object"},
-      "ApiTokenCreateResponse": {"properties":{"token":{"$ref":"#/components/schemas/ApiTokenCreated"}},"required":["token"],"title":"ApiTokenCreateResponse","type":"object"},
-      "ApiTokenCreated": {"properties":{"createdAt":{"format":"date-time","title":"Createdat","type":"string"},"expiresAt":{"format":"date-time","title":"Expiresat","type":"string"},"id":{"title":"Id","type":"string"},"lastUsedAt":{"anyOf":[{"format":"date-time","type":"string"},{"type":"null"}],"title":"Lastusedat"},"name":{"title":"Name","type":"string"},"plaintext":{"title":"Plaintext","type":"string"},"publicId":{"title":"Publicid","type":"string"},"revokedAt":{"anyOf":[{"format":"date-time","type":"string"},{"type":"null"}],"title":"Revokedat"},"scopes":{"items":{"enum":["read","config:write","run","dependency:write"],"type":"string"},"title":"Scopes","type":"array"},"workspaceAllowlist":{"items":{"type":"string"},"title":"Workspaceallowlist","type":"array"}},"required":["id","publicId","name","scopes","workspaceAllowlist","createdAt","expiresAt","plaintext"],"title":"ApiTokenCreated","type":"object"},
-      "ApiTokenListResponse": {"properties":{"items":{"items":{"$ref":"#/components/schemas/ApiTokenMetadata"},"title":"Items","type":"array"}},"required":["items"],"title":"ApiTokenListResponse","type":"object"},
-      "ApiTokenMetadata": {"properties":{"createdAt":{"format":"date-time","title":"Createdat","type":"string"},"expiresAt":{"format":"date-time","title":"Expiresat","type":"string"},"id":{"title":"Id","type":"string"},"lastUsedAt":{"anyOf":[{"format":"date-time","type":"string"},{"type":"null"}],"title":"Lastusedat"},"name":{"title":"Name","type":"string"},"publicId":{"title":"Publicid","type":"string"},"revokedAt":{"anyOf":[{"format":"date-time","type":"string"},{"type":"null"}],"title":"Revokedat"},"scopes":{"items":{"enum":["read","config:write","run","dependency:write"],"type":"string"},"title":"Scopes","type":"array"},"workspaceAllowlist":{"items":{"type":"string"},"title":"Workspaceallowlist","type":"array"}},"required":["id","publicId","name","scopes","workspaceAllowlist","createdAt","expiresAt"],"title":"ApiTokenMetadata","type":"object"},
+      "AdminUserListResponse": {
+        "properties": {
+          "users": {
+            "items": {
+              "$ref": "#/components/schemas/AdminUserSummary"
+            },
+            "title": "Users",
+            "type": "array"
+          }
+        },
+        "required": [
+          "users"
+        ],
+        "title": "AdminUserListResponse",
+        "type": "object"
+      },
+      "AdminUserPatchRequest": {
+        "properties": {
+          "displayName": {
+            "anyOf": [
+              {
+                "maxLength": 120,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Displayname"
+          },
+          "role": {
+            "anyOf": [
+              {
+                "enum": [
+                  "admin",
+                  "user"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Role"
+          },
+          "status": {
+            "anyOf": [
+              {
+                "enum": [
+                  "active",
+                  "disabled"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Status"
+          }
+        },
+        "title": "AdminUserPatchRequest",
+        "type": "object"
+      },
+      "AdminUserSummary": {
+        "properties": {
+          "disabledAt": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Disabledat"
+          },
+          "displayName": {
+            "title": "Displayname",
+            "type": "string"
+          },
+          "email": {
+            "title": "Email",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "role": {
+            "enum": [
+              "admin",
+              "user"
+            ],
+            "title": "Role",
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "active",
+              "disabled"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "workspaceIds": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Workspaceids",
+            "type": "array"
+          }
+        },
+        "required": [
+          "id",
+          "email",
+          "displayName",
+          "role",
+          "status"
+        ],
+        "title": "AdminUserSummary",
+        "type": "object"
+      },
+      "AdminWorkspaceListResponse": {
+        "properties": {
+          "workspaces": {
+            "items": {
+              "$ref": "#/components/schemas/WorkspaceSummary"
+            },
+            "title": "Workspaces",
+            "type": "array"
+          }
+        },
+        "required": [
+          "workspaces"
+        ],
+        "title": "AdminWorkspaceListResponse",
+        "type": "object"
+      },
+      "ApiCatalogSpecListResponse": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/ApiCatalogSpecSummary"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "limit": {
+            "title": "Limit",
+            "type": "integer"
+          },
+          "offset": {
+            "title": "Offset",
+            "type": "integer"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total",
+          "limit",
+          "offset"
+        ],
+        "title": "ApiCatalogSpecListResponse",
+        "type": "object"
+      },
+      "ApiCatalogSpecResponse": {
+        "properties": {
+          "contentUrl": {
+            "title": "Contenturl",
+            "type": "string"
+          },
+          "createdAt": {
+            "title": "Createdat",
+            "type": "string"
+          },
+          "documentTitle": {
+            "title": "Documenttitle",
+            "type": "string"
+          },
+          "documentVersion": {
+            "title": "Documentversion",
+            "type": "string"
+          },
+          "filename": {
+            "title": "Filename",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "openapiVersion": {
+            "title": "Openapiversion",
+            "type": "string"
+          },
+          "sha256": {
+            "title": "Sha256",
+            "type": "string"
+          },
+          "sizeBytes": {
+            "title": "Sizebytes",
+            "type": "integer"
+          },
+          "sourceFormat": {
+            "$ref": "#/components/schemas/ApiCatalogSpecSourceFormat"
+          },
+          "status": {
+            "$ref": "#/components/schemas/ApiCatalogSpecStatus"
+          },
+          "updatedAt": {
+            "title": "Updatedat",
+            "type": "string"
+          },
+          "validationMessage": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Validationmessage"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "filename",
+          "sourceFormat",
+          "documentTitle",
+          "documentVersion",
+          "sizeBytes",
+          "sha256",
+          "status",
+          "createdAt",
+          "updatedAt",
+          "openapiVersion",
+          "contentUrl"
+        ],
+        "title": "ApiCatalogSpecResponse",
+        "type": "object"
+      },
+      "ApiCatalogSpecSourceFormat": {
+        "enum": [
+          "openapi_json",
+          "openapi_yaml",
+          "swagger_json",
+          "swagger_yaml"
+        ],
+        "title": "ApiCatalogSpecSourceFormat",
+        "type": "string"
+      },
+      "ApiCatalogSpecStatus": {
+        "enum": [
+          "available",
+          "invalid",
+          "storage_unavailable"
+        ],
+        "title": "ApiCatalogSpecStatus",
+        "type": "string"
+      },
+      "ApiCatalogSpecSummary": {
+        "properties": {
+          "createdAt": {
+            "title": "Createdat",
+            "type": "string"
+          },
+          "documentTitle": {
+            "title": "Documenttitle",
+            "type": "string"
+          },
+          "documentVersion": {
+            "title": "Documentversion",
+            "type": "string"
+          },
+          "filename": {
+            "title": "Filename",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "sha256": {
+            "title": "Sha256",
+            "type": "string"
+          },
+          "sizeBytes": {
+            "title": "Sizebytes",
+            "type": "integer"
+          },
+          "sourceFormat": {
+            "$ref": "#/components/schemas/ApiCatalogSpecSourceFormat"
+          },
+          "status": {
+            "$ref": "#/components/schemas/ApiCatalogSpecStatus"
+          },
+          "updatedAt": {
+            "title": "Updatedat",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "filename",
+          "sourceFormat",
+          "documentTitle",
+          "documentVersion",
+          "sizeBytes",
+          "sha256",
+          "status",
+          "createdAt",
+          "updatedAt"
+        ],
+        "title": "ApiCatalogSpecSummary",
+        "type": "object"
+      },
+      "ApiTokenCreateRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "expiresAt": {
+            "format": "date-time",
+            "title": "Expiresat",
+            "type": "string"
+          },
+          "name": {
+            "maxLength": 120,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          },
+          "scopes": {
+            "items": {
+              "enum": [
+                "read",
+                "config:write",
+                "run",
+                "dependency:write"
+              ],
+              "type": "string"
+            },
+            "maxItems": 4,
+            "minItems": 1,
+            "title": "Scopes",
+            "type": "array"
+          },
+          "workspaceAllowlist": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 50,
+            "minItems": 1,
+            "title": "Workspaceallowlist",
+            "type": "array"
+          }
+        },
+        "required": [
+          "name",
+          "scopes",
+          "workspaceAllowlist",
+          "expiresAt"
+        ],
+        "title": "ApiTokenCreateRequest",
+        "type": "object"
+      },
+      "ApiTokenCreateResponse": {
+        "properties": {
+          "token": {
+            "$ref": "#/components/schemas/ApiTokenCreated"
+          }
+        },
+        "required": [
+          "token"
+        ],
+        "title": "ApiTokenCreateResponse",
+        "type": "object"
+      },
+      "ApiTokenCreated": {
+        "properties": {
+          "createdAt": {
+            "format": "date-time",
+            "title": "Createdat",
+            "type": "string"
+          },
+          "expiresAt": {
+            "format": "date-time",
+            "title": "Expiresat",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "lastUsedAt": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Lastusedat"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "plaintext": {
+            "title": "Plaintext",
+            "type": "string"
+          },
+          "publicId": {
+            "title": "Publicid",
+            "type": "string"
+          },
+          "revokedAt": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Revokedat"
+          },
+          "scopes": {
+            "items": {
+              "enum": [
+                "read",
+                "config:write",
+                "run",
+                "dependency:write"
+              ],
+              "type": "string"
+            },
+            "title": "Scopes",
+            "type": "array"
+          },
+          "workspaceAllowlist": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Workspaceallowlist",
+            "type": "array"
+          }
+        },
+        "required": [
+          "id",
+          "publicId",
+          "name",
+          "scopes",
+          "workspaceAllowlist",
+          "createdAt",
+          "expiresAt",
+          "plaintext"
+        ],
+        "title": "ApiTokenCreated",
+        "type": "object"
+      },
+      "ApiTokenListResponse": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/ApiTokenMetadata"
+            },
+            "title": "Items",
+            "type": "array"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "title": "ApiTokenListResponse",
+        "type": "object"
+      },
+      "ApiTokenMetadata": {
+        "properties": {
+          "createdAt": {
+            "format": "date-time",
+            "title": "Createdat",
+            "type": "string"
+          },
+          "expiresAt": {
+            "format": "date-time",
+            "title": "Expiresat",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "lastUsedAt": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Lastusedat"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "publicId": {
+            "title": "Publicid",
+            "type": "string"
+          },
+          "revokedAt": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Revokedat"
+          },
+          "scopes": {
+            "items": {
+              "enum": [
+                "read",
+                "config:write",
+                "run",
+                "dependency:write"
+              ],
+              "type": "string"
+            },
+            "title": "Scopes",
+            "type": "array"
+          },
+          "workspaceAllowlist": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Workspaceallowlist",
+            "type": "array"
+          }
+        },
+        "required": [
+          "id",
+          "publicId",
+          "name",
+          "scopes",
+          "workspaceAllowlist",
+          "createdAt",
+          "expiresAt"
+        ],
+        "title": "ApiTokenMetadata",
+        "type": "object"
+      },
       "AuthSessionResponse": {
         "properties": {
           "availableWorkspaces": {
@@ -2211,6 +2638,17 @@
             ],
             "title": "Runnerversion"
           },
+          "runtimeVersion": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Runtimeversion"
+          },
           "scope": {
             "enum": [
               "public",
@@ -2350,6 +2788,17 @@
               }
             ],
             "title": "Runnerversion"
+          },
+          "runtimeVersion": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Runtimeversion"
           },
           "sanitizedLogTail": {
             "anyOf": [
@@ -3043,6 +3492,17 @@
             ],
             "title": "Runnerversion"
           },
+          "runtimeVersion": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Runtimeversion"
+          },
           "scope": {
             "enum": [
               "public",
@@ -3142,6 +3602,22 @@
         "title": "LoginRequest",
         "type": "object"
       },
+      "MembershipReplaceRequest": {
+        "properties": {
+          "workspaceIds": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Workspaceids",
+            "type": "array"
+          }
+        },
+        "required": [
+          "workspaceIds"
+        ],
+        "title": "MembershipReplaceRequest",
+        "type": "object"
+      },
       "MonitoringEmbedResponse": {
         "properties": {
           "dashboardUid": {
@@ -3220,6 +3696,586 @@
           "dashboardUid"
         ],
         "title": "MonitoringEmbedResponse",
+        "type": "object"
+      },
+      "OpenApiGeneratedBodyDraft": {
+        "properties": {
+          "contentType": {
+            "anyOf": [
+              {
+                "maxLength": 120,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Contenttype"
+          },
+          "formFields": {
+            "items": {
+              "$ref": "#/components/schemas/OpenApiGeneratedNamedValueDraft"
+            },
+            "maxItems": 200,
+            "title": "Formfields",
+            "type": "array"
+          },
+          "rawText": {
+            "anyOf": [
+              {
+                "maxLength": 262144,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rawtext"
+          },
+          "type": {
+            "default": "none",
+            "enum": [
+              "none",
+              "raw",
+              "form"
+            ],
+            "title": "Type",
+            "type": "string"
+          }
+        },
+        "title": "OpenApiGeneratedBodyDraft",
+        "type": "object"
+      },
+      "OpenApiGeneratedNamedValueDraft": {
+        "properties": {
+          "enabled": {
+            "default": true,
+            "title": "Enabled",
+            "type": "boolean"
+          },
+          "name": {
+            "maxLength": 255,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          },
+          "value": {
+            "default": "",
+            "maxLength": 65536,
+            "title": "Value",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "title": "OpenApiGeneratedNamedValueDraft",
+        "type": "object"
+      },
+      "OpenApiGeneratedStepDraft": {
+        "properties": {
+          "body": {
+            "$ref": "#/components/schemas/OpenApiGeneratedBodyDraft"
+          },
+          "enabled": {
+            "default": true,
+            "title": "Enabled",
+            "type": "boolean"
+          },
+          "headers": {
+            "items": {
+              "$ref": "#/components/schemas/OpenApiGeneratedNamedValueDraft"
+            },
+            "maxItems": 200,
+            "title": "Headers",
+            "type": "array"
+          },
+          "method": {
+            "enum": [
+              "GET",
+              "POST",
+              "PUT",
+              "PATCH",
+              "DELETE",
+              "HEAD",
+              "OPTIONS"
+            ],
+            "title": "Method",
+            "type": "string"
+          },
+          "name": {
+            "maxLength": 120,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          },
+          "path": {
+            "maxLength": 2048,
+            "minLength": 1,
+            "title": "Path",
+            "type": "string"
+          },
+          "queryParams": {
+            "items": {
+              "$ref": "#/components/schemas/OpenApiGeneratedNamedValueDraft"
+            },
+            "maxItems": 200,
+            "title": "Queryparams",
+            "type": "array"
+          },
+          "settings": {
+            "$ref": "#/components/schemas/OpenApiGeneratedStepSettingsDraft"
+          }
+        },
+        "required": [
+          "name",
+          "method",
+          "path"
+        ],
+        "title": "OpenApiGeneratedStepDraft",
+        "type": "object"
+      },
+      "OpenApiGeneratedStepDraftItem": {
+        "properties": {
+          "operationRef": {
+            "$ref": "#/components/schemas/OpenApiOperationRef"
+          },
+          "source": {
+            "$ref": "#/components/schemas/OpenApiGeneratedStepSource"
+          },
+          "step": {
+            "$ref": "#/components/schemas/OpenApiGeneratedStepDraft"
+          },
+          "warnings": {
+            "items": {
+              "$ref": "#/components/schemas/OpenApiStepGenerationWarning"
+            },
+            "title": "Warnings",
+            "type": "array"
+          }
+        },
+        "required": [
+          "operationRef",
+          "step",
+          "source",
+          "warnings"
+        ],
+        "title": "OpenApiGeneratedStepDraftItem",
+        "type": "object"
+      },
+      "OpenApiGeneratedStepSettingsDraft": {
+        "properties": {
+          "followRedirects": {
+            "title": "Followredirects",
+            "type": "null"
+          },
+          "keepAlive": {
+            "title": "Keepalive",
+            "type": "null"
+          },
+          "thinkTimeMs": {
+            "title": "Thinktimems",
+            "type": "null"
+          },
+          "timeoutMs": {
+            "title": "Timeoutms",
+            "type": "null"
+          }
+        },
+        "title": "OpenApiGeneratedStepSettingsDraft",
+        "type": "object"
+      },
+      "OpenApiGeneratedStepSource": {
+        "properties": {
+          "operationId": {
+            "anyOf": [
+              {
+                "maxLength": 160,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Operationid"
+          },
+          "summary": {
+            "anyOf": [
+              {
+                "maxLength": 120,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Summary"
+          }
+        },
+        "title": "OpenApiGeneratedStepSource",
+        "type": "object"
+      },
+      "OpenApiOperationListResponse": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/OpenApiOperationSummary"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "spec": {
+            "$ref": "#/components/schemas/OpenApiSpecSourceSummary"
+          },
+          "warnings": {
+            "items": {
+              "$ref": "#/components/schemas/OpenApiStepGenerationWarning"
+            },
+            "title": "Warnings",
+            "type": "array"
+          }
+        },
+        "required": [
+          "spec",
+          "items",
+          "warnings"
+        ],
+        "title": "OpenApiOperationListResponse",
+        "type": "object"
+      },
+      "OpenApiOperationRef": {
+        "properties": {
+          "method": {
+            "enum": [
+              "GET",
+              "POST",
+              "PUT",
+              "PATCH",
+              "DELETE",
+              "HEAD",
+              "OPTIONS"
+            ],
+            "title": "Method",
+            "type": "string"
+          },
+          "operationId": {
+            "anyOf": [
+              {
+                "maxLength": 160,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Operationid"
+          },
+          "path": {
+            "maxLength": 2048,
+            "minLength": 1,
+            "title": "Path",
+            "type": "string"
+          }
+        },
+        "required": [
+          "method",
+          "path"
+        ],
+        "title": "OpenApiOperationRef",
+        "type": "object"
+      },
+      "OpenApiOperationSummary": {
+        "properties": {
+          "displayName": {
+            "title": "Displayname",
+            "type": "string"
+          },
+          "hasRequestBody": {
+            "title": "Hasrequestbody",
+            "type": "boolean"
+          },
+          "method": {
+            "enum": [
+              "GET",
+              "POST",
+              "PUT",
+              "PATCH",
+              "DELETE",
+              "HEAD",
+              "OPTIONS"
+            ],
+            "title": "Method",
+            "type": "string"
+          },
+          "operationId": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Operationid"
+          },
+          "path": {
+            "title": "Path",
+            "type": "string"
+          },
+          "ref": {
+            "$ref": "#/components/schemas/OpenApiOperationRef"
+          },
+          "summary": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Summary"
+          },
+          "supportedForGeneration": {
+            "title": "Supportedforgeneration",
+            "type": "boolean"
+          },
+          "tags": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Tags",
+            "type": "array"
+          },
+          "warningCodes": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Warningcodes",
+            "type": "array"
+          }
+        },
+        "required": [
+          "ref",
+          "method",
+          "path",
+          "tags",
+          "displayName",
+          "hasRequestBody",
+          "supportedForGeneration",
+          "warningCodes"
+        ],
+        "title": "OpenApiOperationSummary",
+        "type": "object"
+      },
+      "OpenApiSpecSourceListResponse": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/OpenApiSpecSourceSummary"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "limit": {
+            "title": "Limit",
+            "type": "integer"
+          },
+          "offset": {
+            "title": "Offset",
+            "type": "integer"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total",
+          "limit",
+          "offset"
+        ],
+        "title": "OpenApiSpecSourceListResponse",
+        "type": "object"
+      },
+      "OpenApiSpecSourceSummary": {
+        "properties": {
+          "documentTitle": {
+            "title": "Documenttitle",
+            "type": "string"
+          },
+          "documentVersion": {
+            "title": "Documentversion",
+            "type": "string"
+          },
+          "filename": {
+            "title": "Filename",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "sourceFormat": {
+            "title": "Sourceformat",
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "available",
+              "invalid",
+              "storage_unavailable"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "updatedAt": {
+            "title": "Updatedat",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "filename",
+          "sourceFormat",
+          "documentTitle",
+          "documentVersion",
+          "status",
+          "updatedAt"
+        ],
+        "title": "OpenApiSpecSourceSummary",
+        "type": "object"
+      },
+      "OpenApiStepDraftGenerateRequest": {
+        "properties": {
+          "insert": {
+            "$ref": "#/components/schemas/OpenApiStepInsertPlan"
+          },
+          "operationRefs": {
+            "items": {
+              "$ref": "#/components/schemas/OpenApiOperationRef"
+            },
+            "maxItems": 20,
+            "minItems": 1,
+            "title": "Operationrefs",
+            "type": "array"
+          },
+          "specId": {
+            "maxLength": 26,
+            "minLength": 26,
+            "title": "Specid",
+            "type": "string"
+          }
+        },
+        "required": [
+          "specId",
+          "operationRefs",
+          "insert"
+        ],
+        "title": "OpenApiStepDraftGenerateRequest",
+        "type": "object"
+      },
+      "OpenApiStepDraftPreviewResponse": {
+        "properties": {
+          "insert": {
+            "$ref": "#/components/schemas/OpenApiStepInsertPlan"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/OpenApiGeneratedStepDraftItem"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "spec": {
+            "$ref": "#/components/schemas/OpenApiSpecSourceSummary"
+          },
+          "warnings": {
+            "items": {
+              "$ref": "#/components/schemas/OpenApiStepGenerationWarning"
+            },
+            "title": "Warnings",
+            "type": "array"
+          }
+        },
+        "required": [
+          "spec",
+          "items",
+          "insert",
+          "warnings"
+        ],
+        "title": "OpenApiStepDraftPreviewResponse",
+        "type": "object"
+      },
+      "OpenApiStepGenerationWarning": {
+        "properties": {
+          "code": {
+            "maxLength": 80,
+            "minLength": 1,
+            "title": "Code",
+            "type": "string"
+          },
+          "field": {
+            "anyOf": [
+              {
+                "maxLength": 160,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Field"
+          },
+          "message": {
+            "maxLength": 300,
+            "minLength": 1,
+            "title": "Message",
+            "type": "string"
+          }
+        },
+        "required": [
+          "code",
+          "message"
+        ],
+        "title": "OpenApiStepGenerationWarning",
+        "type": "object"
+      },
+      "OpenApiStepInsertPlan": {
+        "properties": {
+          "mode": {
+            "enum": [
+              "append",
+              "before_step",
+              "after_step"
+            ],
+            "title": "Mode",
+            "type": "string"
+          },
+          "stepId": {
+            "anyOf": [
+              {
+                "maxLength": 26,
+                "minLength": 26,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Stepid"
+          }
+        },
+        "required": [
+          "mode"
+        ],
+        "title": "OpenApiStepInsertPlan",
         "type": "object"
       },
       "OverviewActiveRuns": {
@@ -3614,6 +4670,744 @@
         "title": "PermissionSummary",
         "type": "object"
       },
+      "PublicEnvGroupCreateRequest": {
+        "properties": {
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "variables": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/EnvGroupPlainVariableWrite"
+            },
+            "title": "Variables",
+            "type": "object"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "title": "PublicEnvGroupCreateRequest",
+        "type": "object"
+      },
+      "PublicEnvGroupDetail": {
+        "properties": {
+          "createdAt": {
+            "title": "Createdat",
+            "type": "string"
+          },
+          "createdBy": {
+            "title": "Createdby",
+            "type": "string"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "inUse": {
+            "title": "Inuse",
+            "type": "boolean"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "updatedAt": {
+            "title": "Updatedat",
+            "type": "string"
+          },
+          "updatedBy": {
+            "title": "Updatedby",
+            "type": "string"
+          },
+          "variableCount": {
+            "title": "Variablecount",
+            "type": "integer"
+          },
+          "variables": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/EnvGroupPlainVariableRead"
+            },
+            "title": "Variables",
+            "type": "object"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "variableCount",
+          "inUse",
+          "createdBy",
+          "updatedBy",
+          "createdAt",
+          "updatedAt",
+          "variables"
+        ],
+        "title": "PublicEnvGroupDetail",
+        "type": "object"
+      },
+      "PublicEnvGroupPatchRequest": {
+        "properties": {
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "variables": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "$ref": "#/components/schemas/EnvGroupPlainVariableWrite"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Variables"
+          }
+        },
+        "title": "PublicEnvGroupPatchRequest",
+        "type": "object"
+      },
+      "PublicLoadNodeListResponse": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/PublicLoadNodeSummary"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "limit": {
+            "title": "Limit",
+            "type": "integer"
+          },
+          "offset": {
+            "title": "Offset",
+            "type": "integer"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "limit",
+          "offset",
+          "total"
+        ],
+        "title": "PublicLoadNodeListResponse",
+        "type": "object"
+      },
+      "PublicLoadNodeSummary": {
+        "properties": {
+          "bundleVersion": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Bundleversion"
+          },
+          "createdAt": {
+            "title": "Createdat",
+            "type": "string"
+          },
+          "host": {
+            "title": "Host",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "lastCheckedAt": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Lastcheckedat"
+          },
+          "lastHeartbeatAt": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Lastheartbeatat"
+          },
+          "runnerVersion": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Runnerversion"
+          },
+          "runtimeVersion": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Runtimeversion"
+          },
+          "scope": {
+            "enum": [
+              "public",
+              "workspace"
+            ],
+            "title": "Scope",
+            "type": "string"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          },
+          "updatedAt": {
+            "title": "Updatedat",
+            "type": "string"
+          },
+          "workspaceId": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Workspaceid"
+          }
+        },
+        "required": [
+          "id",
+          "scope",
+          "host",
+          "status",
+          "createdAt",
+          "updatedAt"
+        ],
+        "title": "PublicLoadNodeSummary",
+        "type": "object"
+      },
+      "PublicRunCreateRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "confirmHighConcurrency": {
+            "default": false,
+            "title": "Confirmhighconcurrency",
+            "type": "boolean"
+          },
+          "envGroupId": {
+            "anyOf": [
+              {
+                "maxLength": 26,
+                "minLength": 26,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Envgroupid"
+          },
+          "expectedSourceRevision": {
+            "minimum": 1.0,
+            "title": "Expectedsourcerevision",
+            "type": "integer"
+          },
+          "resourceRequest": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PublicRunResourceRequest"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "runType": {
+            "$ref": "#/components/schemas/RunType"
+          },
+          "selectedNodeId": {
+            "anyOf": [
+              {
+                "maxLength": 26,
+                "minLength": 26,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Selectednodeid"
+          },
+          "sourceId": {
+            "maxLength": 26,
+            "minLength": 26,
+            "title": "Sourceid",
+            "type": "string"
+          },
+          "sourceType": {
+            "enum": [
+              "debug_scenario",
+              "test_plan"
+            ],
+            "title": "Sourcetype",
+            "type": "string"
+          }
+        },
+        "required": [
+          "runType",
+          "sourceType",
+          "sourceId",
+          "expectedSourceRevision"
+        ],
+        "title": "PublicRunCreateRequest",
+        "type": "object"
+      },
+      "PublicRunReport": {
+        "properties": {
+          "allocatedNodes": {
+            "items": {
+              "$ref": "#/components/schemas/RunAllocatedNode"
+            },
+            "title": "Allocatednodes",
+            "type": "array"
+          },
+          "artifactsSummary": {
+            "$ref": "#/components/schemas/RunArtifactsSummary"
+          },
+          "failureDiagnostics": {
+            "$ref": "#/components/schemas/FailureDiagnostics"
+          },
+          "finalStatsPreview": {
+            "$ref": "#/components/schemas/FinalStatsPreview"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "kpiSummary": {
+            "$ref": "#/components/schemas/RunKpiSummary"
+          },
+          "snapshot": {
+            "$ref": "#/components/schemas/RunSnapshotSummary"
+          },
+          "verdict": {
+            "$ref": "#/components/schemas/RunVerdict"
+          }
+        },
+        "required": [
+          "id",
+          "verdict",
+          "kpiSummary",
+          "failureDiagnostics",
+          "finalStatsPreview",
+          "snapshot",
+          "allocatedNodes",
+          "artifactsSummary"
+        ],
+        "title": "PublicRunReport",
+        "type": "object"
+      },
+      "PublicRunResourceRequest": {
+        "oneOf": [
+          {
+            "properties": {
+              "mode": {
+                "const": "manual"
+              },
+              "nodeCount": {
+                "type": "null"
+              },
+              "selectedNodeIds": {
+                "minItems": 1
+              }
+            },
+            "required": [
+              "mode",
+              "selectedNodeIds"
+            ]
+          },
+          {
+            "properties": {
+              "mode": {
+                "const": "auto"
+              },
+              "selectedNodeIds": {
+                "maxItems": 0
+              }
+            },
+            "required": [
+              "mode",
+              "nodeCount"
+            ]
+          }
+        ],
+        "properties": {
+          "concurrencyPerNode": {
+            "anyOf": [
+              {
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Concurrencypernode"
+          },
+          "mode": {
+            "enum": [
+              "manual",
+              "auto"
+            ],
+            "title": "Mode",
+            "type": "string"
+          },
+          "nodeCount": {
+            "anyOf": [
+              {
+                "maximum": 10.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Nodecount"
+          },
+          "selectedNodeIds": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 10,
+            "title": "Selectednodeids",
+            "type": "array"
+          }
+        },
+        "required": [
+          "mode"
+        ],
+        "title": "PublicRunResourceRequest",
+        "type": "object"
+      },
+      "PublicTestPlanCreateRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "description": {
+            "anyOf": [
+              {
+                "maxLength": 1000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "envGroupId": {
+            "anyOf": [
+              {
+                "maxLength": 26,
+                "minLength": 26,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Envgroupid"
+          },
+          "name": {
+            "maxLength": 120,
+            "minLength": 1,
+            "pattern": ".*\\S.*",
+            "title": "Name",
+            "type": "string"
+          },
+          "resource": {
+            "$ref": "#/components/schemas/PublicTestPlanResourceConfig"
+          },
+          "runMode": {
+            "default": "sequential",
+            "enum": [
+              "sequential",
+              "parallel"
+            ],
+            "title": "Runmode",
+            "type": "string"
+          },
+          "scenarioItems": {
+            "items": {
+              "$ref": "#/components/schemas/TestPlanScenarioItemInput"
+            },
+            "maxItems": 20,
+            "title": "Scenarioitems",
+            "type": "array"
+          },
+          "slaRules": {
+            "items": {
+              "$ref": "#/components/schemas/TestPlanSlaRuleInput"
+            },
+            "maxItems": 10,
+            "title": "Slarules",
+            "type": "array"
+          },
+          "tags": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 10,
+            "title": "Tags",
+            "type": "array"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "title": "PublicTestPlanCreateRequest",
+        "type": "object"
+      },
+      "PublicTestPlanPatchRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "description": {
+            "anyOf": [
+              {
+                "maxLength": 1000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "envGroupId": {
+            "anyOf": [
+              {
+                "maxLength": 26,
+                "minLength": 26,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Envgroupid"
+          },
+          "expectedRevision": {
+            "minimum": 1.0,
+            "title": "Expectedrevision",
+            "type": "integer"
+          },
+          "name": {
+            "maxLength": 120,
+            "minLength": 1,
+            "pattern": ".*\\S.*",
+            "title": "Name",
+            "type": "string"
+          },
+          "resource": {
+            "$ref": "#/components/schemas/PublicTestPlanResourceConfig"
+          },
+          "runMode": {
+            "default": "sequential",
+            "enum": [
+              "sequential",
+              "parallel"
+            ],
+            "title": "Runmode",
+            "type": "string"
+          },
+          "scenarioItems": {
+            "items": {
+              "$ref": "#/components/schemas/TestPlanScenarioItemInput"
+            },
+            "maxItems": 20,
+            "title": "Scenarioitems",
+            "type": "array"
+          },
+          "slaRules": {
+            "items": {
+              "$ref": "#/components/schemas/TestPlanSlaRuleInput"
+            },
+            "maxItems": 10,
+            "title": "Slarules",
+            "type": "array"
+          },
+          "tags": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 10,
+            "title": "Tags",
+            "type": "array"
+          }
+        },
+        "required": [
+          "name",
+          "expectedRevision"
+        ],
+        "title": "PublicTestPlanPatchRequest",
+        "type": "object"
+      },
+      "PublicTestPlanResourceConfig": {
+        "oneOf": [
+          {
+            "properties": {
+              "mode": {
+                "const": "manual"
+              },
+              "nodeCount": {
+                "type": "null"
+              }
+            }
+          },
+          {
+            "properties": {
+              "mode": {
+                "const": "auto"
+              },
+              "selectedNodeId": {
+                "type": "null"
+              },
+              "selectedNodeIds": {
+                "maxItems": 0
+              }
+            },
+            "required": [
+              "mode",
+              "nodeCount"
+            ]
+          }
+        ],
+        "properties": {
+          "mode": {
+            "default": "manual",
+            "enum": [
+              "manual",
+              "auto"
+            ],
+            "title": "Mode",
+            "type": "string"
+          },
+          "nodeCount": {
+            "anyOf": [
+              {
+                "maximum": 10.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Nodecount"
+          },
+          "poolType": {
+            "anyOf": [
+              {
+                "enum": [
+                  "public",
+                  "private"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pooltype"
+          },
+          "selectedNodeId": {
+            "anyOf": [
+              {
+                "maxLength": 26,
+                "minLength": 26,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Selectednodeid"
+          },
+          "selectedNodeIds": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 10,
+            "title": "Selectednodeids",
+            "type": "array"
+          }
+        },
+        "title": "PublicTestPlanResourceConfig",
+        "type": "object"
+      },
       "RegisterRequest": {
         "properties": {
           "displayName": {
@@ -3649,6 +5443,19 @@
         ],
         "title": "ReportSummaryStatus",
         "type": "string"
+      },
+      "ResetPasswordRequest": {
+        "properties": {
+          "newPassword": {
+            "title": "Newpassword",
+            "type": "string"
+          }
+        },
+        "required": [
+          "newPassword"
+        ],
+        "title": "ResetPasswordRequest",
+        "type": "object"
       },
       "RunActor": {
         "properties": {
@@ -3762,6 +5569,17 @@
       },
       "RunArtifactItem": {
         "properties": {
+          "allocationId": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Allocationid"
+          },
           "artifactType": {
             "$ref": "#/components/schemas/RunArtifactType"
           },
@@ -4002,12 +5820,7 @@
             "type": "string"
           },
           "runType": {
-            "enum": [
-              "debug",
-              "standard"
-            ],
-            "title": "Runtype",
-            "type": "string"
+            "$ref": "#/components/schemas/RunType"
           },
           "selectedNodeId": {
             "title": "Selectednodeid",
@@ -5332,7 +7145,9 @@
             "title": "Description"
           },
           "globalHeaders": {
-            "items": { "$ref": "#/components/schemas/ScenarioNamedValue" },
+            "items": {
+              "$ref": "#/components/schemas/ScenarioNamedValue"
+            },
             "maxItems": 200,
             "title": "Globalheaders",
             "type": "array"
@@ -5361,7 +7176,9 @@
             "type": "array"
           },
           "variables": {
-            "items": { "$ref": "#/components/schemas/ScenarioVariable" },
+            "items": {
+              "$ref": "#/components/schemas/ScenarioVariable"
+            },
             "maxItems": 200,
             "title": "Variables",
             "type": "array"
@@ -5536,7 +7353,9 @@
             "type": "integer"
           },
           "globalHeaders": {
-            "items": { "$ref": "#/components/schemas/ScenarioNamedValue" },
+            "items": {
+              "$ref": "#/components/schemas/ScenarioNamedValue"
+            },
             "title": "Globalheaders",
             "type": "array"
           },
@@ -5580,7 +7399,9 @@
             "type": "string"
           },
           "variables": {
-            "items": { "$ref": "#/components/schemas/ScenarioVariable" },
+            "items": {
+              "$ref": "#/components/schemas/ScenarioVariable"
+            },
             "title": "Variables",
             "type": "array"
           }
@@ -5794,40 +7615,6 @@
         "title": "ScenarioNamedValue",
         "type": "object"
       },
-      "ScenarioVariable": {
-        "additionalProperties": false,
-        "properties": {
-          "enabled": {
-            "default": true,
-            "title": "Enabled",
-            "type": "boolean"
-          },
-          "id": {
-            "maxLength": 26,
-            "minLength": 26,
-            "title": "Id",
-            "type": "string"
-          },
-          "name": {
-            "maxLength": 64,
-            "minLength": 1,
-            "title": "Name",
-            "type": "string"
-          },
-          "value": {
-            "default": "",
-            "maxLength": 65536,
-            "title": "Value",
-            "type": "string"
-          }
-        },
-        "required": [
-          "id",
-          "name"
-        ],
-        "title": "ScenarioVariable",
-        "type": "object"
-      },
       "ScenarioPatchRequest": {
         "additionalProperties": false,
         "properties": {
@@ -5867,7 +7654,9 @@
             "type": "integer"
           },
           "globalHeaders": {
-            "items": { "$ref": "#/components/schemas/ScenarioNamedValue" },
+            "items": {
+              "$ref": "#/components/schemas/ScenarioNamedValue"
+            },
             "maxItems": 200,
             "title": "Globalheaders",
             "type": "array"
@@ -5896,7 +7685,9 @@
             "type": "array"
           },
           "variables": {
-            "items": { "$ref": "#/components/schemas/ScenarioVariable" },
+            "items": {
+              "$ref": "#/components/schemas/ScenarioVariable"
+            },
             "maxItems": 200,
             "title": "Variables",
             "type": "array"
@@ -5912,6 +7703,18 @@
       "ScenarioScript": {
         "additionalProperties": false,
         "properties": {
+          "dependencyFileId": {
+            "anyOf": [
+              {
+                "maxLength": 26,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dependencyfileid"
+          },
           "enabled": {
             "default": true,
             "title": "Enabled",
@@ -5936,18 +7739,6 @@
             "default": "groovy",
             "title": "Language",
             "type": "string"
-          },
-          "scriptText": {
-            "anyOf": [
-              {
-                "maxLength": 262144,
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Scripttext"
           }
         },
         "required": [
@@ -6235,25 +8026,146 @@
         "title": "ScenarioUploadFile",
         "type": "object"
       },
+      "ScenarioVariable": {
+        "additionalProperties": false,
+        "properties": {
+          "enabled": {
+            "default": true,
+            "title": "Enabled",
+            "type": "boolean"
+          },
+          "id": {
+            "maxLength": 26,
+            "minLength": 26,
+            "title": "Id",
+            "type": "string"
+          },
+          "name": {
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          },
+          "value": {
+            "default": "",
+            "maxLength": 65536,
+            "title": "Value",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name"
+        ],
+        "title": "ScenarioVariable",
+        "type": "object"
+      },
+      "SensitiveStatus": {
+        "properties": {
+          "minioCredentialsConfigured": {
+            "title": "Miniocredentialsconfigured",
+            "type": "boolean"
+          },
+          "runnerInternalTokenConfigured": {
+            "title": "Runnerinternaltokenconfigured",
+            "type": "boolean"
+          },
+          "sshCredentialEncryptionKeyConfigured": {
+            "title": "Sshcredentialencryptionkeyconfigured",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "runnerInternalTokenConfigured",
+          "sshCredentialEncryptionKeyConfigured",
+          "minioCredentialsConfigured"
+        ],
+        "title": "SensitiveStatus",
+        "type": "object"
+      },
       "SetupStatusResponse": {
         "properties": {
+          "activeAdminCount": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Activeadmincount"
+          },
+          "activeWorkspaceCount": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Activeworkspacecount"
+          },
           "allowSignup": {
             "title": "Allowsignup",
             "type": "boolean"
+          },
+          "archivedWorkspaceCount": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Archivedworkspacecount"
           },
           "hasDefaultWorkspace": {
             "title": "Hasdefaultworkspace",
             "type": "boolean"
           },
+          "loadNodeRuntimeStatus": {
+            "anyOf": [
+              {
+                "enum": [
+                  "ready",
+                  "not_configured",
+                  "artifact_missing"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Loadnoderuntimestatus"
+          },
           "needsBootstrap": {
             "title": "Needsbootstrap",
+            "type": "boolean"
+          },
+          "sensitiveStatus": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SensitiveStatus"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "storageAvailable": {
+            "title": "Storageavailable",
             "type": "boolean"
           }
         },
         "required": [
           "needsBootstrap",
           "allowSignup",
-          "hasDefaultWorkspace"
+          "hasDefaultWorkspace",
+          "storageAvailable"
         ],
         "title": "SetupStatusResponse",
         "type": "object"
@@ -6266,6 +8178,372 @@
         ],
         "title": "SlaResult",
         "type": "string"
+      },
+      "SystemSettingsPatchRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "allowSignup": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "examples": [
+              false
+            ],
+            "title": "Allowsignup"
+          },
+          "dependencyFileAllowedExtensions": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "examples": [
+              [
+                ".csv",
+                ".txt"
+              ]
+            ],
+            "title": "Dependencyfileallowedextensions"
+          },
+          "dependencyFileMaxBytes": {
+            "anyOf": [
+              {
+                "maximum": 1073741824.0,
+                "minimum": 1048576.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "examples": [
+              104857600
+            ],
+            "title": "Dependencyfilemaxbytes"
+          },
+          "dependencyFilePreviewBinaryDenyExtensions": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "examples": [
+              [
+                ".png",
+                ".zip"
+              ]
+            ],
+            "title": "Dependencyfilepreviewbinarydenyextensions"
+          },
+          "dependencyFilePreviewMaxBytes": {
+            "anyOf": [
+              {
+                "maximum": 5242880.0,
+                "minimum": 1024.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "examples": [
+              65536
+            ],
+            "title": "Dependencyfilepreviewmaxbytes"
+          },
+          "jmeterMemoryXmx": {
+            "anyOf": [
+              {
+                "pattern": "^[1-9][0-9]*[KMG]$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "examples": [
+              "4G"
+            ],
+            "title": "Jmetermemoryxmx"
+          },
+          "loadNodeApiBaseUrl": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "examples": [
+              "http://192.168.1.50:8080"
+            ],
+            "title": "Loadnodeapibaseurl"
+          },
+          "loadSoftLimitWarningConcurrency": {
+            "anyOf": [
+              {
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "examples": [
+              1000
+            ],
+            "title": "Loadsoftlimitwarningconcurrency"
+          },
+          "maxDelaySeconds": {
+            "anyOf": [
+              {
+                "maximum": 604800.0,
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "examples": [
+              0
+            ],
+            "title": "Maxdelayseconds"
+          },
+          "maxIterations": {
+            "anyOf": [
+              {
+                "maximum": 10000000.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "examples": [
+              1000000
+            ],
+            "title": "Maxiterations"
+          },
+          "maxRampUpSeconds": {
+            "anyOf": [
+              {
+                "maximum": 604800.0,
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "examples": [
+              300
+            ],
+            "title": "Maxrampupseconds"
+          },
+          "maxRunDurationSeconds": {
+            "anyOf": [
+              {
+                "maximum": 604800.0,
+                "minimum": 60.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "examples": [
+              86400
+            ],
+            "title": "Maxrundurationseconds"
+          },
+          "maxScenarioItemsPerTestPlan": {
+            "anyOf": [
+              {
+                "maximum": 100.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "examples": [
+              20
+            ],
+            "title": "Maxscenarioitemspertestplan"
+          },
+          "maxSlaRulesPerTestPlan": {
+            "anyOf": [
+              {
+                "maximum": 50.0,
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "examples": [
+              5
+            ],
+            "title": "Maxslarulespertestplan"
+          },
+          "maxTargetRps": {
+            "anyOf": [
+              {
+                "maximum": 1000000.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "examples": [
+              100000
+            ],
+            "title": "Maxtargetrps"
+          }
+        },
+        "title": "SystemSettingsPatchRequest",
+        "type": "object"
+      },
+      "SystemSettingsResponse": {
+        "properties": {
+          "sensitiveStatus": {
+            "$ref": "#/components/schemas/SensitiveStatus"
+          },
+          "settings": {
+            "$ref": "#/components/schemas/SystemSettingsValues"
+          }
+        },
+        "required": [
+          "settings",
+          "sensitiveStatus"
+        ],
+        "title": "SystemSettingsResponse",
+        "type": "object"
+      },
+      "SystemSettingsValues": {
+        "properties": {
+          "allowSignup": {
+            "title": "Allowsignup",
+            "type": "boolean"
+          },
+          "dependencyFileAllowedExtensions": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Dependencyfileallowedextensions",
+            "type": "array"
+          },
+          "dependencyFileMaxBytes": {
+            "title": "Dependencyfilemaxbytes",
+            "type": "integer"
+          },
+          "dependencyFilePreviewBinaryDenyExtensions": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Dependencyfilepreviewbinarydenyextensions",
+            "type": "array"
+          },
+          "dependencyFilePreviewMaxBytes": {
+            "title": "Dependencyfilepreviewmaxbytes",
+            "type": "integer"
+          },
+          "jmeterMemoryXmx": {
+            "title": "Jmetermemoryxmx",
+            "type": "string"
+          },
+          "loadNodeApiBaseUrl": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Loadnodeapibaseurl"
+          },
+          "loadSoftLimitWarningConcurrency": {
+            "title": "Loadsoftlimitwarningconcurrency",
+            "type": "integer"
+          },
+          "maxDelaySeconds": {
+            "title": "Maxdelayseconds",
+            "type": "integer"
+          },
+          "maxIterations": {
+            "title": "Maxiterations",
+            "type": "integer"
+          },
+          "maxRampUpSeconds": {
+            "title": "Maxrampupseconds",
+            "type": "integer"
+          },
+          "maxRunDurationSeconds": {
+            "title": "Maxrundurationseconds",
+            "type": "integer"
+          },
+          "maxScenarioItemsPerTestPlan": {
+            "title": "Maxscenarioitemspertestplan",
+            "type": "integer"
+          },
+          "maxSlaRulesPerTestPlan": {
+            "title": "Maxslarulespertestplan",
+            "type": "integer"
+          },
+          "maxTargetRps": {
+            "title": "Maxtargetrps",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "allowSignup",
+          "loadSoftLimitWarningConcurrency",
+          "jmeterMemoryXmx",
+          "maxScenarioItemsPerTestPlan",
+          "maxSlaRulesPerTestPlan",
+          "maxRunDurationSeconds",
+          "maxRampUpSeconds",
+          "maxDelaySeconds",
+          "maxIterations",
+          "maxTargetRps",
+          "dependencyFileMaxBytes",
+          "dependencyFileAllowedExtensions",
+          "dependencyFilePreviewMaxBytes",
+          "dependencyFilePreviewBinaryDenyExtensions"
+        ],
+        "title": "SystemSettingsValues",
+        "type": "object"
       },
       "TestPlanCreateRequest": {
         "additionalProperties": false,
@@ -6662,6 +8940,28 @@
       },
       "TestPlanResourceConfig": {
         "properties": {
+          "mode": {
+            "default": "manual",
+            "enum": [
+              "manual",
+              "auto"
+            ],
+            "title": "Mode",
+            "type": "string"
+          },
+          "nodeCount": {
+            "anyOf": [
+              {
+                "maximum": 10.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Nodecount"
+          },
           "poolType": {
             "anyOf": [
               {
@@ -6689,6 +8989,14 @@
               }
             ],
             "title": "Selectednodeid"
+          },
+          "selectedNodeIds": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 10,
+            "title": "Selectednodeids",
+            "type": "array"
           }
         },
         "title": "TestPlanResourceConfig",
@@ -6696,6 +9004,37 @@
       },
       "TestPlanResourceSummary": {
         "properties": {
+          "allocatedNodeCount": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Allocatednodecount"
+          },
+          "mode": {
+            "default": "manual",
+            "enum": [
+              "manual",
+              "auto"
+            ],
+            "title": "Mode",
+            "type": "string"
+          },
+          "nodeCount": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Nodecount"
+          },
           "poolType": {
             "anyOf": [
               {
@@ -6721,6 +9060,13 @@
               }
             ],
             "title": "Selectednodeid"
+          },
+          "selectedNodeIds": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Selectednodeids",
+            "type": "array"
           },
           "selectedNodeName": {
             "anyOf": [
@@ -7308,7 +9654,8 @@
           },
           "status": {
             "enum": [
-              "active"
+              "active",
+              "disabled"
             ],
             "title": "Status",
             "type": "string"
@@ -7322,6 +9669,34 @@
           "status"
         ],
         "title": "UserSummary",
+        "type": "object"
+      },
+      "WorkspaceEnvelope": {
+        "properties": {
+          "workspace": {
+            "$ref": "#/components/schemas/WorkspaceSummary"
+          }
+        },
+        "required": [
+          "workspace"
+        ],
+        "title": "WorkspaceEnvelope",
+        "type": "object"
+      },
+      "WorkspaceListResponse": {
+        "properties": {
+          "workspaces": {
+            "items": {
+              "$ref": "#/components/schemas/WorkspaceSummary"
+            },
+            "title": "Workspaces",
+            "type": "array"
+          }
+        },
+        "required": [
+          "workspaces"
+        ],
+        "title": "WorkspaceListResponse",
         "type": "object"
       },
       "WorkspaceMembershipSummary": {
@@ -7391,6 +9766,40 @@
         ],
         "title": "WorkspaceSummary",
         "type": "object"
+      },
+      "WorkspaceSwitchRequest": {
+        "properties": {
+          "workspaceId": {
+            "title": "Workspaceid",
+            "type": "string"
+          }
+        },
+        "required": [
+          "workspaceId"
+        ],
+        "title": "WorkspaceSwitchRequest",
+        "type": "object"
+      },
+      "WorkspaceWriteRequest": {
+        "properties": {
+          "name": {
+            "maxLength": 120,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "title": "WorkspaceWriteRequest",
+        "type": "object"
+      }
+    },
+    "securitySchemes": {
+      "HTTPBearer": {
+        "scheme": "bearer",
+        "type": "http"
       }
     }
   },
@@ -7407,12 +9816,17 @@
       "API_SPEC_TOO_LARGE",
       "API_SPEC_PARSE_FAILED",
       "UNSUPPORTED_API_SPEC_FORMAT",
+      "API_SPEC_NOT_AVAILABLE",
+      "OPENAPI_OPERATION_NOT_FOUND",
+      "OPENAPI_OPERATION_UNSUPPORTED",
       "STORAGE_UNAVAILABLE",
       "FILE_IN_USE",
       "LOAD_NODE_PUBLIC_ADMIN_REQUIRED",
       "LOAD_NODE_CONFLICT",
       "LOAD_NODE_BUSY",
       "LOAD_NODE_ACTION_NOT_ALLOWED",
+      "LOAD_NODE_UNAVAILABLE",
+      "LOAD_NODE_CAPACITY_UNAVAILABLE",
       "LOAD_NODE_CREDENTIAL_REQUIRED",
       "LOAD_NODE_CREDENTIAL_INVALID",
       "LOAD_NODE_HOST_INVALID",
@@ -7427,12 +9841,27 @@
       "LOAD_NODE_RUNNER_HOME_UNWRITABLE",
       "LOAD_NODE_PYTHON_MISSING",
       "LOAD_NODE_JAVA_MISSING",
+      "LOAD_NODE_TAR_MISSING",
       "LOAD_NODE_TAURUS_MISSING",
       "LOAD_NODE_JMETER_MISSING",
+      "LOAD_NODE_RUNTIME_ARTIFACT_MISSING",
+      "LOAD_NODE_RUNTIME_ARCH_UNSUPPORTED",
+      "LOAD_NODE_RUNTIME_UPLOAD_FAILED",
+      "LOAD_NODE_RUNTIME_CHECKSUM_FAILED",
+      "LOAD_NODE_RUNTIME_EXTRACT_FAILED",
+      "LOAD_NODE_RUNTIME_METADATA_INVALID",
+      "LOAD_NODE_RUNTIME_BZT_FAILED",
+      "LOAD_NODE_RUNTIME_JMETER_FAILED",
+      "LOAD_NODE_RUNTIME_PLUGIN_MISSING",
+      "LOAD_NODE_RUNTIME_ACTIVATION_FAILED",
       "LOAD_NODE_INIT_FAILED",
       "CREDENTIAL_DECRYPT_FAILED",
       "SCENARIO_REVISION_CONFLICT",
       "INVALID_EXECUTION_PREVIEW_MODE",
+      "RUN_CREATION_NOT_ALLOWED",
+      "RUN_CONTROL_SSH_HOST_KEY_UNTRUSTED",
+      "RUN_CONTROL_SSH_HOST_KEY_CHANGED",
+      "RUN_CONTROL_INVALID_API_BASE_URL",
       "RESOURCE_REQUEST_INVALID",
       "RUN_STOP_NOT_ALLOWED",
       "RUN_TERMINAL_STATE",
@@ -7449,7 +9878,19 @@
       "RUN_CONTROL_CONFLICT",
       "TEST_PLAN_REVISION_CONFLICT",
       "TEST_PLAN_NOT_RUNNABLE",
-      "LOAD_SOFT_LIMIT_CONFIRMATION_REQUIRED"
+      "LOAD_SOFT_LIMIT_CONFIRMATION_REQUIRED",
+      "WORKSPACE_ARCHIVED",
+      "WORKSPACE_NOT_FOUND",
+      "WORKSPACE_NAME_CONFLICT",
+      "WORKSPACE_LAST_ACTIVE_REQUIRED",
+      "USER_NOT_FOUND",
+      "USER_EMAIL_CONFLICT",
+      "USER_DISABLED",
+      "USER_LAST_ACTIVE_ADMIN",
+      "USER_WORKSPACE_REQUIRED",
+      "SETTING_NOT_EDITABLE",
+      "SENSITIVE_SETTING_VALUE_FORBIDDEN",
+      "PUBLIC_TOKEN_SCOPE_DENIED"
     ]
   },
   "openapi": "3.1.0",
@@ -7457,54 +9898,7 @@
     "/v1/account/ai-skill/download": {
       "get": {
         "operationId": "downloadPublicApiAiSkill",
-        "parameters": [{"in":"cookie","name":"surgepilot_session","required":false,"schema":{"anyOf":[{"type":"string"},{"type":"null"}],"title":"SurgePilot Session"}}],
-        "responses": {"200":{"content":{"application/zip":{"schema":{"format":"binary","type":"string"}}},"description":"Official SurgePilot Public API AI skill source archive."},"401":{"content":{"application/json":{"schema":{"$ref":"#/components/schemas/ErrorResponse"}}},"description":"Unauthorized"},"503":{"content":{"application/json":{"example":{"code":"AI_SKILL_SOURCE_NOT_AVAILABLE","message":"AI skill source is not available.","requestId":"01J00000000000000000000000"},"schema":{"$ref":"#/components/schemas/ErrorResponse"}}},"description":"The official AI skill source is not available."}},
-        "summary":"Download Public Api Ai Skill","tags":["account-ai-skill"]
-      }
-    },
-    "/v1/account/api-tokens": {
-      "get": {
-        "operationId":"listAccountApiTokens",
-        "parameters":[{"in":"cookie","name":"surgepilot_session","required":false,"schema":{"anyOf":[{"type":"string"},{"type":"null"}],"title":"SurgePilot Session"}}],
-        "responses":{"200":{"content":{"application/json":{"schema":{"$ref":"#/components/schemas/ApiTokenListResponse"}}},"description":"Successful Response"},"401":{"content":{"application/json":{"schema":{"$ref":"#/components/schemas/ErrorResponse"}}},"description":"Unauthorized"},"422":{"content":{"application/json":{"schema":{"$ref":"#/components/schemas/ErrorResponse"}}},"description":"Unprocessable Entity"}},
-        "summary":"List Account Api Tokens","tags":["account-api-tokens"]
-      },
-      "post": {
-        "operationId":"createAccountApiToken",
-        "parameters":[{"in":"header","name":"x-csrf-token","required":true,"schema":{"title":"X-Csrf-Token","type":"string"}},{"in":"cookie","name":"surgepilot_session","required":false,"schema":{"anyOf":[{"type":"string"},{"type":"null"}],"title":"SurgePilot Session"}}],
-        "requestBody":{"required":true,"content":{"application/json":{"schema":{"$ref":"#/components/schemas/ApiTokenCreateRequest"}}}},
-        "responses":{"201":{"content":{"application/json":{"schema":{"$ref":"#/components/schemas/ApiTokenCreateResponse"}}},"description":"Successful Response"},"400":{"content":{"application/json":{"schema":{"$ref":"#/components/schemas/ErrorResponse"}}},"description":"Bad Request"},"401":{"content":{"application/json":{"schema":{"$ref":"#/components/schemas/ErrorResponse"}}},"description":"Unauthorized"},"403":{"content":{"application/json":{"schema":{"$ref":"#/components/schemas/ErrorResponse"}}},"description":"Forbidden"},"422":{"content":{"application/json":{"schema":{"$ref":"#/components/schemas/ErrorResponse"}}},"description":"Unprocessable Entity"}},
-        "summary":"Create Account Api Token","tags":["account-api-tokens"]
-      }
-    },
-    "/v1/account/api-tokens/{tokenId}": {
-      "delete": {
-        "operationId":"deleteAccountApiToken",
-        "parameters":[{"in":"path","name":"tokenId","required":true,"schema":{"title":"Tokenid","type":"string"}},{"in":"header","name":"x-csrf-token","required":true,"schema":{"title":"X-Csrf-Token","type":"string"}},{"in":"cookie","name":"surgepilot_session","required":false,"schema":{"anyOf":[{"type":"string"},{"type":"null"}],"title":"SurgePilot Session"}}],
-        "responses":{"204":{"description":"Successful Response"},"401":{"content":{"application/json":{"schema":{"$ref":"#/components/schemas/ErrorResponse"}}},"description":"Unauthorized"},"403":{"content":{"application/json":{"schema":{"$ref":"#/components/schemas/ErrorResponse"}}},"description":"Forbidden"},"404":{"content":{"application/json":{"schema":{"$ref":"#/components/schemas/ErrorResponse"}}},"description":"Not Found"},"422":{"content":{"application/json":{"schema":{"$ref":"#/components/schemas/ErrorResponse"}}},"description":"Unprocessable Entity"}},
-        "summary":"Delete Account Api Token","tags":["account-api-tokens"]
-      }
-    },
-    "/v1/api-catalog/specs": {
-      "get": {
-        "operationId": "listApiCatalogSpecs",
         "parameters": [
-          {
-            "in": "header",
-            "name": "x-workspace-id",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "X-Workspace-Id"
-            }
-          },
           {
             "in": "cookie",
             "name": "surgepilot_session",
@@ -7520,49 +9914,19 @@
               ],
               "title": "SurgePilot Session"
             }
-          },
-          {
-            "in": "query",
-            "name": "limit",
-            "required": false,
-            "schema": {
-              "default": 50,
-              "maximum": 100,
-              "minimum": 1,
-              "type": "integer"
-            }
-          },
-          {
-            "in": "query",
-            "name": "offset",
-            "required": false,
-            "schema": {
-              "default": 0,
-              "minimum": 0,
-              "type": "integer"
-            }
           }
         ],
         "responses": {
           "200": {
             "content": {
-              "application/json": {
+              "application/zip": {
                 "schema": {
-                  "$ref": "#/components/schemas/ApiCatalogSpecListResponse"
+                  "format": "binary",
+                  "type": "string"
                 }
               }
             },
-            "description": "Successful Response"
-          },
-          "400": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Bad Request"
+            "description": "Official SurgePilot Public API AI skill source archive."
           },
           "401": {
             "content": {
@@ -7574,28 +9938,35 @@
             },
             "description": "Unauthorized"
           },
-          "403": {
+          "503": {
             "content": {
               "application/json": {
+                "example": {
+                  "code": "AI_SKILL_SOURCE_NOT_AVAILABLE",
+                  "message": "AI skill source is not available.",
+                  "requestId": "01J00000000000000000000000"
+                },
                 "schema": {
                   "$ref": "#/components/schemas/ErrorResponse"
                 }
               }
             },
-            "description": "Forbidden"
+            "description": "The official AI skill source is not available."
           }
         },
-        "summary": "List Api Catalog Specs Route",
+        "summary": "Download Public Api Ai Skill",
         "tags": [
-          "api-catalog"
+          "account-ai-skill"
         ]
-      },
-      "post": {
-        "operationId": "uploadApiCatalogSpec",
+      }
+    },
+    "/v1/account/api-tokens": {
+      "get": {
+        "operationId": "listAccountApiTokens",
         "parameters": [
           {
-            "in": "header",
-            "name": "x-workspace-id",
+            "in": "cookie",
+            "name": "surgepilot_session",
             "required": false,
             "schema": {
               "anyOf": [
@@ -7606,9 +9977,50 @@
                   "type": "null"
                 }
               ],
-              "title": "X-Workspace-Id"
+              "title": "SurgePilot Session"
             }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiTokenListResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
           },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          }
+        },
+        "summary": "List Account Api Tokens",
+        "tags": [
+          "account-api-tokens"
+        ]
+      },
+      "post": {
+        "operationId": "createAccountApiToken",
+        "parameters": [
           {
             "in": "header",
             "name": "x-csrf-token",
@@ -7637,22 +10049,9 @@
         ],
         "requestBody": {
           "content": {
-            "multipart/form-data": {
+            "application/json": {
               "schema": {
-                "properties": {
-                  "file": {
-                    "format": "binary",
-                    "type": "string"
-                  },
-                  "name": {
-                    "maxLength": 120,
-                    "type": "string"
-                  }
-                },
-                "required": [
-                  "file"
-                ],
-                "type": "object"
+                "$ref": "#/components/schemas/ApiTokenCreateRequest"
               }
             }
           },
@@ -7663,7 +10062,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ApiCatalogSpecResponse"
+                  "$ref": "#/components/schemas/ApiTokenCreateResponse"
                 }
               }
             },
@@ -7699,106 +10098,34 @@
             },
             "description": "Forbidden"
           },
-          "413": {
-            "content": {
-              "application/json": {
-                "example": {
-                  "code": "API_SPEC_TOO_LARGE",
-                  "message": "Uploaded API spec is too large.",
-                  "requestId": "req_example"
-                },
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Uploaded API spec exceeds the configured size limit."
-          },
-          "415": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Unsupported Media Type"
-          },
           "422": {
             "content": {
               "application/json": {
-                "examples": {
-                  "parseFailed": {
-                    "value": {
-                      "code": "API_SPEC_PARSE_FAILED",
-                      "message": "The uploaded API spec could not be parsed.",
-                      "requestId": "req_example"
-                    }
-                  },
-                  "unsupportedFormat": {
-                    "value": {
-                      "code": "UNSUPPORTED_API_SPEC_FORMAT",
-                      "message": "The uploaded file must be an OpenAPI or Swagger document.",
-                      "requestId": "req_example"
-                    }
-                  }
-                },
                 "schema": {
                   "$ref": "#/components/schemas/ErrorResponse"
                 }
               }
             },
             "description": "Unprocessable Entity"
-          },
-          "503": {
-            "content": {
-              "application/json": {
-                "example": {
-                  "code": "STORAGE_UNAVAILABLE",
-                  "message": "Storage is unavailable.",
-                  "requestId": "req_example"
-                },
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "MinIO storage is unavailable or the configured bucket is inaccessible."
           }
         },
-        "summary": "Upload Api Catalog Spec Route",
+        "summary": "Create Account Api Token",
         "tags": [
-          "api-catalog"
+          "account-api-tokens"
         ]
       }
     },
-    "/v1/api-catalog/specs/{specId}": {
+    "/v1/account/api-tokens/{tokenId}": {
       "delete": {
-        "operationId": "deleteApiCatalogSpec",
+        "operationId": "deleteAccountApiToken",
         "parameters": [
           {
             "in": "path",
-            "name": "specId",
+            "name": "tokenId",
             "required": true,
             "schema": {
-              "title": "Specid",
+              "title": "Tokenid",
               "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "x-workspace-id",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "X-Workspace-Id"
             }
           },
           {
@@ -7831,16 +10158,6 @@
           "204": {
             "description": "Successful Response"
           },
-          "400": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Bad Request"
-          },
           "401": {
             "content": {
               "application/json": {
@@ -7882,266 +10199,9 @@
             "description": "Unprocessable Entity"
           }
         },
-        "summary": "Delete Api Catalog Spec Route",
+        "summary": "Delete Account Api Token",
         "tags": [
-          "api-catalog"
-        ]
-      },
-      "get": {
-        "operationId": "getApiCatalogSpec",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "specId",
-            "required": true,
-            "schema": {
-              "title": "Specid",
-              "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "x-workspace-id",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "X-Workspace-Id"
-            }
-          },
-          {
-            "in": "cookie",
-            "name": "surgepilot_session",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "SurgePilot Session"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiCatalogSpecResponse"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "400": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Bad Request"
-          },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Unauthorized"
-          },
-          "403": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Forbidden"
-          },
-          "404": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Not Found"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Unprocessable Entity"
-          }
-        },
-        "summary": "Get Api Catalog Spec Route",
-        "tags": [
-          "api-catalog"
-        ]
-      }
-    },
-    "/v1/api-catalog/specs/{specId}/content": {
-      "get": {
-        "operationId": "getApiCatalogSpecContent",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "specId",
-            "required": true,
-            "schema": {
-              "title": "Specid",
-              "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "x-workspace-id",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "X-Workspace-Id"
-            }
-          },
-          {
-            "in": "cookie",
-            "name": "surgepilot_session",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "SurgePilot Session"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object"
-                }
-              },
-              "application/octet-stream": {
-                "schema": {
-                  "format": "binary",
-                  "type": "string"
-                }
-              },
-              "application/yaml": {
-                "schema": {
-                  "type": "string"
-                }
-              },
-              "text/yaml": {
-                "schema": {
-                  "type": "string"
-                }
-              }
-            },
-            "description": "Authorized OpenAPI or Swagger spec content."
-          },
-          "400": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Bad Request"
-          },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Unauthorized"
-          },
-          "403": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Forbidden"
-          },
-          "404": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Not Found"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Unprocessable Entity"
-          },
-          "503": {
-            "content": {
-              "application/json": {
-                "example": {
-                  "code": "STORAGE_UNAVAILABLE",
-                  "message": "Storage is unavailable.",
-                  "requestId": "req_example"
-                },
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "MinIO storage is unavailable or the configured bucket is inaccessible."
-          }
-        },
-        "summary": "Get Api Catalog Spec Content Route",
-        "tags": [
-          "api-catalog"
+          "account-api-tokens"
         ]
       }
     },
@@ -9318,6 +11378,666 @@
         "summary": "Admin Archive Workspace",
         "tags": [
           "admin"
+        ]
+      }
+    },
+    "/v1/api-catalog/specs": {
+      "get": {
+        "operationId": "listApiCatalogSpecs",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "x-workspace-id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Workspace-Id"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "surgepilot_session",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "SurgePilot Session"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "maximum": 100,
+              "minimum": 1,
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "minimum": 0,
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiCatalogSpecListResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          }
+        },
+        "summary": "List Api Catalog Specs Route",
+        "tags": [
+          "api-catalog"
+        ]
+      },
+      "post": {
+        "operationId": "uploadApiCatalogSpec",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "x-workspace-id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Workspace-Id"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-csrf-token",
+            "required": true,
+            "schema": {
+              "title": "X-Csrf-Token",
+              "type": "string"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "surgepilot_session",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "SurgePilot Session"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "properties": {
+                  "file": {
+                    "format": "binary",
+                    "type": "string"
+                  },
+                  "name": {
+                    "maxLength": 120,
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "file"
+                ],
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiCatalogSpecResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "code": "API_SPEC_TOO_LARGE",
+                  "message": "Uploaded API spec is too large.",
+                  "requestId": "req_example"
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Uploaded API spec exceeds the configured size limit."
+          },
+          "415": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unsupported Media Type"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "examples": {
+                  "parseFailed": {
+                    "value": {
+                      "code": "API_SPEC_PARSE_FAILED",
+                      "message": "The uploaded API spec could not be parsed.",
+                      "requestId": "req_example"
+                    }
+                  },
+                  "unsupportedFormat": {
+                    "value": {
+                      "code": "UNSUPPORTED_API_SPEC_FORMAT",
+                      "message": "The uploaded file must be an OpenAPI or Swagger document.",
+                      "requestId": "req_example"
+                    }
+                  }
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "code": "STORAGE_UNAVAILABLE",
+                  "message": "Storage is unavailable.",
+                  "requestId": "req_example"
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "MinIO storage is unavailable or the configured bucket is inaccessible."
+          }
+        },
+        "summary": "Upload Api Catalog Spec Route",
+        "tags": [
+          "api-catalog"
+        ]
+      }
+    },
+    "/v1/api-catalog/specs/{specId}": {
+      "delete": {
+        "operationId": "deleteApiCatalogSpec",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "specId",
+            "required": true,
+            "schema": {
+              "title": "Specid",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-workspace-id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Workspace-Id"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-csrf-token",
+            "required": true,
+            "schema": {
+              "title": "X-Csrf-Token",
+              "type": "string"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "surgepilot_session",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "SurgePilot Session"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          }
+        },
+        "summary": "Delete Api Catalog Spec Route",
+        "tags": [
+          "api-catalog"
+        ]
+      },
+      "get": {
+        "operationId": "getApiCatalogSpec",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "specId",
+            "required": true,
+            "schema": {
+              "title": "Specid",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-workspace-id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Workspace-Id"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "surgepilot_session",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "SurgePilot Session"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiCatalogSpecResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          }
+        },
+        "summary": "Get Api Catalog Spec Route",
+        "tags": [
+          "api-catalog"
+        ]
+      }
+    },
+    "/v1/api-catalog/specs/{specId}/content": {
+      "get": {
+        "operationId": "getApiCatalogSpecContent",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "specId",
+            "required": true,
+            "schema": {
+              "title": "Specid",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-workspace-id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Workspace-Id"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "surgepilot_session",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "SurgePilot Session"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              },
+              "application/octet-stream": {
+                "schema": {
+                  "format": "binary",
+                  "type": "string"
+                }
+              },
+              "application/yaml": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "text/yaml": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "description": "Authorized OpenAPI or Swagger spec content."
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "code": "STORAGE_UNAVAILABLE",
+                  "message": "Storage is unavailable.",
+                  "requestId": "req_example"
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "MinIO storage is unavailable or the configured bucket is inaccessible."
+          }
+        },
+        "summary": "Get Api Catalog Spec Content Route",
+        "tags": [
+          "api-catalog"
         ]
       }
     },
@@ -14134,6 +16854,150 @@
         ]
       }
     },
+    "/v1/runs/{runId}/debug-http-body-blobs/{artifactId}/download": {
+      "get": {
+        "operationId": "downloadDebugHttpBodyBlob",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "runId",
+            "required": true,
+            "schema": {
+              "title": "Runid",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "artifactId",
+            "required": true,
+            "schema": {
+              "title": "Artifactid",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-workspace-id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Workspace-Id"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "surgepilot_session",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "SurgePilot Session"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/octet-stream": {
+                "schema": {
+                  "format": "binary",
+                  "type": "string"
+                }
+              }
+            },
+            "description": "Debug HTTP trace sidecar body bytes."
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "Download Debug Http Body Blob",
+        "tags": [
+          "runs"
+        ]
+      }
+    },
     "/v1/runs/{runId}/monitoring": {
       "get": {
         "operationId": "getRunMonitoringLink",
@@ -14522,31 +17386,6 @@
         "tags": [
           "runs"
         ]
-      }
-    },
-    "/v1/scenarios/{scenarioId}/openapi-step-generation/specs": {
-      "get": {
-        "operationId": "listScenarioOpenApiSpecSources",
-        "parameters": [{"in":"path","name":"scenarioId","required":true,"schema":{"type":"string"}},{"in":"query","name":"limit","schema":{"default":50,"maximum":100,"minimum":1,"type":"integer"}},{"in":"query","name":"offset","schema":{"default":0,"maximum":100000,"minimum":0,"type":"integer"}},{"in":"header","name":"x-workspace-id","schema":{"type":["string","null"]}},{"in":"cookie","name":"surgepilot_session","schema":{"type":["string","null"]}}],
-        "responses":{"200":{"description":"Successful Response","content":{"application/json":{"schema":{"$ref":"#/components/schemas/OpenApiSpecSourceListResponse"}}}},"400":{"description":"Bad Request","content":{"application/json":{"schema":{"$ref":"#/components/schemas/ErrorResponse"}}}},"401":{"description":"Unauthorized","content":{"application/json":{"schema":{"$ref":"#/components/schemas/ErrorResponse"}}}},"403":{"description":"Forbidden","content":{"application/json":{"schema":{"$ref":"#/components/schemas/ErrorResponse"}}}},"404":{"description":"Not Found","content":{"application/json":{"schema":{"$ref":"#/components/schemas/ErrorResponse"}}}}},
-        "summary":"List Scenario Openapi Spec Sources","tags":["scenarios"]
-      }
-    },
-    "/v1/scenarios/{scenarioId}/openapi-step-generation/specs/{specId}/operations": {
-      "get": {
-        "operationId":"listScenarioOpenApiOperations",
-        "parameters":[{"in":"path","name":"scenarioId","required":true,"schema":{"type":"string"}},{"in":"path","name":"specId","required":true,"schema":{"type":"string"}},{"in":"header","name":"x-workspace-id","schema":{"type":["string","null"]}},{"in":"cookie","name":"surgepilot_session","schema":{"type":["string","null"]}}],
-        "responses":{"200":{"description":"Successful Response","content":{"application/json":{"schema":{"$ref":"#/components/schemas/OpenApiOperationListResponse"}}}},"400":{"description":"Bad Request","content":{"application/json":{"schema":{"$ref":"#/components/schemas/ErrorResponse"}}}},"401":{"description":"Unauthorized","content":{"application/json":{"schema":{"$ref":"#/components/schemas/ErrorResponse"}}}},"403":{"description":"Forbidden","content":{"application/json":{"schema":{"$ref":"#/components/schemas/ErrorResponse"}}}},"404":{"description":"Not Found","content":{"application/json":{"schema":{"$ref":"#/components/schemas/ErrorResponse"}}}},"422":{"description":"Unprocessable Entity","content":{"application/json":{"schema":{"$ref":"#/components/schemas/ErrorResponse"}}}},"503":{"description":"Service Unavailable","content":{"application/json":{"schema":{"$ref":"#/components/schemas/ErrorResponse"}}}}},
-        "summary":"List Scenario Openapi Operations","tags":["scenarios"]
-      }
-    },
-    "/v1/scenarios/{scenarioId}/openapi-step-generation/drafts": {
-      "post": {
-        "operationId":"generateScenarioOpenApiStepDrafts",
-        "parameters":[{"in":"path","name":"scenarioId","required":true,"schema":{"type":"string"}},{"in":"header","name":"x-workspace-id","schema":{"type":["string","null"]}},{"in":"header","name":"x-csrf-token","required":true,"schema":{"type":"string"}},{"in":"cookie","name":"surgepilot_session","schema":{"type":["string","null"]}}],
-        "requestBody":{"required":true,"content":{"application/json":{"schema":{"$ref":"#/components/schemas/OpenApiStepDraftGenerateRequest"}}}},
-        "responses":{"200":{"description":"Successful Response","content":{"application/json":{"schema":{"$ref":"#/components/schemas/OpenApiStepDraftPreviewResponse"}}}},"400":{"description":"Bad Request","content":{"application/json":{"schema":{"$ref":"#/components/schemas/ErrorResponse"}}}},"401":{"description":"Unauthorized","content":{"application/json":{"schema":{"$ref":"#/components/schemas/ErrorResponse"}}}},"403":{"description":"Forbidden","content":{"application/json":{"schema":{"$ref":"#/components/schemas/ErrorResponse"}}}},"404":{"description":"Not Found","content":{"application/json":{"schema":{"$ref":"#/components/schemas/ErrorResponse"}}}},"422":{"description":"Unprocessable Entity","content":{"application/json":{"schema":{"$ref":"#/components/schemas/ErrorResponse"}}}},"503":{"description":"Service Unavailable","content":{"application/json":{"schema":{"$ref":"#/components/schemas/ErrorResponse"}}}}},
-        "summary":"Generate Scenario Openapi Step Drafts","tags":["scenarios"]
       }
     },
     "/v1/scenarios": {
@@ -15464,6 +18303,410 @@
           }
         },
         "summary": "Clone Scenario",
+        "tags": [
+          "scenarios"
+        ]
+      }
+    },
+    "/v1/scenarios/{scenarioId}/openapi-step-generation/drafts": {
+      "post": {
+        "operationId": "generateScenarioOpenApiStepDrafts",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "scenarioId",
+            "required": true,
+            "schema": {
+              "title": "Scenarioid",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-workspace-id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Workspace-Id"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-csrf-token",
+            "required": true,
+            "schema": {
+              "title": "X-Csrf-Token",
+              "type": "string"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "surgepilot_session",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "SurgePilot Session"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OpenApiStepDraftGenerateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OpenApiStepDraftPreviewResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "Generate Scenario Openapi Step Drafts",
+        "tags": [
+          "scenarios"
+        ]
+      }
+    },
+    "/v1/scenarios/{scenarioId}/openapi-step-generation/specs": {
+      "get": {
+        "operationId": "listScenarioOpenApiSpecSources",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "scenarioId",
+            "required": true,
+            "schema": {
+              "title": "Scenarioid",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "maximum": 100000,
+              "minimum": 0,
+              "title": "Offset",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-workspace-id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Workspace-Id"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "surgepilot_session",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "SurgePilot Session"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OpenApiSpecSourceListResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          }
+        },
+        "summary": "List Scenario Openapi Spec Sources",
+        "tags": [
+          "scenarios"
+        ]
+      }
+    },
+    "/v1/scenarios/{scenarioId}/openapi-step-generation/specs/{specId}/operations": {
+      "get": {
+        "operationId": "listScenarioOpenApiOperations",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "scenarioId",
+            "required": true,
+            "schema": {
+              "title": "Scenarioid",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "specId",
+            "required": true,
+            "schema": {
+              "title": "Specid",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-workspace-id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Workspace-Id"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "surgepilot_session",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "SurgePilot Session"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OpenApiOperationListResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "List Scenario Openapi Operations",
         "tags": [
           "scenarios"
         ]

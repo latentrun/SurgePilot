@@ -1045,6 +1045,28 @@
           }
         ],
         "properties": {
+          "mode": {
+            "default": "manual",
+            "enum": [
+              "manual",
+              "auto"
+            ],
+            "title": "Mode",
+            "type": "string"
+          },
+          "nodeCount": {
+            "anyOf": [
+              {
+                "maximum": 10.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Nodecount"
+          },
           "poolType": {
             "anyOf": [
               {
@@ -1072,6 +1094,14 @@
               }
             ],
             "title": "Selectednodeid"
+          },
+          "selectedNodeIds": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 10,
+            "title": "Selectednodeids",
+            "type": "array"
           }
         },
         "title": "PublicTestPlanResourceConfig",
@@ -1246,12 +1276,7 @@
             "type": "string"
           },
           "runType": {
-            "enum": [
-              "debug",
-              "standard"
-            ],
-            "title": "Runtype",
-            "type": "string"
+            "$ref": "#/components/schemas/RunType"
           },
           "selectedNodeId": {
             "title": "Selectednodeid",
@@ -2309,6 +2334,14 @@
             ],
             "title": "Description"
           },
+          "globalHeaders": {
+            "items": {
+              "$ref": "#/components/schemas/ScenarioNamedValue"
+            },
+            "maxItems": 200,
+            "title": "Globalheaders",
+            "type": "array"
+          },
           "name": {
             "maxLength": 120,
             "minLength": 1,
@@ -2330,6 +2363,14 @@
             },
             "maxItems": 10,
             "title": "Tags",
+            "type": "array"
+          },
+          "variables": {
+            "items": {
+              "$ref": "#/components/schemas/ScenarioVariable"
+            },
+            "maxItems": 200,
+            "title": "Variables",
             "type": "array"
           }
         },
@@ -2501,6 +2542,13 @@
             "title": "Enabledstepcount",
             "type": "integer"
           },
+          "globalHeaders": {
+            "items": {
+              "$ref": "#/components/schemas/ScenarioNamedValue"
+            },
+            "title": "Globalheaders",
+            "type": "array"
+          },
           "id": {
             "title": "Id",
             "type": "string"
@@ -2539,6 +2587,13 @@
           "updatedAt": {
             "title": "Updatedat",
             "type": "string"
+          },
+          "variables": {
+            "items": {
+              "$ref": "#/components/schemas/ScenarioVariable"
+            },
+            "title": "Variables",
+            "type": "array"
           }
         },
         "required": [
@@ -2554,6 +2609,8 @@
           "updatedAt",
           "baseUrlExpression",
           "defaultSettings",
+          "globalHeaders",
+          "variables",
           "dataSources",
           "steps"
         ],
@@ -2786,6 +2843,14 @@
             "title": "Expectedrevision",
             "type": "integer"
           },
+          "globalHeaders": {
+            "items": {
+              "$ref": "#/components/schemas/ScenarioNamedValue"
+            },
+            "maxItems": 200,
+            "title": "Globalheaders",
+            "type": "array"
+          },
           "name": {
             "maxLength": 120,
             "minLength": 1,
@@ -2808,6 +2873,14 @@
             "maxItems": 10,
             "title": "Tags",
             "type": "array"
+          },
+          "variables": {
+            "items": {
+              "$ref": "#/components/schemas/ScenarioVariable"
+            },
+            "maxItems": 200,
+            "title": "Variables",
+            "type": "array"
           }
         },
         "required": [
@@ -2820,6 +2893,18 @@
       "ScenarioScript": {
         "additionalProperties": false,
         "properties": {
+          "dependencyFileId": {
+            "anyOf": [
+              {
+                "maxLength": 26,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dependencyfileid"
+          },
           "enabled": {
             "default": true,
             "title": "Enabled",
@@ -2844,18 +2929,6 @@
             "default": "groovy",
             "title": "Language",
             "type": "string"
-          },
-          "scriptText": {
-            "anyOf": [
-              {
-                "maxLength": 262144,
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Scripttext"
           }
         },
         "required": [
@@ -3143,6 +3216,40 @@
         "title": "ScenarioUploadFile",
         "type": "object"
       },
+      "ScenarioVariable": {
+        "additionalProperties": false,
+        "properties": {
+          "enabled": {
+            "default": true,
+            "title": "Enabled",
+            "type": "boolean"
+          },
+          "id": {
+            "maxLength": 26,
+            "minLength": 26,
+            "title": "Id",
+            "type": "string"
+          },
+          "name": {
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          },
+          "value": {
+            "default": "",
+            "maxLength": 65536,
+            "title": "Value",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name"
+        ],
+        "title": "ScenarioVariable",
+        "type": "object"
+      },
       "SlaResult": {
         "enum": [
           "passed",
@@ -3385,6 +3492,28 @@
       },
       "TestPlanResourceConfig": {
         "properties": {
+          "mode": {
+            "default": "manual",
+            "enum": [
+              "manual",
+              "auto"
+            ],
+            "title": "Mode",
+            "type": "string"
+          },
+          "nodeCount": {
+            "anyOf": [
+              {
+                "maximum": 10.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Nodecount"
+          },
           "poolType": {
             "anyOf": [
               {
@@ -3412,6 +3541,14 @@
               }
             ],
             "title": "Selectednodeid"
+          },
+          "selectedNodeIds": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 10,
+            "title": "Selectednodeids",
+            "type": "array"
           }
         },
         "title": "TestPlanResourceConfig",
@@ -3419,6 +3556,37 @@
       },
       "TestPlanResourceSummary": {
         "properties": {
+          "allocatedNodeCount": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Allocatednodecount"
+          },
+          "mode": {
+            "default": "manual",
+            "enum": [
+              "manual",
+              "auto"
+            ],
+            "title": "Mode",
+            "type": "string"
+          },
+          "nodeCount": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Nodecount"
+          },
           "poolType": {
             "anyOf": [
               {
@@ -3444,6 +3612,13 @@
               }
             ],
             "title": "Selectednodeid"
+          },
+          "selectedNodeIds": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Selectednodeids",
+            "type": "array"
           },
           "selectedNodeName": {
             "anyOf": [
@@ -4007,6 +4182,12 @@
         "title": "TestPlanUpdatedBy",
         "type": "object"
       }
+    },
+    "securitySchemes": {
+      "HTTPBearer": {
+        "scheme": "bearer",
+        "type": "http"
+      }
     }
   },
   "info": {
@@ -4019,12 +4200,20 @@
       "INVALID_FILENAME",
       "DEPENDENCY_FILE_NAME_CONFLICT",
       "PAYLOAD_TOO_LARGE",
+      "API_SPEC_TOO_LARGE",
+      "API_SPEC_PARSE_FAILED",
+      "UNSUPPORTED_API_SPEC_FORMAT",
+      "API_SPEC_NOT_AVAILABLE",
+      "OPENAPI_OPERATION_NOT_FOUND",
+      "OPENAPI_OPERATION_UNSUPPORTED",
       "STORAGE_UNAVAILABLE",
       "FILE_IN_USE",
       "LOAD_NODE_PUBLIC_ADMIN_REQUIRED",
       "LOAD_NODE_CONFLICT",
       "LOAD_NODE_BUSY",
       "LOAD_NODE_ACTION_NOT_ALLOWED",
+      "LOAD_NODE_UNAVAILABLE",
+      "LOAD_NODE_CAPACITY_UNAVAILABLE",
       "LOAD_NODE_CREDENTIAL_REQUIRED",
       "LOAD_NODE_CREDENTIAL_INVALID",
       "LOAD_NODE_HOST_INVALID",
@@ -4035,12 +4224,27 @@
       "LOAD_NODE_RUNNER_HOME_UNWRITABLE",
       "LOAD_NODE_PYTHON_MISSING",
       "LOAD_NODE_JAVA_MISSING",
+      "LOAD_NODE_TAR_MISSING",
       "LOAD_NODE_TAURUS_MISSING",
       "LOAD_NODE_JMETER_MISSING",
+      "LOAD_NODE_RUNTIME_ARTIFACT_MISSING",
+      "LOAD_NODE_RUNTIME_ARCH_UNSUPPORTED",
+      "LOAD_NODE_RUNTIME_UPLOAD_FAILED",
+      "LOAD_NODE_RUNTIME_CHECKSUM_FAILED",
+      "LOAD_NODE_RUNTIME_EXTRACT_FAILED",
+      "LOAD_NODE_RUNTIME_METADATA_INVALID",
+      "LOAD_NODE_RUNTIME_BZT_FAILED",
+      "LOAD_NODE_RUNTIME_JMETER_FAILED",
+      "LOAD_NODE_RUNTIME_PLUGIN_MISSING",
+      "LOAD_NODE_RUNTIME_ACTIVATION_FAILED",
       "LOAD_NODE_INIT_FAILED",
       "CREDENTIAL_DECRYPT_FAILED",
       "SCENARIO_REVISION_CONFLICT",
       "INVALID_EXECUTION_PREVIEW_MODE",
+      "RUN_CREATION_NOT_ALLOWED",
+      "RUN_CONTROL_SSH_HOST_KEY_UNTRUSTED",
+      "RUN_CONTROL_SSH_HOST_KEY_CHANGED",
+      "RUN_CONTROL_INVALID_API_BASE_URL",
       "RESOURCE_REQUEST_INVALID",
       "RUN_STOP_NOT_ALLOWED",
       "RUN_TERMINAL_STATE",
@@ -4058,6 +4262,17 @@
       "TEST_PLAN_REVISION_CONFLICT",
       "TEST_PLAN_NOT_RUNNABLE",
       "LOAD_SOFT_LIMIT_CONFIRMATION_REQUIRED",
+      "WORKSPACE_ARCHIVED",
+      "WORKSPACE_NOT_FOUND",
+      "WORKSPACE_NAME_CONFLICT",
+      "WORKSPACE_LAST_ACTIVE_REQUIRED",
+      "USER_NOT_FOUND",
+      "USER_EMAIL_CONFLICT",
+      "USER_DISABLED",
+      "USER_LAST_ACTIVE_ADMIN",
+      "USER_WORKSPACE_REQUIRED",
+      "SETTING_NOT_EDITABLE",
+      "SENSITIVE_SETTING_VALUE_FORBIDDEN",
       "PUBLIC_TOKEN_SCOPE_DENIED"
     ]
   },

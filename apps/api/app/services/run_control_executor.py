@@ -46,9 +46,6 @@ from app.services.ssh_remote import (
 )
 
 
-CredentialResolver = Callable[[str], CredentialPlaintext]
-
-
 def _monitoring_token_from_worker_env() -> str | None:
     value = os.environ.get("SURGEPILOT_MONITORING_INFLUXDB_TOKEN")
     if value:
@@ -63,6 +60,9 @@ def _monitoring_token_from_worker_env() -> str | None:
     return content or None
 
 
+CredentialResolver = Callable[[str], CredentialPlaintext]
+
+
 @dataclass(frozen=True)
 class RemoteExecutorOptions:
     command_timeout_seconds: int
@@ -70,16 +70,6 @@ class RemoteExecutorOptions:
 
 
 class RemoteRunControlExecutor(RunControlExecutor):
-    """Execute claimed run-control requests over the P0-03 SSH/SFTP adapter.
-
-    ``start`` uploads the runner bundle and a transient env file, then invokes
-    ``python3 <runnerHome>/runner.py start --run-id <runId>`` (with ``--fake``
-    for protocol-smoke Runs). ``stop`` and ``force_kill`` invoke the matching
-    Runner CLI commands. Secrets travel only in the 0600 env file, which the
-    remote shell deletes through an EXIT trap; failure paths attempt
-    compensating deletion and quarantine the node when the outcome is unknown.
-    """
-
     def __init__(
         self,
         *,
@@ -116,121 +106,115 @@ class RemoteRunControlExecutor(RunControlExecutor):
                 message="Run control execution failed.",
                 quarantine_node=False,
             )
-        execution_bundle_files: list[ExecutionBundleFile] | None = None
-        if command.action == "start" and command.source_type in {"debug_scenario", "test_plan"}:
-            try:
-                execution_bundle_files = self._build_execution_bundle(command)
-            except Exception:
-                return RunControlExecutionResult(
-                    ok=False,
-                    error_code="RUN_BUNDLE_BUILD_FAILED",
-                    message="Run execution bundle could not be prepared.",
-                    quarantine_node=False,
-                )
-        target: SshTarget | None = None
-        env_path: str | None = None
-        start_invoked = False
-        cleanup_required = False
         try:
-            credential = self._credential_for(command.node_id)
-            target = SshTarget(
-                host=command.host,
-                port=command.ssh_port,
-                username=command.ssh_user,
-                credential=credential,
-                connect_timeout_seconds=self.settings.load_node_ssh_connect_timeout_seconds,
-                trusted_host_key_algorithm=command.trusted_host_key_algorithm,
-                trusted_host_key_public_key=command.trusted_host_key_public_key,
-                trusted_host_key_fingerprint_sha256=command.trusted_host_key_fingerprint_sha256,
-            )
-            self._upload_runner(target=target, runner_home=command.runner_home)
-            self._upload_execution_bundle(
-                target=target, command=command, files=execution_bundle_files
-            )
-            env_path = self._remote_env_path(command)
-            cleanup_required = command.action == "start"
-            self.adapter.upload_text(
-                target,
-                remote_path=env_path,
-                content=self._env_file(command, api_base_url=api_base_url),
-                mode=0o600,
-            )
-            self._upload_monitoring_properties_if_needed(target=target, command=command)
-            remote_command = self._shell_command(command=command, env_path=env_path)
-            start_invoked = command.action == "start"
-            result = self.adapter.run_command(
-                target,
-                command=remote_command,
-                timeout_seconds=self.options.command_timeout_seconds,
-                output_limit_bytes=self.options.output_limit_bytes,
-            )
-        except AppError as exc:
-            return RunControlExecutionResult(
-                ok=False,
-                error_code=exc.code,
-                message=exc.message,
-                quarantine_node=self._failure_requires_quarantine(
-                    target=target,
-                    command=command,
-                    env_path=env_path,
-                    cleanup_required=cleanup_required,
-                ),
-            )
-        except SshHostKeyUntrustedError:
-            return RunControlExecutionResult(
-                ok=False,
-                error_code="RUN_CONTROL_SSH_HOST_KEY_UNTRUSTED",
-                message="Run control SSH host key verification failed.",
-                quarantine_node=self._failure_requires_quarantine(
-                    target=target,
-                    command=command,
-                    env_path=env_path,
-                    cleanup_required=cleanup_required,
-                ),
-            )
-        except SshHostKeyChangedError:
-            return RunControlExecutionResult(
-                ok=False,
-                error_code="RUN_CONTROL_SSH_HOST_KEY_CHANGED",
-                message="Run control SSH host key verification failed.",
-                quarantine_node=self._failure_requires_quarantine(
-                    target=target,
-                    command=command,
-                    env_path=env_path,
-                    cleanup_required=cleanup_required,
-                ),
-            )
+            execution_bundle_files = self._build_execution_bundle(command)
         except Exception:
             return RunControlExecutionResult(
                 ok=False,
-                error_code="RUN_CONTROL_EXECUTION_FAILED",
-                message="Run control execution failed.",
-                quarantine_node=(
-                    False
+                error_code="RUN_BUNDLE_BUILD_FAILED",
+                message="Run execution bundle could not be prepared.",
+                quarantine_node=False,
+            )
+        try:
+            start_invoked = False
+            cleanup_required = False
+            target: SshTarget | None = None
+            env_path: str | None = None
+            try:
+                credential = self._credential_for(command.node_id)
+                target = SshTarget(
+                    host=command.host,
+                    port=command.ssh_port,
+                    username=command.ssh_user,
+                    credential=credential,
+                    connect_timeout_seconds=self.settings.load_node_ssh_connect_timeout_seconds,
+                    trusted_host_key_algorithm=command.trusted_host_key_algorithm,
+                    trusted_host_key_public_key=command.trusted_host_key_public_key,
+                    trusted_host_key_fingerprint_sha256=command.trusted_host_key_fingerprint_sha256,
+                )
+                self._verify_active_runtime(target=target, command=command)
+                self._upload_runner(target=target, runner_home=command.runner_home)
+                self._upload_execution_bundle(
+                    target=target, command=command, files=execution_bundle_files
+                )
+                env_path = self._remote_env_path(command)
+                cleanup_required = command.action == "start"
+                self.adapter.upload_text(
+                    target,
+                    remote_path=env_path,
+                    content=self._env_file(command, api_base_url=api_base_url),
+                    mode=0o600,
+                )
+                self._upload_monitoring_properties_if_needed(target=target, command=command)
+                remote_command = self._shell_command(command=command, env_path=env_path)
+                start_invoked = command.action == "start"
+                result = self.adapter.run_command(
+                    target,
+                    command=remote_command,
+                    timeout_seconds=self.options.command_timeout_seconds,
+                    output_limit_bytes=self.options.output_limit_bytes,
+                )
+            except AppError as exc:
+                return RunControlExecutionResult(
+                    ok=False,
+                    error_code=exc.code,
+                    message=exc.message,
+                    quarantine_node=self._failure_requires_quarantine(
+                        target=target,
+                        command=command,
+                        env_path=env_path,
+                        cleanup_required=cleanup_required,
+                    ),
+                )
+            except SshHostKeyUntrustedError:
+                return RunControlExecutionResult(
+                    ok=False,
+                    error_code="RUN_CONTROL_SSH_HOST_KEY_UNTRUSTED",
+                    message="Run control SSH host key verification failed.",
+                    quarantine_node=self._failure_requires_quarantine(
+                        target=target,
+                        command=command,
+                        env_path=env_path,
+                        cleanup_required=cleanup_required,
+                    ),
+                )
+            except SshHostKeyChangedError:
+                return RunControlExecutionResult(
+                    ok=False,
+                    error_code="RUN_CONTROL_SSH_HOST_KEY_CHANGED",
+                    message="Run control SSH host key verification failed.",
+                    quarantine_node=self._failure_requires_quarantine(
+                        target=target,
+                        command=command,
+                        env_path=env_path,
+                        cleanup_required=cleanup_required,
+                    ),
+                )
+            except Exception:
+                return RunControlExecutionResult(
+                    ok=False,
+                    error_code="RUN_CONTROL_EXECUTION_FAILED",
+                    message="Run control execution failed.",
+                    quarantine_node=False
                     if start_invoked
                     else self._failure_requires_quarantine(
                         target=target,
                         command=command,
                         env_path=env_path,
                         cleanup_required=cleanup_required,
-                    )
-                ),
-                cleanup_required=start_invoked,
-            )
+                    ),
+                    cleanup_required=start_invoked,
+                )
         finally:
             self._close_execution_bundle(execution_bundle_files)
         if result.ok:
             return RunControlExecutionResult(ok=True)
         return RunControlExecutionResult(
             ok=False,
-            error_code=(
-                "RUN_CONTROL_TIMEOUT" if result.timed_out else "RUN_CONTROL_REMOTE_FAILED"
-            ),
-            message=(
-                "Run control command timed out."
-                if result.timed_out
-                else "Run control command failed."
-            ),
+            error_code="RUN_CONTROL_TIMEOUT" if result.timed_out else "RUN_CONTROL_REMOTE_FAILED",
+            message="Run control command timed out."
+            if result.timed_out
+            else "Run control command failed.",
             stderr_preview=sanitize_log(
                 result.stderr_preview, max_bytes=self.options.output_limit_bytes
             ),
@@ -253,6 +237,44 @@ class RemoteRunControlExecutor(RunControlExecutor):
             raise RuntimeError("Run control target node was not found.")
         return decrypt_credential(credential_for_node(session, node=node))
 
+    def _verify_active_runtime(self, *, target: SshTarget, command: RunControlCommand) -> None:
+        if command.action != "start":
+            return
+        expected = self._expected_runtime_version(command)
+        if not expected:
+            raise AppError(
+                "RUN_CONTROL_RUNTIME_MISMATCH",
+                "Load Node Runtime must be reinitialized before this Run can start.",
+                409,
+            )
+
+        current = posixpath.join(command.runner_home, "current")
+        metadata_path = posixpath.join(current, "metadata.json")
+        script = (
+            "import json,sys; "
+            "data=json.load(open(sys.argv[1], encoding='utf-8')); "
+            "version=data.get('version'); "
+            "assert isinstance(version,str) and version; print(version)"
+        )
+        probe = self.adapter.run_command(
+            target,
+            command=(
+                f"test -L {shlex.quote(current)} && "
+                f"python3 -c {shlex.quote(script)} {shlex.quote(metadata_path)}"
+            ),
+            timeout_seconds=self.options.command_timeout_seconds,
+            output_limit_bytes=256,
+        )
+        if not probe.ok or probe.stdout_preview.strip() != expected:
+            raise AppError(
+                "RUN_CONTROL_RUNTIME_MISMATCH",
+                "Load Node Runtime must be reinitialized before this Run can start.",
+                409,
+            )
+
+    def _expected_runtime_version(self, command: RunControlCommand) -> str:
+        return command.expected_runtime_version.strip()
+
     def _upload_runner(self, *, target: SshTarget, runner_home: str) -> None:
         for file in self.runner_bundle.files():
             remote_path = posixpath.join(runner_home, file.relative_path)
@@ -260,20 +282,33 @@ class RemoteRunControlExecutor(RunControlExecutor):
                 target, remote_path=remote_path, content=file.content, mode=file.mode
             )
 
-    def _build_execution_bundle(self, command: RunControlCommand) -> list[ExecutionBundleFile]:
+    def _build_execution_bundle(
+        self, command: RunControlCommand
+    ) -> list[ExecutionBundleFile] | None:
+        if command.action != "start" or command.source_type not in {"debug_scenario", "test_plan"}:
+            return None
         if self.session_factory is None:
             raise RuntimeError("Run execution bundle requires a session factory.")
         with self.session_factory() as session:
             if command.source_type == "test_plan":
                 return build_test_plan_execution_bundle(
-                    session, run_id=command.run_id, runner_home=command.runner_home, settings=self.settings
+                    session,
+                    run_id=command.run_id,
+                    runner_home=command.runner_home,
+                    settings=self.settings,
                 )
             return build_debug_scenario_execution_bundle(
-                session, run_id=command.run_id, runner_home=command.runner_home, settings=self.settings
+                session,
+                run_id=command.run_id,
+                runner_home=command.runner_home,
+                settings=self.settings,
             )
 
     def _upload_execution_bundle(
-        self, *, target: SshTarget, command: RunControlCommand,
+        self,
+        *,
+        target: SshTarget,
+        command: RunControlCommand,
         files: list[ExecutionBundleFile] | None,
     ) -> None:
         if not files:
@@ -282,14 +317,15 @@ class RemoteRunControlExecutor(RunControlExecutor):
         for file in files:
             remote_path = safe_join(bundle_root, file.relative_path)
             if file.content is not None:
-                self.adapter.upload_bytes(target, remote_path=remote_path, content=file.content, mode=file.mode)
-            elif file.stream is not None:
-                self.adapter.upload_stream(target, remote_path=remote_path, source=file.stream, mode=file.mode)
-
-    def _close_execution_bundle(self, files: list[ExecutionBundleFile] | None) -> None:
-        for file in files or []:
-            if file.stream is not None:
-                file.stream.close()
+                self.adapter.upload_bytes(
+                    target, remote_path=remote_path, content=file.content, mode=file.mode
+                )
+                continue
+            if file.stream is None:
+                continue
+            self.adapter.upload_stream(
+                target, remote_path=remote_path, source=file.stream, mode=file.mode
+            )
 
     def _upload_monitoring_properties_if_needed(
         self, *, target: SshTarget, command: RunControlCommand
@@ -322,6 +358,11 @@ class RemoteRunControlExecutor(RunControlExecutor):
             mode=0o600,
         )
 
+    def _close_execution_bundle(self, files: list[ExecutionBundleFile] | None) -> None:
+        for file in files or []:
+            if file.stream is not None:
+                file.stream.close()
+
     def _failure_requires_quarantine(
         self,
         *,
@@ -339,15 +380,10 @@ class RemoteRunControlExecutor(RunControlExecutor):
             "secrets",
             "monitoring.properties",
         )
-        secrets_dir = posixpath.dirname(monitoring_path)
         try:
             result = self.adapter.run_command(
                 target,
-                command=(
-                    f"rm -f {shlex.quote(env_path)} {shlex.quote(monitoring_path)} && "
-                    f"rmdir {shlex.quote(secrets_dir)} && "
-                    f"test ! -e {shlex.quote(monitoring_path)}"
-                ),
+                command=f"rm -f {shlex.quote(env_path)} {shlex.quote(monitoring_path)}",
                 timeout_seconds=self.options.command_timeout_seconds,
                 output_limit_bytes=512,
             )
@@ -383,6 +419,7 @@ class RemoteRunControlExecutor(RunControlExecutor):
             "RUNNER_INTERNAL_TOKEN": runner_token,
             "SURGEPILOT_NODE_ID": command.node_id,
             "RUNNER_HOME": command.runner_home,
+            "SURGEPILOT_EXPECTED_RUNTIME_VERSION": self._expected_runtime_version(command),
         }
         if api_base_url is not None:
             values = {"SURGEPILOT_API_BASE_URL": api_base_url, **values}

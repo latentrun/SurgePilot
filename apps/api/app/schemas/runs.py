@@ -4,7 +4,6 @@ from typing import Literal
 from pydantic import ConfigDict, Field, field_validator, model_validator
 
 from app.core.ids import is_ulid
-
 from app.schemas.common import ApiSchema
 
 
@@ -20,6 +19,7 @@ class RunState(str, Enum):
 CallbackEventType = Literal[
     "accepted", "running", "heartbeat", "artifact", "finished", "failed", "aborted"
 ]
+
 
 class RunType(str, Enum):
     debug = "debug"
@@ -71,8 +71,9 @@ class RunResourceRequest(ApiSchema):
     @field_validator("selected_node_ids")
     @classmethod
     def validate_selected_node_ids(cls, value: list[str]) -> list[str]:
-        if any(not is_ulid(item) for item in value):
-            raise ValueError("Invalid ULID.")
+        for item in value:
+            if not is_ulid(item):
+                raise ValueError("Invalid ULID.")
         return value
 
     @model_validator(mode="after")
@@ -84,25 +85,15 @@ class RunResourceRequest(ApiSchema):
                 raise ValueError("Manual resource requests require selectedNodeIds.")
             if len(set(self.selected_node_ids)) != len(self.selected_node_ids):
                 raise ValueError("Manual resource requests require distinct selectedNodeIds.")
-        elif self.selected_node_ids:
-            raise ValueError("Auto resource requests must not include selectedNodeIds.")
-        elif self.node_count is None:
-            raise ValueError("Auto resource requests require nodeCount.")
+        if self.mode == "auto":
+            if self.selected_node_ids:
+                raise ValueError("Auto resource requests must not include selectedNodeIds.")
+            if self.node_count is None:
+                raise ValueError("Auto resource requests require nodeCount.")
         return self
 
 
 class RunCreateRequest(ApiSchema):
-    """Public ``POST /api/v1/runs`` payload for Scenario Debug Runs and
-    Test Plan Runs.
-
-    P0-05 activates public Run creation for ``runType=debug`` with
-    ``sourceType=debug_scenario``. P0-06 extends public Run creation to
-    ``runType=standard|debug`` with ``sourceType=test_plan``. Test Plan Runs
-    use the saved Env Group and Load Node settings and reject overrides;
-    ``confirmHighConcurrency`` acknowledges the soft single-node concurrency
-    limit.
-    """
-
     model_config = ConfigDict(
         alias_generator=ApiSchema.model_config["alias_generator"],
         populate_by_name=True,
@@ -117,6 +108,13 @@ class RunCreateRequest(ApiSchema):
     selected_node_id: str | None = Field(default=None, min_length=26, max_length=26)
     resource_request: RunResourceRequest | None = None
     confirm_high_concurrency: bool = False
+
+    @field_validator("source_id", "env_group_id", "selected_node_id")
+    @classmethod
+    def validate_ulid(cls, value: str | None) -> str | None:
+        if value is not None and not is_ulid(value):
+            raise ValueError("Invalid ULID.")
+        return value
 
 
 class RunCreateResponse(ApiSchema):
@@ -356,6 +354,7 @@ class RunReportDetail(ApiSchema):
 class RunArtifactItem(ApiSchema):
     id: str
     node_id: str
+    allocation_id: str | None = None
     artifact_type: RunArtifactType
     relative_path: str
     display_filename: str

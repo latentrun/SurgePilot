@@ -14,17 +14,18 @@ import time
 import urllib.error
 import urllib.request
 from uuid import uuid4
+import zipfile
 
 import click
 
 SAFE_PATH_SEGMENT = re.compile(r"^[A-Za-z0-9._-]+$")
 MAX_RUN_ID_LENGTH = 64
 MAX_ARTIFACT_UPLOAD_BYTES = 200 * 1024 * 1024
+DEFAULT_ARCHIVE_UPLOAD_MAX_BYTES = 50 * 1024 * 1024
 SUPERVISOR_PIDFILE = "supervisor.pid"
 WORKLOAD_PIDFILE = "workload.pid"
 TERMINATE_GROUP_SIGNAL_GRACE_SECONDS = 10.0
 DEFAULT_STOP_SUPERVISOR_TIMEOUT_SECONDS = 120.0
-RUNNER_VERSION = "0.1.0"
 
 
 @dataclass(frozen=True)
@@ -39,6 +40,10 @@ class ProcEntry:
     pgid: int
     state: str
     starttime: str
+
+
+class DiagnosticArchiveOversize(Exception):
+    pass
 
 
 @dataclass(frozen=True)
@@ -57,6 +62,13 @@ class ArtifactUploadSummary:
     @property
     def has_failed_upload(self) -> bool:
         return any(result.status == "failed" for result in self.results)
+
+    @property
+    def artifacts_zip_status(self) -> str | None:
+        for result in self.results:
+            if result.artifact_type == "artifacts_zip":
+                return result.status
+        return None
 
 
 class ProcessGroupProbe:
@@ -189,18 +201,6 @@ def surgepilot_yaml_path(run_id: str, *, base: Path | None = None) -> Path:
     return bundle_dir(run_id, base=base) / "surgepilot.yml"
 
 
-def monitoring_properties_path(run_id: str, *, base: Path | None = None) -> Path:
-    return run_dir(run_id, base=base) / "secrets" / "monitoring.properties"
-
-
-def cleanup_monitoring_properties(run_id: str, *, base: Path | None = None) -> bool:
-    try:
-        monitoring_properties_path(run_id, base=base).unlink(missing_ok=True)
-    except OSError:
-        return False
-    return True
-
-
 def supervisor_pidfile_path(run_id: str, *, base: Path | None = None) -> Path:
     return run_dir(run_id, base=base) / SUPERVISOR_PIDFILE
 
@@ -215,6 +215,22 @@ def pidfile_path(run_id: str, *, base: Path | None = None) -> Path:
 
 def runner_entrypoint() -> Path:
     return Path(__file__).resolve().parents[1] / "runner.py"
+
+
+def runtime_bzt_path() -> Path:
+    return runner_home() / "current" / "bin" / "bzt"
+
+
+def monitoring_properties_path(run_id: str, *, base: Path | None = None) -> Path:
+    return run_dir(run_id, base=base) / "secrets" / "monitoring.properties"
+
+
+def cleanup_monitoring_properties(run_id: str) -> bool:
+    try:
+        monitoring_properties_path(run_id).unlink(missing_ok=True)
+    except OSError:
+        return False
+    return True
 
 
 def _write_managed_pidfile(
@@ -390,6 +406,17 @@ def api_base() -> str | None:
 
 def runner_token() -> str | None:
     return os.environ.get("RUNNER_INTERNAL_TOKEN")
+
+
+def runner_archive_upload_max_bytes() -> int:
+    raw = os.environ.get("SURGEPILOT_RUNNER_ARCHIVE_MAX_BYTES")
+    if raw is None:
+        return DEFAULT_ARCHIVE_UPLOAD_MAX_BYTES
+    try:
+        value = int(raw)
+    except ValueError:
+        return DEFAULT_ARCHIVE_UPLOAD_MAX_BYTES
+    return min(max(value, 0), MAX_ARTIFACT_UPLOAD_BYTES)
 
 
 def _callback_response_is_acked(response_bytes: bytes) -> bool:
@@ -573,6 +600,21 @@ def upload_artifact(
                 return None
             time.sleep(delay)
     return None
+
+
+def validate_active_runtime_version() -> str:
+    expected = (os.environ.get("SURGEPILOT_EXPECTED_RUNTIME_VERSION") or "").strip()
+    if not expected:
+        raise RuntimeError("Expected Runtime version is not configured.")
+    metadata_path = runner_home() / "current" / "metadata.json"
+    try:
+        metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
+    except (OSError, ValueError) as exc:
+        raise RuntimeError("Active Runtime metadata is unavailable.") from exc
+    actual = metadata.get("version")
+    if not isinstance(actual, str) or not actual or actual != expected:
+        raise RuntimeError("Active Runtime version does not match the expected version.")
+    return actual
 
 
 def sla_result_for_exit(mode: str, exit_code: int) -> str | None:
@@ -839,6 +881,126 @@ def _wait_for_process_group_exit(managed: ManagedPid, timeout: float) -> bool:
         time.sleep(0.1)
 
 
+def _is_safe_archive_relative_path(relative_path: str) -> bool:
+    try:
+        validate_artifact_relative_path(relative_path)
+    except ValueError:
+        return False
+    parts = relative_path.split("/")
+    if any(part.startswith(".") for part in parts):
+        return False
+    filename = parts[-1]
+    if filename == "artifacts.zip" or filename.startswith(".tmp-"):
+        return False
+    return True
+
+
+def _is_regular_file_inside_run(path: Path, root: Path) -> bool:
+    try:
+        if path.is_symlink() or not path.is_file():
+            return False
+        resolved_path = path.resolve(strict=True)
+        resolved_root = root.resolve(strict=True)
+        return os.path.commonpath([str(resolved_root), str(resolved_path)]) == str(resolved_root)
+    except (OSError, ValueError):
+        return False
+
+
+def iter_diagnostic_archive_members(run_id: str) -> list[tuple[str, Path]]:
+    root = run_dir(run_id)
+    artifacts = bundle_dir(run_id) / "artifacts"
+    body_blob_dir = artifacts / "debug-http-body-blobs"
+    candidates: list[tuple[str, Path]] = [
+        ("logs/runner.log", root / "logs" / "runner.log"),
+        ("artifacts/bzt.log", artifacts / "bzt.log"),
+        ("artifacts/jmeter.log", artifacts / "jmeter.log"),
+        ("artifacts/final_stats.csv", artifacts / "final_stats.csv"),
+        ("artifacts/finalstats.csv", artifacts / "finalstats.csv"),
+        ("artifacts/debug-http-trace.jsonl", artifacts / "debug-http-trace.jsonl"),
+    ]
+    candidates.extend(
+        (
+            f"artifacts/debug-http-body-blobs/{path.name}",
+            path,
+        )
+        for path in sorted(body_blob_dir.glob("*.bin"))
+    )
+    candidates.extend((f"artifacts/{path.name}", path) for path in sorted(artifacts.glob("*.jtl")))
+
+    members: list[tuple[str, Path]] = []
+    seen: set[str] = set()
+    for relative_path, path in candidates:
+        if relative_path in seen:
+            continue
+        if not _is_safe_archive_relative_path(relative_path):
+            continue
+        if not _is_regular_file_inside_run(path, root):
+            continue
+        members.append((relative_path, path))
+        seen.add(relative_path)
+    return members
+
+
+def _diagnostic_archive_source_bytes(members: list[tuple[str, Path]]) -> int | None:
+    total = 0
+    try:
+        for _relative_path, source_path in members:
+            total += source_path.stat().st_size
+    except OSError:
+        return None
+    return total
+
+
+def build_diagnostic_archive(run_id: str, *, max_bytes: int | None = None) -> ArtifactUploadResult:
+    relative_path = "artifacts/artifacts.zip"
+    archive_path = bundle_dir(run_id) / "artifacts" / "artifacts.zip"
+    archive_path.parent.mkdir(parents=True, exist_ok=True)
+    archive_path.unlink(missing_ok=True)
+    members = iter_diagnostic_archive_members(run_id)
+    if not members:
+        return ArtifactUploadResult("artifacts_zip", relative_path, "missing", archive_path)
+
+    byte_limit = runner_archive_upload_max_bytes() if max_bytes is None else max(max_bytes, 0)
+    source_bytes = _diagnostic_archive_source_bytes(members)
+    if source_bytes is None:
+        return ArtifactUploadResult("artifacts_zip", relative_path, "failed", archive_path)
+    if source_bytes > byte_limit:
+        click.echo(
+            f"artifact archive upload skipped; source bytes exceed runner threshold {byte_limit}",
+            err=True,
+        )
+        return ArtifactUploadResult(
+            "artifacts_zip", relative_path, "skipped_oversize", archive_path
+        )
+
+    tmp_path = archive_path.parent / f".artifacts.zip.tmp.{os.getpid()}.{uuid4().hex}"
+    try:
+        with zipfile.ZipFile(tmp_path, "w", compression=zipfile.ZIP_STORED) as archive:
+            for member_path, source_path in members:
+                archive.write(source_path, arcname=member_path)
+                if tmp_path.stat().st_size > byte_limit:
+                    raise DiagnosticArchiveOversize
+        if tmp_path.stat().st_size > byte_limit:
+            raise DiagnosticArchiveOversize
+        os.replace(tmp_path, archive_path)
+        _fsync_directory(archive_path.parent)
+        return ArtifactUploadResult("artifacts_zip", relative_path, "uploaded", archive_path)
+    except DiagnosticArchiveOversize:
+        tmp_path.unlink(missing_ok=True)
+        archive_path.unlink(missing_ok=True)
+        click.echo(
+            f"artifact archive upload skipped; archive exceeds runner threshold {byte_limit}",
+            err=True,
+        )
+        return ArtifactUploadResult(
+            "artifacts_zip", relative_path, "skipped_oversize", archive_path
+        )
+    except OSError:
+        tmp_path.unlink(missing_ok=True)
+        archive_path.unlink(missing_ok=True)
+        return ArtifactUploadResult("artifacts_zip", relative_path, "failed", archive_path)
+
+
 def _artifact_candidates(run_id: str) -> list[tuple[str, str, Path]]:
     root = run_dir(run_id)
     bundle = bundle_dir(run_id)
@@ -860,6 +1022,7 @@ def _artifact_candidates(run_id: str) -> list[tuple[str, str, Path]]:
             artifacts / "debug-http-trace.jsonl",
         ),
         *body_blob_candidates,
+        ("artifacts_zip", "artifacts/artifacts.zip", artifacts / "artifacts.zip"),
         ("final_stats_csv", "artifacts/final_stats.csv", artifacts / "final_stats.csv"),
         ("final_stats_csv", "artifacts/finalstats.csv", artifacts / "finalstats.csv"),
         ("run_log", "logs/runner.log", root / "logs" / "runner.log"),
@@ -872,6 +1035,10 @@ def upload_run_artifacts(
     run_id: str, node_id: str, seq: int, *, runtime_version: str
 ) -> ArtifactUploadSummary:
     results: list[ArtifactUploadResult] = []
+    archive_result = build_diagnostic_archive(run_id)
+    if archive_result.status != "uploaded":
+        results.append(archive_result)
+
     seen: set[str] = set()
     for artifact_type, relative_path, path in _artifact_candidates(run_id):
         if relative_path in seen or not path.is_file():
@@ -958,6 +1125,12 @@ def cleanup_run_directory_if_safe(
         return False
     if any(result.status == "failed" for result in artifact_results):
         return False
+    archive_status = next(
+        (result.status for result in artifact_results if result.artifact_type == "artifacts_zip"),
+        None,
+    )
+    if archive_status not in {"uploaded", "skipped_oversize"}:
+        return False
 
     if _pidfiles_uncertain_for_cleanup(run_id, supervisor=supervisor, workload=workload):
         return False
@@ -1003,7 +1176,7 @@ def managed_run(run_id: str) -> None:
         log_path.parent.mkdir(parents=True, exist_ok=True)
         terminal = "failed"
         details: dict = {"processGroupExited": True, "reason": "bundle_invalid"}
-        runtime_version = RUNNER_VERSION
+        runtime_version = validate_active_runtime_version()
         seq = 1
         post_callback(
             payload(
@@ -1026,7 +1199,7 @@ def managed_run(run_id: str) -> None:
                 log_file.flush()
                 try:
                     process = subprocess.Popen(
-                        ["bzt", "-n", "surgepilot.yml"],
+                        [str(runtime_bzt_path()), "-n", "surgepilot.yml"],
                         cwd=bundle_dir(run_id),
                         stdout=log_file,
                         stderr=subprocess.STDOUT,
@@ -1128,7 +1301,7 @@ def fake_scenario(run_id: str) -> None:
     require_safe_run_id(run_id)
     node_id = os.environ.get("SURGEPILOT_NODE_ID", "01HZX3Y9M0E9W7Z6M5QK9S8P7C")
     scenario = os.environ.get("RUNNER_FAKE_SCENARIO", "success")
-    runtime_version = RUNNER_VERSION
+    runtime_version = validate_active_runtime_version()
     accepted = payload(
         run_id,
         node_id,
@@ -1229,6 +1402,7 @@ def start(run_id: str, fake: bool) -> None:
     require_safe_run_id(run_id)
     cleanup_owned_by_child = False
     try:
+        runtime_version = validate_active_runtime_version()
         if fake:
             fake_scenario(run_id)
             return
@@ -1239,7 +1413,7 @@ def start(run_id: str, fake: bool) -> None:
                     os.environ.get("SURGEPILOT_NODE_ID", "01HZX3Y9M0E9W7Z6M5QK9S8P7C"),
                     "failed",
                     1,
-                    runtime_version=RUNNER_VERSION,
+                    runtime_version=runtime_version,
                     details={
                         "processGroupExited": False,
                         "reason": "stale_process_detected",

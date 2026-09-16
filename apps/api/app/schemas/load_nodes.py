@@ -149,6 +149,7 @@ class LoadNodeSummary(ApiSchema):
     last_status_reason: str | None = None
     runner_version: str | None = None
     bundle_version: str | None = None
+    runtime_version: str | None = None
     last_initialized_at: str | None = None
     last_checked_at: str | None = None
     last_heartbeat_at: str | None = None
@@ -216,4 +217,5 @@ class LoadNodeInitAttemptDetail(LoadNodeInitAttemptSummary):
     sanitized_log_tail: str | None = None
     runner_version: str | None = None
     bundle_version: str | None = None
+    runtime_version: str | None = None
     updated_at: str

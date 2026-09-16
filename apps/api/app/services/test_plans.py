@@ -11,7 +11,7 @@ from typing import Any
 import yaml
 from fastapi import Request
 from pydantic import ValidationError
-from sqlalchemy import func, select
+from sqlalchemy import and_, func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -20,26 +20,38 @@ from app.core.errors import AppError
 from app.core.ids import is_ulid, new_ulid
 from app.core.time import utc_now
 from app.models.auth import User
+from app.models.dependency_files import DependencyFile
 from app.models.env_groups import EnvGroup
+from app.services.env_groups import env_group_runtime_values, internal_env_values
 from app.models.load_nodes import LoadNode
 from app.models.runs import Run
-from app.models.scenarios import RunCreationDedupKey, Scenario
+from app.models.scenarios import RunCreationDedupKey, Scenario, ScenarioDependencyFileRef
 from app.models.test_plans import TestPlan, TestPlanScenarioItem, TestPlanSlaRule
 from app.schemas.common import ExecutionPreviewResponse, ExecutionPreviewWarning
 from app.schemas.test_plans import TestPlanCreateRequest
 from app.services.audit import write_audit_event
-from app.services.env_groups import env_group_runtime_values, internal_env_values
+from app.services.load_nodes import visible_node_filters
 from app.services.runs import RunExecutionInput, create_run_execution
+from app.services.system_settings import (
+    EffectiveLoadSettings,
+    effective_load_settings,
+    jmeter_memory_xmx,
+)
 from app.services.scenarios import (
     ACTIVE_RUN_STATES,
     DEFAULT_DEDUP_WINDOW_SECONDS,
-    SCENARIO_ALIAS,
     _enabled_dependency_files,
+    _scenario_snapshot,
     build_debug_taurus_document_from_content,
     field_error,
     invalid_preview_mode,
+    PREVIEW_RUNNER_HOME,
+    RUNTIME_JMETER_VERSION,
+    runtime_jmeter_path,
     request_label,
     safe_preview_yaml,
+    taurus_modules,
+    taurus_settings,
     validation_error,
 )
 
@@ -49,21 +61,96 @@ PERCENT_SUBJECTS = {"fail", "succ"}
 COUNT_SUBJECTS = {"hits"}
 BYTE_SUBJECTS = {"bytes"}
 ACTIVE_RUN_STATES_LIST = list(ACTIVE_RUN_STATES)
-JMETER_PROTOCOL_HANDLERS = {"http": "bzt.jmx.http.HTTPProtocolHandler"}
-TAURUS_MODULE_CLASS_ALIASES = {
-    "local": "bzt.modules.provisioning.Local",
-    "consolidator": "bzt.modules.aggregator.ConsolidatingAggregator",
-    "final-stats": "bzt.modules.reporting.FinalStatus",
-    "console": "bzt.modules.console.ConsoleStatusReporter",
-    "passfail": "bzt.modules.passfail.PassFailStatus",
-}
-# P0-03/P0-05 runtime baseline: the Load Node's configured Apache JMeter
-# deployment is the source of truth for ``modules.jmeter.path``/``version``.
-# P0-06 must not redefine the JMeter runtime independently.
-JMETER_RUNTIME_PATH = (
-    "/opt/surgepilot/runner/current/apache-jmeter-5.6.3/bin/surgepilot-jmeter-wrapper"
-)
-JMETER_RUNTIME_VERSION = "5.6.3"
+
+
+LoadSettings = Settings | EffectiveLoadSettings
+
+
+@dataclass(frozen=True)
+class TestPlanRunResult:
+    run: Run
+    deduplicated: bool
+    status_code: int
+
+
+@dataclass(frozen=True)
+class ValidatedPlanContext:
+    test_plan: TestPlan
+    env_group: EnvGroup | None
+    node: LoadNode | None
+    scenario_rows: dict[str, Scenario]
+    scenario_taurus_docs: dict[str, dict[str, Any]]
+    dependency_files: list[dict[str, Any]]
+    enabled_items: list[TestPlanScenarioItem]
+    expected_concurrency: int
+    standard_load_settings_by_item_id: dict[str, dict[str, Any]]
+    debug_load_settings_by_item_id: dict[str, dict[str, Any]]
+    jmeter_memory_xmx: str
+
+
+def _resource_value(resource_request: object, snake_name: str, camel_name: str) -> Any:
+    if isinstance(resource_request, dict):
+        return resource_request.get(camel_name, resource_request.get(snake_name))
+    return getattr(resource_request, snake_name, None)
+
+
+def _normalize_resource_request_override(resource_request: object | None) -> dict[str, Any] | None:
+    if resource_request is None:
+        return None
+    mode = _resource_value(resource_request, "mode", "mode")
+    selected_node_ids = list(
+        _resource_value(resource_request, "selected_node_ids", "selectedNodeIds") or []
+    )
+    node_count = _resource_value(resource_request, "node_count", "nodeCount")
+    pool_type = _resource_value(resource_request, "pool_type", "poolType")
+    concurrency_per_node = _resource_value(
+        resource_request, "concurrency_per_node", "concurrencyPerNode"
+    )
+    if mode not in {"manual", "auto"}:
+        raise AppError("RESOURCE_REQUEST_INVALID", "Resource request is invalid.", 422)
+    if pool_type not in {None, "public", "private"}:
+        raise AppError("RESOURCE_REQUEST_INVALID", "Resource request is invalid.", 422)
+    if mode == "manual":
+        if node_count is not None or not selected_node_ids:
+            raise AppError("RESOURCE_REQUEST_INVALID", "Resource request is invalid.", 422)
+        if len(set(selected_node_ids)) != len(selected_node_ids):
+            raise AppError("RESOURCE_REQUEST_INVALID", "Resource request is invalid.", 422)
+    if mode == "auto":
+        if selected_node_ids or not isinstance(node_count, int) or node_count <= 0:
+            raise AppError("RESOURCE_REQUEST_INVALID", "Resource request is invalid.", 422)
+    return {
+        "mode": mode,
+        "selectedNodeIds": selected_node_ids,
+        "selectedNodeId": selected_node_ids[0] if selected_node_ids else None,
+        "nodeCount": node_count if mode == "auto" else None,
+        "poolType": pool_type,
+        "concurrencyPerNode": concurrency_per_node,
+    }
+
+
+def _apply_resource_request_override(
+    snapshot_payload: dict[str, Any], *, run_type: str, resource_request: object | None
+) -> dict[str, Any]:
+    override = _normalize_resource_request_override(resource_request)
+    resource = dict(snapshot_payload.get("resourceRequest") or {})
+    if override is None:
+        return resource
+    if run_type != "standard":
+        raise AppError("RESOURCE_REQUEST_INVALID", "Resource request is invalid.", 422)
+    resource["mode"] = override["mode"]
+    resource["selectedNodeIds"] = override["selectedNodeIds"]
+    resource["selectedNodeId"] = override["selectedNodeId"]
+    resource["nodeCount"] = override["nodeCount"]
+    if override.get("poolType") is not None:
+        resource["poolType"] = override["poolType"]
+    if override["concurrencyPerNode"] is not None:
+        resource["expectedConcurrencyPerNode"] = override["concurrencyPerNode"]
+    snapshot_payload["resourceRequest"] = resource
+    return resource
+
+
+def iso_z(value) -> str:
+    return value.isoformat().replace("+00:00", "Z")
 
 
 def _num(value: Any) -> int | float | None:
@@ -74,6 +161,12 @@ def _num(value: Any) -> int | float | None:
             return int(value)
         return float(value)
     return value
+
+
+def _canonical_hash(payload: dict[str, Any]) -> str:
+    return hashlib.sha256(
+        json.dumps(payload, sort_keys=True, separators=(",", ":"), default=str).encode()
+    ).hexdigest()
 
 
 def _normalize_tags(tags: list[str]) -> list[str]:
@@ -130,6 +223,18 @@ def _load_settings_from_payload(payload: dict[str, Any]) -> dict[str, Any]:
         "targetRps": payload.get("targetRps"),
         "steps": payload.get("steps"),
         "delaySeconds": payload.get("delaySeconds", 0),
+    }
+
+
+def debug_load_settings() -> dict[str, Any]:
+    return {
+        "concurrencyPerNode": 1,
+        "rampUpSeconds": 0,
+        "holdForSeconds": None,
+        "iterations": 1,
+        "targetRps": None,
+        "steps": None,
+        "delaySeconds": 0,
     }
 
 
@@ -203,7 +308,7 @@ def _sla_rule_dict(rule: TestPlanSlaRule) -> dict[str, Any]:
 
 
 def _validate_load_settings(
-    settings_payload: dict[str, Any], *, field_prefix: str, settings: Settings
+    settings_payload: dict[str, Any], *, field_prefix: str, settings: LoadSettings
 ) -> None:
     details: list[dict[str, str]] = []
     concurrency = int(settings_payload["concurrencyPerNode"])
@@ -372,7 +477,14 @@ def _generated_sampler_labels(payload: dict[str, Any], scenarios: dict[str, Scen
         for step in scenario.steps_json or []:
             if not step.get("enabled", True):
                 continue
-            labels.add(request_label(step["method"], step["path"]))
+            labels.add(
+                request_label(
+                    step["method"],
+                    step["path"],
+                    step["id"],
+                    item_id=item["id"],
+                )
+            )
     return labels
 
 
@@ -391,7 +503,7 @@ def _validate_sla_rule_labels(rules: list[dict[str, Any]], allowed_labels: set[s
 
 
 def _validate_payload_references(
-    db: Session, *, workspace_id: str, payload: dict[str, Any], settings: Settings
+    db: Session, *, workspace_id: str, payload: dict[str, Any], settings: LoadSettings
 ) -> None:
     _normalize_plan_children(payload)
     _validate_unique_child_ids(payload)
@@ -404,11 +516,38 @@ def _validate_payload_references(
         if env_group is None:
             raise AppError("RESOURCE_NOT_FOUND", "Resource was not found.", 404)
     resource = payload.get("resource") or {}
+    mode = resource.get("mode") or "manual"
     pool_type = resource.get("poolType")
-    selected_node_id = resource.get("selectedNodeId")
-    if selected_node_id is not None:
-        if not is_ulid(selected_node_id):
-            raise AppError("RESOURCE_REQUEST_INVALID", "Resource request is invalid.", 422)
+    selected_ids = list(
+        resource.get("selectedNodeIds")
+        or ([resource.get("selectedNodeId")] if resource.get("selectedNodeId") else [])
+    )
+    if mode == "manual" and resource.get("nodeCount") is not None:
+        raise validation_error(
+            [
+                field_error(
+                    "resource.nodeCount",
+                    "Manual resource mode must not include node count.",
+                    "conflicting_field",
+                )
+            ]
+        )
+    if mode == "auto" and selected_ids:
+        raise validation_error(
+            [
+                field_error(
+                    "resource.selectedNodeIds",
+                    "Auto resource mode must not include selected nodes.",
+                    "conflicting_field",
+                )
+            ]
+        )
+    if mode == "manual" and (
+        any(not isinstance(node_id, str) or not is_ulid(node_id) for node_id in selected_ids)
+        or len(set(selected_ids)) != len(selected_ids)
+    ):
+        raise AppError("RESOURCE_REQUEST_INVALID", "Resource request is invalid.", 422)
+    if mode == "manual" and selected_ids:
         if pool_type is None:
             raise validation_error(
                 [
@@ -419,20 +558,23 @@ def _validate_payload_references(
                     )
                 ]
             )
-        node = db.scalar(
+        nodes = db.scalars(
             select(LoadNode).where(
-                LoadNode.id == selected_node_id,
+                LoadNode.id.in_(selected_ids),
                 LoadNode.archived_at.is_(None),
             )
-        )
-        if node is None:
-            raise AppError("RESOURCE_NOT_FOUND", "Resource was not found.", 404)
-        if pool_type == "public" and node.scope != "public":
-            raise AppError("RESOURCE_NOT_FOUND", "Resource was not found.", 404)
-        if pool_type == "private" and not (
-            node.scope == "workspace" and node.workspace_id == workspace_id
-        ):
-            raise AppError("RESOURCE_NOT_FOUND", "Resource was not found.", 404)
+        ).all()
+        by_id = {node.id: node for node in nodes}
+        for selected_id in selected_ids:
+            node = by_id.get(selected_id)
+            if node is None:
+                raise AppError("RESOURCE_NOT_FOUND", "Resource was not found.", 404)
+            if pool_type == "public" and node.scope != "public":
+                raise AppError("RESOURCE_NOT_FOUND", "Resource was not found.", 404)
+            if pool_type == "private" and not (
+                node.scope == "workspace" and node.workspace_id == workspace_id
+            ):
+                raise AppError("RESOURCE_NOT_FOUND", "Resource was not found.", 404)
     scenario_ids = [item["scenarioId"] for item in payload.get("scenarioItems", [])]
     scenarios: dict[str, Scenario] = {}
     if scenario_ids:
@@ -532,7 +674,7 @@ def _replace_children(db: Session, *, plan: TestPlan, payload: dict[str, Any], n
 def create_test_plan(
     db: Session, *, workspace_id: str, actor: User, payload: dict[str, Any]
 ) -> TestPlan:
-    settings = get_settings()
+    settings = effective_load_settings(db)
     payload = dict(payload)
     payload["tags"] = _normalize_tags(payload.get("tags") or [])
     _validate_payload_references(db, workspace_id=workspace_id, payload=payload, settings=settings)
@@ -547,7 +689,12 @@ def create_test_plan(
         env_group_id=payload.get("envGroupId"),
         run_mode=payload.get("runMode") or "sequential",
         pool_type=resource.get("poolType"),
-        selected_node_id=resource.get("selectedNodeId"),
+        selected_node_id=resource.get("selectedNodeId")
+        or (resource.get("selectedNodeIds") or [None])[0],
+        resource_mode=resource.get("mode") or "manual",
+        selected_node_ids_json=resource.get("selectedNodeIds")
+        or ([resource.get("selectedNodeId")] if resource.get("selectedNodeId") else []),
+        node_count=resource.get("nodeCount"),
         revision=1,
         created_by=actor.id,
         updated_by=actor.id,
@@ -573,8 +720,11 @@ def clone_test_plan(
         "envGroupId": source.env_group_id,
         "runMode": source.run_mode,
         "resource": {
+            "mode": source.resource_mode,
             "poolType": source.pool_type,
             "selectedNodeId": source.selected_node_id,
+            "selectedNodeIds": list(source.selected_node_ids_json or []),
+            "nodeCount": source.node_count,
         },
         "scenarioItems": [
             {
@@ -594,15 +744,12 @@ def clone_test_plan(
             for rule in rules
         ],
     }
-    settings = get_settings()
+    settings = effective_load_settings(db)
     payload = _pydantic_create_payload(payload)
     payload["tags"] = _normalize_tags(payload.get("tags") or [])
     _validate_payload_references(db, workspace_id=workspace_id, payload=payload, settings=settings)
     now = utc_now()
     resource = payload["resource"]
-    selected_node_ids = list(source.selected_node_ids_json or [])
-    if not selected_node_ids and source.selected_node_id:
-        selected_node_ids = [source.selected_node_id]
     clone = TestPlan(
         id=new_ulid(),
         workspace_id=workspace_id,
@@ -612,10 +759,12 @@ def clone_test_plan(
         env_group_id=payload.get("envGroupId"),
         run_mode=payload.get("runMode") or "sequential",
         pool_type=resource.get("poolType"),
-        selected_node_id=resource.get("selectedNodeId"),
-        resource_mode=source.resource_mode,
-        selected_node_ids_json=selected_node_ids,
-        node_count=source.node_count,
+        selected_node_id=resource.get("selectedNodeId")
+        or (resource.get("selectedNodeIds") or [None])[0],
+        resource_mode=resource.get("mode") or "manual",
+        selected_node_ids_json=resource.get("selectedNodeIds")
+        or ([resource.get("selectedNodeId")] if resource.get("selectedNodeId") else []),
+        node_count=resource.get("nodeCount"),
         revision=1,
         created_by=actor.id,
         updated_by=actor.id,
@@ -670,7 +819,7 @@ def patch_test_plan(
             "Test Plan was updated by another request. Reload and try again.",
             409,
         )
-    settings = get_settings()
+    settings = effective_load_settings(db)
     payload = dict(payload)
     payload["tags"] = _normalize_tags(payload.get("tags") or [])
     _validate_payload_references(
@@ -684,7 +833,14 @@ def patch_test_plan(
     locked.env_group_id = payload.get("envGroupId")
     locked.run_mode = payload.get("runMode") or "sequential"
     locked.pool_type = resource.get("poolType")
-    locked.selected_node_id = resource.get("selectedNodeId")
+    locked.resource_mode = resource.get("mode") or "manual"
+    locked.selected_node_ids_json = resource.get("selectedNodeIds") or (
+        [resource.get("selectedNodeId")] if resource.get("selectedNodeId") else []
+    )
+    locked.node_count = resource.get("nodeCount")
+    locked.selected_node_id = resource.get("selectedNodeId") or (
+        locked.selected_node_ids_json[0] if locked.selected_node_ids_json else None
+    )
     locked.revision += 1
     locked.updated_by = actor.id
     locked.updated_at = now
@@ -773,6 +929,69 @@ def _node_for_plan(db: Session, plan: TestPlan) -> LoadNode | None:
     return db.get(LoadNode, plan.selected_node_id)
 
 
+def _resource_pool_condition(*, workspace_id: str, pool_type: str | None):
+    if pool_type == "public":
+        return LoadNode.scope == "public"
+    if pool_type == "private":
+        return and_(LoadNode.scope == "workspace", LoadNode.workspace_id == workspace_id)
+    return visible_node_filters(workspace_id=workspace_id)
+
+
+def _visible_nodes_for_pool(
+    db: Session, *, workspace_id: str, pool_type: str | None, node_ids: list[str]
+) -> dict[str, LoadNode]:
+    if not node_ids:
+        return {}
+    nodes = db.scalars(
+        select(LoadNode).where(
+            LoadNode.id.in_(node_ids),
+            LoadNode.archived_at.is_(None),
+            visible_node_filters(workspace_id=workspace_id),
+            _resource_pool_condition(workspace_id=workspace_id, pool_type=pool_type),
+        )
+    ).all()
+    return {node.id: node for node in nodes}
+
+
+def _auto_idle_capacity(db: Session, plan: TestPlan) -> int:
+    return int(
+        db.scalar(
+            select(func.count(LoadNode.id)).where(
+                LoadNode.archived_at.is_(None),
+                LoadNode.status == "idle",
+                LoadNode.runtime_version == (get_settings().load_node_runtime_version or ""),
+                visible_node_filters(workspace_id=plan.workspace_id),
+                _resource_pool_condition(workspace_id=plan.workspace_id, pool_type=plan.pool_type),
+            )
+        )
+        or 0
+    )
+
+
+def _batch_auto_idle_capacity(
+    db: Session,
+    *,
+    workspace_id: str,
+    pool_types: set[str | None],
+    runtime_version: str,
+) -> dict[str | None, int]:
+    capacities: dict[str | None, int] = {}
+    for pool_type in pool_types:
+        capacities[pool_type] = int(
+            db.scalar(
+                select(func.count(LoadNode.id)).where(
+                    LoadNode.archived_at.is_(None),
+                    LoadNode.status == "idle",
+                    LoadNode.runtime_version == runtime_version,
+                    visible_node_filters(workspace_id=workspace_id),
+                    _resource_pool_condition(workspace_id=workspace_id, pool_type=pool_type),
+                )
+            )
+            or 0
+        )
+    return capacities
+
+
 def _env_for_plan(db: Session, plan: TestPlan) -> EnvGroup | None:
     if plan.env_group_id is None:
         return None
@@ -783,14 +1002,234 @@ def _env_for_plan(db: Session, plan: TestPlan) -> EnvGroup | None:
     )
 
 
+@dataclass(frozen=True)
+class _TestPlanListBatchData:
+    items_by_plan_id: dict[str, list[TestPlanScenarioItem]]
+    rules_by_plan_id: dict[str, list[TestPlanSlaRule]]
+    scenarios: dict[str, Scenario]
+    env_groups: dict[str, EnvGroup]
+    nodes: dict[str, LoadNode]
+    updated_by_users: dict[str, User]
+    dependency_files_by_scenario_id: dict[str, list[DependencyFile]]
+    auto_idle_capacity_by_pool_type: dict[str | None, int]
+    effective_settings: EffectiveLoadSettings
+    runtime_settings: Settings
+    jmeter_memory_xmx: str
+
+
+def _rows_for_plan_ids(
+    db: Session, *, plan_ids: list[str]
+) -> tuple[dict[str, list[TestPlanScenarioItem]], dict[str, list[TestPlanSlaRule]]]:
+    items_by_plan_id: dict[str, list[TestPlanScenarioItem]] = {plan_id: [] for plan_id in plan_ids}
+    rules_by_plan_id: dict[str, list[TestPlanSlaRule]] = {plan_id: [] for plan_id in plan_ids}
+    if not plan_ids:
+        return items_by_plan_id, rules_by_plan_id
+    items = db.scalars(
+        select(TestPlanScenarioItem)
+        .where(TestPlanScenarioItem.test_plan_id.in_(plan_ids))
+        .order_by(
+            TestPlanScenarioItem.test_plan_id.asc(),
+            TestPlanScenarioItem.position.asc(),
+            TestPlanScenarioItem.id.asc(),
+        )
+    ).all()
+    for item in items:
+        items_by_plan_id.setdefault(item.test_plan_id, []).append(item)
+    rules = db.scalars(
+        select(TestPlanSlaRule)
+        .where(TestPlanSlaRule.test_plan_id.in_(plan_ids))
+        .order_by(
+            TestPlanSlaRule.test_plan_id.asc(),
+            TestPlanSlaRule.position.asc(),
+            TestPlanSlaRule.id.asc(),
+        )
+    ).all()
+    for rule in rules:
+        rules_by_plan_id.setdefault(rule.test_plan_id, []).append(rule)
+    return items_by_plan_id, rules_by_plan_id
+
+
+def _dependency_files_by_scenario_ids(
+    db: Session, *, workspace_id: str, scenario_ids: set[str]
+) -> dict[str, list[DependencyFile]]:
+    dependency_files_by_scenario_id: dict[str, list[DependencyFile]] = {
+        scenario_id: [] for scenario_id in scenario_ids
+    }
+    if not scenario_ids:
+        return dependency_files_by_scenario_id
+    rows = db.execute(
+        select(ScenarioDependencyFileRef.scenario_id, DependencyFile)
+        .join(DependencyFile, DependencyFile.id == ScenarioDependencyFileRef.dependency_file_id)
+        .where(
+            ScenarioDependencyFileRef.workspace_id == workspace_id,
+            ScenarioDependencyFileRef.scenario_id.in_(scenario_ids),
+            DependencyFile.status == "available",
+        )
+    ).all()
+    for scenario_id, dependency_file in rows:
+        dependency_files_by_scenario_id.setdefault(scenario_id, []).append(dependency_file)
+    return dependency_files_by_scenario_id
+
+
+def _batch_test_plan_list_data(
+    db: Session, *, workspace_id: str, plans: list[TestPlan]
+) -> _TestPlanListBatchData:
+    plan_ids = [plan.id for plan in plans]
+    items_by_plan_id, rules_by_plan_id = _rows_for_plan_ids(db, plan_ids=plan_ids)
+    scenario_ids = {
+        item.scenario_id for items in items_by_plan_id.values() for item in items if item.enabled
+    }
+    scenarios = (
+        {
+            scenario.id: scenario
+            for scenario in db.scalars(
+                select(Scenario).where(
+                    Scenario.id.in_(scenario_ids),
+                    Scenario.workspace_id == workspace_id,
+                    Scenario.deleted_at.is_(None),
+                )
+            ).all()
+        }
+        if scenario_ids
+        else {}
+    )
+    env_ids = sorted({plan.env_group_id for plan in plans if plan.env_group_id})
+    env_groups = (
+        {
+            env_group.id: env_group
+            for env_group in db.scalars(
+                select(EnvGroup).where(
+                    EnvGroup.id.in_(env_ids), EnvGroup.workspace_id == workspace_id
+                )
+            ).all()
+        }
+        if env_ids
+        else {}
+    )
+    node_ids = sorted(
+        {
+            node_id
+            for plan in plans
+            for node_id in (
+                list(plan.selected_node_ids_json or [])
+                or ([plan.selected_node_id] if plan.selected_node_id else [])
+            )
+        }
+    )
+    nodes = (
+        {
+            node.id: node
+            for node in db.scalars(
+                select(LoadNode).where(
+                    LoadNode.id.in_(node_ids),
+                    visible_node_filters(workspace_id=workspace_id),
+                )
+            ).all()
+        }
+        if node_ids
+        else {}
+    )
+    user_ids = sorted({plan.updated_by for plan in plans if plan.updated_by})
+    updated_by_users = (
+        {user.id: user for user in db.scalars(select(User).where(User.id.in_(user_ids))).all()}
+        if user_ids
+        else {}
+    )
+    auto_pool_types = {
+        plan.pool_type for plan in plans if plan.resource_mode == "auto" and plan.node_count
+    }
+    runtime_settings = get_settings()
+    return _TestPlanListBatchData(
+        items_by_plan_id=items_by_plan_id,
+        rules_by_plan_id=rules_by_plan_id,
+        scenarios=scenarios,
+        env_groups=env_groups,
+        nodes=nodes,
+        updated_by_users=updated_by_users,
+        dependency_files_by_scenario_id=_dependency_files_by_scenario_ids(
+            db, workspace_id=workspace_id, scenario_ids=scenario_ids
+        ),
+        auto_idle_capacity_by_pool_type=_batch_auto_idle_capacity(
+            db,
+            workspace_id=workspace_id,
+            pool_types=auto_pool_types,
+            runtime_version=runtime_settings.load_node_runtime_version or "",
+        )
+        if auto_pool_types
+        else {},
+        effective_settings=effective_load_settings(db),
+        runtime_settings=runtime_settings,
+        jmeter_memory_xmx=jmeter_memory_xmx(db),
+    )
+
+
+def _scenario_preflight_reasons(
+    db: Session,
+    *,
+    plan: TestPlan,
+    enabled_items: list[TestPlanScenarioItem],
+    scenarios: dict[str, Scenario],
+    env_group: EnvGroup | None = None,
+    node: LoadNode | None = None,
+    runtime_settings: Settings | None = None,
+    memory_xmx: str | None = None,
+    dependency_files_by_scenario_id: dict[str, list[DependencyFile]] | None = None,
+) -> list[str]:
+    if env_group is None and plan.env_group_id is not None:
+        env_group = _env_for_plan(db, plan)
+    env_variables = env_group_runtime_values(env_group)
+    settings = runtime_settings or get_settings()
+    if node is None:
+        node = _node_for_plan(db, plan)
+    runner_home = node.runner_home if node is not None else settings.load_node_default_runner_home
+    active_memory_xmx = memory_xmx or jmeter_memory_xmx(db)
+    reasons: list[str] = []
+    for item in enabled_items:
+        scenario = scenarios.get(item.scenario_id)
+        if scenario is None:
+            continue
+        if dependency_files_by_scenario_id is None:
+            dependency_models = [
+                file for _ref, file in _enabled_dependency_files(db, scenario=scenario)
+            ]
+        else:
+            dependency_models = dependency_files_by_scenario_id.get(scenario.id, [])
+        try:
+            build_debug_taurus_document_from_content(
+                scenario_content=_scenario_content(scenario),
+                env_variables=env_variables,
+                dependency_files=dependency_models,
+                jmeter_path=runtime_jmeter_path(runner_home),
+                jmeter_version=RUNTIME_JMETER_VERSION,
+                memory_xmx=active_memory_xmx,
+            )
+        except AppError as exc:
+            detail_codes = {
+                detail.get("code") for detail in (exc.details or []) if isinstance(detail, dict)
+            }
+            reason = (
+                "missing_variables"
+                if "missing_variable" in detail_codes
+                else "scenario_not_runnable"
+            )
+            if reason not in reasons:
+                reasons.append(reason)
+    return reasons
+
+
 def not_runnable_reasons(
     db: Session,
     plan: TestPlan,
     items: list[TestPlanScenarioItem] | None = None,
     rules: list[TestPlanSlaRule] | None = None,
+    batch: _TestPlanListBatchData | None = None,
 ) -> list[str]:
     if items is None or rules is None:
-        loaded_items, loaded_rules = _rows_for_plan(db, plan_id=plan.id)
+        if batch is None:
+            loaded_items, loaded_rules = _rows_for_plan(db, plan_id=plan.id)
+        else:
+            loaded_items = batch.items_by_plan_id.get(plan.id, [])
+            loaded_rules = batch.rules_by_plan_id.get(plan.id, [])
         items = loaded_items if items is None else items
         rules = loaded_rules if rules is None else rules
     reasons: list[str] = []
@@ -798,17 +1237,25 @@ def not_runnable_reasons(
     enabled_rules = [rule for rule in rules if rule.enabled]
     if not enabled:
         reasons.append("no_enabled_scenarios")
-    settings = get_settings()
+    settings = batch.effective_settings if batch is not None else effective_load_settings(db)
     if len(enabled) > settings.max_scenario_items_per_test_plan:
         reasons.append("too_many_scenarios")
     if len(enabled_rules) > settings.max_sla_rules_per_test_plan:
         reasons.append("too_many_sla_rules")
     if plan.pool_type is None:
         reasons.append("load_node_required")
-    elif plan.selected_node_id is None:
+    elif plan.resource_mode == "manual" and not (
+        plan.selected_node_ids_json or ([plan.selected_node_id] if plan.selected_node_id else [])
+    ):
         reasons.append("load_node_required")
-    else:
-        node = _node_for_plan(db, plan)
+    elif plan.resource_mode == "auto" and not plan.node_count:
+        reasons.append("load_node_required")
+    elif plan.resource_mode == "manual":
+        node = (
+            batch.nodes.get(plan.selected_node_id)
+            if batch is not None and plan.selected_node_id is not None
+            else _node_for_plan(db, plan)
+        )
         if node is None or node.archived_at is not None:
             reasons.append("load_node_unavailable")
         elif plan.pool_type == "public" and node.scope != "public":
@@ -817,22 +1264,70 @@ def not_runnable_reasons(
             node.scope == "workspace" and node.workspace_id == plan.workspace_id
         ):
             reasons.append("load_node_unavailable")
-        elif node.status != "idle":
+        elif node.status != "idle" or node.runtime_version != (
+            (
+                batch.runtime_settings if batch is not None else get_settings()
+            ).load_node_runtime_version
+            or ""
+        ):
             reasons.append("load_node_not_idle")
-    scenario_rows = _scenario_map(db, workspace_id=plan.workspace_id, items=enabled)
+    elif (
+        batch.auto_idle_capacity_by_pool_type.get(plan.pool_type)
+        if batch is not None
+        else _auto_idle_capacity(db, plan)
+    ) < int(plan.node_count or 0):
+        reasons.append("load_node_capacity_unavailable")
+    scenario_rows = (
+        {
+            item.scenario_id: batch.scenarios[item.scenario_id]
+            for item in enabled
+            if item.scenario_id in batch.scenarios
+        }
+        if batch is not None
+        else _scenario_map(db, workspace_id=plan.workspace_id, items=enabled)
+    )
     if any(item.scenario_id not in scenario_rows for item in enabled):
         reasons.append("scenario_unavailable")
-    env_group = _env_for_plan(db, plan)
+    env_group = (
+        batch.env_groups.get(plan.env_group_id)
+        if batch is not None and plan.env_group_id is not None
+        else _env_for_plan(db, plan)
+    )
     if plan.env_group_id is not None and env_group is None:
         reasons.append("env_group_unavailable")
     expected = _expected_concurrency_for_rows(plan.run_mode, enabled)
     if enabled and expected > settings.single_node_concurrency_hard_limit:
         reasons.append("single_node_concurrency_hard_limit")
+    if not any(
+        reason in reasons
+        for reason in {"no_enabled_scenarios", "scenario_unavailable", "env_group_unavailable"}
+    ):
+        reasons.extend(
+            reason
+            for reason in _scenario_preflight_reasons(
+                db,
+                plan=plan,
+                enabled_items=enabled,
+                scenarios=scenario_rows,
+                env_group=env_group,
+                node=(
+                    batch.nodes.get(plan.selected_node_id)
+                    if batch is not None and plan.selected_node_id is not None
+                    else None
+                ),
+                runtime_settings=batch.runtime_settings if batch is not None else None,
+                memory_xmx=batch.jmeter_memory_xmx if batch is not None else None,
+                dependency_files_by_scenario_id=(
+                    batch.dependency_files_by_scenario_id if batch is not None else None
+                ),
+            )
+            if reason not in reasons
+        )
     return reasons
 
 
 def _guard(db: Session, plan: TestPlan, items: list[TestPlanScenarioItem]) -> dict[str, Any]:
-    settings = get_settings()
+    settings = effective_load_settings(db)
     expected = _expected_concurrency_for_rows(plan.run_mode, items)
     return {
         "expectedConcurrencyPerNode": expected,
@@ -841,6 +1336,153 @@ def _guard(db: Session, plan: TestPlan, items: list[TestPlanScenarioItem]) -> di
         "requiresHighConcurrencyConfirmation": expected
         > settings.single_node_concurrency_soft_limit,
     }
+
+
+def detail_payload(db: Session, plan: TestPlan) -> dict[str, Any]:
+    items, rules = _rows_for_plan(db, plan_id=plan.id)
+    scenarios = _scenario_map(db, workspace_id=plan.workspace_id, items=items)
+    reasons = not_runnable_reasons(db, plan, items, rules)
+    scenario_items = []
+    for item in items:
+        scenario = scenarios.get(item.scenario_id)
+        scenario_items.append(
+            {
+                "id": item.id,
+                "scenarioId": item.scenario_id,
+                "scenarioName": scenario.name if scenario else None,
+                "scenarioRevision": scenario.revision if scenario else None,
+                "enabledStepCount": len(
+                    [
+                        step
+                        for step in (scenario.steps_json if scenario else [])
+                        if step.get("enabled", True)
+                    ]
+                ),
+                "updatedAt": iso_z(scenario.updated_at) if scenario else None,
+                "enabled": item.enabled,
+                "order": item.position,
+                "loadSettings": _load_settings_dict(item),
+            }
+        )
+    return {
+        "id": plan.id,
+        "name": plan.name,
+        "description": plan.description,
+        "tags": plan.tags_json or [],
+        "envGroupId": plan.env_group_id,
+        "runMode": plan.run_mode,
+        "resource": {
+            "mode": plan.resource_mode,
+            "poolType": plan.pool_type,
+            "selectedNodeId": plan.selected_node_id,
+            "selectedNodeIds": list(plan.selected_node_ids_json or []),
+            "nodeCount": plan.node_count,
+        },
+        "scenarioItems": scenario_items,
+        "slaRules": [_sla_rule_dict(rule) for rule in rules],
+        "runGuard": _guard(db, plan, items),
+        "runnable": not reasons,
+        "notRunnableReasons": reasons,
+        "revision": plan.revision,
+        "createdAt": iso_z(plan.created_at),
+        "updatedAt": iso_z(plan.updated_at),
+    }
+
+
+def summary_payload(db: Session, plan: TestPlan) -> dict[str, Any]:
+    items, rules = _rows_for_plan(db, plan_id=plan.id)
+    env = _env_for_plan(db, plan)
+    node = _node_for_plan(db, plan)
+    reasons = not_runnable_reasons(db, plan, items, rules)
+    expected = _expected_concurrency_for_rows(plan.run_mode, items)
+    settings = effective_load_settings(db)
+    updated_by = db.get(User, plan.updated_by)
+    return {
+        "id": plan.id,
+        "name": plan.name,
+        "description": plan.description,
+        "tags": plan.tags_json or [],
+        "runMode": plan.run_mode,
+        "envGroup": {"id": env.id, "name": env.name} if env else None,
+        "resource": {
+            "mode": plan.resource_mode,
+            "poolType": plan.pool_type,
+            "selectedNodeId": plan.selected_node_id,
+            "selectedNodeIds": list(plan.selected_node_ids_json or []),
+            "nodeCount": plan.node_count,
+            "selectedNodeName": node.host if node else None,
+            "allocatedNodeCount": len(plan.selected_node_ids_json or [])
+            if plan.resource_mode == "manual"
+            else plan.node_count,
+            "selectedNodeStatus": node.status if node else None,
+        },
+        "scenarioItemCount": len(items),
+        "enabledScenarioItemCount": len([item for item in items if item.enabled]),
+        "slaRuleCount": len([rule for rule in rules if rule.enabled]),
+        "expectedConcurrencyPerNode": expected,
+        "requiresHighConcurrencyConfirmation": expected
+        > settings.single_node_concurrency_soft_limit,
+        "runnable": not reasons,
+        "notRunnableReasons": reasons,
+        "revision": plan.revision,
+        "updatedAt": iso_z(plan.updated_at),
+        "updatedBy": {"id": updated_by.id, "displayName": updated_by.display_name}
+        if updated_by
+        else None,
+    }
+
+
+def summary_payloads(
+    db: Session, *, workspace_id: str, plans: list[TestPlan]
+) -> list[dict[str, Any]]:
+    if not plans:
+        return []
+    batch = _batch_test_plan_list_data(db, workspace_id=workspace_id, plans=plans)
+    payloads: list[dict[str, Any]] = []
+    for plan in plans:
+        items = batch.items_by_plan_id.get(plan.id, [])
+        rules = batch.rules_by_plan_id.get(plan.id, [])
+        env = batch.env_groups.get(plan.env_group_id) if plan.env_group_id is not None else None
+        node = batch.nodes.get(plan.selected_node_id) if plan.selected_node_id is not None else None
+        reasons = not_runnable_reasons(db, plan, items, rules, batch=batch)
+        expected = _expected_concurrency_for_rows(plan.run_mode, items)
+        updated_by = batch.updated_by_users.get(plan.updated_by)
+        payloads.append(
+            {
+                "id": plan.id,
+                "name": plan.name,
+                "description": plan.description,
+                "tags": plan.tags_json or [],
+                "runMode": plan.run_mode,
+                "envGroup": {"id": env.id, "name": env.name} if env else None,
+                "resource": {
+                    "mode": plan.resource_mode,
+                    "poolType": plan.pool_type,
+                    "selectedNodeId": plan.selected_node_id,
+                    "selectedNodeIds": list(plan.selected_node_ids_json or []),
+                    "nodeCount": plan.node_count,
+                    "selectedNodeName": node.host if node else None,
+                    "allocatedNodeCount": len(plan.selected_node_ids_json or [])
+                    if plan.resource_mode == "manual"
+                    else plan.node_count,
+                    "selectedNodeStatus": node.status if node else None,
+                },
+                "scenarioItemCount": len(items),
+                "enabledScenarioItemCount": len([item for item in items if item.enabled]),
+                "slaRuleCount": len([rule for rule in rules if rule.enabled]),
+                "expectedConcurrencyPerNode": expected,
+                "requiresHighConcurrencyConfirmation": expected
+                > batch.effective_settings.single_node_concurrency_soft_limit,
+                "runnable": not reasons,
+                "notRunnableReasons": reasons,
+                "revision": plan.revision,
+                "updatedAt": iso_z(plan.updated_at),
+                "updatedBy": {"id": updated_by.id, "displayName": updated_by.display_name}
+                if updated_by
+                else None,
+            }
+        )
+    return payloads
 
 
 def delete_test_plan(db: Session, *, plan: TestPlan, actor: User) -> None:
@@ -888,7 +1530,7 @@ def get_test_plan_execution_preview(
     if run_type not in {"debug", "standard"}:
         raise invalid_preview_mode("runType")
     plan = get_test_plan(db, workspace_id=workspace_id, test_plan_id=test_plan_id)
-    settings = get_settings()
+    settings = effective_load_settings(db)
     ctx = _validate_run_context(
         db,
         plan=plan,
@@ -900,8 +1542,8 @@ def get_test_plan_execution_preview(
     snapshot = _snapshot_payload(ctx, run_type=run_type, rules=rules)
     document = build_test_plan_taurus_document_from_snapshot(
         snapshot,
-        jmeter_path=JMETER_RUNTIME_PATH,
-        jmeter_version=JMETER_RUNTIME_VERSION,
+        jmeter_path=runtime_jmeter_path(PREVIEW_RUNNER_HOME),
+        jmeter_version=RUNTIME_JMETER_VERSION,
     )
     variable_values = [
         value
@@ -959,46 +1601,302 @@ def test_plan_references_scenario(db: Session, *, workspace_id: str, scenario_id
     )
 
 
-def _taurus_settings(env: dict[str, str]) -> dict[str, Any]:
-    return {
-        "artifacts-dir": "artifacts",
-        "aggregator": "consolidator",
-        "env": env,
-    }
+def _scenario_content(scenario: Scenario) -> dict[str, Any]:
+    return _scenario_snapshot(scenario)
 
 
-def _taurus_modules(
+def _validate_run_context(
+    db: Session,
     *,
-    jmeter_path: str,
-    jmeter_version: str,
-    force_ctg: bool,
-    sequential: bool = False,
-    memory_xmx: str = "4G",
-    include_passfail: bool = False,
-) -> dict[str, Any]:
-    local_module: dict[str, Any] = {"class": TAURUS_MODULE_CLASS_ALIASES["local"]}
-    if sequential:
-        local_module["sequential"] = True
-    modules: dict[str, Any] = {
-        "jmeter": {
-            "class": "bzt.modules.jmeter.JMeterExecutor",
-            "path": jmeter_path,
-            "version": jmeter_version,
-            "detect-plugins": False,
-            "memory-xmx": memory_xmx,
-            "force-ctg": force_ctg,
-            "fix-log4j": False,
-            "fix-jars": False,
-            "protocol-handlers": dict(JMETER_PROTOCOL_HANDLERS),
-        },
-        "local": local_module,
-        "consolidator": {"class": TAURUS_MODULE_CLASS_ALIASES["consolidator"]},
-        "final-stats": {"class": TAURUS_MODULE_CLASS_ALIASES["final-stats"]},
-        "console": {"class": TAURUS_MODULE_CLASS_ALIASES["console"]},
+    plan: TestPlan,
+    run_type: str,
+    settings: LoadSettings,
+    confirm_high_concurrency: bool,
+    resource_request: dict[str, Any] | None = None,
+) -> ValidatedPlanContext:
+    items, rules = _rows_for_plan(db, plan_id=plan.id)
+    enabled_items = [item for item in items if item.enabled]
+    if not enabled_items:
+        raise AppError("TEST_PLAN_NOT_RUNNABLE", "Test Plan is not runnable.", 409)
+    if len(enabled_items) > settings.max_scenario_items_per_test_plan:
+        raise validation_error(
+            [field_error("scenarioItems", "Too many enabled Scenario items.", "too_many_scenarios")]
+        )
+    enabled_rules = [rule for rule in rules if rule.enabled]
+    if run_type == "standard" and len(enabled_rules) > settings.max_sla_rules_per_test_plan:
+        raise validation_error(
+            [field_error("slaRules", "Too many enabled SLA Rules.", "too_many_sla_rules")]
+        )
+    plan_node_ids = list(
+        plan.selected_node_ids_json or ([plan.selected_node_id] if plan.selected_node_id else [])
+    )
+    requested_node_ids = plan_node_ids
+    resource_mode = plan.resource_mode
+    node_count = plan.node_count
+    if run_type == "standard" and resource_request is not None:
+        resource_mode = str(resource_request.get("mode") or resource_mode)
+        requested_node_ids = list(resource_request.get("selectedNodeIds") or [])
+        node_count = resource_request.get("nodeCount")
+    if (
+        run_type == "standard"
+        and resource_mode == "manual"
+        and len(set(requested_node_ids)) != len(requested_node_ids)
+    ):
+        raise AppError("RESOURCE_REQUEST_INVALID", "Resource request is invalid.", 422)
+    if run_type == "standard" and resource_mode == "manual" and node_count is not None:
+        raise AppError("RESOURCE_REQUEST_INVALID", "Resource request is invalid.", 422)
+    if run_type == "standard" and resource_mode == "auto" and requested_node_ids:
+        raise AppError("RESOURCE_REQUEST_INVALID", "Resource request is invalid.", 422)
+    if plan.pool_type is None:
+        raise AppError("TEST_PLAN_NOT_RUNNABLE", "Test Plan is missing Load Node resources.", 409)
+    node = _node_for_plan(db, plan)
+    if resource_mode == "manual":
+        if not requested_node_ids:
+            raise AppError(
+                "TEST_PLAN_NOT_RUNNABLE", "Test Plan is missing a selected Load Node.", 409
+            )
+        visible_nodes = _visible_nodes_for_pool(
+            db,
+            workspace_id=plan.workspace_id,
+            pool_type=plan.pool_type,
+            node_ids=requested_node_ids,
+        )
+        if any(node_id not in visible_nodes for node_id in requested_node_ids):
+            raise AppError("RESOURCE_NOT_FOUND", "Resource was not found.", 404)
+        if plan.selected_node_id not in requested_node_ids:
+            node = visible_nodes[requested_node_ids[0]]
+    elif not node_count:
+        raise AppError("TEST_PLAN_NOT_RUNNABLE", "Test Plan is missing Load Node count.", 409)
+    elif _auto_idle_capacity(db, plan) < int(node_count):
+        raise AppError(
+            "LOAD_NODE_CAPACITY_UNAVAILABLE",
+            "Not enough Load Nodes are available.",
+            409,
+            [
+                {
+                    "requested": str(node_count),
+                    "available": str(_auto_idle_capacity(db, plan)),
+                }
+            ],
+        )
+    env_group = _env_for_plan(db, plan)
+    if plan.env_group_id is not None and env_group is None:
+        raise AppError("RESOURCE_NOT_FOUND", "Resource was not found.", 404)
+    env_variables = env_group_runtime_values(env_group)
+    scenarios = _scenario_map(db, workspace_id=plan.workspace_id, items=enabled_items)
+    if any(item.scenario_id not in scenarios for item in enabled_items):
+        raise AppError("TEST_PLAN_NOT_RUNNABLE", "Referenced Scenario is unavailable.", 409)
+    expected = _expected_concurrency_for_rows(plan.run_mode, enabled_items)
+    if (
+        run_type == "standard"
+        and resource_request
+        and resource_request.get("concurrencyPerNode") is not None
+    ):
+        expected = int(resource_request["concurrencyPerNode"])
+    if run_type == "standard" and expected > settings.single_node_concurrency_hard_limit:
+        raise validation_error(
+            [
+                field_error(
+                    "scenarioItems",
+                    "Expected concurrency exceeds the hard limit.",
+                    "single_node_concurrency_hard_limit",
+                )
+            ]
+        )
+    if (
+        run_type == "standard"
+        and expected > settings.single_node_concurrency_soft_limit
+        and not confirm_high_concurrency
+    ):
+        raise AppError(
+            "LOAD_SOFT_LIMIT_CONFIRMATION_REQUIRED",
+            "Expected single-node concurrency exceeds the configured soft limit.",
+            409,
+            [
+                {
+                    "field": "scenarioItems",
+                    "code": "single_node_concurrency_soft_limit",
+                    "message": "Confirm that this run should start with high single-node concurrency.",
+                    "meta": {
+                        "expectedConcurrencyPerNode": expected,
+                        "softLimit": settings.single_node_concurrency_soft_limit,
+                    },
+                }
+            ],
+        )
+    dependency_files: list[dict[str, Any]] = []
+    seen_dependency_ids: set[str] = set()
+    scenario_taurus_docs: dict[str, dict[str, Any]] = {}
+    for item in enabled_items:
+        scenario = scenarios[item.scenario_id]
+        dependency_rows = _enabled_dependency_files(db, scenario=scenario)
+        dependency_models = [file for _ref, file in dependency_rows]
+        content = _scenario_content(scenario)
+        doc = build_debug_taurus_document_from_content(
+            scenario_content=content,
+            env_variables=env_variables,
+            dependency_files=dependency_models,
+            jmeter_path=runtime_jmeter_path(
+                (node.runner_home if node is not None else PREVIEW_RUNNER_HOME)
+            ),
+            jmeter_version=RUNTIME_JMETER_VERSION,
+            memory_xmx=jmeter_memory_xmx(db),
+            test_plan_item_id=item.id,
+        )
+        scenario_taurus_docs[item.id] = doc["scenarios"]["surgepilot_scenario"]
+        for ref, file in dependency_rows:
+            if file.id in seen_dependency_ids:
+                continue
+            seen_dependency_ids.add(file.id)
+            dependency_files.append(
+                {
+                    "id": file.id,
+                    "filename": file.filename,
+                    "sizeBytes": file.size_bytes,
+                    "sha256": file.sha256,
+                    "refType": ref.ref_type,
+                    "stepId": ref.step_id,
+                    "scenarioId": ref.scenario_id,
+                }
+            )
+    standard_load_settings_by_item_id = {
+        item.id: _load_settings_dict(item) for item in enabled_items
     }
-    if include_passfail:
-        modules["passfail"] = {"class": TAURUS_MODULE_CLASS_ALIASES["passfail"]}
-    return modules
+    if (
+        run_type == "standard"
+        and resource_request
+        and resource_request.get("concurrencyPerNode") is not None
+    ):
+        standard_load_settings_by_item_id = {
+            item_id: {**settings_payload, "concurrencyPerNode": expected}
+            for item_id, settings_payload in standard_load_settings_by_item_id.items()
+        }
+    for index, item in enumerate(enabled_items):
+        settings_payload = (
+            standard_load_settings_by_item_id[item.id]
+            if run_type == "standard"
+            else debug_load_settings()
+        )
+        _validate_load_settings(
+            settings_payload,
+            field_prefix=f"scenarioItems[{index}].loadSettings",
+            settings=settings,
+        )
+    for index, rule in enumerate(enabled_rules):
+        _validate_sla_rule(_sla_rule_dict(rule), field_prefix=f"slaRules[{index}]")
+    _validate_sla_rule_labels(
+        [_sla_rule_dict(rule) for rule in enabled_rules],
+        {
+            request["label"]
+            for scenario_document in scenario_taurus_docs.values()
+            for request in scenario_document.get("requests", [])
+            if request.get("label")
+        },
+    )
+    return ValidatedPlanContext(
+        test_plan=plan,
+        env_group=env_group,
+        node=node,
+        scenario_rows=scenarios,
+        scenario_taurus_docs=scenario_taurus_docs,
+        dependency_files=dependency_files,
+        enabled_items=enabled_items,
+        expected_concurrency=expected,
+        standard_load_settings_by_item_id=standard_load_settings_by_item_id,
+        debug_load_settings_by_item_id={item.id: debug_load_settings() for item in enabled_items},
+        jmeter_memory_xmx=jmeter_memory_xmx(db),
+    )
+
+
+def _snapshot_payload(
+    ctx: ValidatedPlanContext, *, run_type: str, rules: list[TestPlanSlaRule]
+) -> dict[str, Any]:
+    plan = ctx.test_plan
+    env_snapshot = None
+    if ctx.env_group is not None:
+        env_snapshot = {
+            "id": ctx.env_group.id,
+            "name": ctx.env_group.name,
+            "variables": env_group_runtime_values(ctx.env_group),
+        }
+    enabled_rules = [_sla_rule_dict(rule) for rule in rules if rule.enabled]
+    if run_type == "debug":
+        sla_mode = "not_evaluated"
+        rule_snapshot: list[dict[str, Any]] = []
+    elif enabled_rules:
+        sla_mode = "passfail"
+        rule_snapshot = enabled_rules
+    else:
+        sla_mode = "not_configured"
+        rule_snapshot = []
+    scenario_items: list[dict[str, Any]] = []
+    for item in ctx.enabled_items:
+        scenario = ctx.scenario_rows[item.scenario_id]
+        scenario_items.append(
+            {
+                "itemId": item.id,
+                "order": item.position,
+                "scenarioId": scenario.id,
+                "scenarioRevision": scenario.revision,
+                "scenarioName": scenario.name,
+                "loadSettings": (
+                    ctx.debug_load_settings_by_item_id
+                    if run_type == "debug"
+                    else ctx.standard_load_settings_by_item_id
+                )[item.id],
+                "visualScenario": ctx.scenario_taurus_docs[item.id],
+            }
+        )
+    snapshot = {
+        "schemaVersion": 1,
+        "runType": run_type,
+        "sourceType": "test_plan",
+        "sourceId": plan.id,
+        "sourceRevision": plan.revision,
+        "validityDefault": "invalid" if run_type == "debug" else "valid",
+        "slaEvaluationMode": sla_mode,
+        "testPlan": {
+            "id": plan.id,
+            "name": plan.name,
+            "description": plan.description,
+            "tags": plan.tags_json or [],
+            "revision": plan.revision,
+            "runMode": "sequential" if run_type == "debug" else plan.run_mode,
+        },
+        "envGroup": env_snapshot,
+        "resourceRequest": {
+            "mode": plan.resource_mode if run_type == "standard" else "manual",
+            "poolType": plan.pool_type,
+            "selectedNodeId": plan.selected_node_id,
+            "selectedNodeIds": list(
+                plan.selected_node_ids_json
+                or ([plan.selected_node_id] if plan.selected_node_id else [])
+            )
+            if run_type == "standard"
+            else ([plan.selected_node_id] if plan.selected_node_id else []),
+            "nodeCount": plan.node_count
+            if run_type == "standard" and plan.resource_mode == "auto"
+            else None,
+            "expectedConcurrencyPerNode": ctx.expected_concurrency if run_type == "standard" else 1,
+        },
+        "scenarioItems": scenario_items,
+        "jmeterMemoryXmx": ctx.jmeter_memory_xmx,
+        "dependencyFiles": ctx.dependency_files,
+        "slaRules": rule_snapshot,
+    }
+    document = build_test_plan_taurus_document_from_snapshot(
+        snapshot,
+        jmeter_path=runtime_jmeter_path(
+            (ctx.node.runner_home if ctx.node is not None else PREVIEW_RUNNER_HOME)
+        ),
+        jmeter_version=RUNTIME_JMETER_VERSION,
+    )
+    yaml_text = yaml.safe_dump(document, sort_keys=False, allow_unicode=False)
+    snapshot["generatedYaml"] = {
+        "artifactRelativePath": "execution/generated.yml",
+        "sha256": hashlib.sha256(yaml_text.encode()).hexdigest(),
+    }
+    return snapshot
 
 
 def _scenario_alias(item_id: str) -> str:
@@ -1070,7 +1968,7 @@ def build_test_plan_taurus_document_from_snapshot(
         else []
     )
     memory_xmx = str(snapshot.get("jmeterMemoryXmx") or get_settings().jmeter_memory_xmx)
-    modules = _taurus_modules(
+    modules = taurus_modules(
         jmeter_path=jmeter_path,
         jmeter_version=jmeter_version,
         force_ctg=force_ctg,
@@ -1078,7 +1976,7 @@ def build_test_plan_taurus_document_from_snapshot(
         memory_xmx=memory_xmx,
         include_passfail=bool(criteria),
     )
-    settings = _taurus_settings(env_values)
+    settings = taurus_settings(env_values)
     scenarios = {
         _scenario_alias(item["itemId"]): item.get("visualScenario") or {} for item in scenario_items
     }
@@ -1098,462 +1996,6 @@ def build_test_plan_taurus_document_from_snapshot(
     return document
 
 
-def iso_z(value) -> str:
-    return value.isoformat().replace("+00:00", "Z")
-
-
-def _canonical_hash(payload: dict[str, Any]) -> str:
-    encoded = json.dumps(payload, sort_keys=True, separators=(",", ":"), default=str).encode()
-    return hashlib.sha256(encoded).hexdigest()
-
-
-def debug_load_settings() -> dict[str, Any]:
-    """Fixed low-risk load profile applied to every enabled Scenario item."""
-    return {
-        "concurrencyPerNode": 1,
-        "rampUpSeconds": 0,
-        "holdForSeconds": None,
-        "iterations": 1,
-        "targetRps": None,
-        "steps": None,
-        "delaySeconds": 0,
-    }
-
-
-@dataclass(frozen=True)
-class TestPlanRunResult:
-    """Outcome of a Test Plan Run Now / Debug creation request.
-
-    ``deduplicated`` is ``True`` when the request hit the short-window dedup
-    key and the already-created Run is returned with status 200 instead of 201.
-    """
-
-    run: Run
-    deduplicated: bool
-    status_code: int
-
-
-@dataclass(frozen=True)
-class ValidatedPlanContext:
-    test_plan: TestPlan
-    env_group: EnvGroup | None
-    scenario_rows: dict[str, Scenario]
-    scenario_taurus_docs: dict[str, dict[str, Any]]
-    dependency_files: list[dict[str, Any]]
-    enabled_items: list[TestPlanScenarioItem]
-    expected_concurrency: int
-    standard_load_settings_by_item_id: dict[str, dict[str, Any]]
-    debug_load_settings_by_item_id: dict[str, dict[str, Any]]
-    jmeter_memory_xmx: str
-
-
-def _resource_value(resource_request: object, snake_name: str, camel_name: str) -> Any:
-    if isinstance(resource_request, dict):
-        return resource_request.get(camel_name, resource_request.get(snake_name))
-    return getattr(resource_request, snake_name, None)
-
-
-def _normalize_resource_request_override(resource_request: object | None) -> dict[str, Any] | None:
-    if resource_request is None:
-        return None
-    mode = _resource_value(resource_request, "mode", "mode")
-    selected_node_ids = list(
-        _resource_value(resource_request, "selected_node_ids", "selectedNodeIds") or []
-    )
-    node_count = _resource_value(resource_request, "node_count", "nodeCount")
-    if mode not in {"manual", "auto"}:
-        raise AppError("RESOURCE_REQUEST_INVALID", "Resource request is invalid.", 422)
-    if mode == "manual":
-        if node_count is not None or not selected_node_ids:
-            raise AppError("RESOURCE_REQUEST_INVALID", "Resource request is invalid.", 422)
-        if len(set(selected_node_ids)) != len(selected_node_ids):
-            raise AppError("RESOURCE_REQUEST_INVALID", "Resource request is invalid.", 422)
-    elif selected_node_ids or not isinstance(node_count, int) or node_count <= 0:
-        raise AppError("RESOURCE_REQUEST_INVALID", "Resource request is invalid.", 422)
-    return {
-        "mode": mode,
-        "selectedNodeIds": selected_node_ids,
-        "selectedNodeId": selected_node_ids[0] if selected_node_ids else None,
-        "nodeCount": node_count if mode == "auto" else None,
-    }
-
-
-def _apply_resource_request_override(
-    snapshot_payload: dict[str, Any], *, resource_request: dict[str, Any] | None
-) -> dict[str, Any]:
-    resource = dict(snapshot_payload.get("resourceRequest") or {})
-    if resource_request is not None:
-        resource.update(resource_request)
-    snapshot_payload["resourceRequest"] = resource
-    return resource
-
-
-def detail_payload(db: Session, plan: TestPlan) -> dict[str, Any]:
-    items, rules = _rows_for_plan(db, plan_id=plan.id)
-    scenarios = _scenario_map(db, workspace_id=plan.workspace_id, items=items)
-    reasons = not_runnable_reasons(db, plan, items, rules)
-    scenario_items: list[dict[str, Any]] = []
-    for item in items:
-        scenario = scenarios.get(item.scenario_id)
-        scenario_items.append(
-            {
-                "id": item.id,
-                "scenarioId": item.scenario_id,
-                "scenarioName": scenario.name if scenario else None,
-                "scenarioRevision": scenario.revision if scenario else None,
-                "enabledStepCount": len(
-                    [
-                        step
-                        for step in (scenario.steps_json if scenario else [])
-                        if step.get("enabled", True)
-                    ]
-                ),
-                "updatedAt": iso_z(scenario.updated_at) if scenario else None,
-                "enabled": item.enabled,
-                "order": item.position,
-                "loadSettings": _load_settings_dict(item),
-            }
-        )
-    return {
-        "id": plan.id,
-        "name": plan.name,
-        "description": plan.description,
-        "tags": plan.tags_json or [],
-        "envGroupId": plan.env_group_id,
-        "runMode": plan.run_mode,
-        "resource": {
-            "poolType": plan.pool_type,
-            "selectedNodeId": plan.selected_node_id,
-        },
-        "scenarioItems": scenario_items,
-        "slaRules": [_sla_rule_dict(rule) for rule in rules],
-        "runGuard": _guard(db, plan, items),
-        "runnable": not reasons,
-        "notRunnableReasons": reasons,
-        "revision": plan.revision,
-        "createdAt": iso_z(plan.created_at),
-        "updatedAt": iso_z(plan.updated_at),
-    }
-
-
-def summary_payload(db: Session, plan: TestPlan) -> dict[str, Any]:
-    items, rules = _rows_for_plan(db, plan_id=plan.id)
-    env = _env_for_plan(db, plan)
-    node = _node_for_plan(db, plan)
-    reasons = not_runnable_reasons(db, plan, items, rules)
-    expected = _expected_concurrency_for_rows(plan.run_mode, items)
-    settings = get_settings()
-    updated_by = db.get(User, plan.updated_by)
-    return {
-        "id": plan.id,
-        "name": plan.name,
-        "description": plan.description,
-        "tags": plan.tags_json or [],
-        "runMode": plan.run_mode,
-        "envGroup": {"id": env.id, "name": env.name} if env else None,
-        "resource": {
-            "poolType": plan.pool_type,
-            "selectedNodeId": plan.selected_node_id,
-            "selectedNodeName": node.host if node else None,
-            "selectedNodeStatus": node.status if node else None,
-        },
-        "scenarioItemCount": len(items),
-        "enabledScenarioItemCount": len([item for item in items if item.enabled]),
-        "slaRuleCount": len([rule for rule in rules if rule.enabled]),
-        "expectedConcurrencyPerNode": expected,
-        "requiresHighConcurrencyConfirmation": expected
-        > settings.single_node_concurrency_soft_limit,
-        "runnable": not reasons,
-        "notRunnableReasons": reasons,
-        "revision": plan.revision,
-        "updatedAt": iso_z(plan.updated_at),
-        "updatedBy": {"id": updated_by.id, "displayName": updated_by.display_name}
-        if updated_by
-        else None,
-    }
-
-
-def summary_payloads(
-    db: Session, *, workspace_id: str, plans: list[TestPlan]
-) -> list[dict[str, Any]]:
-    _ = workspace_id
-    return [summary_payload(db, plan) for plan in plans]
-
-
-def _validate_run_context(
-    db: Session,
-    *,
-    plan: TestPlan,
-    run_type: str,
-    settings: Settings,
-    confirm_high_concurrency: bool,
-    resource_request: dict[str, Any] | None = None,
-) -> ValidatedPlanContext:
-    items, rules = _rows_for_plan(db, plan_id=plan.id)
-    enabled_items = [item for item in items if item.enabled]
-    if not enabled_items:
-        raise AppError("TEST_PLAN_NOT_RUNNABLE", "Test Plan is not runnable.", 409)
-    if len(enabled_items) > settings.max_scenario_items_per_test_plan:
-        raise validation_error(
-            [field_error("scenarioItems", "Too many enabled Scenario items.", "too_many_scenarios")]
-        )
-    enabled_rules = [rule for rule in rules if rule.enabled]
-    if run_type == "standard" and len(enabled_rules) > settings.max_sla_rules_per_test_plan:
-        raise validation_error(
-            [field_error("slaRules", "Too many enabled SLA Rules.", "too_many_sla_rules")]
-        )
-    if plan.pool_type is None:
-        raise AppError("TEST_PLAN_NOT_RUNNABLE", "Test Plan is missing Load Node resources.", 409)
-    requested_node_ids = list(
-        (plan.selected_node_ids_json or ([plan.selected_node_id] if plan.selected_node_id else []))
-    )
-    resource_mode = plan.resource_mode
-    node_count = plan.node_count
-    if run_type == "standard" and resource_request is not None:
-        resource_mode = resource_request["mode"]
-        requested_node_ids = list(resource_request["selectedNodeIds"])
-        node_count = resource_request["nodeCount"]
-    if resource_mode == "auto" and run_type == "standard":
-        if not node_count:
-            raise AppError("TEST_PLAN_NOT_RUNNABLE", "Test Plan is missing Load Node count.", 409)
-    elif not requested_node_ids:
-        raise AppError(
-            "TEST_PLAN_NOT_RUNNABLE", "Test Plan is missing a selected Load Node.", 409
-        )
-    if not (run_type == "standard" and resource_mode == "auto"):
-        node = _node_for_plan(db, plan)
-        if requested_node_ids and (plan.selected_node_id not in requested_node_ids):
-            node = db.get(LoadNode, requested_node_ids[0])
-        if node is None or node.archived_at is not None:
-            raise AppError("TEST_PLAN_NOT_RUNNABLE", "Selected Load Node is unavailable.", 409)
-        if plan.pool_type == "public" and node.scope != "public":
-            raise AppError("TEST_PLAN_NOT_RUNNABLE", "Selected Load Node is unavailable.", 409)
-        if plan.pool_type == "private" and not (
-            node.scope == "workspace" and node.workspace_id == plan.workspace_id
-        ):
-            raise AppError("TEST_PLAN_NOT_RUNNABLE", "Selected Load Node is unavailable.", 409)
-    env_group = _env_for_plan(db, plan)
-    if plan.env_group_id is not None and env_group is None:
-        raise AppError("RESOURCE_NOT_FOUND", "Resource was not found.", 404)
-    env_variables = env_group_runtime_values(env_group)
-    scenarios = _scenario_map(db, workspace_id=plan.workspace_id, items=enabled_items)
-    if any(item.scenario_id not in scenarios for item in enabled_items):
-        raise AppError("TEST_PLAN_NOT_RUNNABLE", "Referenced Scenario is unavailable.", 409)
-    expected = _expected_concurrency_for_rows(plan.run_mode, enabled_items)
-    if (
-        run_type == "standard"
-        and expected > settings.single_node_concurrency_hard_limit
-    ):
-        raise validation_error(
-            [
-                field_error(
-                    "scenarioItems",
-                    "Expected concurrency exceeds the hard limit.",
-                    "single_node_concurrency_hard_limit",
-                )
-            ]
-        )
-    if (
-        run_type == "standard"
-        and expected > settings.single_node_concurrency_soft_limit
-        and not confirm_high_concurrency
-    ):
-        raise AppError(
-            "LOAD_SOFT_LIMIT_CONFIRMATION_REQUIRED",
-            "Expected single-node concurrency exceeds the configured soft limit.",
-            409,
-            [
-                {
-                    "field": "scenarioItems",
-                    "code": "single_node_concurrency_soft_limit",
-                    "message": "Confirm that this run should start with high single-node concurrency.",
-                    "meta": {
-                        "expectedConcurrencyPerNode": expected,
-                        "softLimit": settings.single_node_concurrency_soft_limit,
-                    },
-                }
-            ],
-        )
-    dependency_files: list[dict[str, Any]] = []
-    seen_dependency_ids: set[str] = set()
-    scenario_taurus_docs: dict[str, dict[str, Any]] = {}
-    for item in enabled_items:
-        scenario = scenarios[item.scenario_id]
-        dependency_rows = _enabled_dependency_files(db, scenario=scenario)
-        dependency_models = [file for _ref, file in dependency_rows]
-        content = {
-            "name": scenario.name,
-            "baseUrlExpression": scenario.base_url_expression,
-            "defaultSettings": scenario.default_settings_json,
-            "dataSources": scenario.data_sources_json,
-            "steps": scenario.steps_json,
-        }
-        doc = build_debug_taurus_document_from_content(
-            scenario_content=content,
-            env_variables=env_variables,
-            dependency_files=dependency_models,
-            jmeter_path=JMETER_RUNTIME_PATH,
-            jmeter_version=JMETER_RUNTIME_VERSION,
-        )
-        scenario_taurus_docs[item.id] = doc["scenarios"][SCENARIO_ALIAS]
-        for ref, file in dependency_rows:
-            if file.id in seen_dependency_ids:
-                continue
-            seen_dependency_ids.add(file.id)
-            dependency_files.append(
-                {
-                    "id": file.id,
-                    "filename": file.filename,
-                    "sizeBytes": file.size_bytes,
-                    "sha256": file.sha256,
-                    "refType": ref.ref_type,
-                    "stepId": ref.step_id,
-                    "scenarioId": ref.scenario_id,
-                }
-            )
-    standard_load_settings_by_item_id = {
-        item.id: _load_settings_dict(item) for item in enabled_items
-    }
-    for index, item in enumerate(enabled_items):
-        settings_payload = (
-            standard_load_settings_by_item_id[item.id]
-            if run_type == "standard"
-            else debug_load_settings()
-        )
-        _validate_load_settings(
-            settings_payload,
-            field_prefix=f"scenarioItems[{index}].loadSettings",
-            settings=settings,
-        )
-    for index, rule in enumerate(enabled_rules):
-        _validate_sla_rule(_sla_rule_dict(rule), field_prefix=f"slaRules[{index}]")
-    _validate_sla_rule_labels(
-        [_sla_rule_dict(rule) for rule in enabled_rules],
-        {
-            request["label"]
-            for scenario_document in scenario_taurus_docs.values()
-            for request in scenario_document.get("requests", [])
-            if request.get("label")
-        },
-    )
-    return ValidatedPlanContext(
-        test_plan=plan,
-        env_group=env_group,
-        scenario_rows=scenarios,
-        scenario_taurus_docs=scenario_taurus_docs,
-        dependency_files=dependency_files,
-        enabled_items=enabled_items,
-        expected_concurrency=expected,
-        standard_load_settings_by_item_id=standard_load_settings_by_item_id,
-        debug_load_settings_by_item_id={item.id: debug_load_settings() for item in enabled_items},
-        jmeter_memory_xmx=settings.jmeter_memory_xmx,
-    )
-
-
-def _snapshot_payload(
-    ctx: ValidatedPlanContext, *, run_type: str, rules: list[TestPlanSlaRule]
-) -> dict[str, Any]:
-    plan = ctx.test_plan
-    env_snapshot = None
-    if ctx.env_group is not None:
-        env_snapshot = {
-            "id": ctx.env_group.id,
-            "name": ctx.env_group.name,
-            "variables": env_group_runtime_values(ctx.env_group),
-        }
-    enabled_rules = [_sla_rule_dict(rule) for rule in rules if rule.enabled]
-    if run_type == "debug":
-        sla_mode = "not_evaluated"
-        rule_snapshot: list[dict[str, Any]] = []
-    elif enabled_rules:
-        sla_mode = "passfail"
-        rule_snapshot = enabled_rules
-    else:
-        sla_mode = "not_configured"
-        rule_snapshot = []
-    scenario_items: list[dict[str, Any]] = []
-    for item in ctx.enabled_items:
-        scenario = ctx.scenario_rows[item.scenario_id]
-        scenario_items.append(
-            {
-                "itemId": item.id,
-                "order": item.position,
-                "scenarioId": scenario.id,
-                "scenarioRevision": scenario.revision,
-                "scenarioName": scenario.name,
-                "loadSettings": (
-                    ctx.debug_load_settings_by_item_id
-                    if run_type == "debug"
-                    else ctx.standard_load_settings_by_item_id
-                )[item.id],
-                "visualScenario": ctx.scenario_taurus_docs[item.id],
-            }
-        )
-    snapshot: dict[str, Any] = {
-        "schemaVersion": 1,
-        "runType": run_type,
-        "sourceType": "test_plan",
-        "sourceId": plan.id,
-        "sourceRevision": plan.revision,
-        "validityDefault": "invalid" if run_type == "debug" else "valid",
-        "slaEvaluationMode": sla_mode,
-        "testPlan": {
-            "id": plan.id,
-            "name": plan.name,
-            "description": plan.description,
-            "tags": plan.tags_json or [],
-            "revision": plan.revision,
-            "runMode": "sequential" if run_type == "debug" else plan.run_mode,
-        },
-        "envGroup": env_snapshot,
-        "resourceRequest": {
-            "mode": plan.resource_mode,
-            "poolType": plan.pool_type,
-            "selectedNodeId": plan.selected_node_id,
-            "selectedNodeIds": list(
-                plan.selected_node_ids_json
-                or ([plan.selected_node_id] if plan.selected_node_id else [])
-            ),
-            "nodeCount": plan.node_count,
-            "expectedConcurrencyPerNode": ctx.expected_concurrency
-            if run_type == "standard"
-            else 1,
-        },
-        "scenarioItems": scenario_items,
-        "jmeterMemoryXmx": ctx.jmeter_memory_xmx,
-        "dependencyFiles": ctx.dependency_files,
-        "slaRules": rule_snapshot,
-    }
-    document = build_test_plan_taurus_document_from_snapshot(
-        snapshot,
-        jmeter_path=JMETER_RUNTIME_PATH,
-        jmeter_version=JMETER_RUNTIME_VERSION,
-    )
-    yaml_text = yaml.safe_dump(document, sort_keys=False, allow_unicode=False)
-    snapshot["generatedYaml"] = {
-        "artifactRelativePath": "execution/generated.yml",
-        "sha256": hashlib.sha256(yaml_text.encode()).hexdigest(),
-    }
-    return snapshot
-
-
-def _find_existing_dedup_run(
-    db: Session, *, workspace_id: str, dedup_hash: str, now
-) -> Run | None:
-    existing_dedup = db.scalar(
-        select(RunCreationDedupKey).where(
-            RunCreationDedupKey.workspace_id == workspace_id,
-            RunCreationDedupKey.dedup_key_hash == dedup_hash,
-            RunCreationDedupKey.expires_at > now,
-        )
-    )
-    if existing_dedup is None:
-        return None
-    return db.scalar(
-        select(Run).where(Run.id == existing_dedup.run_id, Run.workspace_id == workspace_id)
-    )
-
-
 def create_test_plan_run(
     db: Session,
     *,
@@ -1567,15 +2009,6 @@ def create_test_plan_run(
     resource_request: object | None = None,
     dedup_window_seconds: int = DEFAULT_DEDUP_WINDOW_SECONDS,
 ) -> TestPlanRunResult:
-    """Create a Test Plan Standard Run Now or Debug Run.
-
-    The caller owns the transaction. This function validates the saved Test
-    Plan against the P0-06 run guardrails (single visible Idle Load Node, Env
-    Group and Scenario references, concurrency soft/hard limits and SLA
-    Rules), snapshots the immutable execution context, and atomically creates
-    the Run + Snapshot + node lease through ``create_run_execution``. A
-    short-window dedup key collapses repeated user retries onto the same Run.
-    """
     if run_type not in {"debug", "standard"}:
         raise validation_error(
             [field_error("runType", "Run type is not supported.", "unsupported_run_type")]
@@ -1598,11 +2031,11 @@ def create_test_plan_run(
             "Test Plan was updated by another request. Reload and try again.",
             409,
         )
-    settings = get_settings()
+    settings = effective_load_settings(db)
     _items, rules = _rows_for_plan(db, plan_id=plan.id)
     normalized_resource_request = _normalize_resource_request_override(resource_request)
-    if run_type == "debug" and normalized_resource_request is not None:
-        raise AppError("RESOURCE_REQUEST_INVALID", "Resource request is invalid.", 422)
+    if run_type == "standard" and normalized_resource_request is not None:
+        normalized_resource_request["poolType"] = plan.pool_type
     ctx = _validate_run_context(
         db,
         plan=plan,
@@ -1613,7 +2046,7 @@ def create_test_plan_run(
     )
     snapshot_payload = _snapshot_payload(ctx, run_type=run_type, rules=rules)
     resource = _apply_resource_request_override(
-        snapshot_payload, resource_request=normalized_resource_request
+        snapshot_payload, run_type=run_type, resource_request=normalized_resource_request
     )
     snapshot_hash = _canonical_hash(snapshot_payload)
     dedup_input = {
@@ -1623,7 +2056,7 @@ def create_test_plan_run(
         "sourceType": "test_plan",
         "sourceId": plan.id,
         "sourceRevision": plan.revision,
-        "resourceMode": resource.get("mode"),
+        "resourceMode": resource.get("mode", "manual") if run_type == "standard" else "manual",
         "selectedNodeIds": list(resource.get("selectedNodeIds") or []),
         "nodeCount": resource.get("nodeCount"),
         "snapshotHash": snapshot_hash,
@@ -1644,13 +2077,15 @@ def create_test_plan_run(
             RunExecutionInput(
                 workspace_id=workspace_id,
                 actor=actor,
-                selected_node_id=resource.get("selectedNodeId") or plan.selected_node_id or "",
+                selected_node_id=plan.selected_node_id or "",
                 run_type=run_type,
                 source_type="test_plan",
                 source_id=plan.id,
                 snapshot_payload=snapshot_payload,
                 selected_node_ids=tuple(resource.get("selectedNodeIds") or ()),
-                resource_mode=resource.get("mode", "manual") if run_type == "standard" else "manual",
+                resource_mode=resource.get("mode", "manual")
+                if run_type == "standard"
+                else "manual",
                 pool_type=resource.get("poolType") if run_type == "standard" else None,
                 node_count=resource.get("nodeCount") if run_type == "standard" else None,
             ),
@@ -1704,3 +2139,16 @@ def create_test_plan_run(
             return TestPlanRunResult(existing_run, True, 200)
         raise exc
     return TestPlanRunResult(run, False, 201)
+
+
+def _find_existing_dedup_run(db: Session, *, workspace_id: str, dedup_hash: str, now) -> Run | None:
+    existing = db.scalar(
+        select(RunCreationDedupKey).where(
+            RunCreationDedupKey.workspace_id == workspace_id,
+            RunCreationDedupKey.dedup_key_hash == dedup_hash,
+            RunCreationDedupKey.expires_at > now,
+        )
+    )
+    if existing is None:
+        return None
+    return db.scalar(select(Run).where(Run.id == existing.run_id, Run.workspace_id == workspace_id))

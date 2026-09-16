@@ -81,9 +81,15 @@ class InitResult:
     message: str | None = None
     runner_version: str | None = None
     bundle_version: str | None = None
+    runtime_version: str | None = None
 
 
 class LoadNodeInitializer:
+    # Runtime version selected when the initialization attempt was enqueued. The worker freezes it
+    # on the initializer before running so a configuration change cannot alter an in-flight
+    # activation; ``None`` keeps reading the configured Runtime version for direct callers.
+    runtime_version: str | None = None
+
     def initialize(self, node: LoadNode, credential: CredentialPlaintext) -> InitResult:
         _ = node, credential
         raise NotImplementedError("Load Node initializer must be provided.")
@@ -92,6 +98,7 @@ class LoadNodeInitializer:
 class DeterministicLoadNodeInitializer(LoadNodeInitializer):
     def initialize(self, node: LoadNode, credential: CredentialPlaintext) -> InitResult:
         _ = credential
+        selected_version = self.runtime_version or get_settings().load_node_runtime_version
         return InitResult(
             ok=True,
             log=(
@@ -103,6 +110,7 @@ class DeterministicLoadNodeInitializer(LoadNodeInitializer):
             message="Initialization succeeded.",
             runner_version="0.1.0",
             bundle_version="p0-03",
+            runtime_version=(selected_version or "deterministic-runtime"),
         )
 
 
@@ -686,6 +694,12 @@ def decrypt_credential(credential: LoadNodeCredential) -> CredentialPlaintext:
         ) from exc
 
 
+def effective_runtime_version() -> str | None:
+    """Return the Runtime version selected for a newly enqueued initialization attempt."""
+    version = (get_settings().load_node_runtime_version or "").strip()
+    return version or None
+
+
 def request_initialization(
     db: Session, *, node: LoadNode, actor: User, force: bool, request_id: str | None
 ) -> LoadNodeInitializationAttempt:
@@ -712,6 +726,7 @@ def request_initialization(
         status="queued",
         requested_by=actor.id,
         message="Initialization queued.",
+        runtime_version=effective_runtime_version(),
         request_id=request_id,
         created_at=now,
         updated_at=now,
@@ -815,6 +830,8 @@ def complete_initialization_attempt(
             from app.services.load_node_initializer import RealLoadNodeInitializer
 
             initializer = RealLoadNodeInitializer()
+        # The attempt keeps the Runtime version selected when it was enqueued.
+        initializer.runtime_version = active_attempt.runtime_version
         result = initializer.initialize(node, credential)
     except AppError as exc:
         active_attempt, node = lock_active_running_attempt(db, attempt_id=attempt.id)
@@ -864,11 +881,13 @@ def succeed_attempt(
     attempt.sanitized_log_tail = sanitize_log(result.log)
     attempt.runner_version = result.runner_version
     attempt.bundle_version = result.bundle_version
+    attempt.runtime_version = result.runtime_version
     attempt.updated_at = now
     node.status = "idle"
     node.last_status_reason = None
     node.runner_version = result.runner_version
     node.bundle_version = result.bundle_version
+    node.runtime_version = result.runtime_version
     node.last_initialized_at = now
     node.last_checked_at = now
     node.updated_at = now
