@@ -1,0 +1,59 @@
+name: Public Site Build
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - ".github/workflows/pages-build.yml"
+      - "docs/site/**"
+      - "tests/contract/test_user_docs_locales.py"
+      - "package.json"
+      - "pnpm-lock.yaml"
+      - "pnpm-workspace.yaml"
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/pages-build.yml"
+      - "docs/site/**"
+      - "tests/contract/test_user_docs_locales.py"
+      - "package.json"
+      - "pnpm-lock.yaml"
+      - "pnpm-workspace.yaml"
+
+# Private stage: this workflow only builds and verifies the public site. It holds no deployment
+# authority, and public deployment stays behind the owner-gated launch.
+permissions:
+  contents: read
+
+concurrency:
+  group: public-site-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build and inspect static output
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4
+        with:
+          version: "11.3.0"
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: "22"
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Install browser runtime for rendered metadata checks
+        run: pnpm --filter @surgepilot/docs exec playwright install --with-deps chromium
+      - name: Build and verify public site
+        run: pnpm --filter @surgepilot/docs test
+      - name: Retain reviewed static output
+        if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: surgepilot-public-site
+          path: docs/site/.vitepress/dist
+          if-no-files-found: error
+          include-hidden-files: true
+          retention-days: 1

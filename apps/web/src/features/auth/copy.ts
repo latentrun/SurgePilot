@@ -7,7 +7,7 @@ export const authCopy = {
   },
   register: {
     firstAdminTitle: "Create administrator",
-    firstAdminSubmit: "Create administrator",
+    firstAdminSubmit: "Create Administrator",
     selfTitle: "Create account",
     selfSubmit: "Create account",
     firstAdminDescription:
@@ -24,10 +24,12 @@ export const authCopy = {
       "Password must have at least 10 characters, one letter, and one number.",
     SIGNUP_DISABLED:
       "Account creation is disabled. Contact an administrator for access.",
+    WORKSPACE_REQUIRED:
+      "Workspace is not available. Refresh the page or contact an administrator.",
     REQUEST_FAILED:
-      "SurgePilot service is temporarily unavailable. Try again in a moment.",
+      "SurgePilot service is temporarily unavailable. Try again in a moment or contact an administrator.",
     default: "Something went wrong. Try again.",
     setup:
       "Workspace setup is not complete. Contact an administrator before continuing.",
   },
-} as const;
+};

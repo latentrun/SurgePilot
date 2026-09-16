@@ -29,4 +29,5 @@ export const scenarioCopy = {
     "Scenario cannot be archived while it is referenced by active execution state or visible dependent resources.",
   noTags: "No tags",
   noNodes: "No idle Load Nodes are available.",
+  soon: "Soon",
 };

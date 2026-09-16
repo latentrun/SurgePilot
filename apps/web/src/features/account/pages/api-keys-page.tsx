@@ -1,4 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
+import * as Dialog from "@radix-ui/react-dialog";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { Check, Copy, Plus, RefreshCw, Trash2, X } from "lucide-react";
 
 import {
   ApiError,
@@ -50,46 +53,27 @@ function useCsrfToken() {
 }
 
 export function ApiKeysPage() {
+  const queryClient = useQueryClient();
   const { session } = useAuthSession();
   const getWriteToken = useCsrfToken();
-  const [tokens, setTokens] = useState<ApiTokenMetadata[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [listError, setListError] = useState<string | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
   const [name, setName] = useState("");
   const [scopes, setScopes] = useState<Scope[]>([]);
   const [expiresOn, setExpiresOn] = useState(defaultExpiry());
   const [formError, setFormError] = useState<string | null>(null);
-  const [isCreating, setIsCreating] = useState(false);
   const [createdPlaintext, setCreatedPlaintext] = useState<string | null>(null);
   const [copySucceeded, setCopySucceeded] = useState(false);
   const [workspaceCopySucceeded, setWorkspaceCopySucceeded] = useState(false);
   const [workspaceCopyError, setWorkspaceCopyError] = useState<string | null>(null);
   const [revokeTarget, setRevokeTarget] = useState<ApiTokenMetadata | null>(null);
   const [revokeError, setRevokeError] = useState<string | null>(null);
-  const [isRevoking, setIsRevoking] = useState(false);
 
+  const listQuery = useQuery({ queryKey: ["account-api-tokens"], queryFn: listAccountApiTokens });
   const workspaceId = session?.currentWorkspace.id ?? session?.defaultWorkspace.id ?? "";
   const workspaceName = session?.currentWorkspace.name ?? "Current Workspace";
-  const rows = tokens;
+  const rows = listQuery.data?.items ?? [];
 
   const activeCount = useMemo(() => rows.filter((row) => row.revokedAt === null).length, [rows]);
-
-  async function load() {
-    setIsLoading(true);
-    try {
-      setTokens((await listAccountApiTokens()).items);
-      setListError(null);
-    } catch (cause) {
-      setListError(errorMessage(cause));
-    } finally {
-      setIsLoading(false);
-    }
-  }
-
-  useEffect(() => {
-    void load();
-  }, []);
 
   useEffect(() => {
     if (!copySucceeded) return undefined;
@@ -126,33 +110,12 @@ export function ApiKeysPage() {
     setWorkspaceCopyError(result.reason);
   }
 
-  function resetCreateForm() {
-    setName("");
-    setScopes([]);
-    setExpiresOn(defaultExpiry());
-    setFormError(null);
-    setCopySucceeded(false);
-  }
-
-  function closeCreate() {
-    setCreateOpen(false);
-    setCreatedPlaintext(null);
-  }
-
-  async function submitCreate() {
-    const trimmedName = name.trim();
-    if (!trimmedName) {
-      setFormError("Name is required.");
-      return;
-    }
-    if (scopes.length === 0) {
-      setFormError("Select at least one scope.");
-      return;
-    }
-    setIsCreating(true);
-    setFormError(null);
-    try {
-      const response = await createAccountApiToken(
+  const createMutation = useMutation({
+    mutationFn: async () => {
+      const trimmedName = name.trim();
+      if (!trimmedName) throw new Error("Name is required.");
+      if (scopes.length === 0) throw new Error("Select at least one scope.");
+      return createAccountApiToken(
         {
           name: trimmedName,
           scopes,
@@ -161,30 +124,30 @@ export function ApiKeysPage() {
         },
         await getWriteToken(),
       );
+    },
+    onSuccess: async (response) => {
       setCreatedPlaintext(response.token.plaintext);
-      resetCreateForm();
-      await load();
-    } catch (cause) {
-      setFormError(errorMessage(cause));
-    } finally {
-      setIsCreating(false);
-    }
-  }
+      setName("");
+      setScopes([]);
+      setExpiresOn(defaultExpiry());
+      setFormError(null);
+      setCopySucceeded(false);
+      await queryClient.invalidateQueries({ queryKey: ["account-api-tokens"] });
+    },
+    onError: (error) => {
+      setFormError(errorMessage(error));
+    },
+  });
 
-  async function confirmRevoke() {
-    if (!revokeTarget) return;
-    setIsRevoking(true);
-    setRevokeError(null);
-    try {
-      await deleteAccountApiToken(revokeTarget.id, await getWriteToken());
+  const revokeMutation = useMutation({
+    mutationFn: async (tokenId: string) => deleteAccountApiToken(tokenId, await getWriteToken()),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["account-api-tokens"] });
       setRevokeTarget(null);
-      await load();
-    } catch (cause) {
-      setRevokeError(errorMessage(cause));
-    } finally {
-      setIsRevoking(false);
-    }
-  }
+      setRevokeError(null);
+    },
+    onError: (error) => setRevokeError(errorMessage(error)),
+  });
 
   function toggleScope(scope: Scope) {
     setScopes((current) =>
@@ -193,8 +156,8 @@ export function ApiKeysPage() {
   }
 
   return (
-    <main className="space-y-6">
-      <section className="rounded-3xl border border-white/10 bg-surface-container-low p-6 shadow-xl">
+    <section className="space-y-6">
+      <div className="rounded-3xl border border-white/10 bg-surface-container-low p-6 shadow-xl">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div>
             <p className="font-mono text-[10px] font-semibold uppercase tracking-[0.22em] text-secondary">Account</p>
@@ -205,13 +168,10 @@ export function ApiKeysPage() {
           </div>
           <button
             className="inline-flex items-center gap-2 rounded-xl bg-primary px-4 py-2 text-sm font-semibold text-on-primary shadow-[0_0_24px_rgba(34,211,238,0.25)]"
-            onClick={() => {
-              setCreatedPlaintext(null);
-              setFormError(null);
-              setCreateOpen(true);
-            }}
+            onClick={() => setCreateOpen(true)}
             type="button"
           >
+            <Plus aria-hidden className="h-4 w-4" />
             Create API Key
           </button>
         </div>
@@ -234,6 +194,7 @@ export function ApiKeysPage() {
                     onClick={() => void copyWorkspaceId()}
                     type="button"
                   >
+                    {workspaceCopySucceeded ? <Check aria-hidden className="h-3.5 w-3.5" /> : <Copy aria-hidden className="h-3.5 w-3.5" />}
                     {workspaceCopySucceeded ? "Copied" : "Copy"}
                   </button>
                 </div>
@@ -246,22 +207,21 @@ export function ApiKeysPage() {
             <p className="mt-2 text-sm font-semibold text-white">read · config:write · run · dependency:write</p>
           </div>
         </div>
-      </section>
+      </div>
 
-      <section className="rounded-3xl border border-white/10 bg-surface-container-low p-6 shadow-xl">
+      <div className="rounded-3xl border border-white/10 bg-surface-container-low p-6 shadow-xl">
         <div className="mb-4 flex items-center justify-between gap-3">
           <h2 className="text-lg font-semibold text-white">Your keys</h2>
           <button
             aria-label="Refresh API keys"
             className="rounded-xl border border-white/10 p-2 text-text-muted hover:text-white"
-            onClick={() => void load()}
+            onClick={() => void listQuery.refetch()}
             type="button"
           >
-            Refresh
+            <RefreshCw aria-hidden className="h-4 w-4" />
           </button>
         </div>
-        {listError ? <p className="mb-4 rounded-2xl border border-danger/30 bg-danger/10 p-4 text-sm text-danger">{listError}</p> : null}
-        {isLoading ? (
+        {listQuery.isLoading ? (
           <div aria-label="Loading API keys" className="rounded-2xl border border-white/10 bg-white/5 p-6 text-sm text-text-muted" role="status">Loading API keys...</div>
         ) : rows.length === 0 ? (
           <div className="rounded-2xl border border-dashed border-white/10 p-8 text-center text-sm text-text-muted">No API keys yet. Create one when you need programmatic access.</div>
@@ -294,12 +254,10 @@ export function ApiKeysPage() {
                         aria-label={`Revoke ${token.name}`}
                         className="inline-flex items-center gap-2 rounded-xl border border-danger/30 px-3 py-1.5 text-xs font-semibold text-danger disabled:opacity-50"
                         disabled={token.revokedAt !== null}
-                        onClick={() => {
-                          setRevokeError(null);
-                          setRevokeTarget(token);
-                        }}
+                        onClick={() => setRevokeTarget(token)}
                         type="button"
                       >
+                        <Trash2 aria-hidden className="h-3.5 w-3.5" />
                         Revoke
                       </button>
                     </td>
@@ -309,17 +267,18 @@ export function ApiKeysPage() {
             </table>
           </div>
         )}
-      </section>
+      </div>
 
-      {createOpen ? (
-        <div aria-labelledby="api-key-create-title" aria-modal="true" className="fixed inset-0 z-50 grid place-items-center bg-black/60 p-4" role="dialog">
-          <section className="w-full max-w-2xl rounded-3xl border border-white/10 bg-surface-container-low p-6 text-text-main shadow-2xl">
+      <Dialog.Root open={createOpen} onOpenChange={(open) => { setCreateOpen(open); if (!open) setCreatedPlaintext(null); }}>
+        <Dialog.Portal>
+          <Dialog.Overlay className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm" />
+          <Dialog.Content className="fixed left-1/2 top-1/2 z-50 w-[calc(100vw-2rem)] max-w-2xl -translate-x-1/2 -translate-y-1/2 rounded-3xl border border-white/10 bg-surface-container-low p-6 text-text-main shadow-2xl" aria-describedby="api-key-create-description">
             <div className="flex items-start justify-between gap-4">
               <div>
-                <h2 className="font-display text-2xl font-semibold text-white" id="api-key-create-title">Create API Key</h2>
-                <p className="mt-2 text-sm leading-6 text-text-muted" id="api-key-create-description">Choose the minimum scopes required for this automation.</p>
+                <Dialog.Title className="font-display text-2xl font-semibold text-white">Create API Key</Dialog.Title>
+                <Dialog.Description id="api-key-create-description" className="mt-2 text-sm leading-6 text-text-muted">Choose the minimum scopes required for this automation.</Dialog.Description>
               </div>
-              <button aria-label="Close Create API Key" className="rounded-xl border border-white/10 p-2 text-text-muted hover:text-white" onClick={closeCreate} type="button">Close</button>
+              <Dialog.Close className="rounded-xl border border-white/10 p-2 text-text-muted hover:text-white"><X aria-hidden className="h-4 w-4" /></Dialog.Close>
             </div>
 
             {createdPlaintext ? (
@@ -332,6 +291,7 @@ export function ApiKeysPage() {
                     onClick={() => void copyCreatedToken()}
                     type="button"
                   >
+                    {copySucceeded ? <Check aria-hidden className="h-3.5 w-3.5" /> : <Copy aria-hidden className="h-3.5 w-3.5" />}
                     {copySucceeded ? "Copied" : "Copy"}
                   </button>
                 </div>
@@ -339,7 +299,7 @@ export function ApiKeysPage() {
                 <div className="mt-4 flex justify-end">
                   <button
                     className="rounded-xl bg-primary px-4 py-2 text-sm font-semibold text-on-primary"
-                    onClick={closeCreate}
+                    onClick={() => setCreateOpen(false)}
                     type="button"
                   >
                     Done
@@ -351,7 +311,8 @@ export function ApiKeysPage() {
                 className="mt-6 space-y-5"
                 onSubmit={(event) => {
                   event.preventDefault();
-                  void submitCreate();
+                  setFormError(null);
+                  createMutation.mutate();
                 }}
               >
                 <label className="block text-sm font-medium text-text-muted">
@@ -381,28 +342,29 @@ export function ApiKeysPage() {
                 </div>
                 {formError ? <p className="text-sm text-danger">{formError}</p> : null}
                 <div className="flex justify-end gap-3">
-                  <button className="rounded-xl border border-white/10 px-4 py-2 text-sm font-semibold text-text-main" onClick={closeCreate} type="button">Cancel</button>
-                  <button className="rounded-xl bg-primary px-4 py-2 text-sm font-semibold text-on-primary disabled:opacity-60" disabled={isCreating} type="submit">Create key</button>
+                  <Dialog.Close className="rounded-xl border border-white/10 px-4 py-2 text-sm font-semibold text-text-main" type="button">Cancel</Dialog.Close>
+                  <button className="rounded-xl bg-primary px-4 py-2 text-sm font-semibold text-on-primary disabled:opacity-60" disabled={createMutation.isPending} type="submit">Create key</button>
                 </div>
               </form>
             )}
-          </section>
-        </div>
-      ) : null}
+          </Dialog.Content>
+        </Dialog.Portal>
+      </Dialog.Root>
 
-      {revokeTarget !== null ? (
-        <div aria-labelledby="api-key-revoke-title" aria-modal="true" className="fixed inset-0 z-50 grid place-items-center bg-black/60 p-4" role="dialog">
-          <section className="w-full max-w-md rounded-3xl border border-white/10 bg-surface-container-low p-6 text-text-main shadow-2xl">
-            <h2 className="font-display text-2xl font-semibold text-white" id="api-key-revoke-title">Revoke {revokeTarget.name}?</h2>
-            <p className="mt-3 text-sm leading-6 text-text-muted" id="api-key-revoke-description">Existing automation using this key will stop authenticating immediately.</p>
+      <Dialog.Root open={revokeTarget !== null} onOpenChange={(open) => !open && setRevokeTarget(null)}>
+        <Dialog.Portal>
+          <Dialog.Overlay className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm" />
+          <Dialog.Content aria-describedby="api-key-revoke-description" className="fixed left-1/2 top-1/2 z-50 w-[calc(100vw-2rem)] max-w-md -translate-x-1/2 -translate-y-1/2 rounded-3xl border border-white/10 bg-surface-container-low p-6 text-text-main shadow-2xl">
+            <Dialog.Title className="font-display text-2xl font-semibold text-white">Revoke {revokeTarget?.name}?</Dialog.Title>
+            <Dialog.Description id="api-key-revoke-description" className="mt-3 text-sm leading-6 text-text-muted">Existing automation using this key will stop authenticating immediately.</Dialog.Description>
             {revokeError ? <p className="mt-3 text-sm text-danger">{revokeError}</p> : null}
             <div className="mt-6 flex justify-end gap-3">
-              <button className="rounded-xl border border-white/10 px-4 py-2 text-sm font-semibold text-text-main" onClick={() => setRevokeTarget(null)} type="button">Cancel</button>
-              <button className="rounded-xl bg-danger px-4 py-2 text-sm font-semibold text-white disabled:opacity-60" disabled={isRevoking} onClick={() => void confirmRevoke()} type="button">Revoke key</button>
+              <Dialog.Close className="rounded-xl border border-white/10 px-4 py-2 text-sm font-semibold text-text-main" type="button">Cancel</Dialog.Close>
+              <button className="rounded-xl bg-danger px-4 py-2 text-sm font-semibold text-white disabled:opacity-60" disabled={revokeMutation.isPending} onClick={() => revokeTarget && revokeMutation.mutate(revokeTarget.id)} type="button">Revoke key</button>
             </div>
-          </section>
-        </div>
-      ) : null}
-    </main>
+          </Dialog.Content>
+        </Dialog.Portal>
+      </Dialog.Root>
+    </section>
   );
 }

@@ -1,4 +1,6 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { useSearchParams } from "react-router-dom";
 
 import {
   getMonitoringEmbed,
@@ -7,30 +9,19 @@ import {
 import { useAuthSession } from "../../../app/auth-session";
 import { formatEnum, StatusPill } from "../../runs/pages/run-shared";
 
-type MonitoringStatus = MonitoringEmbedResponse["status"];
 type IframeFailureReason = "auth" | "gateway" | "grafana";
 
-const monitoringStateCopy: Record<
-  MonitoringStatus,
-  { body: string; title: string }
-> = {
-  ready: {
-    body: "Dashboard configuration is ready. Loading the dashboard…",
-    title: "Monitoring is ready",
-  },
-  not_configured: {
-    body: "This deployment has no monitoring configuration, so no dashboard is available.",
-    title: "Monitoring is not configured",
-  },
-  config_error: {
-    body: "Monitoring configuration is incomplete, so the dashboard cannot be shown.",
-    title: "Monitoring configuration error",
-  },
-  disabled: {
-    body: "Monitoring is disabled for this deployment.",
-    title: "Monitoring is disabled",
-  },
-};
+function monitoringStatusCopy(response: MonitoringEmbedResponse | undefined) {
+  if (!response) return "Loading monitoring dashboard…";
+  if (response.status === "disabled") return "Monitoring is disabled.";
+  if (
+    response.status === "not_configured" ||
+    response.status === "config_error"
+  ) {
+    return "Monitoring is not configured. Ask an administrator to enable the Grafana and InfluxDB services.";
+  }
+  return "Dashboard configuration is ready. Loading Grafana…";
+}
 
 function failureReasonForStatus(status: number): IframeFailureReason {
   if (status === 401 || status === 403) return "auth";
@@ -38,107 +29,75 @@ function failureReasonForStatus(status: number): IframeFailureReason {
   return "grafana";
 }
 
-function monitoringFailureCopy(reason: IframeFailureReason | undefined) {
+function grafanaFailureCopy(reason: IframeFailureReason | undefined) {
   if (reason === "gateway") {
-    return "The monitoring dashboard is temporarily unavailable. Try again later.";
+    return "Grafana gateway is unavailable. Restarting Grafana or Nginx may be required.";
   }
   if (reason === "auth") {
-    return "The monitoring dashboard could not be loaded. Check your session, then try again.";
+    return "Grafana dashboard could not be loaded. Check your session, then try again.";
   }
-  return "The monitoring dashboard could not be loaded. Try again later.";
+  return "Grafana dashboard could not be loaded. Check the Grafana provisioning status, then try again.";
 }
-
-export function useMonitoringQueryParams() {
-  const [search, setSearch] = useState(() => window.location.search);
-  useEffect(() => {
-    const onPopState = () => setSearch(window.location.search);
-    window.addEventListener("popstate", onPopState);
-    return () => window.removeEventListener("popstate", onPopState);
-  }, []);
-  return useMemo(() => new URLSearchParams(search), [search]);
-}
-
-type IframeState = {
-  failureReason?: IframeFailureReason;
-  status: "checking" | "loading" | "loaded" | "failed";
-  url: string | null;
-};
 
 export function MonitoringPage() {
+  const [searchParams] = useSearchParams();
   const { session } = useAuthSession();
   const workspaceId = session?.defaultWorkspace.id ?? "";
-  const searchParams = useMonitoringQueryParams();
   const runId = searchParams.get("runId");
   const from = searchParams.get("from");
   const to = searchParams.get("to");
-
-  const [response, setResponse] = useState<MonitoringEmbedResponse | null>(
-    null,
-  );
-  const [loadError, setLoadError] = useState(false);
-  const [isLoading, setIsLoading] = useState(true);
-  const [iframeState, setIframeState] = useState<IframeState>({
-    status: "loading",
-    url: null,
+  const embedQuery = useQuery({
+    enabled: Boolean(workspaceId),
+    queryKey: ["monitoring-embed", workspaceId, runId, from, to],
+    queryFn: () => getMonitoringEmbed({ workspaceId, runId, from, to }),
   });
-
-  useEffect(() => {
-    if (!workspaceId) return undefined;
-    let cancelled = false;
-    setIsLoading(true);
-    void getMonitoringEmbed({ from, runId, to, workspaceId })
-      .then((next) => {
-        if (cancelled) return;
-        setResponse(next);
-        setLoadError(false);
-      })
-      .catch(() => {
-        if (cancelled) return;
-        setResponse(null);
-        setLoadError(true);
-      })
-      .finally(() => {
-        if (!cancelled) setIsLoading(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [workspaceId, runId, from, to]);
-
-  const iframeUrl = response?.iframeUrl ?? null;
+  const response = embedQuery.data;
+  const [iframeState, setIframeState] = useState<{
+    status: "checking" | "loading" | "loaded" | "failed";
+    url: string | null;
+    failureReason?: IframeFailureReason;
+  }>({ status: "loading", url: null });
+  const iframeRef = useRef<HTMLIFrameElement | null>(null);
 
   useEffect(() => {
     setIframeState((current) =>
-      current.url === iframeUrl ? current : { status: "loading", url: iframeUrl },
+      current.url === (response?.iframeUrl ?? null)
+        ? current
+        : {
+            status: response?.iframeUrl ? "checking" : "loading",
+            url: response?.iframeUrl ?? null,
+          },
     );
-  }, [iframeUrl]);
+  }, [response?.iframeUrl]);
 
   useEffect(() => {
+    const iframeUrl = response?.iframeUrl ?? null;
     if (!iframeUrl) return undefined;
     const controller = new AbortController();
     let cancelled = false;
     setIframeState({ status: "checking", url: iframeUrl });
     void (async () => {
       try {
-        const preflight = await fetch(iframeUrl, {
+        const grafanaResponse = await fetch(iframeUrl, {
           credentials: "include",
           signal: controller.signal,
         });
         if (cancelled) return;
         setIframeState({
-          failureReason: preflight.ok
-            ? undefined
-            : failureReasonForStatus(preflight.status),
-          status: preflight.ok ? "loading" : "failed",
+          status: grafanaResponse.ok ? "loading" : "failed",
           url: iframeUrl,
+          failureReason: grafanaResponse.ok
+            ? undefined
+            : failureReasonForStatus(grafanaResponse.status),
         });
       } catch (error: unknown) {
         if (cancelled) return;
-        if (error instanceof DOMException && error.name === "AbortError") return;
+        if (error instanceof DOMException && error.name === "AbortError")
+          return;
         setIframeState({
-          failureReason: "gateway",
           status: "failed",
           url: iframeUrl,
+          failureReason: "gateway",
         });
       }
     })();
@@ -146,101 +105,71 @@ export function MonitoringPage() {
       cancelled = true;
       controller.abort();
     };
-  }, [iframeUrl]);
+  }, [response?.iframeUrl]);
 
-  const stateCopy = response ? monitoringStateCopy[response.status] : null;
-  const showStatePanel = Boolean(response) && response?.status !== "ready";
-  const showIframe =
-    Boolean(response?.enabled) &&
-    iframeUrl !== null &&
-    iframeState.status !== "checking" &&
-    iframeState.status !== "failed";
+  useEffect(() => {
+    const iframe = iframeRef.current;
+    const iframeUrl = response?.iframeUrl ?? null;
+    if (!iframe || !iframeUrl) return undefined;
+    const markLoaded = () =>
+      setIframeState({ status: "loaded", url: iframeUrl });
+    const markFailed = () =>
+      setIframeState({
+        status: "failed",
+        url: iframeUrl,
+        failureReason: "grafana",
+      });
+    iframe.addEventListener("load", markLoaded);
+    iframe.addEventListener("error", markFailed);
+    return () => {
+      iframe.removeEventListener("load", markLoaded);
+      iframe.removeEventListener("error", markFailed);
+    };
+  }, [response?.iframeUrl]);
 
   return (
-    <main
+    <section
+      className="flex h-[calc(100dvh-4rem)] min-h-0 w-full flex-col bg-background"
       data-monitoring-page="true"
-      style={{
-        background: "#0b0f1a",
-        display: "flex",
-        flexDirection: "column",
-        height: "100dvh",
-        margin: 0,
-        maxWidth: "none",
-        minHeight: 0,
-        width: "100%",
-      }}
     >
-      <header
-        style={{
-          alignItems: "center",
-          display: "flex",
-          gap: 12,
-          padding: "12px 16px",
-        }}
-      >
-        <h1 style={{ color: "#fff", fontSize: 18, margin: 0 }}>Monitoring</h1>
-        {response ? (
-          <StatusPill tone={response.enabled ? "success" : "warning"}>
-            {formatEnum(response.status)}
-          </StatusPill>
-        ) : null}
-      </header>
+      <h1 className="sr-only">Monitoring</h1>
 
       <div
         aria-label="Monitoring"
+        className="relative flex min-h-0 flex-1 flex-col"
         role="region"
-        style={{
-          display: "flex",
-          flex: 1,
-          flexDirection: "column",
-          minHeight: 0,
-          position: "relative",
-        }}
       >
-        {isLoading ? (
-          <p role="status" style={{ color: "#bbc9cd", margin: 16 }}>
-            Loading monitoring dashboard…
-          </p>
+        {response ? (
+          <div className="absolute right-4 top-4 z-10">
+            <StatusPill tone={response.enabled ? "success" : "warning"}>
+              {formatEnum(response.status)}
+            </StatusPill>
+          </div>
         ) : null}
-        {loadError ? (
-          <p role="alert" style={{ margin: 16 }}>
-            Monitoring could not be loaded.
-          </p>
-        ) : null}
-        {!isLoading && response?.status === "ready" && iframeState.status !== "loaded" ? (
-          <p
-            data-monitoring-state="ready"
-            role="status"
-            style={{ color: "#bbc9cd", margin: 16 }}
-          >
-            {monitoringStateCopy.ready.body}
-          </p>
-        ) : null}
-        {!isLoading && showStatePanel ? (
+        {embedQuery.isLoading ? (
           <div
-            data-monitoring-state={response?.status}
+            className="absolute left-4 top-4 z-10 rounded-xl border border-white/10 bg-surface-container-low/90 px-3 py-2 text-sm text-text-muted shadow-lg"
             role="status"
-            style={{
-              border: "1px solid #d3bbff55",
-              borderRadius: 16,
-              margin: 16,
-              maxWidth: 640,
-              padding: 16,
-            }}
           >
-            <h2 style={{ color: "#fff", fontSize: 16, margin: 0 }}>
-              {stateCopy?.title}
-            </h2>
-            <p style={{ color: "#bbc9cd", marginTop: 8 }}>{stateCopy?.body}</p>
-            {response?.warnings?.length ? (
-              <div
-                style={{
-                  display: "flex",
-                  flexWrap: "wrap",
-                  gap: 8,
-                  marginTop: 12,
-                }}
-              >
+            Loading monitoring dashboard…
+          </div>
+        ) : null}
+        {embedQuery.isError ? (
+          <div
+            className="absolute left-4 top-4 z-10 rounded-xl border border-error/30 bg-error-container px-3 py-2 text-sm text-on-error-container shadow-lg"
+            role="status"
+          >
+            Monitoring could not be loaded.
+          </div>
+        ) : null}
+        {response && !response.enabled ? (
+          <div
+            className="m-4 max-w-2xl rounded-xl border border-warning/30 bg-warning/10 p-4 text-sm text-warning"
+            role="status"
+          >
+            <p>{monitoringStatusCopy(response)}</p>
+            {response.warnings?.length ? (
+              <div className="mt-3 flex flex-wrap gap-2">
                 {response.warnings.map((warning) => (
                   <StatusPill key={warning} tone="warning">
                     {formatEnum(warning)}
@@ -250,31 +179,41 @@ export function MonitoringPage() {
             ) : null}
           </div>
         ) : null}
-        {iframeState.status === "failed" ? (
-          <p
-            data-monitoring-state="iframe_failed"
-            role="alert"
-            style={{ margin: 16 }}
-          >
-            {monitoringFailureCopy(iframeState.failureReason)}
-          </p>
-        ) : null}
-        {showIframe ? (
-          <iframe
-            onError={() =>
-              setIframeState({
-                failureReason: "grafana",
-                status: "failed",
-                url: iframeUrl,
-              })
-            }
-            onLoad={() => setIframeState({ status: "loaded", url: iframeUrl })}
-            src={iframeUrl ?? undefined}
-            style={{ border: 0, flex: 1, minHeight: 0, width: "100%" }}
-            title="Grafana monitoring dashboard"
-          />
+        {response?.enabled && response.iframeUrl ? (
+          <>
+            {iframeState.status === "failed" ? (
+              <div
+                className="absolute left-4 top-4 z-10 rounded-xl border border-error/30 bg-error-container px-3 py-2 text-sm text-on-error-container shadow-lg"
+                role="status"
+              >
+                {grafanaFailureCopy(iframeState.failureReason)}
+              </div>
+            ) : null}
+            {iframeState.status !== "checking" &&
+            iframeState.status !== "failed" ? (
+              <iframe
+                className="min-h-0 flex-1 w-full border-0 bg-surface-container-low"
+                onError={() =>
+                  setIframeState({
+                    status: "failed",
+                    url: response.iframeUrl ?? null,
+                    failureReason: "grafana",
+                  })
+                }
+                onLoad={() =>
+                  setIframeState({
+                    status: "loaded",
+                    url: response.iframeUrl ?? null,
+                  })
+                }
+                ref={iframeRef}
+                src={response.iframeUrl}
+                title="Grafana monitoring dashboard"
+              />
+            ) : null}
+          </>
         ) : null}
       </div>
-    </main>
+    </section>
   );
 }

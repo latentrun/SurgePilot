@@ -1,11 +1,18 @@
+import { useRef, useState } from "react";
+import * as Dialog from "@radix-ui/react-dialog";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
-  createContext,
-  useCallback,
-  useContext,
-  useEffect,
-  useRef,
-  useState,
-} from "react";
+  Copy,
+  Download,
+  Eye,
+  FileUp,
+  RefreshCw,
+  Search,
+  ShieldAlert,
+  Trash2,
+  UploadCloud,
+  X,
+} from "lucide-react";
 
 import {
   ApiError,
@@ -15,10 +22,10 @@ import {
   listDependencyFiles,
   previewDependencyFile,
   uploadDependencyFile,
-  type DependencyFilePreviewResponse,
   type DependencyFileSummary,
 } from "../../../app/api-client";
 import { useAuthSession } from "../../../app/auth-session";
+import { copyText } from "../../../utils/clipboard";
 
 const pageSize = 20;
 const safeFilenamePattern = /^[A-Za-z0-9._-]{1,255}$/;
@@ -137,402 +144,8 @@ function useCsrfToken() {
   return async () => csrfToken ?? (await getCsrfToken()).csrfToken;
 }
 
-async function copyText(text: string): Promise<{
-  ok: boolean;
-  reason?: string;
-}> {
-  try {
-    await navigator.clipboard.writeText(text);
-    return { ok: true };
-  } catch {
-    return { ok: false, reason: "Clipboard access is unavailable." };
-  }
-}
-
-const DialogContext = createContext<{ onClose: () => void }>({
-  onClose: () => {},
-});
-
-const Dialog = {
-  Root({
-    children,
-    onOpenChange,
-    open,
-  }: {
-    children: React.ReactNode;
-    onOpenChange?: (open: boolean) => void;
-    open: boolean;
-  }) {
-    if (!open) return null;
-    const onClose = () => onOpenChange?.(false);
-    return (
-      <DialogContext.Provider value={{ onClose }}>
-        <div data-dialog-root="">{children}</div>
-      </DialogContext.Provider>
-    );
-  },
-  Portal({ children }: { children: React.ReactNode }) {
-    return <>{children}</>;
-  },
-  Overlay({
-    className,
-    onClick,
-  }: {
-    className?: string;
-    onClick?: () => void;
-  }) {
-    const { onClose } = useContext(DialogContext);
-    return (
-      <div
-        aria-hidden="true"
-        className={
-          className ?? "fixed inset-0 z-50 bg-black/50 backdrop-blur-sm"
-        }
-        onClick={() => {
-          onClick?.();
-          onClose();
-        }}
-      />
-    );
-  },
-  Content({
-    "aria-label": ariaLabel,
-    children,
-    className,
-  }: {
-    "aria-label"?: string;
-    children: React.ReactNode;
-    className?: string;
-  }) {
-    return (
-      <div
-        aria-label={ariaLabel}
-        aria-modal="true"
-        className={className}
-        role="dialog"
-      >
-        {children}
-      </div>
-    );
-  },
-  Title({
-    children,
-    className,
-  }: {
-    children: React.ReactNode;
-    className?: string;
-  }) {
-    return <h2 className={className}>{children}</h2>;
-  },
-  Description({
-    children,
-    className,
-  }: {
-    children: React.ReactNode;
-    className?: string;
-  }) {
-    return <p className={className}>{children}</p>;
-  },
-  Close({
-    "aria-label": ariaLabel,
-    children,
-    className,
-    onClick,
-  }: {
-    "aria-label"?: string;
-    children: React.ReactNode;
-    className?: string;
-    onClick?: () => void;
-  }) {
-    const { onClose } = useContext(DialogContext);
-    return (
-      <button
-        aria-label={ariaLabel ?? "Close"}
-        className={className}
-        onClick={() => {
-          onClick?.();
-          onClose();
-        }}
-        type="button"
-      >
-        {children}
-      </button>
-    );
-  },
-};
-
-function UploadCloud({ className }: { className?: string }) {
-  return (
-    <svg
-      aria-hidden="true"
-      className={className}
-      fill="none"
-      height="16"
-      stroke="currentColor"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      strokeWidth="2"
-      viewBox="0 0 24 24"
-      width="16"
-    >
-      <path d="M4 14.899A7 7 0 1 1 15.71 8h1.79a4.5 4.5 0 0 1 2.5 8.242" />
-      <path d="M12 12v9" />
-      <path d="m16 16-4-4-4 4" />
-    </svg>
-  );
-}
-
-function Search({ className }: { className?: string }) {
-  return (
-    <svg
-      aria-hidden="true"
-      className={className}
-      fill="none"
-      height="16"
-      stroke="currentColor"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      strokeWidth="2"
-      viewBox="0 0 24 24"
-      width="16"
-    >
-      <circle cx="11" cy="11" r="8" />
-      <path d="m21 21-4.3-4.3" />
-    </svg>
-  );
-}
-
-function ShieldAlert({ className }: { className?: string }) {
-  return (
-    <svg
-      aria-hidden="true"
-      className={className}
-      fill="none"
-      height="16"
-      stroke="currentColor"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      strokeWidth="2"
-      viewBox="0 0 24 24"
-      width="16"
-    >
-      <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
-      <path d="M12 8v4" />
-      <path d="M12 16h.01" />
-    </svg>
-  );
-}
-
-function RefreshCw({ className }: { className?: string }) {
-  return (
-    <svg
-      aria-hidden="true"
-      className={className}
-      fill="none"
-      height="16"
-      stroke="currentColor"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      strokeWidth="2"
-      viewBox="0 0 24 24"
-      width="16"
-    >
-      <path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8" />
-      <path d="M21 3v5h-5" />
-      <path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16" />
-      <path d="M3 21v-5h5" />
-    </svg>
-  );
-}
-
-function FileUp({ className }: { className?: string }) {
-  return (
-    <svg
-      aria-hidden="true"
-      className={className}
-      fill="none"
-      height="16"
-      stroke="currentColor"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      strokeWidth="2"
-      viewBox="0 0 24 24"
-      width="16"
-    >
-      <path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z" />
-      <path d="M14 2v4a2 2 0 0 0 2 2h4" />
-      <path d="M12 12v6" />
-      <path d="m15 15-3-3-3 3" />
-    </svg>
-  );
-}
-
-function Download({ className }: { className?: string }) {
-  return (
-    <svg
-      aria-hidden="true"
-      className={className}
-      fill="none"
-      height="16"
-      stroke="currentColor"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      strokeWidth="2"
-      viewBox="0 0 24 24"
-      width="16"
-    >
-      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-      <polyline points="7 10 12 15 17 10" />
-      <line x1="12" x2="12" y1="15" y2="3" />
-    </svg>
-  );
-}
-
-function Eye({ className }: { className?: string }) {
-  return (
-    <svg
-      aria-hidden="true"
-      className={className}
-      fill="none"
-      height="16"
-      stroke="currentColor"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      strokeWidth="2"
-      viewBox="0 0 24 24"
-      width="16"
-    >
-      <path d="M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0" />
-      <circle cx="12" cy="12" r="3" />
-    </svg>
-  );
-}
-
-function Copy({ className }: { className?: string }) {
-  return (
-    <svg
-      aria-hidden="true"
-      className={className}
-      fill="none"
-      height="16"
-      stroke="currentColor"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      strokeWidth="2"
-      viewBox="0 0 24 24"
-      width="16"
-    >
-      <rect height="14" rx="2" ry="2" width="14" x="8" y="8" />
-      <path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2" />
-    </svg>
-  );
-}
-
-function Trash2({ className }: { className?: string }) {
-  return (
-    <svg
-      aria-hidden="true"
-      className={className}
-      fill="none"
-      height="16"
-      stroke="currentColor"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      strokeWidth="2"
-      viewBox="0 0 24 24"
-      width="16"
-    >
-      <path d="M3 6h18" />
-      <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6" />
-      <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2" />
-      <line x1="10" x2="10" y1="11" y2="17" />
-      <line x1="14" x2="14" y1="11" y2="17" />
-    </svg>
-  );
-}
-
-function X({ className }: { className?: string }) {
-  return (
-    <svg
-      aria-hidden="true"
-      className={className}
-      fill="none"
-      height="16"
-      stroke="currentColor"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      strokeWidth="2"
-      viewBox="0 0 24 24"
-      width="16"
-    >
-      <path d="M18 6 6 18M6 6l12 12" />
-    </svg>
-  );
-}
-
-function ChevronLeft({ className }: { className?: string }) {
-  return (
-    <svg
-      aria-hidden="true"
-      className={className}
-      fill="none"
-      height="16"
-      stroke="currentColor"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      strokeWidth="2"
-      viewBox="0 0 24 24"
-      width="16"
-    >
-      <path d="m15 18-6-6 6-6" />
-    </svg>
-  );
-}
-
-function ChevronRight({ className }: { className?: string }) {
-  return (
-    <svg
-      aria-hidden="true"
-      className={className}
-      fill="none"
-      height="16"
-      stroke="currentColor"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      strokeWidth="2"
-      viewBox="0 0 24 24"
-      width="16"
-    >
-      <path d="m9 18 6-6-6-6" />
-    </svg>
-  );
-}
-
-function IconButton({
-  children,
-  disabled = false,
-  label,
-  onClick,
-}: Readonly<{
-  children: React.ReactNode;
-  disabled?: boolean;
-  label: string;
-  onClick: () => void;
-}>) {
-  return (
-    <button
-      aria-label={label}
-      className="grid h-9 w-9 place-items-center rounded-lg border border-white/10 text-text-muted transition hover:border-primary/30 hover:bg-primary-container/10 hover:text-primary disabled:cursor-not-allowed disabled:opacity-40"
-      disabled={disabled}
-      onClick={onClick}
-      type="button"
-    >
-      {children}
-    </button>
-  );
-}
-
 export function DependencyFilesPage() {
+  const queryClient = useQueryClient();
   const { session } = useAuthSession();
   const getWriteToken = useCsrfToken();
   const [q, setQ] = useState("");
@@ -541,105 +154,103 @@ export function DependencyFilesPage() {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [fileError, setFileError] = useState<string | null>(null);
   const [uploadApiError, setUploadApiError] = useState<string | null>(null);
-  const [isUploading, setIsUploading] = useState(false);
   const [deleteTarget, setDeleteTarget] =
     useState<DependencyFileSummary | null>(null);
+  const [previewTarget, setPreviewTarget] =
+    useState<DependencyFileSummary | null>(null);
+  const [copyMessage, setCopyMessage] = useState<string | null>(null);
+  const [copyError, setCopyError] = useState<string | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
-  const [isDeleting, setIsDeleting] = useState(false);
   const [downloadError, setDownloadError] = useState<string | null>(null);
   const [downloadPendingId, setDownloadPendingId] = useState<string | null>(
     null,
   );
-  const [previewTarget, setPreviewTarget] =
-    useState<DependencyFileSummary | null>(null);
-  const [previewResult, setPreviewResult] =
-    useState<DependencyFilePreviewResponse | null>(null);
-  const [isPreviewLoading, setIsPreviewLoading] = useState(false);
-  const [previewError, setPreviewError] = useState<unknown | null>(null);
-  const [previewAttempt, setPreviewAttempt] = useState(0);
-  const [copyMessage, setCopyMessage] = useState<string | null>(null);
-  const [copyError, setCopyError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
-  const [rows, setRows] = useState<DependencyFileSummary[]>([]);
-  const [total, setTotal] = useState(0);
-  const [isLoading, setIsLoading] = useState(true);
-  const [isFetching, setIsFetching] = useState(false);
-  const [listError, setListError] = useState<unknown | null>(null);
-
   const workspaceId = session?.defaultWorkspace.id ?? "";
-
-  const fetchList = useCallback(async () => {
-    if (!workspaceId) return;
-    setIsFetching(true);
-    try {
-      const data = await listDependencyFiles({
+  const listQuery = useQuery({
+    enabled: session !== null,
+    queryKey: ["dependency-files", workspaceId, q, page],
+    queryFn: () =>
+      listDependencyFiles({
         workspaceId,
         page,
         pageSize,
         q,
         sort: "-createdAt",
-      });
-      setRows(data.items);
-      setTotal(data.total);
-      setListError(null);
-    } catch (err) {
-      setListError(err);
-    } finally {
-      setIsLoading(false);
-      setIsFetching(false);
-    }
-  }, [workspaceId, page, q]);
+      }),
+    retry: false,
+  });
+  const previewQuery = useQuery({
+    enabled: session !== null && previewTarget !== null,
+    queryKey: ["dependency-file-preview", workspaceId, previewTarget?.id],
+    queryFn: () => previewDependencyFile(previewTarget?.id ?? "", workspaceId),
+    retry: false,
+  });
 
-  useEffect(() => {
-    if (session !== null) {
-      void fetchList();
-    }
-  }, [session, fetchList]);
+  const rows = listQuery.data?.items ?? [];
+  const total = listQuery.data?.total ?? 0;
+  const totalPages = Math.max(1, Math.ceil(total / pageSize));
+  const isEmpty =
+    !listQuery.isLoading && !listQuery.isError && rows.length === 0;
 
-  useEffect(() => {
-    if (previewTarget === null || !workspaceId) {
-      return;
-    }
-    let cancelled = false;
-    setIsPreviewLoading(true);
-    setPreviewError(null);
-    setPreviewResult(null);
-    void (async () => {
-      try {
-        const result = await previewDependencyFile(
-          previewTarget.id,
-          workspaceId,
-        );
-        if (!cancelled) {
-          setPreviewResult(result);
-        }
-      } catch (error) {
-        if (!cancelled) {
-          setPreviewError(error);
-        }
-      } finally {
-        if (!cancelled) {
-          setIsPreviewLoading(false);
-        }
+  const uploadMutation = useMutation({
+    mutationFn: async () => {
+      if (selectedFile === null) {
+        throw new Error("Select a file before uploading.");
       }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [previewTarget, previewAttempt, workspaceId]);
+      return uploadDependencyFile(
+        selectedFile,
+        workspaceId,
+        await getWriteToken(),
+      );
+    },
+    onSuccess: async () => {
+      setPage(1);
+      await queryClient.invalidateQueries({
+        queryKey: ["dependency-files", workspaceId],
+      });
+      setUploadOpen(false);
+      setSelectedFile(null);
+      setFileError(null);
+      setUploadApiError(null);
+    },
+    onError: (error) => {
+      setUploadApiError(uploadErrorMessage(error));
+    },
+  });
 
-  const previewData =
-    previewTarget !== null && previewResult?.id === previewTarget.id
-      ? previewResult
-      : null;
+  const deleteMutation = useMutation({
+    mutationFn: async (dependencyFileId: string) =>
+      deleteDependencyFile(
+        dependencyFileId,
+        workspaceId,
+        await getWriteToken(),
+      ),
+    onSuccess: async () => {
+      if (rows.length === 1 && page > 1) {
+        setPage((current) => Math.max(1, current - 1));
+      }
+      await queryClient.invalidateQueries({
+        queryKey: ["dependency-files", workspaceId],
+      });
+      setDeleteTarget(null);
+      setDeleteError(null);
+    },
+    onError: (error) => {
+      if (error instanceof ApiError && error.body.code === "FILE_IN_USE") {
+        setDeleteError(
+          "This file is used by a scenario or test plan and cannot be deleted yet.",
+        );
+        return;
+      }
+      setDeleteError(errorMessage(error));
+    },
+  });
 
   if (session === null) {
     return null;
   }
-
-  const totalPages = Math.max(1, Math.ceil(total / pageSize));
-  const isEmpty = !isLoading && !listError && rows.length === 0;
 
   function updateSearch(value: string) {
     setQ(value);
@@ -661,23 +272,13 @@ export function DependencyFilesPage() {
       : "Select a file to upload.";
     setFileError(nextError);
     setUploadApiError(null);
-    if (nextError !== null || !selectedFile) {
+    if (nextError !== null) {
       return;
     }
-    setIsUploading(true);
     try {
-      const token = await getWriteToken();
-      await uploadDependencyFile(selectedFile, workspaceId, token);
-      setPage(1);
-      setUploadOpen(false);
-      setSelectedFile(null);
-      setFileError(null);
-      setUploadApiError(null);
-      await fetchList();
-    } catch (error) {
-      setUploadApiError(uploadErrorMessage(error));
-    } finally {
-      setIsUploading(false);
+      await uploadMutation.mutateAsync();
+    } catch {
+      // Mutation onError owns user-visible API errors.
     }
   }
 
@@ -706,21 +307,6 @@ export function DependencyFilesPage() {
     }
   }
 
-  function openPreview(file: DependencyFileSummary) {
-    setPreviewTarget(file);
-    setCopyMessage(null);
-    setCopyError(null);
-  }
-
-  function closePreview() {
-    setPreviewTarget(null);
-    setPreviewResult(null);
-    setPreviewError(null);
-    setIsPreviewLoading(false);
-    setCopyMessage(null);
-    setCopyError(null);
-  }
-
   async function handleCopyPreview(text: string) {
     setCopyMessage(null);
     setCopyError(null);
@@ -728,34 +314,14 @@ export function DependencyFilesPage() {
     if (result.ok) {
       setCopyMessage("Preview text copied.");
     } else {
-      setCopyError(result.reason ?? "Copy failed.");
+      setCopyError(result.reason);
     }
   }
 
-  async function handleDelete() {
-    if (!deleteTarget) return;
-    setIsDeleting(true);
-    setDeleteError(null);
-    try {
-      const token = await getWriteToken();
-      await deleteDependencyFile(deleteTarget.id, workspaceId, token);
-      if (rows.length === 1 && page > 1) {
-        setPage((current) => Math.max(1, current - 1));
-      }
-      setDeleteTarget(null);
-      await fetchList();
-    } catch (error) {
-      if (error instanceof ApiError && error.body.code === "FILE_IN_USE") {
-        setDeleteError(
-          "This file is used by a scenario or test plan and cannot be deleted yet.",
-        );
-        return;
-      }
-      setDeleteError(errorMessage(error));
-    } finally {
-      setIsDeleting(false);
-    }
-  }
+  const previewData =
+    previewTarget !== null && previewQuery.data?.id === previewTarget.id
+      ? previewQuery.data
+      : null;
 
   return (
     <div className="mx-auto flex max-w-container-max flex-col gap-8">
@@ -806,22 +372,22 @@ export function DependencyFilesPage() {
       ) : null}
 
       <section className="surgepilot-glass overflow-hidden rounded-xl">
-        {isLoading ? (
+        {listQuery.isLoading ? (
           <div className="p-8 text-sm text-text-muted">
             Loading Dependency Files...
           </div>
         ) : null}
-        {listError ? (
+        {listQuery.isError ? (
           <div className="flex flex-col gap-4 p-8 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex gap-3">
               <ShieldAlert className="mt-0.5 h-5 w-5 text-error" />
               <p className="text-sm text-error">
-                {errorMessage(listError)}
+                {errorMessage(listQuery.error)}
               </p>
             </div>
             <button
               className="inline-flex items-center gap-2 rounded-lg border border-white/10 px-3 py-2 text-sm text-text-main"
-              onClick={() => void fetchList()}
+              onClick={() => listQuery.refetch()}
               type="button"
             >
               <RefreshCw className="h-4 w-4" />
@@ -891,7 +457,11 @@ export function DependencyFilesPage() {
                         <div className="flex justify-end gap-2">
                           <IconButton
                             label={`Preview ${file.filename}`}
-                            onClick={() => openPreview(file)}
+                            onClick={() => {
+                              setPreviewTarget(file);
+                              setCopyMessage(null);
+                              setCopyError(null);
+                            }}
                           >
                             <Eye className="h-4 w-4" />
                           </IconButton>
@@ -904,10 +474,7 @@ export function DependencyFilesPage() {
                           </IconButton>
                           <IconButton
                             label={`Delete ${file.filename}`}
-                            onClick={() => {
-                              setDeleteTarget(file);
-                              setDeleteError(null);
-                            }}
+                            onClick={() => setDeleteTarget(file)}
                           >
                             <Trash2 className="h-4 w-4" />
                           </IconButton>
@@ -926,21 +493,19 @@ export function DependencyFilesPage() {
               <div className="flex gap-2">
                 <button
                   className="rounded-lg border border-white/10 px-3 py-2 text-sm text-text-main disabled:cursor-not-allowed disabled:opacity-40"
-                  disabled={page <= 1 || isFetching}
+                  disabled={page <= 1 || listQuery.isFetching}
                   onClick={() => setPage((current) => Math.max(1, current - 1))}
                   type="button"
                 >
-                  <ChevronLeft className="h-4 w-4 inline mr-1" />
                   Previous
                 </button>
                 <button
                   className="rounded-lg border border-white/10 px-3 py-2 text-sm text-text-main disabled:cursor-not-allowed disabled:opacity-40"
-                  disabled={page >= totalPages || isFetching}
+                  disabled={page >= totalPages || listQuery.isFetching}
                   onClick={() => setPage((current) => current + 1)}
                   type="button"
                 >
                   Next
-                  <ChevronRight className="h-4 w-4 inline ml-1" />
                 </button>
               </div>
             </div>
@@ -951,10 +516,7 @@ export function DependencyFilesPage() {
       <Dialog.Root open={uploadOpen} onOpenChange={setUploadOpen}>
         <Dialog.Portal>
           <Dialog.Overlay className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm" />
-          <Dialog.Content
-            aria-label="Upload Dependency File"
-            className="fixed left-1/2 top-1/2 z-50 w-[calc(100vw-2rem)] max-w-lg -translate-x-1/2 -translate-y-1/2 rounded-2xl border border-white/10 bg-surface-container p-6 shadow-2xl"
-          >
+          <Dialog.Content className="fixed left-1/2 top-1/2 z-50 w-[calc(100vw-2rem)] max-w-lg -translate-x-1/2 -translate-y-1/2 rounded-2xl border border-white/10 bg-surface-container p-6 shadow-2xl">
             <div className="flex items-start justify-between gap-4">
               <div>
                 <Dialog.Title className="font-display text-2xl font-semibold text-white">
@@ -965,11 +527,7 @@ export function DependencyFilesPage() {
                   plans in this Workspace.
                 </Dialog.Description>
               </div>
-              <Dialog.Close
-                aria-label="Close"
-                className="rounded-lg p-2 text-secondary transition hover:bg-white/10 hover:text-white"
-                onClick={() => setUploadOpen(false)}
-              >
+              <Dialog.Close className="rounded-lg p-2 text-secondary transition hover:bg-white/10 hover:text-white">
                 <X className="h-4 w-4" />
               </Dialog.Close>
             </div>
@@ -1017,17 +575,16 @@ export function DependencyFilesPage() {
               <div className="flex justify-end gap-3 pt-2">
                 <Dialog.Close
                   className="rounded-lg border border-white/10 px-4 py-2 text-sm text-text-main"
-                  onClick={() => setUploadOpen(false)}
                   type="button"
                 >
                   Cancel
                 </Dialog.Close>
                 <button
                   className="inline-flex items-center justify-center gap-2 rounded-lg bg-primary-container px-5 py-2 font-mono text-[12px] font-bold uppercase tracking-wide text-on-primary transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-60"
-                  disabled={isUploading}
+                  disabled={uploadMutation.isPending}
                   type="submit"
                 >
-                  {isUploading ? "Uploading..." : "Upload"}
+                  {uploadMutation.isPending ? "Uploading..." : "Upload"}
                 </button>
               </div>
             </form>
@@ -1039,16 +596,14 @@ export function DependencyFilesPage() {
         open={previewTarget !== null}
         onOpenChange={(open) => {
           if (!open) {
-            closePreview();
+            setPreviewTarget(null);
+            setCopyMessage(null);
           }
         }}
       >
         <Dialog.Portal>
           <Dialog.Overlay className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm" />
-          <Dialog.Content
-            aria-label={`Preview ${previewTarget?.filename ?? "file"}`}
-            className="fixed inset-y-0 right-0 z-50 flex w-[min(100vw,720px)] flex-col border-l border-white/10 bg-surface-container shadow-2xl"
-          >
+          <Dialog.Content className="fixed inset-y-0 right-0 z-50 flex w-[min(100vw,720px)] flex-col border-l border-white/10 bg-surface-container shadow-2xl">
             <div className="border-b border-white/10 p-6">
               <div className="flex items-start justify-between gap-4">
                 <div className="min-w-0">
@@ -1086,20 +641,20 @@ export function DependencyFilesPage() {
             </div>
 
             <div className="min-h-0 flex-1 overflow-y-auto p-6">
-              {previewTarget !== null && isPreviewLoading ? (
+              {previewTarget !== null && previewQuery.isLoading ? (
                 <p className="text-sm text-text-muted">
                   Loading preview for {previewTarget.filename}...
                 </p>
               ) : null}
 
-              {previewTarget !== null && previewError !== null ? (
+              {previewTarget !== null && previewQuery.isError ? (
                 <div className="space-y-4 rounded-xl border border-error/30 bg-error/10 p-4">
                   <p className="text-sm text-error">
-                    {errorMessage(previewError)}
+                    {errorMessage(previewQuery.error)}
                   </p>
                   <button
                     className="inline-flex items-center gap-2 rounded-lg border border-white/10 px-3 py-2 text-sm text-text-main"
-                    onClick={() => setPreviewAttempt((current) => current + 1)}
+                    onClick={() => void previewQuery.refetch()}
                     type="button"
                   >
                     <RefreshCw className="h-4 w-4" />
@@ -1168,10 +723,7 @@ export function DependencyFilesPage() {
       >
         <Dialog.Portal>
           <Dialog.Overlay className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm" />
-          <Dialog.Content
-            aria-label={`Delete ${deleteTarget?.filename ?? "file"}?`}
-            className="fixed left-1/2 top-1/2 z-50 w-[calc(100vw-2rem)] max-w-md -translate-x-1/2 -translate-y-1/2 rounded-2xl border border-white/10 bg-surface-container p-6 shadow-2xl"
-          >
+          <Dialog.Content className="fixed left-1/2 top-1/2 z-50 w-[calc(100vw-2rem)] max-w-md -translate-x-1/2 -translate-y-1/2 rounded-2xl border border-white/10 bg-surface-container p-6 shadow-2xl">
             <Dialog.Title className="font-display text-2xl font-semibold text-white">
               Delete {deleteTarget?.filename}?
             </Dialog.Title>
@@ -1185,23 +737,48 @@ export function DependencyFilesPage() {
             <div className="mt-6 flex justify-end gap-3">
               <Dialog.Close
                 className="rounded-lg border border-white/10 px-4 py-2 text-sm text-text-main"
-                onClick={() => setDeleteTarget(null)}
                 type="button"
               >
                 Cancel
               </Dialog.Close>
               <button
                 className="rounded-lg bg-error px-5 py-2 font-mono text-[12px] font-bold uppercase tracking-wide text-white disabled:cursor-not-allowed disabled:opacity-60"
-                disabled={isDeleting || deleteTarget === null}
-                onClick={() => void handleDelete()}
+                disabled={deleteMutation.isPending || deleteTarget === null}
+                onClick={() =>
+                  deleteTarget && deleteMutation.mutate(deleteTarget.id)
+                }
                 type="button"
               >
-                {isDeleting ? "Deleting..." : "Delete"}
+                Delete
               </button>
             </div>
           </Dialog.Content>
         </Dialog.Portal>
       </Dialog.Root>
     </div>
+  );
+}
+
+function IconButton({
+  children,
+  disabled = false,
+  label,
+  onClick,
+}: Readonly<{
+  children: React.ReactNode;
+  disabled?: boolean;
+  label: string;
+  onClick: () => void;
+}>) {
+  return (
+    <button
+      aria-label={label}
+      className="grid h-9 w-9 place-items-center rounded-lg border border-white/10 text-text-muted transition hover:border-primary/30 hover:bg-primary-container/10 hover:text-primary disabled:cursor-not-allowed disabled:opacity-40"
+      disabled={disabled}
+      onClick={onClick}
+      type="button"
+    >
+      {children}
+    </button>
   );
 }

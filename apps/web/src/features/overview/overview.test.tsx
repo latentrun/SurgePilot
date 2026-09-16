@@ -103,12 +103,6 @@ function emptyOverview() {
   };
 }
 
-const setupStatus = {
-  needsBootstrap: false,
-  allowSignup: true,
-  hasDefaultWorkspace: true,
-};
-
 function jsonResponse(body: unknown, init: ResponseInit = {}) {
   return new Response(JSON.stringify(body), {
     status: init.status ?? 200,
@@ -127,7 +121,18 @@ function mockFetch(body: unknown, role: "admin" | "user" = "admin") {
     if (url.includes("/api/v1/overview")) return jsonResponse(body);
     if (url.endsWith("/api/v1/admin/setup-status")) {
       return role === "admin"
-        ? jsonResponse(setupStatus)
+        ? jsonResponse({
+            needsBootstrap: false,
+            allowSignup: true,
+            hasDefaultWorkspace: true,
+            storageAvailable: true,
+            loadNodeRuntimeStatus: "artifact_missing",
+            sensitiveStatus: {
+              runnerInternalTokenConfigured: true,
+              sshCredentialEncryptionKeyConfigured: false,
+              minioCredentialsConfigured: true,
+            },
+          })
         : jsonResponse(
             {
               code: "FORBIDDEN",
@@ -137,7 +142,12 @@ function mockFetch(body: unknown, role: "admin" | "user" = "admin") {
             { status: 403 },
           );
     }
-    return jsonResponse(setupStatus);
+    return jsonResponse({
+      needsBootstrap: false,
+      allowSignup: true,
+      hasDefaultWorkspace: true,
+      storageAvailable: true,
+    });
   });
   vi.stubGlobal("fetch", fetchMock);
   return fetchMock;
@@ -185,7 +195,7 @@ describe("P0-08 overview", () => {
     expect(within(row).getByText("Debug")).toBeInTheDocument();
     expect(within(row).getByText("Invalid")).toBeInTheDocument();
     expect(within(row).getByText("SLA Not Evaluated")).toBeInTheDocument();
-    expect(within(row).getByText("N/A")).toBeInTheDocument();
+    expect(within(row).getByText("Unavailable")).toBeInTheDocument();
   });
 
   it("keeps empty states and quick actions P0-scoped", async () => {
@@ -226,7 +236,14 @@ describe("P0-08 overview", () => {
         return Promise.resolve(jsonResponse(authSession("admin")));
       if (url.includes("/api/v1/overview"))
         return new Promise<Response>(() => {});
-      return Promise.resolve(jsonResponse(setupStatus));
+      return Promise.resolve(
+        jsonResponse({
+          needsBootstrap: false,
+          allowSignup: true,
+          hasDefaultWorkspace: true,
+          storageAvailable: true,
+        }),
+      );
     });
     vi.stubGlobal("fetch", pendingFetch);
 
@@ -252,7 +269,12 @@ describe("P0-08 overview", () => {
           { status: 400 },
         );
       }
-      return jsonResponse(setupStatus);
+      return jsonResponse({
+        needsBootstrap: false,
+        allowSignup: true,
+        hasDefaultWorkspace: true,
+        storageAvailable: true,
+      });
     });
     vi.stubGlobal("fetch", errorFetch);
 
@@ -285,7 +307,7 @@ describe("P0-08 overview", () => {
     ).not.toBeInTheDocument();
   });
 
-  it("shows only Setup Status under Admin for Admin users", async () => {
+  it("shows P1 Workspace/Admin links under Admin for Admin users", async () => {
     mockFetch(baseOverview, "admin");
 
     renderAt("/overview");
@@ -298,14 +320,14 @@ describe("P0-08 overview", () => {
       within(navigation).getByRole("link", { name: /setup status/i }),
     ).toHaveAttribute("href", "/admin/setup-status");
     expect(
-      within(navigation).queryByRole("link", { name: /workspaces/i }),
-    ).not.toBeInTheDocument();
+      within(navigation).getByRole("link", { name: /workspaces/i }),
+    ).toHaveAttribute("href", "/admin/workspaces");
     expect(
-      within(navigation).queryByRole("link", { name: /users/i }),
-    ).not.toBeInTheDocument();
+      within(navigation).getByRole("link", { name: /users/i }),
+    ).toHaveAttribute("href", "/admin/users");
     expect(
-      within(navigation).queryByRole("link", { name: /system settings/i }),
-    ).not.toBeInTheDocument();
+      within(navigation).getByRole("link", { name: /system settings/i }),
+    ).toHaveAttribute("href", "/admin/system-settings");
   });
 
   it("renders Admin Setup Status for Admin users only", async () => {
@@ -316,13 +338,10 @@ describe("P0-08 overview", () => {
     expect(
       await screen.findByRole("heading", { name: "Setup Status" }),
     ).toBeInTheDocument();
-    const main = screen.getByRole("main");
-    expect(await within(main).findByText("Available")).toBeInTheDocument();
-    expect(within(main).getByText("Default Workspace")).toBeInTheDocument();
-    expect(within(main).getByText("Local Signup")).toBeInTheDocument();
-    expect(within(main).getByText("Bootstrap")).toBeInTheDocument();
-    expect(within(main).getByText("Enabled")).toBeInTheDocument();
-    expect(within(main).getByText("Completed")).toBeInTheDocument();
+    expect(await screen.findByText("Artifact Storage")).toBeInTheDocument();
+    expect(await screen.findByText("SSH Credential Encryption")).toBeInTheDocument();
+    expect(await screen.findByText("Load Node Runtime")).toBeInTheDocument();
+    expect(await screen.findByText("Artifact missing")).toBeInTheDocument();
     await waitFor(() =>
       expect(
         fetchMock.mock.calls.some(([input]) =>

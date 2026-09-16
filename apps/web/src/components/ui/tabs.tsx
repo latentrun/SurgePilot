@@ -1,68 +1,49 @@
-import { createContext, useContext, useState } from "react";
-import type { ReactNode } from "react";
+import { forwardRef } from "react";
+import * as TabsPrimitive from "@radix-ui/react-tabs";
 
-type TabsContextValue = {
-  value: string;
-  setValue: (value: string) => void;
-};
+import { cn } from "../../utils/cn";
 
-const TabsContext = createContext<TabsContextValue | null>(null);
 
-function useTabs() {
-  const context = useContext(TabsContext);
-  if (!context) throw new Error("Tabs components must be used inside Tabs");
-  return context;
-}
+export const Tabs = TabsPrimitive.Root;
 
-export function Tabs({
-  children,
-  className,
-  defaultValue,
-}: {
-  children: ReactNode;
-  className?: string;
-  defaultValue: string;
-}) {
-  const [value, setValue] = useState(defaultValue);
-  return (
-    <TabsContext.Provider value={{ value, setValue }}>
-      <div className={className}>{children}</div>
-    </TabsContext.Provider>
-  );
-}
+export const TabsList = forwardRef<
+  React.ElementRef<typeof TabsPrimitive.List>,
+  React.ComponentPropsWithoutRef<typeof TabsPrimitive.List>
+>(({ className, ...props }, ref) => (
+  <TabsPrimitive.List
+    className={cn(
+      "flex w-full min-w-max gap-1 border-b border-white/10",
+      className,
+    )}
+    ref={ref}
+    {...props}
+  />
+));
+TabsList.displayName = TabsPrimitive.List.displayName;
 
-export function TabsList({
-  "aria-label": ariaLabel,
-  children,
-}: {
-  "aria-label"?: string;
-  children: ReactNode;
-}) {
-  return (
-    <div aria-label={ariaLabel} className="flex w-full min-w-max gap-1 border-b border-white/10" role="tablist">
-      {children}
-    </div>
-  );
-}
+export const TabsTrigger = forwardRef<
+  React.ElementRef<typeof TabsPrimitive.Trigger>,
+  React.ComponentPropsWithoutRef<typeof TabsPrimitive.Trigger>
+>(({ className, ...props }, ref) => (
+  <TabsPrimitive.Trigger
+    className={cn(
+      "relative whitespace-nowrap px-4 py-3 text-sm font-semibold text-text-muted outline-none transition hover:text-white focus-visible:ring-2 focus-visible:ring-primary/60 data-[state=active]:text-white data-[state=active]:after:absolute data-[state=active]:after:inset-x-3 data-[state=active]:after:bottom-0 data-[state=active]:after:h-0.5 data-[state=active]:after:bg-primary",
+      className,
+    )}
+    ref={ref}
+    {...props}
+  />
+));
+TabsTrigger.displayName = TabsPrimitive.Trigger.displayName;
 
-export function TabsTrigger({ children, value }: { children: ReactNode; value: string }) {
-  const tabs = useTabs();
-  const active = tabs.value === value;
-  return (
-    <button
-      aria-selected={active}
-      className={`relative whitespace-nowrap px-4 py-3 text-sm font-semibold outline-none transition hover:text-white focus-visible:ring-2 focus-visible:ring-primary/60 ${active ? "text-white after:absolute after:inset-x-3 after:bottom-0 after:h-0.5 after:bg-primary" : "text-text-muted"}`}
-      onClick={() => tabs.setValue(value)}
-      role="tab"
-      type="button"
-    >
-      {children}
-    </button>
-  );
-}
-
-export function TabsContent({ children, value }: { children: ReactNode; value: string }) {
-  const tabs = useTabs();
-  if (tabs.value !== value) return null;
-  return <div role="tabpanel">{children}</div>;
-}
+export const TabsContent = forwardRef<
+  React.ElementRef<typeof TabsPrimitive.Content>,
+  React.ComponentPropsWithoutRef<typeof TabsPrimitive.Content>
+>(({ className, ...props }, ref) => (
+  <TabsPrimitive.Content
+    className={cn("outline-none focus-visible:ring-2 focus-visible:ring-primary/60", className)}
+    ref={ref}
+    {...props}
+  />
+));
+TabsContent.displayName = TabsPrimitive.Content.displayName;

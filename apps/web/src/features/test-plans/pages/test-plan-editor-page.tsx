@@ -1,109 +1,56 @@
-import { useEffect, useMemo, useState } from "react";
-
+import { useMutation, useQuery } from "@tanstack/react-query";
+import * as Dialog from "@radix-ui/react-dialog";
+import { Pencil } from "lucide-react";
+import { Link, useBlocker, useNavigate, useParams } from "react-router-dom";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
-  ApiError,
-  cloneTestPlan,
   createRun,
-  deleteTestPlan,
   getCsrfToken,
-  getTestPlan,
   getTestPlanExecutionPreview,
+  getTestPlan,
   listEnvGroups,
   listLoadNodes,
   listScenarios,
   patchTestPlan,
-  type EnvGroupSummary,
+  type ApiError,
   type ExecutionPreviewResponse,
-  type LoadNodeSummary,
-  type ScenarioSummary,
+  type RunResourceRequest,
   type TestPlanDetail,
+  type TestPlanScenarioItem,
   type TestPlanSlaRule,
 } from "../../../app/api-client";
 import { useAuthSession } from "../../../app/auth-session";
 import { useWorkspaceSwitchGuard } from "../../../app/workspace-switch-guard";
-import { testPlanCopy } from "../copy";
+import { IconActionButton } from "../../../components/icon-action";
 import {
   canDebugSavedPlan,
   canRunDraft,
   defaultLoadSettings,
   expectedConcurrency,
   isSupportedResponseCodePattern,
-  loadSettingsProblem,
+  needsEnabledStateMigration,
   newScenarioItem,
   newSlaRule,
-  needsEnabledStateMigration,
-  tagText,
+  tagText as formatTagText,
   tagsFromText,
   toPatchPayload,
   validateTestPlanDraft,
-  type LoadSettingsProblemKey,
 } from "../model";
+import { testPlanCopy } from "../copy";
 
-function currentTestPlanId() {
-  const segments = window.location.pathname.split("/").filter(Boolean);
-  return segments[1] ?? "";
-}
-
-function useCsrfToken() {
+function useWriteToken() {
   const { csrfToken } = useAuthSession();
   return async () => csrfToken ?? (await getCsrfToken()).csrfToken;
 }
 
-function cn(...inputs: (string | boolean | null | undefined)[]) {
-  return inputs.filter(Boolean).join(" ");
-}
-
-function inputClass(hasError: boolean) {
-  return cn(
-    "h-10 w-full rounded-lg border bg-surface-container px-3 text-sm text-text-main outline-none transition focus:border-primary/50",
-    hasError ? "border-error/60" : "border-white/10",
-  );
-}
-
-function textInputClass(extra = "") {
-  return cn(
-    "w-full rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-sm text-text-main outline-none transition focus:border-primary/50",
-    extra,
-  );
-}
-
-function navigateTo(path: string) {
-  window.history.replaceState({}, "", path);
-  window.dispatchEvent(new PopStateEvent("popstate"));
-}
-
-function formatDate(value: string) {
-  return new Intl.DateTimeFormat("en", {
-    dateStyle: "medium",
-    timeStyle: "short",
-  }).format(new Date(value));
-}
-
 function errorMessage(error: unknown) {
-  const code = (error as ApiError | undefined)?.body?.code;
-  if (code === "TEST_PLAN_REVISION_CONFLICT") {
+  const body = (error as ApiError | undefined)?.body;
+  if (body?.code === "TEST_PLAN_REVISION_CONFLICT")
     return testPlanCopy.staleRevision;
-  }
-  if (code === "LOAD_NODE_BUSY") {
-    return testPlanCopy.nodeBusy;
-  }
-  if (code === "TEST_PLAN_NOT_RUNNABLE") {
-    return testPlanCopy.notRunnable;
-  }
-  if (code === "VALIDATION_ERROR") {
-    return testPlanCopy.validationError;
-  }
-  if (code === "RESOURCE_NOT_FOUND") {
-    return "The Test Plan does not exist or is no longer visible.";
-  }
+  if (body?.code === "LOAD_NODE_BUSY") return testPlanCopy.nodeBusy;
+  if (body?.code === "TEST_PLAN_NOT_RUNNABLE") return testPlanCopy.notRunnable;
+  if (body?.code === "VALIDATION_ERROR") return testPlanCopy.validationError;
   return testPlanCopy.actionFailed;
-}
-
-function isRevisionConflict(error: unknown) {
-  return (
-    (error as ApiError | undefined)?.body?.code ===
-    "TEST_PLAN_REVISION_CONFLICT"
-  );
 }
 
 function previewErrorMessage(error: unknown, detail: TestPlanDetail | null) {
@@ -120,210 +67,66 @@ function previewErrorMessage(error: unknown, detail: TestPlanDetail | null) {
   return testPlanCopy.previewFailed;
 }
 
-function lifecycleErrorMessage(error: unknown) {
-  const code = (error as ApiError | undefined)?.body?.code;
-  if (code === "RESOURCE_IN_USE") {
-    return testPlanCopy.resourceInUse;
-  }
-  if (code === "WORKSPACE_ACCESS_DENIED") {
-    return "You do not have access to this workspace.";
-  }
-  return errorMessage(error);
+function sectionClass() {
+  return "rounded-2xl border border-white/10 bg-black/10 p-4";
+}
+
+function miniButton(tone: "neutral" | "primary" | "danger" = "neutral") {
+  if (tone === "primary")
+    return "rounded-lg border border-primary/40 bg-primary/10 px-3 py-1.5 text-xs text-primary disabled:opacity-40";
+  if (tone === "danger")
+    return "rounded-lg border border-error/30 px-3 py-1.5 text-xs text-error disabled:opacity-40";
+  return "rounded-lg border border-white/10 px-3 py-1.5 text-xs text-white disabled:opacity-40";
+}
+
+function helpDisclosure(label: string, body: string) {
+  return (
+    <details className="group relative inline-block text-left">
+      <summary
+        aria-label={label}
+        className="grid h-6 w-6 cursor-pointer list-none place-items-center rounded-full border border-white/10 bg-white/5 text-xs font-semibold text-secondary transition hover:border-primary/40 hover:text-primary [&::-webkit-details-marker]:hidden"
+      >
+        ?
+      </summary>
+      <div className="absolute right-0 z-20 mt-2 w-72 rounded-xl border border-white/10 bg-surface-container p-3 text-xs leading-5 text-text-muted shadow-2xl">
+        {body}
+      </div>
+    </details>
+  );
 }
 
 function parseOptionalNumber(value: string) {
   if (value.trim() === "") return null;
-  const parsed = Number(value);
-  return Number.isFinite(parsed) ? parsed : null;
+  return Number(value);
 }
 
-function navigateToLoadNodes() {
-  window.history.replaceState({}, "", "/resources/load-nodes");
-  window.dispatchEvent(new PopStateEvent("popstate"));
+function standardResourceRequest(
+  detail: TestPlanDetail,
+  nonIdleNodeIds: ReadonlySet<string> = new Set(),
+): RunResourceRequest | undefined {
+  const mode = detail.resource.mode ?? "manual";
+  const concurrencyPerNode = expectedConcurrency(detail) || undefined;
+  if (mode === "auto") {
+    return {
+      mode: "auto",
+      nodeCount: detail.resource.nodeCount ?? 1,
+      concurrencyPerNode,
+    };
+  }
+  const selectedNodeIds =
+    detail.resource.selectedNodeIds && detail.resource.selectedNodeIds.length
+      ? detail.resource.selectedNodeIds
+      : detail.resource.selectedNodeId
+        ? [detail.resource.selectedNodeId]
+        : [];
+  return {
+    mode: "manual",
+    selectedNodeIds: selectedNodeIds.filter(
+      (nodeId) => !nonIdleNodeIds.has(nodeId),
+    ),
+    concurrencyPerNode,
+  };
 }
-
-function Field({
-  children,
-  error,
-  label,
-}: Readonly<{ children: React.ReactNode; error?: string; label: string }>) {
-  return (
-    <label className="block">
-      <span className="mb-1.5 block text-sm font-medium text-text-main">
-        {label}
-      </span>
-      {children}
-      {error ? (
-        <span className="mt-1.5 block text-xs text-error">{error}</span>
-      ) : null}
-    </label>
-  );
-}
-
-function FieldSection({
-  title,
-  description,
-  action,
-  children,
-}: {
-  title: string;
-  description?: string;
-  action?: React.ReactNode;
-  children: React.ReactNode;
-}) {
-  return (
-    <section className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
-      <div className="mb-3 flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h3 className="font-semibold text-white">{title}</h3>
-          {description ? (
-            <p className="mt-1 text-sm text-text-muted">{description}</p>
-          ) : null}
-        </div>
-        {action}
-      </div>
-      {children}
-    </section>
-  );
-}
-
-function MiniButton({
-  children,
-  onClick,
-  tone = "neutral",
-  disabled = false,
-}: {
-  children: React.ReactNode;
-  onClick: () => void;
-  tone?: "neutral" | "danger" | "primary";
-  disabled?: boolean;
-}) {
-  const toneClass =
-    tone === "primary"
-      ? "border-primary/40 bg-primary/10 text-primary"
-      : tone === "danger"
-        ? "border-error/30 text-error"
-        : "border-white/10 text-white";
-  return (
-    <button
-      className={cn(
-        "rounded-lg border px-3 py-1.5 text-xs transition hover:bg-white/5",
-        toneClass,
-        disabled && "cursor-not-allowed opacity-40",
-      )}
-      disabled={disabled}
-      onClick={onClick}
-      type="button"
-    >
-      {children}
-    </button>
-  );
-}
-
-function Plus({ className }: { className?: string }) {
-  return (
-    <svg
-      aria-hidden="true"
-      className={className}
-      fill="none"
-      height="16"
-      stroke="currentColor"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      strokeWidth="2"
-      viewBox="0 0 24 24"
-      width="16"
-    >
-      <path d="M5 12h14M12 5v14" />
-    </svg>
-  );
-}
-
-function Pencil({ className }: { className?: string }) {
-  return (
-    <svg
-      aria-hidden="true"
-      className={className}
-      fill="none"
-      height="16"
-      stroke="currentColor"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      strokeWidth="2"
-      viewBox="0 0 24 24"
-      width="16"
-    >
-      <path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z" />
-      <path d="m15 5 4 4" />
-    </svg>
-  );
-}
-
-function Copy({ className }: { className?: string }) {
-  return (
-    <svg
-      aria-hidden="true"
-      className={className}
-      fill="none"
-      height="16"
-      stroke="currentColor"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      strokeWidth="2"
-      viewBox="0 0 24 24"
-      width="16"
-    >
-      <rect height="14" rx="2" ry="2" width="14" x="8" y="8" />
-      <path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2" />
-    </svg>
-  );
-}
-
-function Archive({ className }: { className?: string }) {
-  return (
-    <svg
-      aria-hidden="true"
-      className={className}
-      fill="none"
-      height="16"
-      stroke="currentColor"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      strokeWidth="2"
-      viewBox="0 0 24 24"
-      width="16"
-    >
-      <rect height="5" rx="1" width="20" x="2" y="3" />
-      <path d="M4 8v11a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8" />
-      <path d="M10 12h4" />
-    </svg>
-  );
-}
-
-const LOAD_SETTING_LABELS: Array<[string, keyof typeof defaultLoadSettings]> =
-  [
-    ["Concurrency / Node", "concurrencyPerNode"],
-    ["Ramp-up", "rampUpSeconds"],
-    ["Hold-for", "holdForSeconds"],
-    ["Iterations", "iterations"],
-    ["Target RPS", "targetRps"],
-    ["Steps", "steps"],
-    ["Delay", "delaySeconds"],
-  ];
-
-const NULLABLE_LOAD_SETTING_KEYS = new Set([
-  "holdForSeconds",
-  "iterations",
-  "targetRps",
-  "steps",
-]);
-
-const loadProblemCopy: Record<LoadSettingsProblemKey, string> = {
-  termination: "Choose hold-for or iterations for this Scenario item.",
-  stepsRequireRampUp: "Steps require ramp-up for this Scenario item.",
-  targetRpsRequiresHoldFor:
-    "Target RPS requires hold-for for this Scenario item.",
-};
 
 const slaMetricOptions = [
   {
@@ -444,1125 +247,982 @@ function subjectForMetric(metric: SlaMetricValue, pattern = "500") {
   return `rc${normalized}`;
 }
 
-export function TestPlanEditorPage() {
-  const { session } = useAuthSession();
-  const getWriteToken = useCsrfToken();
-  const workspaceId = session?.defaultWorkspace.id ?? "";
-  const planId = currentTestPlanId();
+function normalizeDetail(detail: TestPlanDetail): TestPlanDetail {
+  return {
+    ...detail,
+    scenarioItems: detail.scenarioItems.map((item, index) => ({
+      ...item,
+      enabled: true,
+      order: index,
+      loadSettings: item.loadSettings ?? { ...defaultLoadSettings },
+    })),
+    slaRules: detail.slaRules.map((rule) => ({ ...rule, enabled: true })),
+  };
+}
 
+export function TestPlanEditorPage() {
+  const { planId = "" } = useParams();
+  const navigate = useNavigate();
+  const { session } = useAuthSession();
+  const workspaceId = session?.defaultWorkspace.id ?? "";
+  const getWriteToken = useWriteToken();
   const [draft, setDraft] = useState<TestPlanDetail | null>(null);
-  const [tagTextState, setTagTextState] = useState("");
+  const [tagText, setTagText] = useState("");
   const [dirty, setDirty] = useState(false);
   const [renamingName, setRenamingName] = useState(false);
-  const [isLoading, setIsLoading] = useState(true);
-  const [isReloading, setIsReloading] = useState(false);
-  const [loadError, setLoadError] = useState<string | null>(null);
-  const [actionError, setActionError] = useState<string | null>(null);
-  const [needsReload, setNeedsReload] = useState(false);
-  const [isSaving, setIsSaving] = useState(false);
-  const [runningType, setRunningType] = useState<"debug" | "standard" | null>(
-    null,
-  );
-  const [resourceRunType, setResourceRunType] = useState<
-    "debug" | "standard"
-  >("standard");
-  const [pendingConfirmation, setPendingConfirmation] = useState<
-    "standard" | null
-  >(null);
+  const [error, setError] = useState<string | null>(null);
+  const [runError, setRunError] = useState<string | null>(null);
   const [previewRunType, setPreviewRunType] = useState<"debug" | "standard">(
     "debug",
   );
   const [executionPreview, setExecutionPreview] =
     useState<ExecutionPreviewResponse | null>(null);
   const [previewError, setPreviewError] = useState<string | null>(null);
-  const [isPreviewing, setIsPreviewing] = useState(false);
-  const [isCloning, setIsCloning] = useState(false);
-  const [isArchiving, setIsArchiving] = useState(false);
-  const [archiveOpen, setArchiveOpen] = useState(false);
-
-  const [envGroups, setEnvGroups] = useState<EnvGroupSummary[]>([]);
-  const [scenarios, setScenarios] = useState<ScenarioSummary[]>([]);
-  const [nodes, setNodes] = useState<LoadNodeSummary[]>([]);
-  const [isLoadingNodes, setIsLoadingNodes] = useState(false);
-
-  const fetchPlan = useMemo(
-    () => async () => {
-      if (!workspaceId || !planId) return;
-      setIsLoading(true);
-      setLoadError(null);
-      try {
-        const data = await getTestPlan(planId, workspaceId);
-        const migrated = needsEnabledStateMigration(data);
-        const normalized = normalizeDetail(data);
-        setDraft(normalized);
-        setTagTextState(tagText(normalized.tags));
-        setDirty(migrated);
-        setRenamingName(false);
-        setActionError(null);
-        setNeedsReload(false);
-        setExecutionPreview(null);
-        setPreviewError(null);
-      } catch (error) {
-        setLoadError(errorMessage(error));
-      } finally {
-        setIsLoading(false);
-      }
-    },
-    [planId, workspaceId],
+  const [pendingConfirmation, setPendingConfirmation] = useState<
+    "standard" | "debug" | null
+  >(null);
+  const [nodePickerOpen, setNodePickerOpen] = useState(false);
+  const bypassNavigationBlockRef = useRef(false);
+  const dirtyRef = useRef(false);
+  const blocker = useBlocker(
+    ({ currentLocation, nextLocation }) =>
+      dirty &&
+      !bypassNavigationBlockRef.current &&
+      currentLocation.pathname !== nextLocation.pathname,
   );
-
-  useEffect(() => {
-    if (session !== null) {
-      void fetchPlan();
-    }
-  }, [session, fetchPlan]);
-
-  useEffect(() => {
-    if (!workspaceId) return;
-    let active = true;
-    listEnvGroups({ workspaceId, pageSize: 100, sort: "name" })
-      .then((data) => {
-        if (active) setEnvGroups(data.items);
-      })
-      .catch(() => {
-        if (active) setEnvGroups([]);
-      });
-    listScenarios({ workspaceId, pageSize: 100, sort: "name" })
-      .then((data) => {
-        if (active) setScenarios(data.items);
-      })
-      .catch(() => {
-        if (active) setScenarios([]);
-      });
-    return () => {
-      active = false;
-    };
-  }, [workspaceId]);
-
-  const fetchNodes = useMemo(
-    () => async () => {
-      if (!workspaceId) return;
-      setIsLoadingNodes(true);
-      try {
-        const data = await listLoadNodes({
-          workspaceId,
-          limit: 100,
-          offset: 0,
-          sort: "host",
-        });
-        setNodes(data.items);
-      } catch {
-        setNodes([]);
-      } finally {
-        setIsLoadingNodes(false);
-      }
-    },
-    [workspaceId],
-  );
-
-  useEffect(() => {
-    if (workspaceId) {
-      void fetchNodes();
-    }
-  }, [workspaceId, fetchNodes]);
-
-  useEffect(() => {
-    if (!dirty) return undefined;
-    const handler = (event: BeforeUnloadEvent) => {
-      event.preventDefault();
-      event.returnValue = "";
-    };
-    window.addEventListener("beforeunload", handler);
-    return () => window.removeEventListener("beforeunload", handler);
-  }, [dirty]);
-
   const workspaceSwitchGuard = useMemo(
     () => ({
       dirty,
       safePath: "/test-plans",
       onAbandon: () => {
+        bypassNavigationBlockRef.current = true;
         setDirty(false);
-        setActionError(null);
-        setNeedsReload(false);
+        setError(null);
+        setRunError(null);
         setPendingConfirmation(null);
       },
     }),
     [dirty],
   );
   useWorkspaceSwitchGuard(workspaceSwitchGuard);
+  useEffect(() => {
+    if (blocker.state === "blocked") {
+      if (window.confirm(testPlanCopy.unsavedPrompt)) {
+        bypassNavigationBlockRef.current = true;
+        blocker.proceed();
+      } else {
+        blocker.reset();
+      }
+    }
+  }, [blocker]);
 
-  function normalizeDetail(detail: TestPlanDetail): TestPlanDetail {
-    return {
-      ...detail,
-      scenarioItems: detail.scenarioItems.map((item, index) => ({
-        ...item,
-        enabled: true,
-        order: index,
-        loadSettings: item.loadSettings ?? { ...defaultLoadSettings },
-      })),
-      slaRules: detail.slaRules.map((rule) => ({ ...rule, enabled: true })),
-    };
-  }
+  const planQuery = useQuery({
+    enabled: Boolean(workspaceId && planId),
+    queryKey: ["test-plan", workspaceId, planId],
+    queryFn: () => getTestPlan(planId, workspaceId),
+    retry: false,
+  });
+  const envQuery = useQuery({
+    enabled: Boolean(workspaceId),
+    queryKey: ["env-groups", workspaceId, "test-plan-editor"],
+    queryFn: () => listEnvGroups({ workspaceId, pageSize: 100, sort: "name" }),
+  });
+  const scenarioQuery = useQuery({
+    enabled: Boolean(workspaceId),
+    queryKey: ["scenarios", workspaceId, "test-plan-picker"],
+    queryFn: () => listScenarios({ workspaceId, pageSize: 100, sort: "name" }),
+  });
+  const nodeQuery = useQuery({
+    enabled: Boolean(workspaceId),
+    queryKey: ["load-nodes", workspaceId, "test-plan-idle"],
+    queryFn: () =>
+      listLoadNodes({
+        workspaceId,
+        status: "idle",
+        limit: 100,
+        offset: 0,
+        sort: "host",
+      }),
+  });
+  const nonIdleNodeIds = useMemo(
+    () =>
+      new Set(
+        nodeQuery.data?.items
+          .filter((node) => node.status !== "idle")
+          .map((node) => node.id) ?? [],
+      ),
+    [nodeQuery.data?.items],
+  );
+  const manualNodeCandidates = useMemo(() => {
+    const poolType = draft?.resource.poolType;
+    return (
+      nodeQuery.data?.items.filter((node) => {
+        if (node.status !== "idle") return false;
+        if (poolType === "public") return node.scope === "public";
+        if (poolType === "private") return node.scope === "workspace";
+        return true;
+      }) ?? []
+    );
+  }, [draft?.resource.poolType, nodeQuery.data?.items]);
+  const selectedManualNodeIds = useMemo(() => {
+    if (!draft) return [];
+    return draft.resource.selectedNodeIds?.length
+      ? draft.resource.selectedNodeIds
+      : draft.resource.selectedNodeId
+        ? [draft.resource.selectedNodeId]
+        : [];
+  }, [draft]);
+  const selectedManualNodeCount = selectedManualNodeIds.length;
 
-  function updateDraft(updater: (current: TestPlanDetail) => TestPlanDetail) {
+  useEffect(() => {
+    dirtyRef.current = dirty;
+  }, [dirty]);
+
+  useEffect(() => {
+    if (planQuery.data) {
+      if (dirtyRef.current) return;
+      const next = normalizeDetail(planQuery.data);
+      setDraft(next);
+      setTagText(formatTagText(next.tags));
+      setDirty(needsEnabledStateMigration(planQuery.data));
+      setRenamingName(false);
+      setError(null);
+      setRunError(null);
+      setExecutionPreview(null);
+      setPreviewError(null);
+    }
+  }, [planQuery.data]);
+  const updateDraft = (
+    updater: (current: TestPlanDetail) => TestPlanDetail,
+  ) => {
     setDraft((current) => {
       if (!current) return current;
-      return normalizeDetail(updater(current));
+      const next = updater(current);
+      return normalizeDetail(next);
     });
     setDirty(true);
-    setNeedsReload(false);
     clearExecutionPreview();
-  }
-
+  };
   function clearExecutionPreview() {
     setExecutionPreview(null);
     setPreviewError(null);
   }
 
-  const validationErrors = useMemo(
-    () => validateTestPlanDraft(draft),
-    [draft],
-  );
-  const localExpectedConcurrency = expectedConcurrency(draft);
-  const canSave =
-    dirty && !isSaving && validationErrors.length === 0 && draft !== null;
-
-  const draftCanDebug =
-    draft !== null &&
-    (dirty ? canRunDraft(draft) : canDebugSavedPlan(draft));
-  const draftCanRunStandard =
-    draft !== null && (dirty ? canRunDraft(draft) : draft.runnable);
-
-  const poolType = draft?.resource.poolType ?? null;
-  const resourceMode = draft?.resource.mode ?? "manual";
-  const selectedNodeIds = draft?.resource.selectedNodeIds?.length
-    ? draft.resource.selectedNodeIds
-    : draft?.resource.selectedNodeId
-      ? [draft.resource.selectedNodeId]
-      : [];
-  const idleCandidates = useMemo(() => {
-    const pool = poolType;
-    return nodes.filter((node) => {
-      if (node.status !== "idle") return false;
-      if (pool === "public") return node.scope === "public";
-      if (pool === "private") return node.scope === "workspace";
-      return false;
-    });
-  }, [poolType, nodes]);
-  function standardResourceRequest(current: TestPlanDetail) {
-    const mode = current.resource.mode ?? "manual";
-    return mode === "auto"
-      ? {
-          mode: "auto" as const,
-          nodeCount: current.resource.nodeCount ?? 1,
-          concurrencyPerNode: expectedConcurrency(current) || null,
-        }
-      : {
-          mode: "manual" as const,
-          selectedNodeIds: current.resource.selectedNodeIds?.length
-            ? current.resource.selectedNodeIds
-            : current.resource.selectedNodeId
-              ? [current.resource.selectedNodeId]
-              : [],
-          concurrencyPerNode: expectedConcurrency(current) || null,
-        };
-  }
-
-  async function handlePreview() {
-    if (!draft || dirty) return;
-    setIsPreviewing(true);
-    setPreviewError(null);
-    try {
-      const preview = await getTestPlanExecutionPreview({
-        testPlanId: draft.id,
+  const saveMutation = useMutation({
+    mutationFn: async (next: TestPlanDetail) =>
+      patchTestPlan(
+        planId,
+        toPatchPayload(next),
         workspaceId,
-        runType: previewRunType,
-      });
-      setExecutionPreview(preview);
-    } catch (error) {
-      setExecutionPreview(null);
-      setPreviewError(previewErrorMessage(error, draft));
-    } finally {
-      setIsPreviewing(false);
-    }
-  }
-
-  async function handleSave(): Promise<TestPlanDetail | null> {
-    if (!draft) return null;
-    if (validationErrors.length > 0) {
-      setActionError(testPlanCopy.validationError);
-      return null;
-    }
-    setIsSaving(true);
-    setActionError(null);
-    setNeedsReload(false);
-    try {
-      const token = await getWriteToken();
-      const updated = await patchTestPlan(
-        draft.id,
-        toPatchPayload(draft),
-        workspaceId,
-        token,
-      );
+        await getWriteToken(),
+      ),
+    onSuccess: (updated) => {
       const normalized = normalizeDetail(updated);
       setDraft(normalized);
-      setTagTextState(tagText(normalized.tags));
+      setTagText(formatTagText(normalized.tags));
       setDirty(false);
       setRenamingName(false);
+      setError(null);
       clearExecutionPreview();
-      return normalized;
-    } catch (error) {
-      setActionError(errorMessage(error));
-      if (isRevisionConflict(error)) {
-        setNeedsReload(true);
-      }
-      return null;
-    } finally {
-      setIsSaving(false);
-    }
-  }
+    },
+    onError: (err) => setError(errorMessage(err)),
+  });
 
-  async function handleRun(
-    runType: "debug" | "standard",
-    confirmHighConcurrency = false,
-  ) {
-    if (!draft) return;
-    if (validationErrors.length > 0) {
-      setActionError(testPlanCopy.validationError);
-      return;
-    }
-    setRunningType(runType);
-    setActionError(null);
-    setNeedsReload(false);
-    try {
-      const saved = dirty ? await handleSave() : draft;
-      if (!saved) return;
-      if (runType === "standard" ? !saved.runnable : !canDebugSavedPlan(saved)) {
-        setActionError(testPlanCopy.notRunnable);
-        return;
-      }
-      const token = await getWriteToken();
-      const run = await createRun(
+  const runMutation = useMutation({
+    mutationFn: async ({
+      next,
+      runType,
+      confirmHighConcurrency,
+    }: {
+      next: TestPlanDetail;
+      runType: "standard" | "debug";
+      confirmHighConcurrency: boolean;
+    }) =>
+      createRun(
         {
           runType,
           sourceType: "test_plan",
-          sourceId: saved.id,
-          expectedSourceRevision: saved.revision,
+          sourceId: next.id,
+          expectedSourceRevision: next.revision,
           confirmHighConcurrency,
           resourceRequest:
-            runType === "standard" ? standardResourceRequest(saved) : undefined,
+            runType === "standard"
+              ? standardResourceRequest(next, nonIdleNodeIds)
+              : undefined,
         },
         workspaceId,
-        token,
-      );
-      setDirty(false);
-      navigateTo(`/runs/${run.id}`);
-    } catch (error) {
-      const code = (error as ApiError | undefined)?.body?.code;
+        await getWriteToken(),
+      ),
+    onSuccess: (run) => {
+      bypassNavigationBlockRef.current = true;
+      navigate(`/runs/${run.id}`);
+    },
+    onError: (err, variables) => {
+      const apiError = err as ApiError;
       if (
-        code === "LOAD_SOFT_LIMIT_CONFIRMATION_REQUIRED" &&
-        runType === "standard"
+        apiError.body?.code === "LOAD_SOFT_LIMIT_CONFIRMATION_REQUIRED" &&
+        variables.runType === "standard"
       ) {
         setPendingConfirmation("standard");
         return;
       }
-      if (code === "LOAD_NODE_BUSY") {
-        void fetchNodes();
-      }
-      setActionError(errorMessage(error));
-      if (isRevisionConflict(error)) {
-        setNeedsReload(true);
-      }
-    } finally {
-      setRunningType(null);
-    }
-  }
+      if (apiError.body?.code === "LOAD_NODE_BUSY") void nodeQuery.refetch();
+      setRunError(errorMessage(err));
+    },
+  });
+  const previewMutation = useMutation({
+    mutationFn: async () =>
+      getTestPlanExecutionPreview({
+        testPlanId: planId,
+        workspaceId,
+        runType: previewRunType,
+      }),
+    onSuccess: (preview) => {
+      setExecutionPreview(preview);
+      setPreviewError(null);
+    },
+    onError: (error) => {
+      setExecutionPreview(null);
+      setPreviewError(previewErrorMessage(error, draft));
+    },
+  });
 
-  async function handleReload() {
-    setIsReloading(true);
-    setActionError(null);
-    setNeedsReload(false);
-    try {
-      await fetchPlan();
-    } finally {
-      setIsReloading(false);
-    }
-  }
-
-  async function handleClone() {
+  const saveCurrent = async () => {
+    if (!draft) return null;
+    if (validationErrors.length > 0) return null;
+    if (!dirty) return draft;
+    return normalizeDetail(await saveMutation.mutateAsync(draft));
+  };
+  const saveDraft = () => {
     if (!draft) return;
-    setIsCloning(true);
-    setActionError(null);
+    if (validationErrors.length > 0) return;
+    saveMutation.mutate(draft);
+  };
+
+  const runWith = async (
+    runType: "standard" | "debug",
+    confirmHighConcurrency = false,
+  ) => {
     try {
-      const token = await getWriteToken();
-      const cloned = await cloneTestPlan(draft.id, {}, workspaceId, token);
-      setDirty(false);
-      navigateTo(`/test-plans/${cloned.id}`);
-    } catch (error) {
-      setActionError(lifecycleErrorMessage(error));
-    } finally {
-      setIsCloning(false);
-    }
-  }
-
-  async function handleArchive() {
-    if (!draft) return;
-    setIsArchiving(true);
-    setActionError(null);
-    try {
-      const token = await getWriteToken();
-      await deleteTestPlan(draft.id, workspaceId, token);
-      setDirty(false);
-      setArchiveOpen(false);
-      navigateTo("/test-plans");
-    } catch (error) {
-      setActionError(lifecycleErrorMessage(error));
-    } finally {
-      setIsArchiving(false);
-    }
-  }
-
-  function addScenario() {
-    const scenario = scenarios[0];
-    if (!scenario || !draft) return;
-    updateDraft((current) => ({
-      ...current,
-      scenarioItems: [
-        ...current.scenarioItems,
-        newScenarioItem(scenario),
-      ],
-    }));
-  }
-
-  function changeScenarioItemScenario(itemId: string, scenarioId: string) {
-    const scenario = scenarios.find((row) => row.id === scenarioId);
-    if (!scenario) return;
-    updateDraft((current) => ({
-      ...current,
-      scenarioItems: current.scenarioItems.map((row) =>
-        row.id === itemId
-          ? {
-              ...row,
-              scenarioId: scenario.id,
-              scenarioName: scenario.name,
-              scenarioRevision: scenario.revision,
-              enabledStepCount: scenario.enabledStepCount,
-              updatedAt: scenario.updatedAt,
-            }
-          : row,
-      ),
-    }));
-  }
-
-  function moveScenarioItem(itemId: string, direction: -1 | 1) {
-    updateDraft((current) => {
-      const rows = [...current.scenarioItems];
-      const index = rows.findIndex((row) => row.id === itemId);
-      const target = index + direction;
-      if (index < 0 || target < 0 || target >= rows.length) {
-        return current;
+      const saved = await saveCurrent();
+      if (!saved) return;
+      if (
+        runType === "standard" ? !saved.runnable : !canDebugSavedPlan(saved)
+      ) {
+        setRunError(testPlanCopy.notRunnable);
+        return;
       }
-      [rows[index], rows[target]] = [rows[target], rows[index]];
-      return { ...current, scenarioItems: rows };
-    });
-  }
+      await runMutation.mutateAsync({
+        next: saved,
+        runType,
+        confirmHighConcurrency,
+      });
+    } catch {
+      // React Query onError handlers surface actionable feedback; event handlers must not leak rejected promises.
+    }
+  };
 
-  function removeScenarioItem(itemId: string) {
-    updateDraft((current) => ({
-      ...current,
-      scenarioItems: current.scenarioItems.filter((row) => row.id !== itemId),
-    }));
-  }
-
-  function updateLoadSettings(
-    itemId: string,
-    key: keyof typeof defaultLoadSettings,
-    value: string,
-  ) {
-    updateDraft((current) => ({
-      ...current,
-      scenarioItems: current.scenarioItems.map((row) =>
-        row.id === itemId
-          ? {
-              ...row,
-              loadSettings: {
-                ...(row.loadSettings ?? defaultLoadSettings),
-                [key]: NULLABLE_LOAD_SETTING_KEYS.has(key)
-                  ? parseOptionalNumber(value)
-                  : Number(value),
-              },
-            }
-          : row,
-      ),
-    }));
-  }
-
-  function addSlaRule() {
-    updateDraft((current) => ({
-      ...current,
-      slaRules: [...current.slaRules, newSlaRule()],
-    }));
-  }
-
-  function removeSlaRule(ruleId: string) {
-    updateDraft((current) => ({
-      ...current,
-      slaRules: current.slaRules.filter((rule) => rule.id !== ruleId),
-    }));
-  }
-
-  function updateSlaRule(ruleId: string, fields: Partial<TestPlanSlaRule>) {
-    updateDraft((current) => ({
-      ...current,
-      slaRules: current.slaRules.map((rule) =>
-        rule.id === ruleId ? { ...rule, ...fields } : rule,
-      ),
-    }));
-  }
-
-  function changeSlaMetric(rule: TestPlanSlaRule, metric: SlaMetricValue) {
-    const option = metricOption(metric);
-    updateSlaRule(rule.id, {
-      subject: subjectForMetric(metric, responseCodePattern(rule.subject)),
-      condition: option.defaultCondition,
-      threshold: {
-        value: option.defaultThreshold,
-        unit: option.defaultUnit,
-      },
-    });
-  }
-
-  if (session === null) {
-    return null;
-  }
-
-  if (isLoading) {
+  const validationErrors = useMemo(() => validateTestPlanDraft(draft), [draft]);
+  const draftCanDebug = draft
+    ? dirty
+      ? canRunDraft(draft)
+      : canDebugSavedPlan(draft)
+    : false;
+  const draftCanRunStandard = draft
+    ? dirty
+      ? canRunDraft(draft)
+      : draft.runnable
+    : false;
+  const localExpectedConcurrency = expectedConcurrency(draft);
+  if (planQuery.isError) {
     return (
-      <div className="mx-auto max-w-container-max p-8 text-sm text-text-muted">
+      <div className="rounded-2xl border border-error/30 bg-error-container p-8 text-on-error-container">
+        {testPlanCopy.detailLoadError}
+      </div>
+    );
+  }
+  if (planQuery.isLoading || draft === null) {
+    return (
+      <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-8 text-text-muted">
         {testPlanCopy.loadingDetail}
       </div>
     );
   }
 
-  if (loadError || draft === null) {
-    return (
-      <div className="mx-auto max-w-container-max rounded-xl border border-error/30 bg-error-container p-6">
-        <p className="text-sm text-on-error-container">
-          {loadError ?? testPlanCopy.detailLoadError}
-        </p>
-        <div className="mt-4 flex gap-3">
-          <a
-            className="inline-flex items-center rounded-lg border border-white/10 px-4 py-2 text-sm text-text-main transition hover:bg-white/5"
-            href="/test-plans"
-          >
+  return (
+    <section className="mx-auto max-w-7xl space-y-5">
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div>
+          <Link className="text-sm text-primary" to="/test-plans">
             {testPlanCopy.backToList}
-          </a>
+          </Link>
+          <div className="mt-2 flex flex-wrap items-center gap-3">
+            {renamingName ? (
+              <input
+                aria-label={testPlanCopy.renameInputLabel}
+                autoFocus
+                className="min-w-0 max-w-lg rounded-xl border border-primary/40 bg-black/20 px-3 py-1 font-display text-3xl font-semibold text-white outline-none focus:ring-2 focus:ring-primary/30"
+                onBlur={() => setRenamingName(false)}
+                onChange={(event) =>
+                  updateDraft((current) => ({
+                    ...current,
+                    name: event.target.value,
+                  }))
+                }
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") event.currentTarget.blur();
+                }}
+                value={draft.name}
+              />
+            ) : (
+              <>
+                <h1 className="font-display text-3xl font-semibold text-white">
+                  {draft.name || testPlanCopy.untitled}
+                </h1>
+                <IconActionButton
+                  Icon={Pencil}
+                  label={testPlanCopy.rename}
+                  onClick={() => setRenamingName(true)}
+                />
+              </>
+            )}
+          </div>
+          <p className="mt-2 text-sm text-text-muted">
+            {testPlanCopy.revisionStatus(draft.revision, dirty)}
+          </p>
+        </div>
+        <div className="flex flex-wrap gap-2">
           <button
-            className="inline-flex items-center rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-on-primary transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-60"
-            disabled={isReloading}
-            onClick={() => void handleReload()}
+            className="rounded-xl border border-white/10 px-4 py-2 text-white disabled:opacity-40"
+            disabled={
+              !dirty || saveMutation.isPending || validationErrors.length > 0
+            }
+            onClick={saveDraft}
             type="button"
           >
-            {isReloading ? "Reloading..." : "Reload"}
+            {testPlanCopy.save}
+          </button>
+          <button
+            className="rounded-xl border border-primary/40 bg-primary/10 px-4 py-2 font-semibold text-primary disabled:opacity-40"
+            disabled={
+              runMutation.isPending ||
+              saveMutation.isPending ||
+              validationErrors.length > 0 ||
+              !draftCanDebug
+            }
+            onClick={() => void runWith("debug")}
+            type="button"
+          >
+            {dirty ? testPlanCopy.saveAndDebug : testPlanCopy.debug}
+          </button>
+          <button
+            className="rounded-xl bg-primary px-4 py-2 font-semibold text-on-primary disabled:opacity-40"
+            disabled={
+              runMutation.isPending ||
+              saveMutation.isPending ||
+              validationErrors.length > 0 ||
+              !draftCanRunStandard
+            }
+            onClick={() => void runWith("standard")}
+            type="button"
+          >
+            {dirty ? testPlanCopy.saveAndRunNow : testPlanCopy.runNow}
           </button>
         </div>
       </div>
-    );
-  }
 
-  return (
-    <div className="mx-auto flex max-w-container-max flex-col gap-5">
-      <section className="surgepilot-glass rounded-2xl p-5">
-        <div className="flex flex-wrap items-start justify-between gap-4">
-          <div className="min-w-0">
-            <a
-              className="inline-flex text-sm text-primary transition hover:brightness-110"
-              href="/test-plans"
-            >
-              {testPlanCopy.backToList}
-            </a>
-            <div className="mt-2 flex flex-wrap items-center gap-3">
-              {renamingName ? (
-                <input
-                  aria-label={testPlanCopy.renameInputLabel}
-                  autoFocus
-                  className="min-w-0 max-w-lg rounded-lg border border-primary/40 bg-surface-container px-3 py-1 font-display text-[26px] font-semibold leading-9 text-white outline-none focus:border-primary/50"
-                  onChange={(event) =>
-                    updateDraft((current) => ({
-                      ...current,
-                      name: event.target.value,
-                    }))
-                  }
-                  onKeyDown={(event) => {
-                    if (event.key === "Enter") {
-                      event.currentTarget.blur();
-                    }
-                  }}
-                  onBlur={() => setRenamingName(false)}
-                  value={draft.name}
-                />
-              ) : (
-                <>
-                  <h1 className="font-display text-[26px] font-semibold leading-9 text-white">
-                    {draft.name || testPlanCopy.untitled}
-                  </h1>
-                  <button
-                    aria-label={testPlanCopy.rename}
-                    className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-white/10 text-text-muted transition hover:border-primary/30 hover:bg-white/5 hover:text-white"
-                    onClick={() => setRenamingName(true)}
-                    title={testPlanCopy.rename}
-                    type="button"
-                  >
-                    <Pencil className="h-4 w-4" />
-                  </button>
-                </>
-              )}
-              <span className="rounded-full border border-white/10 bg-black/20 px-3 py-1 font-mono text-[11px] text-secondary">
-                Revision {draft.revision}
-              </span>
-              <span
-                className={cn(
-                  "rounded-full border px-3 py-1 font-mono text-[11px]",
-                  dirty
-                    ? "border-warning/30 bg-warning/10 text-warning"
-                    : "border-success/30 bg-success/10 text-success",
-                )}
-              >
-                {dirty ? testPlanCopy.unsaved : testPlanCopy.saved}
-              </span>
-            </div>
-            <div className="mt-3 flex flex-wrap gap-x-6 gap-y-1 font-mono text-xs text-text-muted">
-              <span>Updated {formatDate(draft.updatedAt)}</span>
-              <span>{testPlanCopy.actionsHelp}</span>
-            </div>
-          </div>
-          <div className="flex flex-wrap items-center gap-2">
-            <button
-              className="rounded-lg border border-white/10 px-4 py-2 text-sm text-text-main transition hover:bg-white/5 disabled:cursor-not-allowed disabled:opacity-40"
-              disabled={!canSave}
-              onClick={() => void handleSave()}
-              type="button"
-            >
-              {isSaving ? testPlanCopy.saving : testPlanCopy.save}
-            </button>
-            <button
-              aria-label={`${testPlanCopy.clone} ${draft.name}`}
-              className="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-white/10 text-text-muted transition hover:border-primary/30 hover:bg-white/5 hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
-              disabled={isCloning}
-              onClick={() => void handleClone()}
-              title={testPlanCopy.clone}
-              type="button"
-            >
-              <Copy className="h-4 w-4" />
-            </button>
-            <button
-              aria-label={`${testPlanCopy.archive} ${draft.name}`}
-              className="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-white/10 text-text-muted transition hover:border-error/30 hover:bg-white/5 hover:text-error"
-              onClick={() => setArchiveOpen(true)}
-              title={testPlanCopy.archive}
-              type="button"
-            >
-              <Archive className="h-4 w-4" />
-            </button>
-            <button
-              className="rounded-lg border border-primary/40 bg-primary/10 px-4 py-2 text-sm font-semibold text-primary transition hover:bg-primary/20 disabled:cursor-not-allowed disabled:opacity-40"
-              disabled={
-                runningType !== null ||
-                validationErrors.length > 0 ||
-                !draftCanDebug
-              }
-              onClick={() => void handleRun("debug")}
-              title={
-                dirty
-                  ? "Unsaved changes will be saved before the debug run."
-                  : undefined
-              }
-              type="button"
-            >
-              {runningType === "debug"
-                ? testPlanCopy.startingDebug
-                : dirty
-                  ? testPlanCopy.saveAndDebug
-                  : testPlanCopy.debug}
-            </button>
-            <button
-              className="rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-on-primary transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-40"
-              disabled={
-                runningType !== null ||
-                validationErrors.length > 0 ||
-                !draftCanRunStandard
-              }
-              onClick={() => void handleRun("standard")}
-              title={
-                dirty
-                  ? "Unsaved changes will be saved before the run."
-                  : undefined
-              }
-              type="button"
-            >
-              {runningType === "standard"
-                ? testPlanCopy.startingRun
-                : dirty
-                  ? testPlanCopy.saveAndRunNow
-                  : testPlanCopy.runNow}
-            </button>
-          </div>
+      {error ? (
+        <div className="rounded-xl border border-error/30 bg-error-container p-3 text-sm text-on-error-container">
+          {error}
         </div>
-        {actionError ? (
-          <div className="mt-4 flex items-center justify-between gap-4 rounded-xl border border-error/30 bg-error-container px-4 py-3 text-sm text-on-error-container">
-            <span>{actionError}</span>
-            {needsReload ? (
-              <button
-                className="shrink-0 rounded-lg border border-white/10 px-3 py-1 text-xs text-text-main transition hover:bg-white/5"
-                onClick={() => void handleReload()}
-                type="button"
-              >
-                Reload
-              </button>
-            ) : null}
-          </div>
-        ) : null}
-        {validationErrors.length > 0 ? (
-          <div className="mt-4 rounded-xl border border-warning/30 bg-warning-container px-4 py-3 text-sm text-on-warning-container">
-            {validationErrors.join(" ")}
-          </div>
-        ) : null}
-      </section>
+      ) : null}
+      {runError ? (
+        <div className="rounded-xl border border-error/30 bg-error-container p-3 text-sm text-on-error-container">
+          {runError}
+        </div>
+      ) : null}
+      {validationErrors.length ? (
+        <div className="rounded-xl border border-warning/30 bg-warning-container p-3 text-sm text-on-warning-container">
+          {validationErrors.join(" ")}
+        </div>
+      ) : null}
 
-      <FieldSection
-        title={testPlanCopy.basicInfo}
-        description="Name, description, tags, revision and save status."
-      >
-        <div className="grid gap-4 md:grid-cols-2">
-          <Field label="Test Plan name">
+      <section className={sectionClass()}>
+        <h2 className="text-lg font-semibold text-white">
+          {testPlanCopy.basicInfo}
+        </h2>
+        <div className="mt-4 grid gap-4 md:grid-cols-2">
+          <label className="grid gap-1 text-sm text-text-muted">
+            Test Plan name
             <input
-              aria-label="Test Plan name"
-              className={textInputClass()}
+              className="rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-white"
+              value={draft.name}
               onChange={(event) =>
                 updateDraft((current) => ({
                   ...current,
                   name: event.target.value,
                 }))
               }
-              value={draft.name}
             />
-          </Field>
-          <Field label="Tags">
+          </label>
+          <label className="grid gap-1 text-sm text-text-muted">
+            Tags
             <input
-              aria-label="Tags"
-              className={textInputClass("font-mono")}
+              className="rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-white"
+              value={tagText}
               onChange={(event) => {
-                setTagTextState(event.target.value);
+                setTagText(event.target.value);
                 updateDraft((current) => ({
                   ...current,
                   tags: tagsFromText(event.target.value),
                 }));
               }}
-              placeholder={testPlanCopy.tagsPlaceholder}
-              value={tagTextState}
             />
-          </Field>
-          <Field label="Description">
+          </label>
+          <label className="grid gap-1 text-sm text-text-muted md:col-span-2">
+            Description
             <textarea
-              aria-label="Description"
-              className={cn(textInputClass(), "min-h-20 resize-y")}
+              className="min-h-20 rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-white"
+              value={draft.description ?? ""}
               onChange={(event) =>
                 updateDraft((current) => ({
                   ...current,
                   description: event.target.value || null,
                 }))
               }
-              value={draft.description ?? ""}
             />
-          </Field>
+          </label>
         </div>
-      </FieldSection>
+      </section>
 
-      <div className="grid items-start gap-5 xl:grid-cols-2">
-        <FieldSection title={testPlanCopy.globalContext}>
-          <div className="space-y-4">
-            <Field label="Env Group">
+      <div className="grid gap-5 xl:grid-cols-2">
+        <section className={sectionClass()}>
+          <h2 className="text-lg font-semibold text-white">
+            {testPlanCopy.globalContext}
+          </h2>
+          <div className="mt-4 grid gap-4">
+            <label className="grid gap-1 text-sm text-text-muted">
+              Env Group
               <select
-                aria-label="Env Group"
-                className={cn(inputClass(false), "text-text-main")}
+                className="rounded-xl border border-white/10 bg-surface-container-low px-3 py-2 text-white"
+                value={draft.envGroupId ?? ""}
                 onChange={(event) =>
                   updateDraft((current) => ({
                     ...current,
                     envGroupId: event.target.value || null,
                   }))
                 }
-                value={draft.envGroupId ?? ""}
               >
-                <option value="">{testPlanCopy.noEnvironment}</option>
-                {envGroups.map((env) => (
+                <option value="">No environment</option>
+                {envQuery.data?.items.map((env) => (
                   <option key={env.id} value={env.id}>
                     {env.name}
                   </option>
                 ))}
               </select>
-            </Field>
-            <Field label="Run Mode">
+            </label>
+            <label className="grid gap-1 text-sm text-text-muted">
+              Run Mode
               <select
-                aria-label="Run Mode"
-                className={cn(inputClass(false), "text-text-main")}
+                className="rounded-xl border border-white/10 bg-surface-container-low px-3 py-2 text-white"
+                value={draft.runMode}
                 onChange={(event) =>
                   updateDraft((current) => ({
                     ...current,
                     runMode: event.target.value as TestPlanDetail["runMode"],
                   }))
                 }
-                value={draft.runMode}
               >
                 <option value="sequential">Sequential</option>
                 <option value="parallel">Parallel</option>
               </select>
-            </Field>
-            <p className="text-xs leading-5 text-text-muted">
-              Parallel mode sums per-item concurrency; sequential mode uses the
-              highest per-item concurrency as the single-node expectation.
-            </p>
+            </label>
           </div>
-        </FieldSection>
+        </section>
 
-        <FieldSection title={testPlanCopy.resourceConfiguration}>
-          <div className="space-y-4">
-            <div className="rounded-xl border border-white/10 bg-black/10 px-4 py-3">
-              <p className="text-sm text-text-muted">
-                {testPlanCopy.expectedConcurrency(
-                  localExpectedConcurrency,
-                  draft.runGuard.softConcurrencyPerNodeLimit,
-                )}
-              </p>
-              <p className="mt-1 font-mono text-[11px] text-text-muted">
-                Hard limit{" "}
-                {draft.runGuard.hardConcurrencyPerNodeLimit} · Debug always
-                uses a fixed low-risk profile.
+        <section className={sectionClass()}>
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <h2 className="text-lg font-semibold text-white">
+                {testPlanCopy.resourceConfiguration}
+              </h2>
+              <p className="mt-1 text-sm text-text-muted">
+                {testPlanCopy.expectedConcurrencyLabel}: {""}
+                <span className="font-mono text-primary">
+                  {localExpectedConcurrency}
+                </span>{" "}
+                (soft limit {draft.runGuard.softConcurrencyPerNodeLimit})
               </p>
             </div>
-            <Field label="Resource Configuration For">
-              <select
-                aria-label="Resource Configuration For"
-                className={cn(inputClass(false), "text-text-main")}
-                onChange={(event) =>
-                  setResourceRunType(event.target.value as "debug" | "standard")
-                }
-                value={resourceRunType}
-              >
-                <option value="standard">Standard Run</option>
-                <option value="debug">Debug Run</option>
-              </select>
-            </Field>
-            {resourceRunType === "standard" ? (
-              <>
-                <Field label="Resource Mode">
-                  <select
-                    aria-label="Resource Mode"
-                    className={cn(inputClass(false), "text-text-main")}
-                    onChange={(event) =>
-                      updateDraft((current) => ({
-                        ...current,
-                        resource: {
-                          ...current.resource,
-                          mode: event.target.value as "manual" | "auto",
-                          selectedNodeId: null,
-                          selectedNodeIds: [],
-                          nodeCount:
-                            event.target.value === "auto"
-                              ? current.resource.nodeCount ?? 2
-                              : null,
-                        },
-                      }))
-                    }
-                    value={resourceMode}
+            {helpDisclosure(
+              "Resource configuration help",
+              "Standard Runs can use multiple nodes. Debug stays single-node. Pool Type limits which idle Load Nodes appear in the picker.",
+            )}
+          </div>
+          <div className="mt-4 grid gap-4 md:grid-cols-2 xl:grid-cols-1 2xl:grid-cols-2">
+            <fieldset className="grid gap-2 text-sm text-text-muted">
+              <legend className="text-sm text-text-muted">Resource Mode</legend>
+              <div className="grid gap-2 rounded-xl border border-white/10 bg-surface-container-low p-2">
+                {[
+                  ["manual", "Manual selected nodes"],
+                  ["auto", "Auto node count"],
+                ].map(([value, label]) => (
+                  <label
+                    className="flex min-h-11 cursor-pointer items-center gap-3 rounded-lg px-2 py-1.5 text-white transition hover:bg-white/5"
+                    key={value}
                   >
-                    <option value="manual">Manual selected nodes</option>
-                    <option value="auto">Auto node count</option>
-                  </select>
-                </Field>
-                <Field label="Pool Type">
-                  <select
-                    aria-label="Pool Type"
-                    className={cn(inputClass(false), "text-text-main")}
-                    onChange={(event) =>
-                      updateDraft((current) => ({
-                        ...current,
-                        resource: {
-                          ...current.resource,
-                          poolType:
-                            (event.target.value as "public" | "private" | "") ||
-                            null,
-                          selectedNodeId: null,
-                          selectedNodeIds: [],
-                        },
-                      }))
-                    }
-                    value={poolType ?? ""}
-                  >
-                    <option value="">{testPlanCopy.selectPool}</option>
-                    <option value="private">Private</option>
-                    <option value="public">Public</option>
-                  </select>
-                </Field>
-                {poolType && resourceMode === "auto" ? (
-                  <Field label="Node Count">
                     <input
-                      aria-label="Node Count"
-                      className={textInputClass()}
-                      min={1}
-                      max={10}
+                      checked={(draft.resource.mode ?? "manual") === value}
+                      className="h-4 w-4 accent-primary"
+                      name="test-plan-resource-mode"
+                      type="radio"
+                      value={value}
                       onChange={(event) =>
                         updateDraft((current) => ({
                           ...current,
                           resource: {
                             ...current.resource,
-                            nodeCount: Math.max(1, Number(event.target.value) || 1),
-                            selectedNodeId: null,
-                            selectedNodeIds: [],
+                            mode: event.target
+                              .value as TestPlanDetail["resource"]["mode"],
+                            selectedNodeIds:
+                              event.target.value === "manual"
+                                ? (current.resource.selectedNodeIds ?? [])
+                                : [],
+                            selectedNodeId:
+                              event.target.value === "manual"
+                                ? current.resource.selectedNodeId
+                                : null,
+                            nodeCount:
+                              event.target.value === "auto"
+                                ? (current.resource.nodeCount ?? 2)
+                                : null,
                           },
                         }))
                       }
-                      type="number"
-                      value={draft.resource.nodeCount ?? 2}
                     />
-                    <small>SurgePilot allocates this many idle nodes.</small>
-                  </Field>
-                ) : null}
-                {poolType && resourceMode === "manual" ? (
-                  <Field label="Load Node">
-                    <select
-                      aria-label="Load Nodes"
-                      className={cn(inputClass(false), "text-text-main")}
-                      multiple
-                      onChange={(event) => {
-                        const next = Array.from(event.target.selectedOptions).map(
-                          (option) => option.value,
-                        );
-                        updateDraft((current) => ({
-                          ...current,
-                          resource: {
-                            ...current.resource,
-                            selectedNodeIds: next,
-                            selectedNodeId: next[0] ?? null,
-                          },
-                        }));
-                      }}
-                      value={selectedNodeIds}
-                    >
-                      {idleCandidates.map((node) => (
-                        <option key={node.id} value={node.id}>
-                          {testPlanCopy.nodeOption(node.host, node.status)}
-                        </option>
-                      ))}
-                    </select>
-                    <small>Hold Ctrl/⌘ to select multiple idle nodes.</small>
-                  </Field>
-                ) : null}
-              </>
-            ) : (
-              <p className="rounded-xl border border-primary/20 bg-primary/5 p-3 text-sm text-text-muted">
-                Debug Runs always use one low-risk node. Standard resource
-                settings are not used for Debug Runs.
-              </p>
-            )}
-            {isLoadingNodes ? (
-              <p className="text-xs text-text-muted">
-                Loading Load Nodes...
-              </p>
-            ) : null}
-            {poolType && !isLoadingNodes && idleCandidates.length === 0 ? (
-              <p className="rounded-xl border border-warning/30 bg-warning/10 p-3 text-sm text-warning">
-                {testPlanCopy.noNodes}{" "}
-                <button
-                  className="font-semibold text-primary underline"
-                  onClick={navigateToLoadNodes}
-                  type="button"
+                    <span>{label}</span>
+                  </label>
+                ))}
+              </div>
+            </fieldset>
+            <label className="grid gap-1 text-sm text-text-muted">
+              Pool Type
+              <select
+                className="rounded-xl border border-white/10 bg-surface-container-low px-3 py-2 text-white"
+                value={draft.resource.poolType ?? ""}
+                onChange={(event) =>
+                  updateDraft((current) => ({
+                    ...current,
+                    resource: {
+                      ...current.resource,
+                      poolType: (event.target.value ||
+                        null) as TestPlanDetail["resource"]["poolType"],
+                      selectedNodeId: null,
+                      selectedNodeIds: [],
+                    },
+                  }))
+                }
+              >
+                <option value="">{testPlanCopy.selectPool}</option>
+                <option value="private">Private</option>
+                <option value="public">Public</option>
+              </select>
+            </label>
+            {(draft.resource.mode ?? "manual") === "auto" ? (
+              <div className="grid gap-1 text-sm text-text-muted">
+                <label htmlFor="test-plan-resource-node-count">
+                  Node Count
+                </label>
+                <input
+                  aria-describedby="test-plan-resource-node-count-help"
+                  className="rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-white"
+                  id="test-plan-resource-node-count"
+                  min={1}
+                  max={10}
+                  type="number"
+                  value={draft.resource.nodeCount ?? 2}
+                  onChange={(event) =>
+                    updateDraft((current) => ({
+                      ...current,
+                      resource: {
+                        ...current.resource,
+                        nodeCount: Math.max(1, Number(event.target.value) || 1),
+                        selectedNodeId: null,
+                        selectedNodeIds: [],
+                      },
+                    }))
+                  }
+                />
+                <span
+                  className="text-xs text-secondary"
+                  id="test-plan-resource-node-count-help"
                 >
-                  Open Load Nodes
-                </button>
-              </p>
-            ) : null}
+                  SurgePilot allocates this many currently idle visible nodes.
+                </span>
+              </div>
+            ) : (
+              <div className="grid gap-2 text-sm text-text-muted">
+                <span>Selected Nodes</span>
+                <div className="flex flex-wrap items-center gap-3">
+                  <Dialog.Root
+                    open={nodePickerOpen}
+                    onOpenChange={setNodePickerOpen}
+                  >
+                    <Dialog.Trigger asChild>
+                      <button
+                        className="rounded-xl border border-primary/30 bg-primary/10 px-4 py-2 text-sm font-semibold text-primary disabled:opacity-40"
+                        disabled={!draft.resource.poolType}
+                        type="button"
+                      >
+                        Select nodes
+                      </button>
+                    </Dialog.Trigger>
+                    <Dialog.Portal>
+                      <Dialog.Overlay className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm" />
+                      <Dialog.Content className="fixed left-1/2 top-1/2 z-50 grid max-h-[78vh] w-[min(640px,calc(100vw-2rem))] -translate-x-1/2 -translate-y-1/2 gap-4 overflow-hidden rounded-2xl border border-white/10 bg-surface-container p-6 text-white shadow-2xl">
+                        <div className="flex items-start justify-between gap-4">
+                          <div>
+                            <Dialog.Title className="text-lg font-semibold">
+                              Select Load Nodes
+                            </Dialog.Title>
+                            <Dialog.Description className="mt-1 text-sm text-text-muted">
+                              Choose idle {draft.resource.poolType ?? "visible"}{" "}
+                              nodes for this Standard Run.
+                            </Dialog.Description>
+                          </div>
+                          <Dialog.Close className="rounded-lg p-2 text-secondary transition hover:bg-white/10 hover:text-white">
+                            Close
+                          </Dialog.Close>
+                        </div>
+                        <div className="min-h-0 space-y-2 overflow-auto pr-1">
+                          {manualNodeCandidates.length ? (
+                            manualNodeCandidates.map((node) => (
+                              <label
+                                className="flex min-h-12 cursor-pointer items-center justify-between gap-3 rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2 transition hover:border-primary/30 hover:bg-white/[0.06]"
+                                key={node.id}
+                              >
+                                <span className="grid gap-0.5">
+                                  <span className="text-sm font-medium text-white">
+                                    {testPlanCopy.nodeOption(
+                                      node.host,
+                                      node.status,
+                                    )}
+                                  </span>
+                                  <span className="text-xs capitalize text-text-muted">
+                                    {node.scope === "public"
+                                      ? "Public pool"
+                                      : "Private pool"}
+                                  </span>
+                                </span>
+                                <input
+                                  checked={selectedManualNodeIds.includes(
+                                    node.id,
+                                  )}
+                                  className="h-4 w-4 accent-primary"
+                                  type="checkbox"
+                                  onChange={(event) => {
+                                    const selectedNodeIds = event.target.checked
+                                      ? Array.from(
+                                          new Set([
+                                            ...selectedManualNodeIds,
+                                            node.id,
+                                          ]),
+                                        )
+                                      : selectedManualNodeIds.filter(
+                                          (nodeId) => nodeId !== node.id,
+                                        );
+                                    updateDraft((current) => ({
+                                      ...current,
+                                      resource: {
+                                        ...current.resource,
+                                        mode: "manual",
+                                        selectedNodeIds,
+                                        selectedNodeId:
+                                          selectedNodeIds[0] ?? null,
+                                        nodeCount: null,
+                                      },
+                                    }));
+                                  }}
+                                />
+                              </label>
+                            ))
+                          ) : (
+                            <p className="rounded-xl border border-white/10 bg-white/[0.03] p-4 text-sm text-text-muted">
+                              No idle nodes are available for the selected pool.
+                            </p>
+                          )}
+                        </div>
+                        <div className="flex items-center justify-between gap-3 border-t border-white/10 pt-4">
+                          <span className="text-sm text-text-muted">
+                            Selected: {selectedManualNodeCount}
+                          </span>
+                          <Dialog.Close className="rounded-xl bg-primary px-4 py-2 text-sm font-semibold text-on-primary">
+                            Done
+                          </Dialog.Close>
+                        </div>
+                      </Dialog.Content>
+                    </Dialog.Portal>
+                  </Dialog.Root>
+                  <span className="text-sm text-secondary">
+                    {selectedManualNodeCount}{" "}
+                    {selectedManualNodeCount === 1 ? "node" : "nodes"} selected
+                  </span>
+                </div>
+              </div>
+            )}
           </div>
-        </FieldSection>
+        </section>
       </div>
 
-      <FieldSection
-        title={testPlanCopy.scenarioOrchestration}
-        description={testPlanCopy.scenarioOrchestrationHelp}
-        action={
+      <section className={sectionClass()}>
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h2 className="text-lg font-semibold text-white">
+              {testPlanCopy.scenarioOrchestration}
+            </h2>
+            <p className="mt-1 text-sm text-text-muted">
+              {testPlanCopy.scenarioOrchestrationHelp}
+            </p>
+          </div>
           <button
-            className="inline-flex items-center gap-2 rounded-lg border border-primary/40 bg-primary/10 px-3 py-1.5 text-xs font-semibold text-primary transition hover:bg-primary/20 disabled:cursor-not-allowed disabled:opacity-40"
-            disabled={scenarios.length === 0}
-            onClick={addScenario}
+            className={miniButton("primary")}
+            disabled={!scenarioQuery.data?.items.length}
+            onClick={() => {
+              const scenario = scenarioQuery.data?.items[0];
+              if (!scenario) return;
+              updateDraft((current) => ({
+                ...current,
+                scenarioItems: [
+                  ...current.scenarioItems,
+                  newScenarioItem(scenario),
+                ],
+              }));
+            }}
             type="button"
           >
-            <Plus className="h-3.5 w-3.5" />
             {testPlanCopy.addScenario}
           </button>
-        }
-      >
-        {scenarios.length === 0 ? (
-          <p className="rounded-xl border border-warning/30 bg-warning/10 p-3 text-sm text-warning">
-            {testPlanCopy.noScenarios}{" "}
-            <a
-              className="font-semibold text-primary underline"
-              href="/scenarios"
+        </div>
+        <div className="mt-4 space-y-3">
+          {draft.scenarioItems.map((item, index) => (
+            <div
+              className="rounded-xl border border-white/10 bg-white/[0.03] p-3"
+              key={item.id}
             >
-              Open Scenarios
-            </a>
-          </p>
-        ) : null}
-        <div className="space-y-3">
-          {draft.scenarioItems.map((item, index) => {
-            const settings = item.loadSettings ?? defaultLoadSettings;
-            const problem = loadSettingsProblem(item);
-            return (
-              <div
-                className={cn(
-                  "rounded-xl border p-3",
-                  problem
-                    ? "border-error/40 bg-error-container/10"
-                    : "border-white/10 bg-black/10",
-                )}
-                key={item.id}
-              >
-                <div className="flex flex-wrap items-start justify-between gap-3">
-                  <div className="min-w-[240px] flex-1">
-                    <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-                      <span className="font-mono text-xs text-secondary">
-                        Scenario {index + 1}
-                      </span>
-                      <select
-                        aria-label="Scenario name"
-                        className="min-w-[220px] rounded-lg border border-white/10 bg-surface-container px-2 py-1.5 text-sm text-text-main outline-none focus:border-primary/50"
-                        onChange={(event) =>
-                          changeScenarioItemScenario(item.id, event.target.value)
-                        }
-                        value={item.scenarioId}
-                      >
-                        {scenarios.map((scenario) => (
-                          <option key={scenario.id} value={scenario.id}>
-                            {scenario.name}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                    <p className="mt-1.5 font-mono text-[11px] text-text-muted">
-                      {item.scenarioName ?? "Scenario"} · revision{" "}
-                      {item.scenarioRevision ?? "–"} ·{" "}
-                      {item.enabledStepCount ?? 0} enabled steps · updated{" "}
-                      {item.updatedAt ? formatDate(item.updatedAt) : "–"}
-                    </p>
-                  </div>
-                  <div className="flex flex-wrap gap-2">
-                    <MiniButton
-                      disabled={index === 0}
-                      onClick={() => moveScenarioItem(item.id, -1)}
-                    >
-                      ↑ Up
-                    </MiniButton>
-                    <MiniButton
-                      disabled={index === draft.scenarioItems.length - 1}
-                      onClick={() => moveScenarioItem(item.id, 1)}
-                    >
-                      ↓ Down
-                    </MiniButton>
-                    <MiniButton
-                      onClick={() => removeScenarioItem(item.id)}
-                      tone="danger"
-                    >
-                      Remove
-                    </MiniButton>
-                  </div>
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <label className="grid min-w-[240px] flex-1 gap-1 text-xs text-text-muted md:max-w-sm">
+                  Scenario Name
+                  <select
+                    aria-label="Scenario name"
+                    className="rounded-lg border border-white/10 bg-surface-container-low px-2 py-1.5 text-sm text-white"
+                    value={item.scenarioId}
+                    onChange={(event) => {
+                      const scenario = scenarioQuery.data?.items.find(
+                        (row) => row.id === event.target.value,
+                      );
+                      if (!scenario) return;
+                      updateDraft((current) => ({
+                        ...current,
+                        scenarioItems: current.scenarioItems.map(
+                          (row): TestPlanScenarioItem =>
+                            row.id === item.id
+                              ? {
+                                  ...row,
+                                  scenarioId: scenario.id,
+                                  scenarioName: scenario.name,
+                                  scenarioRevision: scenario.revision,
+                                  enabledStepCount: scenario.enabledStepCount,
+                                  updatedAt: scenario.updatedAt,
+                                }
+                              : row,
+                        ),
+                      }));
+                    }}
+                  >
+                    {scenarioQuery.data?.items.map((scenario) => (
+                      <option key={scenario.id} value={scenario.id}>
+                        {scenario.name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <div className="flex gap-2">
+                  <button
+                    className={miniButton()}
+                    disabled={index === 0}
+                    onClick={() =>
+                      updateDraft((current) => {
+                        const rows = [...current.scenarioItems];
+                        [rows[index - 1], rows[index]] = [
+                          rows[index],
+                          rows[index - 1],
+                        ];
+                        return { ...current, scenarioItems: rows };
+                      })
+                    }
+                    type="button"
+                  >
+                    Up
+                  </button>
+                  <button
+                    className={miniButton()}
+                    disabled={index === draft.scenarioItems.length - 1}
+                    onClick={() =>
+                      updateDraft((current) => {
+                        const rows = [...current.scenarioItems];
+                        [rows[index], rows[index + 1]] = [
+                          rows[index + 1],
+                          rows[index],
+                        ];
+                        return { ...current, scenarioItems: rows };
+                      })
+                    }
+                    type="button"
+                  >
+                    Down
+                  </button>
+                  <button
+                    className={miniButton("danger")}
+                    onClick={() =>
+                      updateDraft((current) => ({
+                        ...current,
+                        scenarioItems: current.scenarioItems.filter(
+                          (row) => row.id !== item.id,
+                        ),
+                      }))
+                    }
+                    type="button"
+                  >
+                    Remove
+                  </button>
                 </div>
-                <div className="mt-3 grid gap-3 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-7">
-                  {LOAD_SETTING_LABELS.map(([label, key]) => (
-                    <label
-                      className="grid gap-1 text-xs text-text-muted"
-                      key={key}
-                    >
-                      {label}
-                      <input
-                        aria-label={`${label} ${index + 1}`}
-                        className="rounded-lg border border-white/10 bg-black/20 px-2 py-1.5 text-sm text-text-main outline-none focus:border-primary/50"
-                        min="0"
-                        type="number"
-                        value={String(settings[key] ?? "")}
-                        onChange={(event) =>
-                          updateLoadSettings(item.id, key, event.target.value)
-                        }
-                      />
-                    </label>
-                  ))}
-                </div>
-                {problem ? (
-                  <p className="mt-2 text-xs text-error">
-                    {loadProblemCopy[problem]}
-                  </p>
-                ) : null}
               </div>
-            );
-          })}
+              <div className="mt-3 grid gap-3 md:grid-cols-6">
+                {[
+                  ["Concurrency / Node", "concurrencyPerNode"],
+                  ["Ramp-up", "rampUpSeconds"],
+                  ["Hold-for", "holdForSeconds"],
+                  ["Iterations", "iterations"],
+                  ["Target RPS", "targetRps"],
+                  ["Steps", "steps"],
+                  ["Delay", "delaySeconds"],
+                ].map(([label, key]) => (
+                  <label
+                    className="grid gap-1 text-xs text-text-muted"
+                    key={key}
+                  >
+                    {label}
+                    <input
+                      className="rounded-lg border border-white/10 bg-black/20 px-2 py-1.5 text-white"
+                      type="number"
+                      value={String(
+                        (item.loadSettings ?? defaultLoadSettings)[
+                          key as keyof typeof defaultLoadSettings
+                        ] ?? "",
+                      )}
+                      onChange={(event) =>
+                        updateDraft((current) => ({
+                          ...current,
+                          scenarioItems: current.scenarioItems.map(
+                            (row): TestPlanScenarioItem =>
+                              row.id === item.id
+                                ? {
+                                    ...row,
+                                    loadSettings: {
+                                      ...(row.loadSettings ??
+                                        defaultLoadSettings),
+                                      [key]:
+                                        key === "targetRps" ||
+                                        key === "iterations" ||
+                                        key === "holdForSeconds" ||
+                                        key === "steps"
+                                          ? parseOptionalNumber(
+                                              event.target.value,
+                                            )
+                                          : Number(event.target.value),
+                                    },
+                                  }
+                                : row,
+                          ),
+                        }))
+                      }
+                    />
+                  </label>
+                ))}
+              </div>
+            </div>
+          ))}
           {draft.scenarioItems.length === 0 ? (
-            <p className="rounded-xl border border-dashed border-white/10 p-5 text-sm text-text-muted">
+            <div className="rounded-xl border border-dashed border-white/10 p-5 text-sm text-text-muted">
               {testPlanCopy.noScenarioItems}
-            </p>
+            </div>
           ) : null}
         </div>
-      </FieldSection>
+      </section>
 
-      <FieldSection
-        title={testPlanCopy.slaRules}
-        description={testPlanCopy.slaRulesHelp}
-        action={
+      <section className={sectionClass()}>
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <h2 className="text-lg font-semibold text-white">
+              {testPlanCopy.slaRules}
+            </h2>
+            <p className="mt-1 text-sm text-text-muted">
+              {testPlanCopy.slaRulesHelp}
+            </p>
+          </div>
           <button
-            className="inline-flex items-center gap-2 rounded-lg border border-primary/40 bg-primary/10 px-3 py-1.5 text-xs font-semibold text-primary transition hover:bg-primary/20 disabled:cursor-not-allowed disabled:opacity-40"
-            disabled={draft.slaRules.length >= 5}
-            onClick={addSlaRule}
+            className={miniButton("primary")}
+            onClick={() =>
+              updateDraft((current) => ({
+                ...current,
+                slaRules: [...current.slaRules, newSlaRule()],
+              }))
+            }
             type="button"
           >
-            <Plus className="h-3.5 w-3.5" />
             {testPlanCopy.addRule}
           </button>
-        }
-      >
-        <div className="space-y-3">
-          {draft.slaRules.map((rule, index) => {
+        </div>
+        <div className="mt-4 space-y-3">
+          {draft.slaRules.map((rule) => {
             const metric = metricValueForSubject(rule.subject);
             const option = metricOption(metric);
             const unitOptions = option.units as readonly SlaThresholdUnit[];
-            const pattern = responseCodePattern(rule.subject);
-            const patternValid = isSupportedResponseCodePattern(pattern);
             return (
               <div
-                className="rounded-xl border border-white/10 bg-black/10 p-3"
+                className="rounded-xl border border-white/10 bg-white/[0.03] p-3"
                 key={rule.id}
               >
-                <div className="flex flex-wrap items-center gap-3">
-                  <span className="font-mono text-xs text-secondary">
-                    Rule {index + 1}
-                  </span>
-                  <div className="ml-auto flex items-center gap-2">
-                    <MiniButton
-                      onClick={() => removeSlaRule(rule.id)}
-                      tone="danger"
-                    >
-                      Remove
-                    </MiniButton>
-                  </div>
-                </div>
-                <div className="mt-3 grid gap-3 md:grid-cols-[1.2fr_1fr_0.8fr_0.8fr_1fr]">
+                <div className="grid gap-3 md:grid-cols-[1.1fr_0.9fr_0.7fr_0.7fr_0.8fr_auto]">
                   <label className="grid gap-1 text-xs text-text-muted">
-                    Fail when metric
+                    Metric
                     <select
                       aria-label="SLA metric"
-                      className={cn(inputClass(false), "text-text-main")}
-                      onChange={(event) =>
-                        changeSlaMetric(
-                          rule,
-                          event.target.value as SlaMetricValue,
-                        )
-                      }
+                      className="rounded-lg border border-white/10 bg-surface-container-low px-2 py-1.5 text-white"
                       value={metric}
+                      onChange={(event) => {
+                        const nextMetric = event.target.value as SlaMetricValue;
+                        const nextOption = metricOption(nextMetric);
+                        updateDraft((current) => ({
+                          ...current,
+                          slaRules: current.slaRules.map((row) =>
+                            row.id === rule.id
+                              ? {
+                                  ...row,
+                                  subject: subjectForMetric(
+                                    nextMetric,
+                                    responseCodePattern(row.subject),
+                                  ),
+                                  condition: nextOption.defaultCondition,
+                                  threshold: {
+                                    value: nextOption.defaultThreshold,
+                                    unit: nextOption.defaultUnit,
+                                  },
+                                }
+                              : row,
+                          ),
+                        }));
+                      }}
                     >
                       {slaMetricOptions.map((metricOptionItem) => (
                         <option
@@ -1575,17 +1235,25 @@ export function TestPlanEditorPage() {
                     </select>
                   </label>
                   <label className="grid gap-1 text-xs text-text-muted">
-                    Condition
+                    Fail when
                     <select
-                      aria-label="SLA condition"
-                      className={cn(inputClass(false), "text-text-main")}
-                      onChange={(event) =>
-                        updateSlaRule(rule.id, {
-                          condition: event.target
-                            .value as TestPlanSlaRule["condition"],
-                        })
-                      }
+                      aria-label="Fail when"
+                      className="rounded-lg border border-white/10 bg-surface-container-low px-2 py-1.5 text-white"
                       value={rule.condition}
+                      onChange={(event) =>
+                        updateDraft((current) => ({
+                          ...current,
+                          slaRules: current.slaRules.map((row) =>
+                            row.id === rule.id
+                              ? {
+                                  ...row,
+                                  condition: event.target
+                                    .value as TestPlanSlaRule["condition"],
+                                }
+                              : row,
+                          ),
+                        }))
+                      }
                     >
                       <option value="gt">Greater than</option>
                       <option value="gte">At least</option>
@@ -1598,17 +1266,24 @@ export function TestPlanEditorPage() {
                     Threshold
                     <input
                       aria-label="SLA threshold"
-                      className="rounded-lg border border-white/10 bg-black/20 px-2 py-2 text-sm text-text-main outline-none focus:border-primary/50"
-                      min="0"
+                      className="rounded-lg border border-white/10 bg-black/20 px-2 py-1.5 text-white"
                       type="number"
                       value={rule.threshold.value}
                       onChange={(event) =>
-                        updateSlaRule(rule.id, {
-                          threshold: {
-                            ...rule.threshold,
-                            value: Number(event.target.value),
-                          },
-                        })
+                        updateDraft((current) => ({
+                          ...current,
+                          slaRules: current.slaRules.map((row) =>
+                            row.id === rule.id
+                              ? {
+                                  ...row,
+                                  threshold: {
+                                    ...row.threshold,
+                                    value: Number(event.target.value),
+                                  },
+                                }
+                              : row,
+                          ),
+                        }))
                       }
                     />
                   </label>
@@ -1616,20 +1291,28 @@ export function TestPlanEditorPage() {
                     Unit
                     <select
                       aria-label="SLA unit"
-                      className={cn(inputClass(false), "text-text-main")}
-                      onChange={(event) =>
-                        updateSlaRule(rule.id, {
-                          threshold: {
-                            ...rule.threshold,
-                            unit: event.target
-                              .value as TestPlanSlaRule["threshold"]["unit"],
-                          },
-                        })
-                      }
+                      className="rounded-lg border border-white/10 bg-surface-container-low px-2 py-1.5 text-white"
                       value={
                         isValidUnitForMetric(metric, rule.threshold.unit)
                           ? rule.threshold.unit
                           : option.defaultUnit
+                      }
+                      onChange={(event) =>
+                        updateDraft((current) => ({
+                          ...current,
+                          slaRules: current.slaRules.map((row) =>
+                            row.id === rule.id
+                              ? {
+                                  ...row,
+                                  threshold: {
+                                    ...row.threshold,
+                                    unit: event.target
+                                      .value as TestPlanSlaRule["threshold"]["unit"],
+                                  },
+                                }
+                              : row,
+                          ),
+                        }))
                       }
                     >
                       {unitOptions.map((unit) => (
@@ -1643,103 +1326,142 @@ export function TestPlanEditorPage() {
                     Action
                     <select
                       aria-label="SLA action"
-                      className={cn(inputClass(false), "text-text-main")}
-                      onChange={(event) =>
-                        updateSlaRule(rule.id, {
-                          action: event.target
-                            .value as TestPlanSlaRule["action"],
-                        })
-                      }
+                      className="rounded-lg border border-white/10 bg-surface-container-low px-2 py-1.5 text-white"
                       value={rule.action}
+                      onChange={(event) =>
+                        updateDraft((current) => ({
+                          ...current,
+                          slaRules: current.slaRules.map((row) =>
+                            row.id === rule.id
+                              ? {
+                                  ...row,
+                                  action: event.target
+                                    .value as TestPlanSlaRule["action"],
+                                }
+                              : row,
+                          ),
+                        }))
+                      }
                     >
                       <option value="continue">Continue</option>
                       <option value="stop">Stop</option>
                     </select>
                   </label>
+                  <div className="flex items-end">
+                    <button
+                      className={miniButton("danger")}
+                      onClick={() =>
+                        updateDraft((current) => ({
+                          ...current,
+                          slaRules: current.slaRules.filter(
+                            (row) => row.id !== rule.id,
+                          ),
+                        }))
+                      }
+                      type="button"
+                    >
+                      Remove
+                    </button>
+                  </div>
                 </div>
                 {metric === "rc" ? (
-                  <div className="mt-3 grid max-w-xs gap-1 text-xs text-text-muted">
+                  <label className="mt-3 grid max-w-xs gap-1 text-xs text-text-muted">
                     Response code pattern
                     <input
                       aria-label="Response code pattern"
-                      className={cn(
-                        "rounded-lg border bg-black/20 px-2 py-1.5 font-mono text-sm text-text-main outline-none focus:border-primary/50",
-                        patternValid
-                          ? "border-white/10"
-                          : "border-error/60",
-                      )}
-                      onChange={(event) =>
-                        updateSlaRule(rule.id, {
-                          subject: subjectForMetric("rc", event.target.value),
-                        })
+                      aria-invalid={
+                        !isSupportedResponseCodePattern(
+                          responseCodePattern(rule.subject),
+                        )
                       }
-                      value={pattern}
+                      className="rounded-lg border border-white/10 bg-black/20 px-2 py-1.5 text-white aria-invalid:border-error/60"
+                      value={responseCodePattern(rule.subject)}
+                      onChange={(event) =>
+                        updateDraft((current) => ({
+                          ...current,
+                          slaRules: current.slaRules.map((row) =>
+                            row.id === rule.id
+                              ? {
+                                  ...row,
+                                  subject: subjectForMetric(
+                                    "rc",
+                                    event.target.value,
+                                  ),
+                                }
+                              : row,
+                          ),
+                        }))
+                      }
                     />
                     <span className="text-[11px] text-text-muted">
                       Use 500, 4??, or *.
                     </span>
-                  </div>
+                  </label>
                 ) : null}
               </div>
             );
           })}
           {draft.slaRules.length === 0 ? (
-            <p className="rounded-xl border border-dashed border-white/10 p-5 text-sm text-text-muted">
+            <div className="rounded-xl border border-dashed border-white/10 p-5 text-sm text-text-muted">
               {testPlanCopy.noSlaRules}
-            </p>
+            </div>
           ) : null}
         </div>
-      </FieldSection>
+      </section>
 
-      <FieldSection
-        action={
+      <section className={sectionClass()}>
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h2 className="text-lg font-semibold text-white">
+              {testPlanCopy.previewTitle}
+            </h2>
+            <p className="mt-1 text-sm text-text-muted">
+              {testPlanCopy.previewDescription}
+            </p>
+          </div>
           <div className="flex flex-wrap items-end gap-2">
-            <Field label={testPlanCopy.previewRunType}>
+            <label className="grid gap-1 text-xs text-text-muted">
+              {testPlanCopy.previewRunType}
               <select
                 aria-label={testPlanCopy.previewRunType}
-                className={textInputClass()}
+                className="rounded-xl border border-white/10 bg-surface-container-low px-3 py-2 text-sm text-white"
+                value={previewRunType}
                 onChange={(event) => {
-                  setPreviewRunType(
-                    event.target.value as "debug" | "standard",
-                  );
+                  setPreviewRunType(event.target.value as "debug" | "standard");
                   clearExecutionPreview();
                 }}
-                value={previewRunType}
               >
                 <option value="debug">Debug</option>
                 <option value="standard">Standard</option>
               </select>
-            </Field>
+            </label>
             <button
-              className="rounded-lg border border-primary/30 bg-primary/10 px-4 py-2 text-sm font-semibold text-primary transition hover:bg-primary/20 disabled:cursor-not-allowed disabled:opacity-40"
-              disabled={dirty || isPreviewing}
-              onClick={() => void handlePreview()}
+              className="rounded-xl border border-primary/30 bg-primary/10 px-4 py-2 text-sm font-semibold text-primary disabled:opacity-40"
+              disabled={dirty || previewMutation.isPending}
+              onClick={() => previewMutation.mutate()}
               type="button"
             >
               {testPlanCopy.previewYaml}
             </button>
           </div>
-        }
-        description={testPlanCopy.previewDescription}
-        title={testPlanCopy.previewTitle}
-      >
+        </div>
         {!dirty && draft.notRunnableReasons.includes("load_node_required") ? (
-          <p className="mb-3 rounded-xl border border-warning/30 bg-warning/10 p-3 text-sm text-warning">
+          <p className="mt-3 rounded-xl border border-warning/30 bg-warning/10 p-3 text-sm text-warning">
             {testPlanCopy.previewLoadNodePrerequisite}
           </p>
         ) : null}
         {dirty ? (
-          <p className="mb-3 rounded-xl border border-warning/30 bg-warning/10 p-3 text-sm text-warning">
+          <p className="mt-3 rounded-xl border border-warning/30 bg-warning/10 p-3 text-sm text-warning">
             {testPlanCopy.saveBeforePreview}
           </p>
         ) : null}
         {previewError ? (
-          <p className="mb-3 rounded-xl border border-error/30 bg-error-container p-3 text-sm text-on-error-container">
+          <p className="mt-3 rounded-xl border border-error/30 bg-error-container p-3 text-sm text-on-error-container">
             {previewError}
           </p>
         ) : null}
         {executionPreview ? (
-          <div className="space-y-3">
+          <div className="mt-4 space-y-3">
             {executionPreview.warnings.length > 0 ? (
               <div className="space-y-2">
                 {executionPreview.warnings.map((warning) => (
@@ -1757,20 +1479,19 @@ export function TestPlanEditorPage() {
             </pre>
           </div>
         ) : null}
-      </FieldSection>
+      </section>
 
       {pendingConfirmation ? (
         <div className="fixed inset-0 z-50 grid place-items-center bg-black/60 p-4">
           <div
-            aria-label={testPlanCopy.highConcurrencyTitle}
-            aria-modal="true"
-            className="w-full max-w-md rounded-2xl border border-warning/30 bg-surface-container-low p-6 shadow-2xl"
             role="dialog"
+            aria-label={testPlanCopy.highConcurrencyTitle}
+            className="w-full max-w-md rounded-3xl border border-warning/30 bg-surface-container-low p-6 shadow-2xl"
           >
             <h2 className="text-xl font-semibold text-white">
               {testPlanCopy.highConcurrencyTitle}
             </h2>
-            <p className="mt-2 text-sm leading-6 text-text-muted">
+            <p className="mt-2 text-sm text-text-muted">
               {testPlanCopy.highConcurrencyBody}
             </p>
             <p className="mt-3 font-mono text-xs text-warning">
@@ -1779,19 +1500,19 @@ export function TestPlanEditorPage() {
                 draft.runGuard.softConcurrencyPerNodeLimit,
               )}
             </p>
-            <div className="mt-6 flex justify-end gap-3">
+            <div className="mt-6 flex justify-end gap-2">
               <button
-                className="rounded-lg border border-white/10 px-4 py-2 text-sm text-text-main transition hover:bg-white/5"
+                className="rounded-xl border border-white/10 px-4 py-2 text-white"
                 onClick={() => setPendingConfirmation(null)}
                 type="button"
               >
                 {testPlanCopy.cancel}
               </button>
               <button
-                className="rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-on-primary transition hover:brightness-110"
+                className="rounded-xl bg-primary px-4 py-2 font-semibold text-on-primary"
                 onClick={() => {
                   setPendingConfirmation(null);
-                  void handleRun("standard", true);
+                  void runWith("standard", true);
                 }}
                 type="button"
               >
@@ -1801,49 +1522,6 @@ export function TestPlanEditorPage() {
           </div>
         </div>
       ) : null}
-
-      {archiveOpen ? (
-        <div
-          aria-label={testPlanCopy.archiveTitle}
-          aria-modal="true"
-          className="fixed inset-0 z-50 grid place-items-center bg-black/60 p-4"
-          role="dialog"
-        >
-          <div className="w-[min(440px,calc(100vw-32px))] rounded-2xl border border-white/10 bg-surface-container-low p-6 shadow-2xl">
-            <h2 className="text-lg font-semibold text-white">
-              {testPlanCopy.archiveTitle}
-            </h2>
-            <p className="mt-2 text-sm leading-6 text-text-muted">
-              Archive {draft.name}? {testPlanCopy.archiveBody}
-            </p>
-            {actionError ? (
-              <p className="mt-4 rounded-lg border border-error/30 bg-error-container px-4 py-3 text-sm text-on-error-container">
-                {actionError}
-              </p>
-            ) : null}
-            <div className="mt-6 flex justify-end gap-3">
-              <button
-                className="rounded-lg border border-white/10 px-4 py-2 text-sm text-text-main transition hover:bg-white/5"
-                onClick={() => {
-                  setArchiveOpen(false);
-                  setActionError(null);
-                }}
-                type="button"
-              >
-                {testPlanCopy.cancel}
-              </button>
-              <button
-                className="rounded-lg bg-error-container px-4 py-2 text-sm font-semibold text-on-error-container transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-60"
-                disabled={isArchiving}
-                onClick={() => void handleArchive()}
-                type="button"
-              >
-                {isArchiving ? "Archiving..." : testPlanCopy.archive}
-              </button>
-            </div>
-          </div>
-        </div>
-      ) : null}
-    </div>
+    </section>
   );
 }

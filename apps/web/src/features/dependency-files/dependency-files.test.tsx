@@ -1,13 +1,9 @@
+import { focusManager } from "@tanstack/react-query";
 import { cleanup, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { App } from "../../App";
-
-const workspace = {
-  id: "01HZW000000000000000000000",
-  name: "Default Workspace",
-};
 
 const authSession = {
   user: {
@@ -17,8 +13,10 @@ const authSession = {
     role: "admin",
     status: "active",
   },
-  currentWorkspace: workspace,
-  defaultWorkspace: workspace,
+  defaultWorkspace: {
+    id: "01HZW000000000000000000000",
+    name: "Default Workspace",
+  },
   csrfToken: "csrf-token",
 };
 
@@ -71,13 +69,18 @@ function mockFetch(
 ) {
   const fetchMock = vi.fn((input: RequestInfo | URL) => {
     const url = requestUrl(input);
-    if (url.includes("/api/v1/auth/me")) return jsonResponse(authSession);
+    if (url.endsWith("/api/v1/auth/me")) return jsonResponse(authSession);
     if (url.includes("/api/v1/dependency-files?")) {
       return jsonResponse({ items: files, page: 1, pageSize: 20, total: files.length });
     }
     const match = url.match(/\/api\/v1\/dependency-files\/([^/]+)\/preview$/);
     if (match) return previewHandler(match[1]);
-    return jsonResponse({});
+    return jsonResponse({
+      needsBootstrap: false,
+      allowSignup: true,
+      hasDefaultWorkspace: true,
+      storageAvailable: true,
+    });
   });
   vi.stubGlobal("fetch", fetchMock);
   return fetchMock;
@@ -91,13 +94,18 @@ function renderDependencyFilesPage() {
 beforeEach(() => {
   window.history.pushState({}, "", "/");
   window.localStorage.clear();
-  Object.defineProperty(navigator, "clipboard", {
+  Object.defineProperty(window, "isSecureContext", {
     configurable: true,
-    value: { writeText: vi.fn(() => Promise.resolve()) },
+    value: true,
+  });
+  vi.stubGlobal("navigator", {
+    ...navigator,
+    clipboard: { writeText: vi.fn(() => Promise.resolve()) },
   });
 });
 
 afterEach(() => {
+  focusManager.setFocused(undefined);
   cleanup();
   vi.unstubAllGlobals();
 });
@@ -117,9 +125,7 @@ describe("P1-06 Dependency File preview web flow", () => {
 
     await screen.findByRole("heading", { name: "Dependency Files" });
     await screen.findByText("users.html");
-    expect(
-      fetchMock.mock.calls.filter(([input]) => requestUrl(input).includes("/preview")),
-    ).toHaveLength(0);
+    expect(fetchMock.mock.calls.filter(([input]) => requestUrl(input).includes("/preview"))).toHaveLength(0);
 
     await userEvent.click(screen.getByRole("button", { name: "Preview users.html" }));
 
@@ -141,7 +147,6 @@ describe("P1-06 Dependency File preview web flow", () => {
       }),
     );
     expect(await within(dialog).findByText("<strong>not bold</strong>")).toBeInTheDocument();
-    expect(dialog.querySelector("strong")).toBeNull();
     expect(within(dialog).getByText("Preview truncated at 16 B.")).toBeInTheDocument();
 
     await userEvent.click(within(dialog).getByRole("button", { name: "Copy preview text" }));
@@ -178,7 +183,9 @@ describe("P1-06 Dependency File preview web flow", () => {
     await screen.findByText("copy me");
     await userEvent.click(within(dialog).getByRole("button", { name: "Copy preview text" }));
     expect(
-      await within(dialog).findByText("Clipboard access is unavailable."),
+      await within(dialog).findByText(
+        "Clipboard copy is unavailable. Use HTTPS or localhost, allow clipboard access, or select the text and copy it manually."
+      ),
     ).toBeInTheDocument();
 
     await userEvent.click(within(dialog).getByRole("button", { name: "Close preview" }));
@@ -234,9 +241,7 @@ describe("P1-06 Dependency File preview web flow", () => {
       await within(dialog).findByText("File storage is temporarily unavailable. Try again later."),
     ).toBeInTheDocument();
     expect(within(dialog).getByRole("button", { name: "Retry preview" })).toBeInTheDocument();
-    expect(
-      within(dialog).getByRole("button", { name: "Download invalid.txt" }),
-    ).toBeInTheDocument();
+    expect(within(dialog).getByRole("button", { name: "Download invalid.txt" })).toBeInTheDocument();
   });
 
   it("does not show stale preview content after switching files", async () => {

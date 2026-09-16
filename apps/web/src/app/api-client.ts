@@ -1,17 +1,13 @@
-import type { components } from "@surgepilot/contracts/web-client";
+import createClient from "openapi-fetch";
 
-export type UserRole = "admin" | "user";
+import type { components, paths } from "@surgepilot/contracts/web-client";
 
 export type ApiErrorBody = components["schemas"]["ErrorResponse"];
-export type WorkspaceSummary = components["schemas"]["WorkspaceSummary"];
-export type AvailableWorkspaceSummary =
-  components["schemas"]["AvailableWorkspaceSummary"];
-export type PermissionSummary = components["schemas"]["PermissionSummary"];
 export type AuthSession = components["schemas"]["AuthSessionResponse"];
-export type CsrfTokenResponse = components["schemas"]["CsrfTokenResponse"];
 export type CurrentUser = components["schemas"]["CurrentUserResponse"];
 export type LoginRequest = components["schemas"]["LoginRequest"];
 export type RegisterRequest = components["schemas"]["RegisterRequest"];
+export type SetupStatus = components["schemas"]["SetupStatusResponse"];
 export type ApiTokenCreateRequest =
   components["schemas"]["ApiTokenCreateRequest"];
 export type ApiTokenCreateResponse =
@@ -19,20 +15,42 @@ export type ApiTokenCreateResponse =
 export type ApiTokenListResponse =
   components["schemas"]["ApiTokenListResponse"];
 export type ApiTokenMetadata = components["schemas"]["ApiTokenMetadata"];
-export type SetupStatus = components["schemas"]["SetupStatusResponse"];
-export type UserSummary = components["schemas"]["UserSummary"];
-export type WorkspaceWriteRequest = components["schemas"]["WorkspaceWriteRequest"];
+
+export type WorkspaceSummary = components["schemas"]["WorkspaceSummary"];
+export type AvailableWorkspaceSummary =
+  components["schemas"]["AvailableWorkspaceSummary"];
+export type PermissionSummary = components["schemas"]["PermissionSummary"];
+export type WorkspaceWriteRequest =
+  components["schemas"]["WorkspaceWriteRequest"];
 export type WorkspaceEnvelope = components["schemas"]["WorkspaceEnvelope"];
 export type AdminWorkspaceListResponse =
   components["schemas"]["AdminWorkspaceListResponse"];
 export type AdminUserSummary = components["schemas"]["AdminUserSummary"];
-export type AdminUserCreateRequest = components["schemas"]["AdminUserCreateRequest"];
-export type AdminUserPatchRequest = components["schemas"]["AdminUserPatchRequest"];
+export type AdminUserCreateRequest =
+  components["schemas"]["AdminUserCreateRequest"];
+export type AdminUserPatchRequest =
+  components["schemas"]["AdminUserPatchRequest"];
 export type AdminUserEnvelope = components["schemas"]["AdminUserEnvelope"];
-export type AdminUserListResponse = components["schemas"]["AdminUserListResponse"];
-export type SystemSettingsResponse = components["schemas"]["SystemSettingsResponse"];
-export type SystemSettingsPatchRequest = components["schemas"]["SystemSettingsPatchRequest"];
-
+export type AdminUserListResponse =
+  components["schemas"]["AdminUserListResponse"];
+export type MembershipReplaceRequest =
+  components["schemas"]["MembershipReplaceRequest"];
+export type SystemSettingsResponse =
+  components["schemas"]["SystemSettingsResponse"];
+export type SystemSettingsPatchRequest =
+  components["schemas"]["SystemSettingsPatchRequest"];
+export type OverviewResponse = components["schemas"]["OverviewResponse"];
+export type ApiCatalogSpecListResponse =
+  components["schemas"]["ApiCatalogSpecListResponse"];
+export type ApiCatalogSpecResponse =
+  components["schemas"]["ApiCatalogSpecResponse"];
+export type ApiCatalogSpecSummary =
+  components["schemas"]["ApiCatalogSpecSummary"];
+export type ApiCatalogSpecSourceFormat =
+  components["schemas"]["ApiCatalogSpecSourceFormat"];
+export type ApiCatalogSpecStatus =
+  components["schemas"]["ApiCatalogSpecStatus"];
+export type OverviewRecentRun = components["schemas"]["OverviewRecentRun"];
 export type EnvGroupCreateRequest =
   components["schemas"]["EnvGroupCreateRequest"];
 export type EnvGroupDetail = components["schemas"]["EnvGroupDetail"];
@@ -47,39 +65,36 @@ export type EnvGroupVariableRead =
 export type EnvGroupVariableWrite =
   | components["schemas"]["EnvGroupPlainVariableWrite"]
   | components["schemas"]["EnvGroupSecretVariableWrite"];
+export type CloneRequest = components["schemas"]["CloneRequest"];
+export type ExecutionPreviewResponse =
+  components["schemas"]["ExecutionPreviewResponse"];
+export type MonitoringEmbedResponse =
+  components["schemas"]["MonitoringEmbedResponse"];
+export type RunMonitoringLinkResponse =
+  components["schemas"]["RunMonitoringLinkResponse"];
 
 export type DependencyFileDetail =
   components["schemas"]["DependencyFileDetail"];
 export type DependencyFileListResponse =
   components["schemas"]["DependencyFileListResponse"];
-export type DependencyFileSummary =
-  components["schemas"]["DependencyFileSummary"];
 export type DependencyFilePreviewResponse =
   components["schemas"]["DependencyFilePreviewResponse"];
-
-export type LoadNodeCreateRequest =
-  components["schemas"]["LoadNodeCreateRequest"];
-export type LoadNodeCredentialUpdateRequest =
-  components["schemas"]["LoadNodeCredentialUpdateRequest"];
+export type DependencyFileSummary =
+  components["schemas"]["DependencyFileSummary"];
+export type LoadNodeConnectivitySummary =
+  components["schemas"]["LoadNodeConnectivitySummary"];
+export type LoadNodeSummary = components["schemas"]["LoadNodeSummary"];
 export type LoadNodeDetail = components["schemas"]["LoadNodeDetail"];
-export type LoadNodeInitAttemptDetail =
-  components["schemas"]["LoadNodeInitAttemptDetail"];
-export type LoadNodeInitAttemptListResponse =
-  components["schemas"]["LoadNodeInitAttemptListResponse"];
-export type LoadNodeInitAttemptSummary =
-  components["schemas"]["LoadNodeInitAttemptSummary"];
-export type LoadNodeInitializeResponse =
-  components["schemas"]["LoadNodeInitializeResponse"];
 export type LoadNodeListResponse =
   components["schemas"]["LoadNodeListResponse"];
+export type LoadNodeCreateRequest =
+  components["schemas"]["LoadNodeCreateRequest"];
 export type LoadNodePatchRequest =
   components["schemas"]["LoadNodePatchRequest"];
-export type LoadNodeScope =
-  components["schemas"]["LoadNodeSummary"]["scope"];
-export type LoadNodeStatus =
-  components["schemas"]["LoadNodeSummary"]["status"];
-export type LoadNodeAuthType =
-  components["schemas"]["LoadNodeSummary"]["authType"];
+export type LoadNodeCredentialUpdateRequest =
+  components["schemas"]["LoadNodeCredentialUpdateRequest"];
+export type LoadNodeInitializeResponse =
+  components["schemas"]["LoadNodeInitializeResponse"];
 export type LoadNodeSshHostKeyInput =
   components["schemas"]["LoadNodeSshHostKeyInput"];
 export type LoadNodeSshHostKeyResponse =
@@ -88,51 +103,22 @@ export type LoadNodeSshHostKeyScanRequest =
   components["schemas"]["LoadNodeSshHostKeyScanRequest"];
 export type LoadNodeSshHostKeyScanResponse =
   components["schemas"]["LoadNodeSshHostKeyScanResponse"];
-export type LoadNodeSummary = components["schemas"]["LoadNodeSummary"];
-export type LoadNodeConnectivitySummary =
-  components["schemas"]["LoadNodeConnectivitySummary"];
-
-export type RunCreateRequest = components["schemas"]["RunCreateRequest"];
-export type RunCreateResponse = components["schemas"]["RunCreateResponse"];
-export type RunState = components["schemas"]["RunState"];
-export type RunListResponse = components["schemas"]["RunListResponse"];
-export type RunListItem = components["schemas"]["RunListItem"];
-export type RunReportDetail = components["schemas"]["RunReportDetail"];
-export type RunArtifactListResponse = components["schemas"]["RunArtifactListResponse"];
-export type RunArtifactItem = components["schemas"]["RunArtifactItem"];
-export type RunArtifactType = components["schemas"]["RunArtifactType"];
-export type RunType = components["schemas"]["RunType"];
-export type RunSourceType = components["schemas"]["RunSourceType"];
-export type RunValidity = components["schemas"]["RunValidity"];
-export type RunValidityPatchResponse = components["schemas"]["RunValidityPatchResponse"];
-export type RunStopResponse = components["schemas"]["RunStopResponse"];
-export type MonitoringEmbedResponse =
-  components["schemas"]["MonitoringEmbedResponse"];
-export type RunMonitoringLinkResponse =
-  components["schemas"]["RunMonitoringLinkResponse"];
-export type CloneRequest = components["schemas"]["CloneRequest"];
-export type ScenarioAssertion = components["schemas"]["ScenarioAssertion"];
-export type ScenarioBody = components["schemas"]["ScenarioBody"];
+export type LoadNodeInitAttemptSummary =
+  components["schemas"]["LoadNodeInitAttemptSummary"];
+export type LoadNodeInitAttemptDetail =
+  components["schemas"]["LoadNodeInitAttemptDetail"];
+export type LoadNodeScope = components["schemas"]["LoadNodeSummary"]["scope"];
+export type LoadNodeStatus = components["schemas"]["LoadNodeSummary"]["status"];
+export type LoadNodeAuthType =
+  components["schemas"]["LoadNodeSummary"]["authType"];
 export type ScenarioCreateRequest =
   components["schemas"]["ScenarioCreateRequest"];
-export type ScenarioDataSource =
-  components["schemas"]["ScenarioDataSource"];
-export type ScenarioDefaultSettings =
-  components["schemas"]["ScenarioDefaultSettings"];
 export type ScenarioDetail = components["schemas"]["ScenarioDetail"];
-export type ScenarioExtractor = components["schemas"]["ScenarioExtractor"];
-export type ScenarioFormField = components["schemas"]["ScenarioFormField"];
 export type ScenarioListResponse =
   components["schemas"]["ScenarioListResponse"];
-export type ScenarioNamedValue = components["schemas"]["ScenarioNamedValue"];
 export type ScenarioPatchRequest =
   components["schemas"]["ScenarioPatchRequest"];
-export type ScenarioScript = components["schemas"]["ScenarioScript"];
 export type ScenarioStep = components["schemas"]["ScenarioStep"];
-export type ScenarioStepSettings =
-  components["schemas"]["ScenarioStepSettings"];
-export type ScenarioSummary = components["schemas"]["ScenarioSummary"];
-export type ScenarioUploadFile = components["schemas"]["ScenarioUploadFile"];
 export type CurlImportParseRequest =
   components["schemas"]["CurlImportParseRequest"];
 export type CurlImportParseResponse =
@@ -149,48 +135,36 @@ export type OpenApiStepDraftPreviewResponse =
   components["schemas"]["OpenApiStepDraftPreviewResponse"];
 export type OpenApiGeneratedStepDraft =
   components["schemas"]["OpenApiGeneratedStepDraft"];
-
+export type RunCreateRequest = components["schemas"]["RunCreateRequest"];
+export type RunCreateResponse = components["schemas"]["RunCreateResponse"];
+export type RunResourceRequest = components["schemas"]["RunResourceRequest"];
+export type RunListResponse = components["schemas"]["RunListResponse"];
+export type RunListItem = components["schemas"]["RunListItem"];
+export type RunReportDetail = components["schemas"]["RunReportDetail"];
+export type RunArtifactListResponse =
+  components["schemas"]["RunArtifactListResponse"];
+export type RunArtifactItem = components["schemas"]["RunArtifactItem"];
+export type RunArtifactType = components["schemas"]["RunArtifactType"];
+export type RunState = components["schemas"]["RunState"];
+export type RunType = components["schemas"]["RunType"];
+export type RunSourceType = components["schemas"]["RunSourceType"];
+export type RunValidity = components["schemas"]["RunValidity"];
+export type RunValidityPatchResponse =
+  components["schemas"]["RunValidityPatchResponse"];
+export type RunStopResponse = components["schemas"]["RunStopResponse"];
 export type TestPlanCreateRequest =
   components["schemas"]["TestPlanCreateRequest"];
 export type TestPlanDetail = components["schemas"]["TestPlanDetail"];
 export type TestPlanListResponse =
   components["schemas"]["TestPlanListResponse"];
-export type TestPlanLoadSettings =
-  components["schemas"]["TestPlanLoadSettings"];
 export type TestPlanPatchRequest =
   components["schemas"]["TestPlanPatchRequest"];
 export type TestPlanSummary = components["schemas"]["TestPlanSummary"];
 export type TestPlanScenarioItem =
   components["schemas"]["TestPlanScenarioItemDetail"];
 export type TestPlanSlaRule = components["schemas"]["TestPlanSlaRuleDetail"];
-export type ExecutionPreviewResponse =
-  components["schemas"]["ExecutionPreviewResponse"];
-export type ExecutionPreviewWarning =
-  components["schemas"]["ExecutionPreviewWarning"];
-
-export type OverviewActiveRuns =
-  components["schemas"]["OverviewActiveRuns"];
-export type OverviewRecentRun =
-  components["schemas"]["OverviewRecentRun"];
-export type OverviewResourceSummary =
-  components["schemas"]["OverviewResourceSummary"];
-export type OverviewResponse =
-  components["schemas"]["OverviewResponse"];
-export type OverviewResultRunScope =
-  components["schemas"]["OverviewResultRunScope"];
-export type OverviewRunStats =
-  components["schemas"]["OverviewRunStats"];
-export type OverviewStatsScope =
-  components["schemas"]["OverviewStatsScope"];
-export type OverviewWorkspace =
-  components["schemas"]["OverviewWorkspace"];
-
-export type ApiCatalogSpecListResponse =
-  components["schemas"]["ApiCatalogSpecListResponse"];
-export type ApiCatalogSpecResponse =
-  components["schemas"]["ApiCatalogSpecResponse"];
-export type ApiCatalogSpecSummary =
-  components["schemas"]["ApiCatalogSpecSummary"];
+export type TestPlanLoadSettings =
+  components["schemas"]["TestPlanLoadSettings"];
 
 export class ApiError extends Error {
   readonly body: ApiErrorBody;
@@ -198,85 +172,194 @@ export class ApiError extends Error {
 
   constructor(status: number, body: ApiErrorBody) {
     super(body.message);
-    this.name = "ApiError";
-    this.status = status;
     this.body = body;
+    this.status = status;
   }
 }
 
-function apiUrl(path: string) {
-  const base = import.meta.env.VITE_API_BASE_URL?.trim().replace(/\/+$/, "");
-  return `${base || "/api"}${path}`;
+function defaultApiBaseUrl() {
+  return typeof window === "undefined"
+    ? "/api"
+    : `${window.location.origin}/api`;
 }
 
-async function request<T>(path: string, init?: RequestInit): Promise<T> {
-  let response: Response;
-  const headers = new Headers(init?.headers);
-  headers.set("Accept", "application/json");
-  if (init?.body && !(init.body instanceof FormData)) {
-    headers.set("Content-Type", "application/json");
-  }
-  try {
-    response = await fetch(apiUrl(path), {
-      ...init,
-      credentials: "include",
-      headers,
-    });
-  } catch {
-    throw new ApiError(0, {
-      code: "REQUEST_FAILED",
-      message: "Request failed.",
-    });
-  }
+function normalizeApiBaseUrl(value: string | undefined) {
+  const trimmed = value?.trim().replace(/\/+$/, "");
+  return trimmed || defaultApiBaseUrl();
+}
 
-  if (!response.ok) {
-    let body: ApiErrorBody;
-    try {
-      body = (await response.json()) as ApiErrorBody;
-    } catch {
-      body = { code: "REQUEST_FAILED", message: "Request failed." };
-    }
-    throw new ApiError(response.status, body);
-  }
+const apiBaseUrl = normalizeApiBaseUrl(import.meta.env.VITE_API_BASE_URL);
 
-  if (response.status === 204) {
-    return undefined as T;
+const client = createClient<paths>({
+  baseUrl: apiBaseUrl,
+  credentials: "include",
+  fetch: (input) => globalThis.fetch(input),
+});
+
+function fallbackError(): ApiErrorBody {
+  return {
+    code: "REQUEST_FAILED",
+    message: "Request failed.",
+    requestId: "unknown",
+  };
+}
+
+async function unwrap<T>(
+  request: Promise<{ data?: T; error?: unknown; response: Response }>,
+): Promise<T> {
+  const result = await request;
+  if (!result.response.ok) {
+    throw new ApiError(
+      result.response.status,
+      (result.error as ApiErrorBody | undefined) ?? fallbackError(),
+    );
   }
-  return (await response.json()) as T;
+  return result.data as T;
 }
 
 export function getSetupStatus() {
-  return request<SetupStatus>("/v1/setup/status");
+  return unwrap<SetupStatus>(client.GET("/v1/setup/status"));
+}
+
+export function downloadPublicApiAiSkill() {
+  return unwrap<Blob>(
+    client.GET("/v1/account/ai-skill/download", { parseAs: "blob" }),
+  );
 }
 
 export function getAdminSetupStatus() {
-  return request<SetupStatus>("/v1/admin/setup-status");
+  return unwrap<SetupStatus>(client.GET("/v1/admin/setup-status"));
 }
 
-export function getOverview(params: {
-  recentLimit?: number;
-  workspaceId: string;
-}) {
-  const query = new URLSearchParams();
-  if (params.recentLimit !== undefined) {
-    query.set("recentLimit", String(params.recentLimit));
-  }
-  const queryStr = query.toString();
-  const url = queryStr ? `/v1/overview?${queryStr}` : "/v1/overview";
-  return request<OverviewResponse>(url, {
-    headers: { "x-workspace-id": params.workspaceId },
-  });
+export function listAdminWorkspaces(
+  status: "active" | "archived" | "all" = "active",
+) {
+  return unwrap<AdminWorkspaceListResponse>(
+    client.GET("/v1/admin/workspaces", { params: { query: { status } } }),
+  );
 }
 
-export function getCurrentUser(preferredWorkspaceId?: string | null) {
-  const query = preferredWorkspaceId
-    ? `?preferredWorkspaceId=${encodeURIComponent(preferredWorkspaceId)}`
-    : "";
-  return request<CurrentUser>(`/v1/auth/me${query}`);
+export function createAdminWorkspace(
+  payload: WorkspaceWriteRequest,
+  csrfToken: string,
+) {
+  return unwrap<WorkspaceEnvelope>(
+    client.POST("/v1/admin/workspaces", {
+      body: payload,
+      params: { header: { "x-csrf-token": csrfToken } },
+    }),
+  );
 }
 
-export function getCsrfToken() {
-  return request<CsrfTokenResponse>("/v1/auth/csrf");
+export function patchAdminWorkspace(
+  workspaceId: string,
+  payload: WorkspaceWriteRequest,
+  csrfToken: string,
+) {
+  return unwrap<WorkspaceEnvelope>(
+    client.PATCH("/v1/admin/workspaces/{workspaceId}", {
+      body: payload,
+      params: {
+        path: { workspaceId },
+        header: { "x-csrf-token": csrfToken },
+      },
+    }),
+  );
+}
+
+export function archiveAdminWorkspace(workspaceId: string, csrfToken: string) {
+  return unwrap<WorkspaceEnvelope>(
+    client.POST("/v1/admin/workspaces/{workspaceId}/archive", {
+      params: {
+        path: { workspaceId },
+        header: { "x-csrf-token": csrfToken },
+      },
+    }),
+  );
+}
+
+export function listAdminUsers(q?: string) {
+  return unwrap<AdminUserListResponse>(
+    client.GET("/v1/admin/users", { params: { query: { q } } }),
+  );
+}
+
+export function createAdminUser(
+  payload: AdminUserCreateRequest,
+  csrfToken: string,
+) {
+  return unwrap<AdminUserEnvelope>(
+    client.POST("/v1/admin/users", {
+      body: payload,
+      params: { header: { "x-csrf-token": csrfToken } },
+    }),
+  );
+}
+
+export function patchAdminUser(
+  userId: string,
+  payload: AdminUserPatchRequest,
+  csrfToken: string,
+) {
+  return unwrap<AdminUserEnvelope>(
+    client.PATCH("/v1/admin/users/{userId}", {
+      body: payload,
+      params: {
+        path: { userId },
+        header: { "x-csrf-token": csrfToken },
+      },
+    }),
+  );
+}
+
+export function resetAdminUserPassword(
+  userId: string,
+  newPassword: string,
+  csrfToken: string,
+) {
+  return unwrap<AdminUserEnvelope>(
+    client.POST("/v1/admin/users/{userId}/reset-password", {
+      body: { newPassword },
+      params: {
+        path: { userId },
+        header: { "x-csrf-token": csrfToken },
+      },
+    }),
+  );
+}
+
+export function replaceAdminUserWorkspaces(
+  userId: string,
+  workspaceIds: string[],
+  csrfToken: string,
+) {
+  return unwrap<AdminUserEnvelope>(
+    client.PUT("/v1/admin/users/{userId}/workspaces", {
+      body: { workspaceIds },
+      params: {
+        path: { userId },
+        header: { "x-csrf-token": csrfToken },
+      },
+    }),
+  );
+}
+
+export function getSystemSettings() {
+  return unwrap<SystemSettingsResponse>(
+    client.GET("/v1/admin/system-settings"),
+  );
+}
+
+export function patchSystemSettings(
+  payload: SystemSettingsPatchRequest,
+  csrfToken: string,
+) {
+  return unwrap<SystemSettingsResponse>(
+    client.PATCH("/v1/admin/system-settings", {
+      body: payload,
+      params: { header: { "x-csrf-token": csrfToken } },
+    }),
+  );
 }
 
 export function listApiCatalogSpecs(params: {
@@ -284,16 +367,17 @@ export function listApiCatalogSpecs(params: {
   offset?: number;
   workspaceId: string;
 }) {
-  const query = new URLSearchParams({
-    limit: String(params.limit ?? 50),
-    offset: String(params.offset ?? 0),
-  });
-  return request<ApiCatalogSpecListResponse>(`/v1/api-catalog/specs?${query}`, {
-    headers: { "x-workspace-id": params.workspaceId },
-  });
+  return unwrap<ApiCatalogSpecListResponse>(
+    client.GET("/v1/api-catalog/specs", {
+      params: {
+        header: { "x-workspace-id": params.workspaceId },
+        query: { limit: params.limit ?? 50, offset: params.offset ?? 0 },
+      },
+    }),
+  );
 }
 
-export async function uploadApiCatalogSpec(params: {
+export function uploadApiCatalogSpec(params: {
   file: File;
   name?: string;
   workspaceId: string;
@@ -301,21 +385,32 @@ export async function uploadApiCatalogSpec(params: {
 }) {
   const formData = new FormData();
   formData.append("file", params.file);
-  if (params.name?.trim()) formData.append("name", params.name.trim());
-  return request<ApiCatalogSpecResponse>("/v1/api-catalog/specs", {
-    method: "POST",
-    headers: {
-      "x-csrf-token": params.csrfToken,
-      "x-workspace-id": params.workspaceId,
-    },
-    body: formData,
-  });
+  const name = params.name?.trim();
+  if (name) {
+    formData.append("name", name);
+  }
+  return unwrap<ApiCatalogSpecResponse>(
+    client.POST("/v1/api-catalog/specs", {
+      body: formData as never,
+      bodySerializer: (body) => body as unknown as BodyInit,
+      params: {
+        header: {
+          "x-csrf-token": params.csrfToken,
+          "x-workspace-id": params.workspaceId,
+        },
+      },
+    }),
+  );
 }
 
 export function getApiCatalogSpec(specId: string, workspaceId: string) {
-  return request<ApiCatalogSpecResponse>(
-    `/v1/api-catalog/specs/${encodeURIComponent(specId)}`,
-    { headers: { "x-workspace-id": workspaceId } },
+  return unwrap<ApiCatalogSpecResponse>(
+    client.GET("/v1/api-catalog/specs/{specId}", {
+      params: {
+        header: { "x-workspace-id": workspaceId },
+        path: { specId },
+      },
+    }),
   );
 }
 
@@ -324,158 +419,150 @@ export function deleteApiCatalogSpec(
   workspaceId: string,
   csrfToken: string,
 ) {
-  return request<void>(
-    `/v1/api-catalog/specs/${encodeURIComponent(specId)}`,
-    {
-      method: "DELETE",
-      headers: {
-        "x-csrf-token": csrfToken,
-        "x-workspace-id": workspaceId,
+  return unwrap<void>(
+    client.DELETE("/v1/api-catalog/specs/{specId}", {
+      params: {
+        header: {
+          "x-csrf-token": csrfToken,
+          "x-workspace-id": workspaceId,
+        },
+        path: { specId },
       },
-    },
+    }),
+  );
+}
+
+export function getOverview(params: {
+  recentLimit?: number;
+  workspaceId: string;
+}) {
+  return unwrap<OverviewResponse>(
+    client.GET("/v1/overview", {
+      params: {
+        header: { "x-workspace-id": params.workspaceId },
+        query: { recentLimit: params.recentLimit ?? 5 },
+      },
+    }),
+  );
+}
+
+export function listAccountApiTokens() {
+  return unwrap<ApiTokenListResponse>(client.GET("/v1/account/api-tokens"));
+}
+
+export function createAccountApiToken(
+  payload: ApiTokenCreateRequest,
+  csrfToken: string,
+) {
+  return unwrap<ApiTokenCreateResponse>(
+    client.POST("/v1/account/api-tokens", {
+      body: payload,
+      params: { header: { "x-csrf-token": csrfToken } },
+    }),
+  );
+}
+
+export function deleteAccountApiToken(tokenId: string, csrfToken: string) {
+  return unwrap<void>(
+    client.DELETE("/v1/account/api-tokens/{tokenId}", {
+      params: {
+        header: { "x-csrf-token": csrfToken },
+        path: { tokenId },
+      },
+    }),
+  );
+}
+
+export function getCurrentUser(preferredWorkspaceId?: string | null) {
+  if (!preferredWorkspaceId) {
+    return unwrap<CurrentUser>(client.GET("/v1/auth/me"));
+  }
+  return unwrap<CurrentUser>(
+    client.GET("/v1/auth/me", {
+      params: { query: { preferredWorkspaceId } },
+    }),
+  );
+}
+
+export function switchWorkspace(workspaceId: string, csrfToken: string) {
+  return unwrap<CurrentUser>(
+    client.POST("/v1/workspaces/switch", {
+      body: { workspaceId },
+      params: { header: { "x-csrf-token": csrfToken } },
+    }),
+  );
+}
+
+export function getCsrfToken() {
+  return unwrap<components["schemas"]["CsrfTokenResponse"]>(
+    client.GET("/v1/auth/csrf"),
   );
 }
 
 export function login(payload: LoginRequest) {
-  return request<AuthSession>("/v1/auth/login", {
-    method: "POST",
-    body: JSON.stringify(payload),
-  });
-}
-
-export function register(payload: RegisterRequest) {
-  return request<AuthSession>("/v1/auth/register", {
-    method: "POST",
-    body: JSON.stringify(payload),
-  });
-}
-
-export function logout(csrfToken: string) {
-  return request<void>("/v1/auth/logout", {
-    method: "POST",
-    headers: { "x-csrf-token": csrfToken },
-  });
-}
-
-export function switchWorkspace(workspaceId: string, csrfToken: string) {
-  return request<CurrentUser>("/v1/workspaces/switch", {
-    method: "POST",
-    body: JSON.stringify({ workspaceId }),
-    headers: { "x-csrf-token": csrfToken },
-  });
-}
-
-export function listAdminWorkspaces(status: "active" | "archived" | "all" = "active") {
-  return request<AdminWorkspaceListResponse>(
-    `/v1/admin/workspaces?status=${encodeURIComponent(status)}`,
+  return unwrap<AuthSession>(
+    client.POST("/v1/auth/login", {
+      body: payload,
+    }),
   );
 }
 
-export function createAdminWorkspace(payload: WorkspaceWriteRequest, csrfToken: string) {
-  return request<WorkspaceEnvelope>("/v1/admin/workspaces", {
-    method: "POST",
-    body: JSON.stringify(payload),
-    headers: { "x-csrf-token": csrfToken },
-  });
+export function register(payload: RegisterRequest) {
+  return unwrap<AuthSession>(
+    client.POST("/v1/auth/register", {
+      body: payload,
+    }),
+  );
 }
 
-export function patchAdminWorkspace(id: string, payload: WorkspaceWriteRequest, csrfToken: string) {
-  return request<WorkspaceEnvelope>(`/v1/admin/workspaces/${encodeURIComponent(id)}`, {
-    method: "PATCH",
-    body: JSON.stringify(payload),
-    headers: { "x-csrf-token": csrfToken },
-  });
-}
-
-export function archiveAdminWorkspace(id: string, csrfToken: string) {
-  return request<WorkspaceEnvelope>(`/v1/admin/workspaces/${encodeURIComponent(id)}/archive`, {
-    method: "POST",
-    headers: { "x-csrf-token": csrfToken },
-  });
-}
-
-export function listAdminUsers(q?: string) {
-  const query = q ? `?q=${encodeURIComponent(q)}` : "";
-  return request<AdminUserListResponse>(`/v1/admin/users${query}`);
-}
-
-export function createAdminUser(payload: AdminUserCreateRequest, csrfToken: string) {
-  return request<AdminUserEnvelope>("/v1/admin/users", {
-    method: "POST",
-    body: JSON.stringify(payload),
-    headers: { "x-csrf-token": csrfToken },
-  });
-}
-
-export function patchAdminUser(id: string, payload: AdminUserPatchRequest, csrfToken: string) {
-  return request<AdminUserEnvelope>(`/v1/admin/users/${encodeURIComponent(id)}`, {
-    method: "PATCH",
-    body: JSON.stringify(payload),
-    headers: { "x-csrf-token": csrfToken },
-  });
-}
-
-export function replaceAdminUserWorkspaces(id: string, workspaceIds: string[], csrfToken: string) {
-  return request<AdminUserEnvelope>(`/v1/admin/users/${encodeURIComponent(id)}/workspaces`, {
-    method: "PUT",
-    body: JSON.stringify({ workspaceIds }),
-    headers: { "x-csrf-token": csrfToken },
-  });
-}
-
-export function resetAdminUserPassword(id: string, newPassword: string, csrfToken: string) {
-  return request<{ user: AdminUserSummary }>(`/v1/admin/users/${encodeURIComponent(id)}/reset-password`, {
-    method: "POST",
-    body: JSON.stringify({ newPassword }),
-    headers: { "x-csrf-token": csrfToken },
-  });
-}
-
-export function getSystemSettings() {
-  return request<SystemSettingsResponse>("/v1/admin/system-settings");
-}
-
-export function patchSystemSettings(payload: SystemSettingsPatchRequest, csrfToken: string) {
-  return request<SystemSettingsResponse>("/v1/admin/system-settings", {
-    method: "PATCH",
-    body: JSON.stringify(payload),
-    headers: { "x-csrf-token": csrfToken },
-  });
+export function logout(csrfToken: string) {
+  return unwrap<void>(
+    client.POST("/v1/auth/logout", {
+      params: {
+        header: {
+          "x-csrf-token": csrfToken,
+        },
+      },
+    }),
+  );
 }
 
 export function listEnvGroups(params: {
   page?: number;
   pageSize?: number;
   q?: string;
-  sort?: string;
+  sort?: "name" | "createdAt" | "-createdAt";
   workspaceId: string;
 }) {
-  const searchParams = new URLSearchParams();
-  if (params.page !== undefined) {
-    searchParams.set("page", String(params.page));
-  }
-  if (params.pageSize !== undefined) {
-    searchParams.set("pageSize", String(params.pageSize));
-  }
-  if (params.q) {
-    searchParams.set("q", params.q);
-  }
-  if (params.sort) {
-    searchParams.set("sort", params.sort);
-  }
-  const queryStr = searchParams.toString();
-  const url = queryStr ? `/v1/env-groups?${queryStr}` : "/v1/env-groups";
-  return request<EnvGroupListResponse>(url, {
-    headers: { "x-workspace-id": params.workspaceId },
-  });
+  return unwrap<EnvGroupListResponse>(
+    client.GET("/v1/env-groups", {
+      params: {
+        header: {
+          "x-workspace-id": params.workspaceId,
+        },
+        query: {
+          page: params.page ?? 1,
+          pageSize: params.pageSize ?? 20,
+          q: params.q || undefined,
+          sort: params.sort ?? "-createdAt",
+        },
+      },
+    }),
+  );
 }
 
 export function getEnvGroup(envGroupId: string, workspaceId: string) {
-  return request<EnvGroupDetail>(
-    `/v1/env-groups/${encodeURIComponent(envGroupId)}`,
-    {
-      headers: { "x-workspace-id": workspaceId },
-    },
+  return unwrap<EnvGroupDetail>(
+    client.GET("/v1/env-groups/{envGroupId}", {
+      params: {
+        header: {
+          "x-workspace-id": workspaceId,
+        },
+        path: {
+          envGroupId,
+        },
+      },
+    }),
   );
 }
 
@@ -484,14 +571,17 @@ export function createEnvGroup(
   workspaceId: string,
   csrfToken: string,
 ) {
-  return request<EnvGroupDetail>("/v1/env-groups", {
-    method: "POST",
-    headers: {
-      "x-csrf-token": csrfToken,
-      "x-workspace-id": workspaceId,
-    },
-    body: JSON.stringify(payload),
-  });
+  return unwrap<EnvGroupDetail>(
+    client.POST("/v1/env-groups", {
+      body: payload,
+      params: {
+        header: {
+          "x-csrf-token": csrfToken,
+          "x-workspace-id": workspaceId,
+        },
+      },
+    }),
+  );
 }
 
 export function patchEnvGroup(
@@ -500,16 +590,19 @@ export function patchEnvGroup(
   workspaceId: string,
   csrfToken: string,
 ) {
-  return request<EnvGroupDetail>(
-    `/v1/env-groups/${encodeURIComponent(envGroupId)}`,
-    {
-      method: "PATCH",
-      headers: {
-        "x-csrf-token": csrfToken,
-        "x-workspace-id": workspaceId,
+  return unwrap<EnvGroupDetail>(
+    client.PATCH("/v1/env-groups/{envGroupId}", {
+      body: payload,
+      params: {
+        header: {
+          "x-csrf-token": csrfToken,
+          "x-workspace-id": workspaceId,
+        },
+        path: {
+          envGroupId,
+        },
       },
-      body: JSON.stringify(payload),
-    },
+    }),
   );
 }
 
@@ -518,15 +611,18 @@ export function duplicateEnvGroup(
   workspaceId: string,
   csrfToken: string,
 ) {
-  return request<EnvGroupDetail>(
-    `/v1/env-groups/${encodeURIComponent(envGroupId)}/duplicate`,
-    {
-      method: "POST",
-      headers: {
-        "x-csrf-token": csrfToken,
-        "x-workspace-id": workspaceId,
+  return unwrap<EnvGroupDetail>(
+    client.POST("/v1/env-groups/{envGroupId}/duplicate", {
+      params: {
+        header: {
+          "x-csrf-token": csrfToken,
+          "x-workspace-id": workspaceId,
+        },
+        path: {
+          envGroupId,
+        },
       },
-    },
+    }),
   );
 }
 
@@ -535,15 +631,18 @@ export function deleteEnvGroup(
   workspaceId: string,
   csrfToken: string,
 ) {
-  return request<void>(
-    `/v1/env-groups/${encodeURIComponent(envGroupId)}`,
-    {
-      method: "DELETE",
-      headers: {
-        "x-csrf-token": csrfToken,
-        "x-workspace-id": workspaceId,
+  return unwrap<void>(
+    client.DELETE("/v1/env-groups/{envGroupId}", {
+      params: {
+        header: {
+          "x-csrf-token": csrfToken,
+          "x-workspace-id": workspaceId,
+        },
+        path: {
+          envGroupId,
+        },
       },
-    },
+    }),
   );
 }
 
@@ -551,129 +650,99 @@ export function listDependencyFiles(params: {
   page?: number;
   pageSize?: number;
   q?: string;
-  sort?: string;
+  sort?: "filename" | "createdAt" | "-createdAt" | "sizeBytes" | "-sizeBytes";
   workspaceId: string;
 }) {
-  const searchParams = new URLSearchParams();
-  if (params.page !== undefined) {
-    searchParams.set("page", String(params.page));
-  }
-  if (params.pageSize !== undefined) {
-    searchParams.set("pageSize", String(params.pageSize));
-  }
-  if (params.q) {
-    searchParams.set("q", params.q);
-  }
-  if (params.sort) {
-    searchParams.set("sort", params.sort);
-  }
-  const queryStr = searchParams.toString();
-  const url = queryStr
-    ? `/v1/dependency-files?${queryStr}`
-    : "/v1/dependency-files";
-  return request<DependencyFileListResponse>(url, {
-    headers: { "x-workspace-id": params.workspaceId },
-  });
+  return unwrap<DependencyFileListResponse>(
+    client.GET("/v1/dependency-files", {
+      params: {
+        header: {
+          "x-workspace-id": params.workspaceId,
+        },
+        query: {
+          page: params.page ?? 1,
+          pageSize: params.pageSize ?? 20,
+          q: params.q || undefined,
+          sort: params.sort ?? "-createdAt",
+        },
+      },
+    }),
+  );
+}
+
+export function uploadDependencyFile(
+  file: File,
+  workspaceId: string,
+  csrfToken: string,
+) {
+  const formData = new FormData();
+  formData.append("file", file);
+  return unwrap<DependencyFileDetail>(
+    client.POST("/v1/dependency-files", {
+      body: formData as never,
+      bodySerializer: (body) => body as unknown as BodyInit,
+      params: {
+        header: {
+          "x-csrf-token": csrfToken,
+          "x-workspace-id": workspaceId,
+        },
+      },
+    }),
+  );
 }
 
 export function getDependencyFile(
   dependencyFileId: string,
   workspaceId: string,
 ) {
-  return request<DependencyFileDetail>(
-    `/v1/dependency-files/${encodeURIComponent(dependencyFileId)}`,
-    {
-      headers: { "x-workspace-id": workspaceId },
-    },
+  return unwrap<DependencyFileDetail>(
+    client.GET("/v1/dependency-files/{dependencyFileId}", {
+      params: {
+        header: {
+          "x-workspace-id": workspaceId,
+        },
+        path: {
+          dependencyFileId,
+        },
+      },
+    }),
   );
 }
 
-export async function uploadDependencyFile(
-  file: File,
-  workspaceId: string,
-  csrfToken: string,
-): Promise<DependencyFileDetail> {
-  const formData = new FormData();
-  formData.append("file", file);
-  let response: Response;
-  try {
-    response = await fetch(apiUrl("/v1/dependency-files"), {
-      method: "POST",
-      credentials: "include",
-      headers: {
-        Accept: "application/json",
-        "x-csrf-token": csrfToken,
-        "x-workspace-id": workspaceId,
-      },
-      body: formData,
-    });
-  } catch {
-    throw new ApiError(0, {
-      code: "REQUEST_FAILED",
-      message: "Request failed.",
-    });
-  }
-
-  if (!response.ok) {
-    let body: ApiErrorBody;
-    try {
-      body = (await response.json()) as ApiErrorBody;
-    } catch {
-      body = { code: "REQUEST_FAILED", message: "Request failed." };
-    }
-    throw new ApiError(response.status, body);
-  }
-
-  return (await response.json()) as DependencyFileDetail;
-}
-
-export async function downloadDependencyFile(
+export function downloadDependencyFile(
   dependencyFileId: string,
   workspaceId: string,
-): Promise<Blob> {
-  let response: Response;
-  try {
-    response = await fetch(
-      apiUrl(
-        `/v1/dependency-files/${encodeURIComponent(dependencyFileId)}/download`,
-      ),
-      {
-        method: "GET",
-        credentials: "include",
-        headers: {
+) {
+  return unwrap<Blob>(
+    client.GET("/v1/dependency-files/{dependencyFileId}/download", {
+      parseAs: "blob",
+      params: {
+        header: {
           "x-workspace-id": workspaceId,
         },
+        path: {
+          dependencyFileId,
+        },
       },
-    );
-  } catch {
-    throw new ApiError(0, {
-      code: "REQUEST_FAILED",
-      message: "Request failed.",
-    });
-  }
-
-  if (!response.ok) {
-    let body: ApiErrorBody;
-    try {
-      body = (await response.json()) as ApiErrorBody;
-    } catch {
-      body = { code: "REQUEST_FAILED", message: "Request failed." };
-    }
-    throw new ApiError(response.status, body);
-  }
-
-  return await response.blob();
+    }),
+  );
 }
 
 export function previewDependencyFile(
   dependencyFileId: string,
   workspaceId: string,
 ) {
-  return request<DependencyFilePreviewResponse>(
-    `/v1/dependency-files/${encodeURIComponent(dependencyFileId)}/preview`,
-    {
-      headers: { "x-workspace-id": workspaceId },
-    },
+  return unwrap<DependencyFilePreviewResponse>(
+    client.GET("/v1/dependency-files/{dependencyFileId}/preview", {
+      params: {
+        header: {
+          "x-workspace-id": workspaceId,
+        },
+        path: {
+          dependencyFileId,
+        },
+      },
+    }),
   );
 }
 
@@ -682,15 +751,24 @@ export function deleteDependencyFile(
   workspaceId: string,
   csrfToken: string,
 ) {
-  return request<void>(
-    `/v1/dependency-files/${encodeURIComponent(dependencyFileId)}`,
-    {
-      method: "DELETE",
-      headers: {
-        "x-csrf-token": csrfToken,
-        "x-workspace-id": workspaceId,
+  return unwrap<void>(
+    client.DELETE("/v1/dependency-files/{dependencyFileId}", {
+      params: {
+        header: {
+          "x-csrf-token": csrfToken,
+          "x-workspace-id": workspaceId,
+        },
+        path: {
+          dependencyFileId,
+        },
       },
-    },
+    }),
+  );
+}
+
+export function getLoadNodeConnectivitySummary() {
+  return unwrap<LoadNodeConnectivitySummary>(
+    client.GET("/v1/load-nodes/connectivity-summary"),
   );
 }
 
@@ -700,42 +778,31 @@ export function listLoadNodes(params: {
   offset?: number;
   q?: string;
   scope?: LoadNodeScope | "";
-  sort?: string;
+  sort?:
+    | "createdAt"
+    | "-createdAt"
+    | "host"
+    | "status"
+    | "lastCheckedAt"
+    | "-lastCheckedAt";
   status?: LoadNodeStatus | "";
   workspaceId: string;
 }) {
-  const searchParams = new URLSearchParams();
-  if (params.limit !== undefined) {
-    searchParams.set("limit", String(params.limit));
-  }
-  if (params.offset !== undefined) {
-    searchParams.set("offset", String(params.offset));
-  }
-  if (params.q) {
-    searchParams.set("q", params.q);
-  }
-  if (params.scope) {
-    searchParams.set("scope", params.scope);
-  }
-  if (params.status) {
-    searchParams.set("status", params.status);
-  }
-  if (params.sort) {
-    searchParams.set("sort", params.sort);
-  }
-  if (params.includeArchived !== undefined) {
-    searchParams.set("includeArchived", String(params.includeArchived));
-  }
-  const queryStr = searchParams.toString();
-  const url = queryStr ? `/v1/load-nodes?${queryStr}` : "/v1/load-nodes";
-  return request<LoadNodeListResponse>(url, {
-    headers: { "x-workspace-id": params.workspaceId },
-  });
-}
-
-export function getLoadNodeConnectivitySummary() {
-  return request<LoadNodeConnectivitySummary>(
-    "/v1/load-nodes/connectivity-summary",
+  return unwrap<LoadNodeListResponse>(
+    client.GET("/v1/load-nodes", {
+      params: {
+        header: { "x-workspace-id": params.workspaceId },
+        query: {
+          includeArchived: params.includeArchived || undefined,
+          limit: params.limit ?? 20,
+          offset: params.offset ?? 0,
+          q: params.q || undefined,
+          scope: params.scope || undefined,
+          sort: params.sort ?? "-createdAt",
+          status: params.status || undefined,
+        },
+      },
+    }),
   );
 }
 
@@ -744,14 +811,14 @@ export function createLoadNode(
   workspaceId: string,
   csrfToken: string,
 ) {
-  return request<LoadNodeDetail>("/v1/load-nodes", {
-    method: "POST",
-    headers: {
-      "x-csrf-token": csrfToken,
-      "x-workspace-id": workspaceId,
-    },
-    body: JSON.stringify(payload),
-  });
+  return unwrap<LoadNodeDetail>(
+    client.POST("/v1/load-nodes", {
+      body: payload,
+      params: {
+        header: { "x-csrf-token": csrfToken, "x-workspace-id": workspaceId },
+      },
+    }),
+  );
 }
 
 export function scanLoadNodeSshHostKey(
@@ -759,16 +826,13 @@ export function scanLoadNodeSshHostKey(
   workspaceId: string,
   csrfToken: string,
 ) {
-  return request<LoadNodeSshHostKeyScanResponse>(
-    "/v1/load-nodes/ssh-host-key/scan",
-    {
-      method: "POST",
-      headers: {
-        "x-csrf-token": csrfToken,
-        "x-workspace-id": workspaceId,
+  return unwrap<LoadNodeSshHostKeyScanResponse>(
+    client.POST("/v1/load-nodes/ssh-host-key/scan", {
+      body: payload,
+      params: {
+        header: { "x-csrf-token": csrfToken, "x-workspace-id": workspaceId },
       },
-      body: JSON.stringify(payload),
-    },
+    }),
   );
 }
 
@@ -778,16 +842,14 @@ export function patchLoadNode(
   workspaceId: string,
   csrfToken: string,
 ) {
-  return request<LoadNodeDetail>(
-    `/v1/load-nodes/${encodeURIComponent(loadNodeId)}`,
-    {
-      method: "PATCH",
-      headers: {
-        "x-csrf-token": csrfToken,
-        "x-workspace-id": workspaceId,
+  return unwrap<LoadNodeDetail>(
+    client.PATCH("/v1/load-nodes/{loadNodeId}", {
+      body: payload,
+      params: {
+        header: { "x-csrf-token": csrfToken, "x-workspace-id": workspaceId },
+        path: { loadNodeId },
       },
-      body: JSON.stringify(payload),
-    },
+    }),
   );
 }
 
@@ -797,16 +859,14 @@ export function trustLoadNodeSshHostKey(
   workspaceId: string,
   csrfToken: string,
 ) {
-  return request<LoadNodeDetail>(
-    `/v1/load-nodes/${encodeURIComponent(loadNodeId)}/ssh-host-key/trust`,
-    {
-      method: "POST",
-      headers: {
-        "x-csrf-token": csrfToken,
-        "x-workspace-id": workspaceId,
+  return unwrap<LoadNodeDetail>(
+    client.POST("/v1/load-nodes/{loadNodeId}/ssh-host-key/trust", {
+      body: payload,
+      params: {
+        header: { "x-csrf-token": csrfToken, "x-workspace-id": workspaceId },
+        path: { loadNodeId },
       },
-      body: JSON.stringify(payload),
-    },
+    }),
   );
 }
 
@@ -816,16 +876,14 @@ export function updateLoadNodeCredentials(
   workspaceId: string,
   csrfToken: string,
 ) {
-  return request<LoadNodeDetail>(
-    `/v1/load-nodes/${encodeURIComponent(loadNodeId)}/credentials`,
-    {
-      method: "POST",
-      headers: {
-        "x-csrf-token": csrfToken,
-        "x-workspace-id": workspaceId,
+  return unwrap<LoadNodeDetail>(
+    client.POST("/v1/load-nodes/{loadNodeId}/credentials", {
+      body: payload,
+      params: {
+        header: { "x-csrf-token": csrfToken, "x-workspace-id": workspaceId },
+        path: { loadNodeId },
       },
-      body: JSON.stringify(payload),
-    },
+    }),
   );
 }
 
@@ -835,16 +893,14 @@ export function initializeLoadNode(
   csrfToken: string,
   force = false,
 ) {
-  return request<LoadNodeInitializeResponse>(
-    `/v1/load-nodes/${encodeURIComponent(loadNodeId)}/initialize`,
-    {
-      method: "POST",
-      headers: {
-        "x-csrf-token": csrfToken,
-        "x-workspace-id": workspaceId,
+  return unwrap<LoadNodeInitializeResponse>(
+    client.POST("/v1/load-nodes/{loadNodeId}/initialize", {
+      body: { force },
+      params: {
+        header: { "x-csrf-token": csrfToken, "x-workspace-id": workspaceId },
+        path: { loadNodeId },
       },
-      body: JSON.stringify({ force }),
-    },
+    }),
   );
 }
 
@@ -854,14 +910,14 @@ export function listLoadNodeInitAttempts(
   limit = 20,
   offset = 0,
 ) {
-  const searchParams = new URLSearchParams();
-  searchParams.set("limit", String(limit));
-  searchParams.set("offset", String(offset));
-  return request<LoadNodeInitAttemptListResponse>(
-    `/v1/load-nodes/${encodeURIComponent(loadNodeId)}/init-attempts?${searchParams.toString()}`,
-    {
-      headers: { "x-workspace-id": workspaceId },
-    },
+  return unwrap<components["schemas"]["LoadNodeInitAttemptListResponse"]>(
+    client.GET("/v1/load-nodes/{loadNodeId}/init-attempts", {
+      params: {
+        header: { "x-workspace-id": workspaceId },
+        path: { loadNodeId },
+        query: { limit, offset },
+      },
+    }),
   );
 }
 
@@ -870,11 +926,13 @@ export function getLoadNodeInitAttempt(
   attemptId: string,
   workspaceId: string,
 ) {
-  return request<LoadNodeInitAttemptDetail>(
-    `/v1/load-nodes/${encodeURIComponent(loadNodeId)}/init-attempts/${encodeURIComponent(attemptId)}`,
-    {
-      headers: { "x-workspace-id": workspaceId },
-    },
+  return unwrap<LoadNodeInitAttemptDetail>(
+    client.GET("/v1/load-nodes/{loadNodeId}/init-attempts/{attemptId}", {
+      params: {
+        header: { "x-workspace-id": workspaceId },
+        path: { loadNodeId, attemptId },
+      },
+    }),
   );
 }
 
@@ -884,16 +942,14 @@ export function disableLoadNode(
   csrfToken: string,
   reason?: string,
 ) {
-  return request<LoadNodeDetail>(
-    `/v1/load-nodes/${encodeURIComponent(loadNodeId)}/disable`,
-    {
-      method: "POST",
-      headers: {
-        "x-csrf-token": csrfToken,
-        "x-workspace-id": workspaceId,
+  return unwrap<LoadNodeDetail>(
+    client.POST("/v1/load-nodes/{loadNodeId}/disable", {
+      body: { reason },
+      params: {
+        header: { "x-csrf-token": csrfToken, "x-workspace-id": workspaceId },
+        path: { loadNodeId },
       },
-      body: JSON.stringify(reason ? { reason } : {}),
-    },
+    }),
   );
 }
 
@@ -902,15 +958,13 @@ export function enableLoadNode(
   workspaceId: string,
   csrfToken: string,
 ) {
-  return request<LoadNodeDetail>(
-    `/v1/load-nodes/${encodeURIComponent(loadNodeId)}/enable`,
-    {
-      method: "POST",
-      headers: {
-        "x-csrf-token": csrfToken,
-        "x-workspace-id": workspaceId,
+  return unwrap<LoadNodeDetail>(
+    client.POST("/v1/load-nodes/{loadNodeId}/enable", {
+      params: {
+        header: { "x-csrf-token": csrfToken, "x-workspace-id": workspaceId },
+        path: { loadNodeId },
       },
-    },
+    }),
   );
 }
 
@@ -919,13 +973,14 @@ export function deleteLoadNode(
   workspaceId: string,
   csrfToken: string,
 ) {
-  return request<void>(`/v1/load-nodes/${encodeURIComponent(loadNodeId)}`, {
-    method: "DELETE",
-    headers: {
-      "x-csrf-token": csrfToken,
-      "x-workspace-id": workspaceId,
-    },
-  });
+  return unwrap<void>(
+    client.DELETE("/v1/load-nodes/{loadNodeId}", {
+      params: {
+        header: { "x-csrf-token": csrfToken, "x-workspace-id": workspaceId },
+        path: { loadNodeId },
+      },
+    }),
+  );
 }
 
 export function listScenarios(params: {
@@ -935,32 +990,18 @@ export function listScenarios(params: {
   sort?: "-updatedAt" | "updatedAt" | "name" | "-name";
   workspaceId: string;
 }) {
-  const searchParams = new URLSearchParams();
-  if (params.page !== undefined) {
-    searchParams.set("page", String(params.page));
-  }
-  if (params.pageSize !== undefined) {
-    searchParams.set("pageSize", String(params.pageSize));
-  }
-  if (params.search) {
-    searchParams.set("search", params.search);
-  }
-  if (params.sort) {
-    searchParams.set("sort", params.sort);
-  }
-  const queryStr = searchParams.toString();
-  const url = queryStr ? `/v1/scenarios?${queryStr}` : "/v1/scenarios";
-  return request<ScenarioListResponse>(url, {
-    headers: { "x-workspace-id": params.workspaceId },
-  });
-}
-
-export function getScenario(scenarioId: string, workspaceId: string) {
-  return request<ScenarioDetail>(
-    `/v1/scenarios/${encodeURIComponent(scenarioId)}`,
-    {
-      headers: { "x-workspace-id": workspaceId },
-    },
+  return unwrap<ScenarioListResponse>(
+    client.GET("/v1/scenarios", {
+      params: {
+        header: { "x-workspace-id": params.workspaceId },
+        query: {
+          page: params.page ?? 1,
+          pageSize: params.pageSize ?? 20,
+          search: params.search || undefined,
+          sort: params.sort ?? "-updatedAt",
+        },
+      },
+    }),
   );
 }
 
@@ -969,14 +1010,25 @@ export function createScenario(
   workspaceId: string,
   csrfToken: string,
 ) {
-  return request<ScenarioDetail>("/v1/scenarios", {
-    method: "POST",
-    headers: {
-      "x-csrf-token": csrfToken,
-      "x-workspace-id": workspaceId,
-    },
-    body: JSON.stringify(payload),
-  });
+  return unwrap<ScenarioDetail>(
+    client.POST("/v1/scenarios", {
+      body: payload,
+      params: {
+        header: { "x-csrf-token": csrfToken, "x-workspace-id": workspaceId },
+      },
+    }),
+  );
+}
+
+export function getScenario(scenarioId: string, workspaceId: string) {
+  return unwrap<ScenarioDetail>(
+    client.GET("/v1/scenarios/{scenarioId}", {
+      params: {
+        header: { "x-workspace-id": workspaceId },
+        path: { scenarioId },
+      },
+    }),
+  );
 }
 
 export function cloneScenario(
@@ -985,16 +1037,14 @@ export function cloneScenario(
   workspaceId: string,
   csrfToken: string,
 ) {
-  return request<ScenarioDetail>(
-    `/v1/scenarios/${encodeURIComponent(scenarioId)}/clone`,
-    {
-      method: "POST",
-      headers: {
-        "x-csrf-token": csrfToken,
-        "x-workspace-id": workspaceId,
+  return unwrap<ScenarioDetail>(
+    client.POST("/v1/scenarios/{scenarioId}/clone", {
+      body: payload,
+      params: {
+        header: { "x-csrf-token": csrfToken, "x-workspace-id": workspaceId },
+        path: { scenarioId },
       },
-      body: JSON.stringify(payload),
-    },
+    }),
   );
 }
 
@@ -1004,16 +1054,29 @@ export function patchScenario(
   workspaceId: string,
   csrfToken: string,
 ) {
-  return request<ScenarioDetail>(
-    `/v1/scenarios/${encodeURIComponent(scenarioId)}`,
-    {
-      method: "PATCH",
-      headers: {
-        "x-csrf-token": csrfToken,
-        "x-workspace-id": workspaceId,
+  return unwrap<ScenarioDetail>(
+    client.PATCH("/v1/scenarios/{scenarioId}", {
+      body: payload,
+      params: {
+        header: { "x-csrf-token": csrfToken, "x-workspace-id": workspaceId },
+        path: { scenarioId },
       },
-      body: JSON.stringify(payload),
-    },
+    }),
+  );
+}
+
+export function deleteScenario(
+  scenarioId: string,
+  workspaceId: string,
+  csrfToken: string,
+) {
+  return unwrap<void>(
+    client.DELETE("/v1/scenarios/{scenarioId}", {
+      params: {
+        header: { "x-csrf-token": csrfToken, "x-workspace-id": workspaceId },
+        path: { scenarioId },
+      },
+    }),
   );
 }
 
@@ -1022,16 +1085,13 @@ export function parseScenarioCurlImport(
   workspaceId: string,
   csrfToken: string,
 ) {
-  return request<CurlImportParseResponse>(
-    "/v1/scenarios/curl-import/parse",
-    {
-      method: "POST",
-      headers: {
-        "x-csrf-token": csrfToken,
-        "x-workspace-id": workspaceId,
+  return unwrap<CurlImportParseResponse>(
+    client.POST("/v1/scenarios/curl-import/parse", {
+      body: payload,
+      params: {
+        header: { "x-csrf-token": csrfToken, "x-workspace-id": workspaceId },
       },
-      body: JSON.stringify(payload),
-    },
+    }),
   );
 }
 
@@ -1039,9 +1099,13 @@ export function listScenarioOpenApiSpecSources(
   scenarioId: string,
   workspaceId: string,
 ) {
-  return request<OpenApiSpecSourceListResponse>(
-    `/v1/scenarios/${encodeURIComponent(scenarioId)}/openapi-step-generation/specs`,
-    { headers: { "x-workspace-id": workspaceId } },
+  return unwrap<OpenApiSpecSourceListResponse>(
+    client.GET("/v1/scenarios/{scenarioId}/openapi-step-generation/specs", {
+      params: {
+        header: { "x-workspace-id": workspaceId },
+        path: { scenarioId },
+      },
+    }),
   );
 }
 
@@ -1050,9 +1114,16 @@ export function listScenarioOpenApiOperations(
   specId: string,
   workspaceId: string,
 ) {
-  return request<OpenApiOperationListResponse>(
-    `/v1/scenarios/${encodeURIComponent(scenarioId)}/openapi-step-generation/specs/${encodeURIComponent(specId)}/operations`,
-    { headers: { "x-workspace-id": workspaceId } },
+  return unwrap<OpenApiOperationListResponse>(
+    client.GET(
+      "/v1/scenarios/{scenarioId}/openapi-step-generation/specs/{specId}/operations",
+      {
+        params: {
+          header: { "x-workspace-id": workspaceId },
+          path: { scenarioId, specId },
+        },
+      },
+    ),
   );
 }
 
@@ -1062,33 +1133,14 @@ export function generateScenarioOpenApiStepDrafts(
   workspaceId: string,
   csrfToken: string,
 ) {
-  return request<OpenApiStepDraftPreviewResponse>(
-    `/v1/scenarios/${encodeURIComponent(scenarioId)}/openapi-step-generation/drafts`,
-    {
-      method: "POST",
-      headers: {
-        "x-csrf-token": csrfToken,
-        "x-workspace-id": workspaceId,
+  return unwrap<OpenApiStepDraftPreviewResponse>(
+    client.POST("/v1/scenarios/{scenarioId}/openapi-step-generation/drafts", {
+      body: payload,
+      params: {
+        header: { "x-csrf-token": csrfToken, "x-workspace-id": workspaceId },
+        path: { scenarioId },
       },
-      body: JSON.stringify(payload),
-    },
-  );
-}
-
-export function deleteScenario(
-  scenarioId: string,
-  workspaceId: string,
-  csrfToken: string,
-) {
-  return request<void>(
-    `/v1/scenarios/${encodeURIComponent(scenarioId)}`,
-    {
-      method: "DELETE",
-      headers: {
-        "x-csrf-token": csrfToken,
-        "x-workspace-id": workspaceId,
-      },
-    },
+    }),
   );
 }
 
@@ -1096,27 +1148,24 @@ export function listTestPlans(params: {
   page?: number;
   pageSize?: number;
   search?: string;
+  tag?: string;
   sort?: "-updatedAt" | "updatedAt" | "name" | "-name";
   workspaceId: string;
 }) {
-  const searchParams = new URLSearchParams();
-  if (params.page !== undefined) {
-    searchParams.set("page", String(params.page));
-  }
-  if (params.pageSize !== undefined) {
-    searchParams.set("pageSize", String(params.pageSize));
-  }
-  if (params.search) {
-    searchParams.set("search", params.search);
-  }
-  if (params.sort) {
-    searchParams.set("sort", params.sort);
-  }
-  const queryStr = searchParams.toString();
-  const url = queryStr ? `/v1/test-plans?${queryStr}` : "/v1/test-plans";
-  return request<TestPlanListResponse>(url, {
-    headers: { "x-workspace-id": params.workspaceId },
-  });
+  return unwrap<TestPlanListResponse>(
+    client.GET("/v1/test-plans", {
+      params: {
+        header: { "x-workspace-id": params.workspaceId },
+        query: {
+          page: params.page ?? 1,
+          pageSize: params.pageSize ?? 20,
+          search: params.search || undefined,
+          tag: params.tag || undefined,
+          sort: params.sort ?? "-updatedAt",
+        },
+      },
+    }),
+  );
 }
 
 export function createTestPlan(
@@ -1124,22 +1173,24 @@ export function createTestPlan(
   workspaceId: string,
   csrfToken: string,
 ) {
-  return request<TestPlanDetail>("/v1/test-plans", {
-    method: "POST",
-    headers: {
-      "x-csrf-token": csrfToken,
-      "x-workspace-id": workspaceId,
-    },
-    body: JSON.stringify(payload),
-  });
+  return unwrap<TestPlanDetail>(
+    client.POST("/v1/test-plans", {
+      body: payload,
+      params: {
+        header: { "x-csrf-token": csrfToken, "x-workspace-id": workspaceId },
+      },
+    }),
+  );
 }
 
 export function getTestPlan(testPlanId: string, workspaceId: string) {
-  return request<TestPlanDetail>(
-    `/v1/test-plans/${encodeURIComponent(testPlanId)}`,
-    {
-      headers: { "x-workspace-id": workspaceId },
-    },
+  return unwrap<TestPlanDetail>(
+    client.GET("/v1/test-plans/{testPlanId}", {
+      params: {
+        header: { "x-workspace-id": workspaceId },
+        path: { testPlanId },
+      },
+    }),
   );
 }
 
@@ -1149,16 +1200,14 @@ export function cloneTestPlan(
   workspaceId: string,
   csrfToken: string,
 ) {
-  return request<TestPlanDetail>(
-    `/v1/test-plans/${encodeURIComponent(testPlanId)}/clone`,
-    {
-      method: "POST",
-      headers: {
-        "x-csrf-token": csrfToken,
-        "x-workspace-id": workspaceId,
+  return unwrap<TestPlanDetail>(
+    client.POST("/v1/test-plans/{testPlanId}/clone", {
+      body: payload,
+      params: {
+        header: { "x-csrf-token": csrfToken, "x-workspace-id": workspaceId },
+        path: { testPlanId },
       },
-      body: JSON.stringify(payload),
-    },
+    }),
   );
 }
 
@@ -1167,10 +1216,14 @@ export function getTestPlanExecutionPreview(params: {
   workspaceId: string;
   runType: "debug" | "standard";
 }) {
-  const query = new URLSearchParams({ runType: params.runType });
-  return request<ExecutionPreviewResponse>(
-    `/v1/test-plans/${encodeURIComponent(params.testPlanId)}/execution-preview?${query.toString()}`,
-    { headers: { "x-workspace-id": params.workspaceId } },
+  return unwrap<ExecutionPreviewResponse>(
+    client.GET("/v1/test-plans/{testPlanId}/execution-preview", {
+      params: {
+        header: { "x-workspace-id": params.workspaceId },
+        path: { testPlanId: params.testPlanId },
+        query: { runType: params.runType },
+      },
+    }),
   );
 }
 
@@ -1180,16 +1233,14 @@ export function patchTestPlan(
   workspaceId: string,
   csrfToken: string,
 ) {
-  return request<TestPlanDetail>(
-    `/v1/test-plans/${encodeURIComponent(testPlanId)}`,
-    {
-      method: "PATCH",
-      headers: {
-        "x-csrf-token": csrfToken,
-        "x-workspace-id": workspaceId,
+  return unwrap<TestPlanDetail>(
+    client.PATCH("/v1/test-plans/{testPlanId}", {
+      body: payload,
+      params: {
+        header: { "x-csrf-token": csrfToken, "x-workspace-id": workspaceId },
+        path: { testPlanId },
       },
-      body: JSON.stringify(payload),
-    },
+    }),
   );
 }
 
@@ -1198,15 +1249,13 @@ export function deleteTestPlan(
   workspaceId: string,
   csrfToken: string,
 ) {
-  return request<void>(
-    `/v1/test-plans/${encodeURIComponent(testPlanId)}`,
-    {
-      method: "DELETE",
-      headers: {
-        "x-csrf-token": csrfToken,
-        "x-workspace-id": workspaceId,
+  return unwrap<void>(
+    client.DELETE("/v1/test-plans/{testPlanId}", {
+      params: {
+        header: { "x-csrf-token": csrfToken, "x-workspace-id": workspaceId },
+        path: { testPlanId },
       },
-    },
+    }),
   );
 }
 
@@ -1215,14 +1264,14 @@ export function createRun(
   workspaceId: string,
   csrfToken: string,
 ) {
-  return request<RunCreateResponse>("/v1/runs", {
-    method: "POST",
-    headers: {
-      "x-csrf-token": csrfToken,
-      "x-workspace-id": workspaceId,
-    },
-    body: JSON.stringify(payload),
-  });
+  return unwrap<RunCreateResponse>(
+    client.POST("/v1/runs", {
+      body: payload,
+      params: {
+        header: { "x-csrf-token": csrfToken, "x-workspace-id": workspaceId },
+      },
+    }),
+  );
 }
 
 export function listRuns(params: {
@@ -1233,82 +1282,51 @@ export function listRuns(params: {
   runType?: RunType | "";
   sourceType?: RunSourceType | "";
   state?: RunState | "";
+  tag?: string;
   validity?: RunValidity | "";
   workspaceId: string;
 }) {
-  const query = new URLSearchParams();
-  if (params.cursor) query.set("cursor", params.cursor);
-  query.set("limit", String(params.limit ?? 20));
-  if (params.q) query.set("q", params.q);
-  if (params.recentHours) query.set("recentHours", String(params.recentHours));
-  if (params.runType) query.set("runType", params.runType);
-  if (params.sourceType) query.set("sourceType", params.sourceType);
-  if (params.state) query.set("state", params.state);
-  if (params.validity) query.set("validity", params.validity);
-  query.set("sort", "-createdAt");
-  return request<RunListResponse>(`/v1/runs?${query.toString()}`, {
-    headers: { "x-workspace-id": params.workspaceId },
-  });
+  return unwrap<RunListResponse>(
+    client.GET("/v1/runs", {
+      params: {
+        header: { "x-workspace-id": params.workspaceId },
+        query: {
+          cursor: params.cursor || undefined,
+          limit: params.limit ?? 20,
+          q: params.q || undefined,
+          recentHours: params.recentHours,
+          runType: params.runType || undefined,
+          sort: "-createdAt",
+          sourceType: params.sourceType || undefined,
+          state: params.state || undefined,
+          tag: params.tag || undefined,
+          validity: params.validity || undefined,
+        },
+      },
+    }),
+  );
 }
 
 export function getRunReport(runId: string, workspaceId: string) {
-  return request<RunReportDetail>(`/v1/runs/${encodeURIComponent(runId)}`, {
-    headers: { "x-workspace-id": workspaceId },
-  });
+  return unwrap<RunReportDetail>(
+    client.GET("/v1/runs/{runId}", {
+      params: {
+        header: { "x-workspace-id": workspaceId },
+        path: { runId },
+      },
+    }),
+  );
 }
 
 export function getRunMonitoringLink(runId: string, workspaceId: string) {
-  return request<RunMonitoringLinkResponse>(
-    `/v1/runs/${encodeURIComponent(runId)}/monitoring`,
-    { headers: { "x-workspace-id": workspaceId } },
+  return unwrap<RunMonitoringLinkResponse>(
+    client.GET("/v1/runs/{runId}/monitoring", {
+      params: {
+        header: { "x-workspace-id": workspaceId },
+        path: { runId },
+      },
+    }),
   );
-}
-
-export function listRunArtifacts(params: {
-  runId: string;
-  workspaceId: string;
-  cursor?: string | null;
-}) {
-  const query = new URLSearchParams({ limit: "50", sort: "createdAt" });
-  if (params.cursor) query.set("cursor", params.cursor);
-  return request<RunArtifactListResponse>(
-    `/v1/runs/${encodeURIComponent(params.runId)}/artifacts?${query.toString()}`,
-    { headers: { "x-workspace-id": params.workspaceId } },
-  );
-}
-
-export function downloadRunArtifact(
-  runId: string,
-  artifactId: string,
-  workspaceId: string,
-) {
-  return fetch(apiUrl(`/v1/runs/${encodeURIComponent(runId)}/artifacts/${encodeURIComponent(artifactId)}/download`), {
-    credentials: "include",
-    headers: { "x-workspace-id": workspaceId },
-  }).then(async (response) => {
-    if (!response.ok) throw new ApiError(response.status, await response.json());
-    return response.blob();
-  });
-}
-
-export function patchRunValidity(
-  runId: string,
-  validity: RunValidity,
-  workspaceId: string,
-  csrfToken: string,
-) {
-  return request<RunValidityPatchResponse>(`/v1/runs/${encodeURIComponent(runId)}/validity`, {
-    method: "PATCH",
-    headers: { "x-csrf-token": csrfToken, "x-workspace-id": workspaceId },
-    body: JSON.stringify({ validity }),
-  });
-}
-
-export function stopRun(runId: string, workspaceId: string, csrfToken: string) {
-  return request<RunStopResponse>(`/v1/runs/${encodeURIComponent(runId)}/stop`, {
-    method: "POST",
-    headers: { "x-csrf-token": csrfToken, "x-workspace-id": workspaceId },
-  });
 }
 
 export function getMonitoringEmbed(params: {
@@ -1317,59 +1335,100 @@ export function getMonitoringEmbed(params: {
   from?: string | null;
   to?: string | null;
 }) {
-  const query = new URLSearchParams();
-  if (params.runId) query.set("runId", params.runId);
-  if (params.from) query.set("from", params.from);
-  if (params.to) query.set("to", params.to);
-  const queryStr = query.toString();
-  const url = queryStr
-    ? `/v1/monitoring/embed?${queryStr}`
-    : "/v1/monitoring/embed";
-  return request<MonitoringEmbedResponse>(url, {
-    headers: { "x-workspace-id": params.workspaceId },
-  });
+  return unwrap<MonitoringEmbedResponse>(
+    client.GET("/v1/monitoring/embed", {
+      params: {
+        header: { "x-workspace-id": params.workspaceId },
+        query: {
+          runId: params.runId || undefined,
+          from: params.from || undefined,
+          to: params.to || undefined,
+        },
+      },
+    }),
+  );
 }
 
-export function listAccountApiTokens() {
-  return request<ApiTokenListResponse>("/v1/account/api-tokens");
+export function listRunArtifacts(params: {
+  artifactType?: RunArtifactType;
+  cursor?: string | null;
+  limit?: number;
+  sort?: "createdAt" | "-createdAt";
+  runId: string;
+  workspaceId: string;
+}) {
+  return unwrap<RunArtifactListResponse>(
+    client.GET("/v1/runs/{runId}/artifacts", {
+      params: {
+        header: { "x-workspace-id": params.workspaceId },
+        path: { runId: params.runId },
+        query: {
+          artifactType: params.artifactType,
+          cursor: params.cursor || undefined,
+          limit: params.limit ?? 50,
+          sort: params.sort ?? "createdAt",
+        },
+      },
+    }),
+  );
 }
 
-export function downloadPublicApiAiSkill() {
-  const request = new Request(apiUrl("/v1/account/ai-skill/download"), {
-    credentials: "include",
-    headers: { Accept: "application/zip" },
-  });
-  return fetch(request).then(async (response) => {
-    if (!response.ok) {
-      let body: ApiErrorBody;
-      try {
-        body = (await response.json()) as ApiErrorBody;
-      } catch {
-        body = { code: "REQUEST_FAILED", message: "Request failed." };
-      }
-      throw new ApiError(response.status, body);
-    }
-    return response.blob();
-  });
+export function downloadRunArtifact(
+  runId: string,
+  artifactId: string,
+  workspaceId: string,
+) {
+  return unwrap<Blob>(
+    client.GET("/v1/runs/{runId}/artifacts/{artifactId}/download", {
+      parseAs: "blob",
+      params: {
+        header: { "x-workspace-id": workspaceId },
+        path: { runId, artifactId },
+      },
+    }),
+  );
 }
 
-export function createAccountApiToken(
-  payload: ApiTokenCreateRequest,
+export function downloadDebugHttpBodyBlob(
+  runId: string,
+  artifactId: string,
+  workspaceId: string,
+) {
+  return unwrap<Blob>(
+    client.GET("/v1/runs/{runId}/debug-http-body-blobs/{artifactId}/download", {
+      parseAs: "blob",
+      params: {
+        header: { "x-workspace-id": workspaceId },
+        path: { runId, artifactId },
+      },
+    }),
+  );
+}
+
+export function patchRunValidity(
+  runId: string,
+  validity: RunValidity,
+  workspaceId: string,
   csrfToken: string,
 ) {
-  return request<ApiTokenCreateResponse>("/v1/account/api-tokens", {
-    method: "POST",
-    headers: { "x-csrf-token": csrfToken },
-    body: JSON.stringify(payload),
-  });
+  return unwrap<RunValidityPatchResponse>(
+    client.PATCH("/v1/runs/{runId}/validity", {
+      body: { validity },
+      params: {
+        header: { "x-csrf-token": csrfToken, "x-workspace-id": workspaceId },
+        path: { runId },
+      },
+    }),
+  );
 }
 
-export function deleteAccountApiToken(tokenId: string, csrfToken: string) {
-  return request<void>(
-    `/v1/account/api-tokens/${encodeURIComponent(tokenId)}`,
-    {
-      method: "DELETE",
-      headers: { "x-csrf-token": csrfToken },
-    },
+export function stopRun(runId: string, workspaceId: string, csrfToken: string) {
+  return unwrap<RunStopResponse>(
+    client.POST("/v1/runs/{runId}/stop", {
+      params: {
+        header: { "x-csrf-token": csrfToken, "x-workspace-id": workspaceId },
+        path: { runId },
+      },
+    }),
   );
 }

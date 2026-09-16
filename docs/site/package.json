@@ -1,0 +1,18 @@
+{
+  "name": "@surgepilot/docs",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vitepress",
+    "build": "vitepress build",
+    "preview": "vitepress preview",
+    "test": "vitepress build && node tests/verify-built-site.mjs && node tests/verify-browser.mjs"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.60.0",
+    "postcss": "^8.5.15",
+    "tailwindcss": "^3.4.19",
+    "vitepress": "^1.6.4"
+  }
+}
