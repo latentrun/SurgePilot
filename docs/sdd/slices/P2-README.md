@@ -47,6 +47,20 @@ does not authorize Kubernetes, package-manager or system installers, Docker Hub 
 all-in-one image, native macOS Load Nodes/Runtime, automatic upgrades, a Runtime UI/catalog,
 signing or SBOM publication, or standalone Public API AI skill release.
 
+`P2-06-lan-first-deployment-usability.md` is active through `ADR-0018`, its new-release Runtime
+default amendment `ADR-0020`, its release `up` configuration confirmation amendment `ADR-0021`,
+and its separate installation amendment `ADR-0024` as release-path amendments to P2-05. It covers
+the tagged-release LAN-first startup contract only: an interactive first-run host/port confirmation
+with a warned canonical-loopback evaluation exception, persisted node-facing URL/port consistency,
+Demo off by default, required node-facing origins, default authenticated InfluxDB publication, a
+strict session-cookie transport value, non-interactive complete-`.env` fixtures, a new-release
+`amd64,arm64` Runtime default without an architecture prompt, and read-only default-Yes release
+`up` configuration review with explicit interactive four-field standard-LAN updates. ADR-0017
+decisions 7 and 8 are superseded only as those amendments specify. It does not authorize network
+discovery, a Web/API configuration surface, automatic or non-interactive rewriting, advanced-HTTPS
+quick editing, non-network changes, source-startup changes, package-manager/system installers, or
+public workflow dispatch capability.
+
 ## P2-00 factual backfill
 
 - API routes live in `apps/api/app/routes/api_catalog.py` and are registered by `apps/api/app/main.py`.
@@ -89,6 +103,13 @@ signing or SBOM publication, or standalone Public API AI skill release.
 - `apps/api/app/services/openapi_export.py` owns normalization, Web/public path filtering, schema reachability pruning, public error-code pruning, and `_export_document`; `scripts/export_openapi.py` and `apps/api/app/services/system_openapi_bootstrap.py` use that shared implementation.
 - `apps/api/app/services/system_openapi_bootstrap.py` owns `build_curated_openapi_payload()`, `import_system_openapi()`, and `bootstrap_system_openapi_best_effort()`. The auth route invokes the wrapper only after an explicit `first_user=True` result, using an independent session and best-effort MinIO compensation.
 - Focused verification is recorded in `apps/api/tests/test_p2_04_openapi_export.py`, `apps/api/tests/test_p2_04_ai_skill.py`, `apps/api/tests/test_p2_04_system_openapi_bootstrap.py`, `tests/contract/test_p2_04_help_ai_agents_openapi.py`, `apps/web/src/features/help/help.test.tsx`, and `tests/e2e/p2_04_help_ai_agents.spec.ts`. Contract refresh uses `make generate-contracts`; the checkpoint's targeted verification commands are `make test`, `make lint`, `make contracts-stale-check`, `make verify`, and the focused Playwright command recorded in the Slice SDD.
+
+## P2-06 factual backfill
+
+- P2-06 is release-path only. The tagged-release wrapper is `infra/release/surgepilot`, the release Compose file is `infra/release/docker-compose.release.yml`, and the configuration, bootstrap, and node-facing helpers are `scripts/release_preflight.py`, `scripts/bootstrap_deployment_env.py`, and `scripts/node_facing_startup.py`.
+- Verification coverage is in `tests/test_release_wrapper.py`, `tests/test_release_preflight.py`, `tests/test_bootstrap_deployment_env.py`, `tests/test_node_facing_startup.py`, `tests/test_release_installer.py`, `tests/contract/test_p2_05_distribution.py`, `tests/contract/test_env_example_drift.py`, and `apps/api/tests/test_p0_00_services.py`; the environment-dependent LAN smoke is `scripts/verify_p2_05_release_stack.py` with `tests/test_p2_05_release_stack_verifier.py`.
+- The interaction contract is: a missing release `.env` requires an interactive host shell, the confirmed host and port values are persisted with Demo off, `amd64,arm64`, and `SESSION_COOKIE_SECURE=false`, a complete existing `.env` is described and read-only by default, an explicit `No` opens the standard-LAN four-field update, and non-interactive startup never prompts or rewrites.
+- Native Linux amd64/arm64 LAN external-node acceptance and the installer workflow smoke require native runners, Docker networking, and real SSH nodes, so they remain outside default `make verify`.
 
 Other P2 slices remain outside this checkpoint and require their own accepted scope and
 implementation history.
