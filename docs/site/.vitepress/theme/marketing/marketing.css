@@ -1,0 +1,782 @@
+@font-face {
+  font-display: swap;
+  font-family: "SurgePilot Geist";
+  font-style: normal;
+  font-weight: 400;
+  src: url("./fonts/Geist-Regular.ttf") format("truetype");
+}
+
+@font-face {
+  font-display: swap;
+  font-family: "SurgePilot Geist";
+  font-style: normal;
+  font-weight: 600;
+  src: url("./fonts/Geist-SemiBold.ttf") format("truetype");
+}
+
+@font-face {
+  font-display: swap;
+  font-family: "SurgePilot Geist";
+  font-style: normal;
+  font-weight: 700 900;
+  src: url("./fonts/Geist-Bold.ttf") format("truetype");
+}
+
+@font-face {
+  font-display: swap;
+  font-family: "SurgePilot JetBrains Mono";
+  font-style: normal;
+  font-weight: 400 700;
+  src: url("./fonts/JetBrainsMono-Regular.ttf") format("truetype");
+}
+
+@tailwind utilities;
+
+.marketing-landing {
+  --marketing-background: #0a0e1a;
+  --marketing-surface: #0f131f;
+  --marketing-primary: #22d3ee;
+  --marketing-secondary: #ec4899;
+  --marketing-on-surface: #dfe2f3;
+  --marketing-on-surface-variant: #bbc9cd;
+  --marketing-outline: #859397;
+  min-height: 100vh;
+  overflow-x: hidden;
+  background-color: var(--marketing-background);
+  color: var(--marketing-on-surface);
+  font-family: "SurgePilot Geist", sans-serif;
+  text-decoration: none !important;
+}
+
+.marketing-landing.static-dot-grid {
+  background-image: radial-gradient(
+    rgba(34, 211, 238, 0.1) 1px,
+    transparent 1px
+  );
+  background-size: 32px 32px;
+}
+
+.marketing-landing .mesh-dot-grid::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background-image: radial-gradient(
+    rgba(34, 211, 238, 0.2) 1px,
+    transparent 1px
+  );
+  background-size: 32px 32px;
+  opacity: 0.2;
+  pointer-events: none;
+}
+
+.marketing-landing a,
+.marketing-landing button,
+.marketing-landing p,
+.marketing-landing span,
+.marketing-landing h1,
+.marketing-landing h2,
+.marketing-landing h3,
+.marketing-landing h4,
+.marketing-landing h5,
+.marketing-landing h6,
+.marketing-landing label {
+  text-decoration: none !important;
+}
+
+.marketing-landing .font-display {
+  font-family: "SurgePilot Geist", sans-serif;
+}
+
+.marketing-landing .font-technical {
+  font-family: "SurgePilot JetBrains Mono", monospace;
+}
+
+.marketing-landing *,
+.marketing-landing *::before,
+.marketing-landing *::after {
+  box-sizing: border-box;
+}
+
+.marketing-landing a:focus-visible,
+.marketing-skip:focus-visible {
+  outline: 3px solid var(--marketing-primary);
+  outline-offset: 4px;
+}
+
+.marketing-skip {
+  position: fixed;
+  top: 0.75rem;
+  left: 0.75rem;
+  z-index: 100;
+  padding: 0.75rem 1rem;
+  border-radius: 0.5rem;
+  background: var(--marketing-primary);
+  color: #00363e;
+  font-weight: 700;
+  transform: translateY(-150%);
+  transition: transform 160ms ease;
+}
+
+.marketing-skip:focus {
+  transform: translateY(0);
+}
+
+.marketing-landing .fixed-glow-1 {
+  position: absolute;
+  top: -10%;
+  left: -10%;
+  z-index: -1;
+  width: 60%;
+  height: 60%;
+  pointer-events: none;
+  background: radial-gradient(
+    circle,
+    rgba(34, 211, 238, 0.08) 0%,
+    transparent 70%
+  );
+}
+
+.marketing-landing .glass-card {
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  backdrop-filter: blur(12px);
+  transition:
+    background-color 0.4s cubic-bezier(0.4, 0, 0.2, 1),
+    border-color 0.4s cubic-bezier(0.4, 0, 0.2, 1),
+    box-shadow 0.4s cubic-bezier(0.4, 0, 0.2, 1),
+    transform 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.marketing-landing .glass-card:hover {
+  background: rgba(255, 255, 255, 0.04);
+  border-color: rgba(34, 211, 238, 0.2);
+  box-shadow:
+    0 10px 40px -10px rgba(0, 0, 0, 0.5),
+    0 0 20px rgba(34, 211, 238, 0.1);
+}
+
+.marketing-landing .icon-tile {
+  display: flex;
+  width: 48px;
+  height: 48px;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgba(34, 211, 238, 0.2);
+  border-radius: 0.75rem;
+  background: rgba(34, 211, 238, 0.1);
+  color: var(--marketing-primary);
+}
+
+.marketing-landing .primary-glow-btn {
+  box-shadow: 0 0 15px rgba(34, 211, 238, 0.3);
+}
+
+.marketing-landing .primary-glow-btn:hover {
+  box-shadow: 0 0 25px rgba(34, 211, 238, 0.5);
+}
+
+.marketing-landing .radar-ring {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  border: 1px solid rgba(34, 211, 238, 0.05);
+  border-radius: 9999px;
+  transform: translate(-50%, -50%);
+}
+
+.marketing-landing .mesh-radar-ring--inner {
+  width: 260px;
+  height: 260px;
+}
+
+.marketing-landing .mesh-radar-ring--middle {
+  width: 400px;
+  height: 400px;
+}
+
+.marketing-landing .mesh-radar-ring--outer {
+  width: 540px;
+  height: 540px;
+}
+
+.marketing-landing .mesh-visual {
+  min-height: 560px;
+}
+
+.marketing-landing .mesh-svg {
+  z-index: 10;
+  overflow: visible;
+  pointer-events: none;
+}
+
+.marketing-landing .mesh-link {
+  stroke: var(--marketing-primary);
+  stroke-linecap: round;
+  vector-effect: non-scaling-stroke;
+}
+
+.marketing-landing .mesh-link--idle {
+  stroke-width: 1px;
+  stroke-opacity: 0.22;
+}
+
+.marketing-landing .mesh-link--busy {
+  stroke-width: 1.5px;
+  stroke-opacity: 0.7;
+  filter: url("#mesh-link-glow");
+}
+
+.marketing-landing .mesh-interface {
+  opacity: 0.95;
+}
+
+.marketing-landing .mesh-interface--idle {
+  opacity: 0.7;
+}
+
+.marketing-landing .mesh-orchestrator {
+  z-index: 50;
+}
+
+.marketing-landing .mesh-node {
+  position: absolute;
+  z-index: 40;
+  display: flex;
+  width: 160px;
+  height: 84px;
+  box-sizing: border-box;
+  left: calc(50% + var(--node-x) - 80px);
+  top: calc(50% + var(--node-y) - 42px);
+  flex-direction: column;
+  justify-content: center;
+  gap: 0.35rem;
+  padding: 0.75rem;
+  border-radius: 0.75rem;
+  transition:
+    transform 0.3s cubic-bezier(0.4, 0, 0.2, 1),
+    border-color 0.3s cubic-bezier(0.4, 0, 0.2, 1),
+    box-shadow 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.marketing-landing .mesh-node:hover {
+  border-color: rgba(34, 211, 238, 0.6);
+  box-shadow: 0 0 20px rgba(34, 211, 238, 0.15);
+  transform: scale(1.05);
+}
+
+.marketing-landing .mesh-node--busy {
+  border-color: rgba(34, 211, 238, 0.4);
+  background: rgba(34, 211, 238, 0.05);
+}
+
+.marketing-landing .mesh-node--idle {
+  border-color: rgba(255, 255, 255, 0.1);
+}
+
+.marketing-landing .mesh-node--pulse {
+  animation: marketing-mesh-node-pulse 2.8s ease-in-out infinite;
+  animation-delay: var(--mesh-pulse-delay, 0s);
+}
+
+.marketing-landing .mesh-node__top,
+.marketing-landing .mesh-node__metrics {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.marketing-landing .mesh-node__top {
+  line-height: 1;
+}
+
+.marketing-landing .mesh-node__metrics {
+  color: rgba(223, 226, 243, 0.7);
+  font-family: "SurgePilot JetBrains Mono", monospace;
+  font-size: 8px;
+  line-height: 1;
+}
+
+.marketing-landing .mesh-node--idle .mesh-node__metrics {
+  color: rgba(223, 226, 243, 0.5);
+}
+
+.marketing-landing .mesh-node__status {
+  border-radius: 0.25rem;
+  padding: 0.125rem 0.375rem;
+  font-family: "SurgePilot JetBrains Mono", monospace;
+  font-size: 8px;
+  line-height: 1.2;
+}
+
+.marketing-landing .mesh-node__status--busy {
+  background: rgba(34, 211, 238, 0.2);
+  color: var(--marketing-primary);
+}
+
+.marketing-landing .mesh-node__status--idle {
+  background: rgba(34, 197, 94, 0.2);
+  color: #22c55e;
+}
+
+.marketing-landing .mesh-node__progress {
+  width: 100%;
+  height: 4px;
+  overflow: hidden;
+  border-radius: 9999px;
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.marketing-landing .mesh-node__progress span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--marketing-primary);
+}
+
+.marketing-landing .reveal-on-scroll {
+  opacity: 0;
+  transform: translateY(20px);
+  transition:
+    opacity 0.6s cubic-bezier(0.4, 0, 0.2, 1),
+    transform 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.marketing-landing .reveal-on-scroll.active {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.marketing-landing .orbit-ring,
+.marketing-landing .orbit-ring-rev,
+.marketing-landing .orbit-core-cw,
+.marketing-landing .orbit-core-ccw {
+  transform-box: view-box;
+  transform-origin: center;
+}
+
+.marketing-landing .orbit-ring {
+  animation: marketing-orbit-cw 24s linear infinite;
+}
+
+.marketing-landing .orbit-ring-rev {
+  animation: marketing-orbit-ccw 17s linear infinite;
+}
+
+.marketing-landing .orbit-core-cw {
+  animation: marketing-orbit-cw 5s linear infinite;
+}
+
+.marketing-landing .orbit-core-ccw {
+  animation: marketing-orbit-ccw 3.6s linear infinite;
+}
+
+.marketing-landing .orbit-node {
+  animation: marketing-node-glow 3.6s ease-in-out infinite;
+}
+
+.marketing-landing .frozen-node {
+  animation: marketing-frozen-pulse 2.6s ease-in-out infinite;
+}
+
+.marketing-landing .core-throb {
+  animation: marketing-core-throb 2.2s ease-in-out infinite;
+}
+
+.marketing-landing .stream-bg {
+  animation: marketing-stream 10s linear infinite;
+}
+
+.marketing-landing .running-pulse {
+  animation: marketing-status-pulse 2s infinite;
+}
+
+.marketing-landing .health-dot {
+  animation: marketing-health-pulse 2s infinite ease-in-out;
+}
+
+.marketing-landing .animate-gradient {
+  animation: marketing-gradient-bg 6s ease infinite;
+}
+
+.marketing-landing .arc-rotate {
+  animation: marketing-arc-rotate 4s linear infinite;
+}
+
+.marketing-landing .packet-motion {
+  position: absolute;
+  width: 10px;
+  height: 10px;
+  border-radius: 9999px;
+  background: var(--marketing-primary);
+  box-shadow:
+    -15px 0 12px -2px rgba(34, 211, 238, 0.5),
+    -30px 0 15px -5px rgba(34, 211, 238, 0.2);
+  filter: blur(1px) drop-shadow(0 0 8px var(--marketing-primary));
+  animation: marketing-packet-flow-line 8s infinite ease-in-out;
+}
+
+/* Scoped token shims for static Tailwind-like classes inside injected markup. */
+.marketing-landing .text-\[10px\] {
+  line-height: 1.5;
+}
+.marketing-landing .border {
+  border-width: 1px;
+  border-style: solid;
+}
+.marketing-landing .text-on-surface {
+  color: var(--marketing-on-surface);
+}
+.marketing-landing .text-on-surface\/60 {
+  color: rgba(223, 226, 243, 0.6);
+}
+.marketing-landing .text-on-surface-variant {
+  color: var(--marketing-on-surface-variant);
+}
+.marketing-landing .text-on-surface-variant\/40 {
+  color: rgba(187, 201, 205, 0.4);
+}
+.marketing-landing .text-on-surface-variant\/60 {
+  color: rgba(187, 201, 205, 0.6);
+}
+.marketing-landing .text-on-surface-variant\/70 {
+  color: rgba(187, 201, 205, 0.7);
+}
+.marketing-landing .text-primary {
+  color: var(--marketing-primary);
+}
+.marketing-landing .text-primary\/30 {
+  color: rgba(34, 211, 238, 0.3);
+}
+.marketing-landing .text-primary\/60 {
+  color: rgba(34, 211, 238, 0.6);
+}
+.marketing-landing .text-secondary {
+  color: var(--marketing-secondary);
+}
+.marketing-landing .text-transparent {
+  color: transparent;
+}
+.marketing-landing .bg-primary {
+  background-color: var(--marketing-primary);
+}
+.marketing-landing .bg-primary\/5 {
+  background-color: rgba(34, 211, 238, 0.05);
+}
+.marketing-landing .bg-primary\/10 {
+  background-color: rgba(34, 211, 238, 0.1);
+}
+.marketing-landing .bg-primary\/20 {
+  background-color: rgba(34, 211, 238, 0.2);
+}
+.marketing-landing .bg-secondary {
+  background-color: var(--marketing-secondary);
+}
+.marketing-landing .bg-secondary\/5 {
+  background-color: rgba(236, 72, 153, 0.05);
+}
+.marketing-landing .bg-white\/\[0\.02\] {
+  background-color: rgba(255, 255, 255, 0.02);
+}
+.marketing-landing .border-primary {
+  border-color: var(--marketing-primary);
+}
+.marketing-landing .border-primary\/10 {
+  border-color: rgba(34, 211, 238, 0.1);
+}
+.marketing-landing .border-primary\/20 {
+  border-color: rgba(34, 211, 238, 0.2);
+}
+.marketing-landing .border-primary\/30 {
+  border-color: rgba(34, 211, 238, 0.3);
+}
+.marketing-landing .border-primary\/40 {
+  border-color: rgba(34, 211, 238, 0.4);
+}
+.marketing-landing .border-primary\/60 {
+  border-color: rgba(34, 211, 238, 0.6);
+}
+.marketing-landing .border-secondary {
+  border-color: var(--marketing-secondary);
+}
+.marketing-landing .border-outline {
+  border-color: var(--marketing-outline);
+}
+.marketing-landing .bg-surface {
+  background-color: var(--marketing-surface);
+}
+.marketing-landing .bg-background-dark {
+  background-color: var(--marketing-background);
+}
+.marketing-landing .text-background-dark {
+  color: var(--marketing-background);
+}
+.marketing-landing .from-primary {
+  --tw-gradient-from: var(--marketing-primary);
+  --tw-gradient-to: rgba(34, 211, 238, 0);
+  --tw-gradient-stops: var(--tw-gradient-from), var(--tw-gradient-to);
+}
+.marketing-landing .via-secondary {
+  --tw-gradient-to: rgba(236, 72, 153, 0);
+  --tw-gradient-stops:
+    var(--tw-gradient-from), var(--marketing-secondary), var(--tw-gradient-to);
+}
+.marketing-landing .to-primary {
+  --tw-gradient-to: var(--marketing-primary);
+}
+.marketing-landing .from-transparent {
+  --tw-gradient-from: transparent;
+  --tw-gradient-to: transparent;
+  --tw-gradient-stops: var(--tw-gradient-from), var(--tw-gradient-to);
+}
+.marketing-landing .via-white\/10 {
+  --tw-gradient-to: rgba(255, 255, 255, 0);
+  --tw-gradient-stops:
+    var(--tw-gradient-from), rgba(255, 255, 255, 0.1), var(--tw-gradient-to);
+}
+.marketing-landing .to-transparent {
+  --tw-gradient-to: transparent;
+}
+.marketing-landing .bg-gradient-to-r {
+  background-image: linear-gradient(to right, var(--tw-gradient-stops));
+}
+.marketing-landing .bg-clip-text {
+  -webkit-background-clip: text;
+  background-clip: text;
+}
+.marketing-landing .bg-\[length\:200\%_auto\] {
+  background-size: 200% auto;
+}
+
+/* Tailwind's static extraction does not emit this arbitrary blur utility for
+ * the injected Loop Engineering markup. Keep the public glow rendering in
+ * lockstep with the product landing without touching the product stylesheet. */
+.marketing-landing .blur-\[100px\] {
+  filter: blur(100px);
+}
+
+@keyframes marketing-stream {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-100px);
+  }
+}
+
+@keyframes marketing-status-pulse {
+  0% {
+    box-shadow: 0 0 0 0 rgba(34, 211, 238, 0.4);
+  }
+  70% {
+    box-shadow: 0 0 0 8px rgba(34, 211, 238, 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(34, 211, 238, 0);
+  }
+}
+
+@keyframes marketing-health-pulse {
+  0%,
+  100% {
+    opacity: 0.4;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.2);
+  }
+}
+
+@keyframes marketing-gradient-bg {
+  0%,
+  100% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+}
+
+@keyframes marketing-arc-rotate {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes marketing-packet-flow-line {
+  0% {
+    offset-distance: 0%;
+    opacity: 0;
+  }
+  5%,
+  95% {
+    opacity: 1;
+  }
+  100% {
+    offset-distance: 100%;
+    opacity: 0;
+  }
+}
+
+@keyframes marketing-orbit-cw {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes marketing-orbit-ccw {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(-360deg);
+  }
+}
+
+@keyframes marketing-node-glow {
+  0%,
+  100% {
+    border-color: rgba(255, 255, 255, 0.1);
+    box-shadow: 0 0 0 rgba(34, 211, 238, 0);
+  }
+  50% {
+    border-color: rgba(34, 211, 238, 0.35);
+    box-shadow: 0 0 18px rgba(34, 211, 238, 0.16);
+  }
+}
+
+@keyframes marketing-mesh-node-pulse {
+  0%,
+  100% {
+    border-color: rgba(34, 211, 238, 0.35);
+    box-shadow: 0 0 0 rgba(34, 211, 238, 0);
+  }
+  50% {
+    border-color: rgba(34, 211, 238, 0.72);
+    box-shadow: 0 0 22px rgba(34, 211, 238, 0.2);
+  }
+}
+
+@keyframes marketing-frozen-pulse {
+  0%,
+  100% {
+    box-shadow:
+      0 0 0 rgba(34, 211, 238, 0.08),
+      inset 0 0 0 rgba(34, 211, 238, 0.08);
+  }
+  50% {
+    box-shadow:
+      0 0 26px rgba(34, 211, 238, 0.22),
+      inset 0 0 18px rgba(34, 211, 238, 0.12);
+  }
+}
+
+@keyframes marketing-core-throb {
+  0%,
+  100% {
+    opacity: 0.82;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.04);
+  }
+}
+
+@media (max-width: 767px) {
+  .marketing-landing .node-card {
+    display: none;
+  }
+
+  .marketing-landing .mesh-svg {
+    display: none;
+  }
+
+  .marketing-landing .radar-ring {
+    opacity: 0.5;
+  }
+}
+
+/* Public-page density tokens. These overrides tighten rhythm while leaving
+ * the existing cards, palette, and desktop motion intact. */
+.marketing-landing > section.py-24 {
+  padding-block: 4rem;
+}
+
+.marketing-landing > section.py-12 {
+  padding-block: 2rem;
+}
+
+.marketing-landing > section.py-24 > .text-center.mb-16 {
+  margin-bottom: 2.5rem;
+}
+
+.marketing-landing > section.py-24 > .text-center.mb-12 {
+  margin-bottom: 2rem;
+}
+
+.marketing-landing > section.py-24 > .mb-20,
+.marketing-landing > section.py-24.mb-20 {
+  margin-bottom: 3rem;
+}
+
+.marketing-landing > section.py-24.mb-20 > .max-w-6xl {
+  padding: 4rem;
+}
+
+.marketing-landing > footer {
+  padding-top: 4rem;
+}
+
+@media (max-width: 767px) {
+  .marketing-landing > header {
+    min-height: auto;
+    padding-top: 3rem;
+  }
+
+  .marketing-landing > header > .max-w-4xl {
+    margin-bottom: 2.5rem;
+  }
+
+  .marketing-landing > section.py-24 {
+    padding-block: 3rem;
+  }
+
+  .marketing-landing > section.py-12 {
+    padding-block: 1.5rem;
+  }
+
+  .marketing-landing > section.py-24 > .text-center.mb-16 {
+    margin-bottom: 2rem;
+  }
+
+  .marketing-landing > section.py-24 > .text-center.mb-12 {
+    margin-bottom: 1.5rem;
+  }
+
+  .marketing-landing > section.py-24 > .mb-20,
+  .marketing-landing > section.py-24.mb-20 {
+    margin-bottom: 2.5rem;
+  }
+
+  .marketing-landing > section.py-24.mb-20 > .max-w-6xl {
+    padding: 2.5rem 1.5rem;
+  }
+
+  .marketing-landing .mesh-dot-grid {
+    min-height: 560px;
+    border-radius: 1.5rem;
+  }
+
+  .marketing-landing > footer {
+    padding-top: 3rem;
+    padding-bottom: 2rem;
+  }
+}
