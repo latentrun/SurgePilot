@@ -1,24 +1,22 @@
+import { useMutation, useQuery } from "@tanstack/react-query";
+import { FileCode2, Pencil, Plus, Terminal } from "lucide-react";
+import { Link, useBlocker, useNavigate, useParams } from "react-router-dom";
+import type { ReactNode } from "react";
 import { useEffect, useMemo, useRef, useState } from "react";
-
 import {
-  ApiError,
-  cloneScenario,
   createRun,
-  deleteScenario,
   getCsrfToken,
+  generateScenarioOpenApiStepDrafts,
   getScenario,
   listDependencyFiles,
   listEnvGroups,
   listLoadNodes,
   listScenarioOpenApiOperations,
   listScenarioOpenApiSpecSources,
-  generateScenarioOpenApiStepDrafts,
-  parseScenarioCurlImport,
   patchScenario,
+  parseScenarioCurlImport,
+  type ApiError,
   type CurlImportParseResponse,
-  type DependencyFileSummary,
-  type EnvGroupSummary,
-  type LoadNodeSummary,
   type OpenApiOperationRef,
   type OpenApiStepDraftPreviewResponse,
   type ScenarioDetail,
@@ -26,11 +24,12 @@ import {
 } from "../../../app/api-client";
 import { useAuthSession } from "../../../app/auth-session";
 import { useWorkspaceSwitchGuard } from "../../../app/workspace-switch-guard";
+import { IconActionButton } from "../../../components/icon-action";
 import { scenarioCopy } from "../copy";
 import {
   cloneStep,
-  newAssertion,
   newDataSource,
+  newAssertion,
   newExtractor,
   newFormField,
   newNamedValue,
@@ -40,41 +39,116 @@ import {
   stepFromCurlImportDraft,
   stepFromOpenApiGeneratedDraft,
   toPatchPayload,
-  type ScenarioAssertion,
   type ScenarioDataSource,
+  type ScenarioAssertion,
   type ScenarioExtractor,
-  type ScenarioFormField,
   type ScenarioNamedValue,
   type ScenarioScript,
   type ScenarioVariable,
-  type ScenarioUploadFile,
 } from "../model";
 
-const HTTP_METHODS = [
-  "GET",
-  "POST",
-  "PUT",
-  "PATCH",
-  "DELETE",
-  "HEAD",
-  "OPTIONS",
-];
-const EXTRACTOR_SUBJECTS = ["body", "headers", "code", "message", "url"];
-const RAW_CONTENT_TYPES = [
-  "application/json",
-  "application/xml",
-  "text/plain",
-  "text/html",
-  "application/x-www-form-urlencoded",
-  "application/graphql",
-];
-const DELIMITER_OPTIONS = [
-  { label: "Comma (,)", value: "," },
-  { label: "Semicolon (;)", value: ";" },
-  { label: "Tab", value: "tab" },
-  { label: "Pipe (|)", value: "|" },
-];
-const OPENAPI_MAX_OPERATION_SELECTION = 20;
+function useWriteToken() {
+  const { csrfToken } = useAuthSession();
+  return async () => csrfToken ?? (await getCsrfToken()).csrfToken;
+}
+function errorMessage(error: unknown, action: "save" | "debug" = "debug") {
+  const code = (error as ApiError | undefined)?.body?.code;
+  if (code === "SCENARIO_REVISION_CONFLICT")
+    return "Scenario changed elsewhere. Reload and try again.";
+  if (code === "LOAD_NODE_BUSY")
+    return "Selected Load Node is no longer idle. Pick another node.";
+  if (code === "VALIDATION_ERROR")
+    return action === "save"
+      ? "Scenario needs attention before it can be saved."
+      : "Scenario needs attention before the Debug Run can start.";
+  return "Action failed. Refresh and try again.";
+}
+function urlPreview(detail: ScenarioDetail, step: ScenarioStep | undefined) {
+  if (!step) return detail.baseUrlExpression;
+  const query = (step.queryParams ?? [])
+    .filter((item) => item.enabled !== false)
+    .map((item) => `${item.name}=${item.value}`)
+    .join("&");
+  return `${detail.baseUrlExpression}${step.path}${query ? `?${query}` : ""}`;
+}
+
+function textInputClass(extra = "") {
+  return `rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-white ${extra}`;
+}
+
+function FieldSection({
+  title,
+  description,
+  action,
+  children,
+}: {
+  title: string;
+  description?: string;
+  action?: ReactNode;
+  children: ReactNode;
+}) {
+  return (
+    <section className="rounded-2xl border border-white/10 bg-black/10 p-4">
+      <div className="mb-3 flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h3 className="font-semibold text-white">{title}</h3>
+          {description ? (
+            <p className="mt-1 text-sm text-text-muted">{description}</p>
+          ) : null}
+        </div>
+        {action}
+      </div>
+      {children}
+    </section>
+  );
+}
+
+function MiniButton({
+  children,
+  onClick,
+  tone = "neutral",
+  disabled = false,
+}: {
+  children: ReactNode;
+  onClick: () => void;
+  tone?: "neutral" | "danger" | "primary";
+  disabled?: boolean;
+}) {
+  const toneClass =
+    tone === "primary"
+      ? "border-primary/40 bg-primary/10 text-primary"
+      : tone === "danger"
+        ? "border-error/30 text-error"
+        : "border-white/10 text-white";
+  return (
+    <button
+      className={`rounded-lg border px-3 py-1.5 text-xs disabled:opacity-40 ${toneClass}`}
+      disabled={disabled}
+      onClick={onClick}
+      type="button"
+    >
+      {children}
+    </button>
+  );
+}
+
+function booleanOverrideValue(value: boolean | null | undefined) {
+  if (value === true) return "true";
+  if (value === false) return "false";
+  return "";
+}
+
+function parseBooleanOverride(value: string) {
+  if (value === "true") return true;
+  if (value === "false") return false;
+  return null;
+}
+function parseCsvNames(value: string) {
+  return value
+    .split(",")
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
 
 function openApiOperationKey(ref: OpenApiOperationRef) {
   return `${ref.method} ${ref.path} ${ref.operationId ?? ""}`;
@@ -82,6 +156,27 @@ function openApiOperationKey(ref: OpenApiOperationRef) {
 
 function openApiRefsEqual(a: OpenApiOperationRef, b: OpenApiOperationRef) {
   return a.method === b.method && a.path === b.path;
+}
+
+function hasSensitiveCurlWarning(preview: CurlImportParseResponse | null) {
+  return (preview?.warnings ?? []).some((warning) =>
+    ["SENSITIVE_HEADER_PRESENT", "SENSITIVE_BODY_FIELD_PRESENT"].includes(
+      warning.code,
+    ),
+  );
+}
+
+function dataSourceVariableText(dataSources: ScenarioDetail["dataSources"]) {
+  return Object.fromEntries(
+    dataSources.map((item) => [item.id, (item.variableNames ?? []).join(", ")]),
+  );
+}
+function scriptsEnabled(detail: ScenarioDetail) {
+  return detail.steps.some(
+    (step) =>
+      step.enabled !== false &&
+      (step.scripts ?? []).some((script) => script.enabled !== false),
+  );
 }
 
 type StepTabKey =
@@ -104,507 +199,40 @@ const stepTabs: Array<{ key: StepTabKey; label: string }> = [
   { key: "scripts", label: "Scripts" },
   { key: "settings", label: "Settings" },
 ];
-
-type ConfigTabKey = "settings" | "headers" | "variables" | "dataSources";
-const configTabs: Array<{ key: ConfigTabKey; label: string }> = [
+const OPENAPI_MAX_OPERATION_SELECTION = 20;
+const OPENAPI_QUERY_STALE_TIME_MS = 30_000;
+type GlobalConfigTabKey = "settings" | "headers" | "variables" | "dataSources";
+const globalConfigTabs: Array<{ key: GlobalConfigTabKey; label: string }> = [
   { key: "settings", label: "Settings" },
   { key: "headers", label: "Headers" },
   { key: "variables", label: "Variables" },
   { key: "dataSources", label: "Data Sources" },
 ];
 
-function firstInvalidConfigTab(detail: ScenarioDetail): ConfigTabKey | null {
-  if (!detail.baseUrlExpression.trim()) return "settings";
-
-  const headerNames = new Set<string>();
-  for (const header of detail.globalHeaders ?? []) {
-    if (!/^[!#$%&'*+.^_`|~0-9A-Za-z-]+$/.test(header.name)) return "headers";
-    const normalizedName = header.name.toLowerCase();
-    if (headerNames.has(normalizedName)) return "headers";
-    headerNames.add(normalizedName);
-  }
-
-  const variableNames = new Set<string>();
-  for (const variable of detail.variables ?? []) {
-    if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(variable.name)) return "variables";
-    if (variableNames.has(variable.name)) return "variables";
-    variableNames.add(variable.name);
-  }
-
-  for (const dataSource of detail.dataSources ?? []) {
-    if (
-      dataSource.delimiter !== null &&
-      dataSource.delimiter !== "tab" &&
-      dataSource.delimiter.length !== 1
-    ) {
-      return "dataSources";
-    }
-    for (const variableName of dataSource.variableNames ?? []) {
-      if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(variableName)) return "dataSources";
-    }
-  }
-
-  return null;
-}
-
-function currentScenarioId() {
-  const segments = window.location.pathname.split("/").filter(Boolean);
-  return segments[1] ?? "";
-}
-
-function useCsrfToken() {
-  const { csrfToken } = useAuthSession();
-  return async () => csrfToken ?? (await getCsrfToken()).csrfToken;
-}
-
-function cn(...inputs: (string | boolean | null | undefined)[]) {
-  return inputs.filter(Boolean).join(" ");
-}
-
-function textInputClass(extra = "") {
-  return cn(
-    "w-full rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-sm text-text-main outline-none transition focus:border-primary/50",
-    extra,
-  );
-}
-
-function inputClass(hasError: boolean) {
-  return cn(
-    "h-10 w-full rounded-lg border bg-surface-container px-3 text-sm text-text-main outline-none transition focus:border-primary/50",
-    hasError ? "border-error/60" : "border-white/10",
-  );
-}
-
-function navigateTo(path: string) {
-  window.history.replaceState({}, "", path);
-  window.dispatchEvent(new PopStateEvent("popstate"));
-}
-
-function errorMessage(error: unknown, action: "save" | "debug" = "debug") {
-  const code = (error as ApiError | undefined)?.body?.code;
-  if (code === "SCENARIO_REVISION_CONFLICT") {
-    return "Scenario changed elsewhere. Reload and try again.";
-  }
-  if (code === "LOAD_NODE_BUSY") {
-    return "Selected Load Node is no longer idle. Pick another node.";
-  }
-  if (code === "VALIDATION_ERROR") {
-    return action === "save"
-      ? "Scenario needs attention before it can be saved."
-      : "Scenario needs attention before the Debug Run can start.";
-  }
-  if (code === "RESOURCE_NOT_FOUND") {
-    return "The Scenario does not exist or is no longer visible.";
-  }
-  return "Action failed. Refresh and try again.";
-}
-
-function lifecycleErrorMessage(error: unknown) {
-  const code = (error as ApiError | undefined)?.body?.code;
-  if (code === "RESOURCE_IN_USE") {
-    return scenarioCopy.resourceInUse;
-  }
-  if (code === "WORKSPACE_ACCESS_DENIED") {
-    return "You do not have access to this workspace.";
-  }
-  return errorMessage(error, "save");
-}
-
-function isRevisionConflict(error: unknown) {
-  return (
-    (error as ApiError | undefined)?.body?.code ===
-    "SCENARIO_REVISION_CONFLICT"
-  );
-}
-
-function formatDate(value: string) {
-  return new Intl.DateTimeFormat("en", {
-    dateStyle: "medium",
-    timeStyle: "short",
-  }).format(new Date(value));
-}
-
-function urlPreview(detail: ScenarioDetail, step: ScenarioStep | undefined) {
-  if (!step) return detail.baseUrlExpression;
-  const query = (step.queryParams ?? [])
-    .filter((item) => item.enabled !== false)
-    .map((item) => `${item.name}=${item.value}`)
-    .join("&");
-  return `${detail.baseUrlExpression}${step.path}${query ? `?${query}` : ""}`;
-}
-
-function parseCsvNames(value: string) {
-  return value
-    .split(",")
-    .map((item) => item.trim())
-    .filter(Boolean);
-}
-
-function booleanOverrideValue(value: boolean | null | undefined) {
-  if (value === true) return "true";
-  if (value === false) return "false";
-  return "";
-}
-
-function parseBooleanOverride(value: string) {
-  if (value === "true") return true;
-  if (value === "false") return false;
-  return null;
-}
-
-function scriptsEnabled(detail: ScenarioDetail) {
-  return detail.steps.some(
-    (step) =>
-      step.enabled !== false &&
-      (step.scripts ?? []).some((script) => script.enabled !== false),
-  );
-}
-
-function hasSensitiveCurlWarning(preview: CurlImportParseResponse | null) {
-  return (preview?.warnings ?? []).some((warning) =>
-    ["SENSITIVE_HEADER_PRESENT", "SENSITIVE_BODY_FIELD_PRESENT"].includes(
-      warning.code,
-    ),
-  );
-}
-
-function stepBody(step: ScenarioStep) {
-  return (
-    step.body ?? {
-      type: "none" as const,
-      contentType: null,
-      rawText: null,
-      formFields: [],
-    }
-  );
-}
-
-function navigateToLoadNodes() {
-  window.history.replaceState({}, "", "/resources/load-nodes");
-  window.dispatchEvent(new PopStateEvent("popstate"));
-}
-
-function Plus({ className }: { className?: string }) {
-  return (
-    <svg
-      aria-hidden="true"
-      className={className}
-      fill="none"
-      height="16"
-      stroke="currentColor"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      strokeWidth="2"
-      viewBox="0 0 24 24"
-      width="16"
-    >
-      <path d="M5 12h14M12 5v14" />
-    </svg>
-  );
-}
-
-function X({ className }: { className?: string }) {
-  return (
-    <svg
-      aria-hidden="true"
-      className={className}
-      fill="none"
-      height="16"
-      stroke="currentColor"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      strokeWidth="2"
-      viewBox="0 0 24 24"
-      width="16"
-    >
-      <path d="M18 6 6 18M6 6l12 12" />
-    </svg>
-  );
-}
-
-function Pencil({ className }: { className?: string }) {
-  return (
-    <svg
-      aria-hidden="true"
-      className={className}
-      fill="none"
-      height="16"
-      stroke="currentColor"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      strokeWidth="2"
-      viewBox="0 0 24 24"
-      width="16"
-    >
-      <path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z" />
-      <path d="m15 5 4 4" />
-    </svg>
-  );
-}
-
-function Copy({ className }: { className?: string }) {
-  return (
-    <svg
-      aria-hidden="true"
-      className={className}
-      fill="none"
-      height="16"
-      stroke="currentColor"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      strokeWidth="2"
-      viewBox="0 0 24 24"
-      width="16"
-    >
-      <rect height="14" rx="2" ry="2" width="14" x="8" y="8" />
-      <path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2" />
-    </svg>
-  );
-}
-
-function Archive({ className }: { className?: string }) {
-  return (
-    <svg
-      aria-hidden="true"
-      className={className}
-      fill="none"
-      height="16"
-      stroke="currentColor"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      strokeWidth="2"
-      viewBox="0 0 24 24"
-      width="16"
-    >
-      <rect height="5" rx="1" width="20" x="2" y="3" />
-      <path d="M4 8v11a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8" />
-      <path d="M10 12h4" />
-    </svg>
-  );
-}
-
-function Terminal({ className }: { className?: string }) {
-  return (
-    <svg
-      aria-hidden="true"
-      className={className}
-      fill="none"
-      height="16"
-      stroke="currentColor"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      strokeWidth="2"
-      viewBox="0 0 24 24"
-      width="16"
-    >
-      <path d="m4 17 6-6-6-6" />
-      <path d="M12 19h8" />
-    </svg>
-  );
-}
-
-function Field({
-  children,
-  error,
-  label,
-}: Readonly<{ children: React.ReactNode; error?: string; label: string }>) {
-  return (
-    <label className="block">
-      <span className="mb-1.5 block text-sm font-medium text-text-main">
-        {label}
-      </span>
-      {children}
-      {error ? (
-        <span className="mt-1.5 block text-xs text-error">{error}</span>
-      ) : null}
-    </label>
-  );
-}
-
-function FieldSection({
-  title,
-  description,
-  action,
-  children,
-}: {
-  title: string;
-  description?: string;
-  action?: React.ReactNode;
-  children: React.ReactNode;
-}) {
-  return (
-    <section className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
-      <div className="mb-3 flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h3 className="font-semibold text-white">{title}</h3>
-          {description ? (
-            <p className="mt-1 text-sm text-text-muted">{description}</p>
-          ) : null}
-        </div>
-        {action}
-      </div>
-      {children}
-    </section>
-  );
-}
-
-function MiniButton({
-  children,
-  onClick,
-  tone = "neutral",
-  disabled = false,
-}: {
-  children: React.ReactNode;
-  onClick: () => void;
-  tone?: "neutral" | "danger" | "primary";
-  disabled?: boolean;
-}) {
-  const toneClass =
-    tone === "primary"
-      ? "border-primary/40 bg-primary/10 text-primary"
-      : tone === "danger"
-        ? "border-error/30 text-error"
-        : "border-white/10 text-white";
-  return (
-    <button
-      className={cn(
-        "rounded-lg border px-3 py-1.5 text-xs transition hover:bg-white/5",
-        toneClass,
-        disabled && "cursor-not-allowed opacity-40",
-      )}
-      disabled={disabled}
-      onClick={onClick}
-      type="button"
-    >
-      {children}
-    </button>
-  );
-}
-
-function NamedValueRows({
-  label,
-  items,
-  onChange,
-  onRemove,
-  emptyText,
-}: {
-  label: string;
-  items: ScenarioNamedValue[] | undefined;
-  onChange: (id: string, fields: Partial<ScenarioNamedValue>) => void;
-  onRemove: (id: string) => void;
-  emptyText?: string;
-}) {
-  const rows = items ?? [];
-  return (
-    <div className="space-y-2">
-      {rows.map((item, index) => (
-        <div
-          className="grid gap-2 rounded-xl border border-white/10 bg-black/10 p-3 md:grid-cols-[1fr_1fr_auto_auto]"
-          key={item.id}
-        >
-          <label className="grid gap-1 text-xs text-text-muted">
-            {label} {index + 1} name
-            <input
-              aria-label={`${label} ${index + 1} name`}
-              className={textInputClass("font-mono")}
-              onChange={(event) => onChange(item.id, { name: event.target.value })}
-              value={item.name}
-            />
-          </label>
-          <label className="grid gap-1 text-xs text-text-muted">
-            {label} {index + 1} value
-            <input
-              aria-label={`${label} ${index + 1} value`}
-              className={textInputClass("font-mono")}
-              onChange={(event) =>
-                onChange(item.id, { value: event.target.value })
-              }
-              value={item.value}
-            />
-          </label>
-          <label className="flex items-end gap-2 pb-2 text-xs text-text-muted">
-            <input
-              checked={item.enabled !== false}
-              onChange={(event) =>
-                onChange(item.id, { enabled: event.target.checked })
-              }
-              type="checkbox"
-            />
-            Enabled
-          </label>
-          <div className="flex items-end">
-            <MiniButton onClick={() => onRemove(item.id)} tone="danger">
-              Remove
-            </MiniButton>
-          </div>
-        </div>
-      ))}
-      {rows.length === 0 ? (
-        <p className="text-sm text-text-muted">
-          {emptyText ?? `No ${label.toLowerCase()} yet.`}
-        </p>
-      ) : null}
-    </div>
-  );
-}
-
 export function ScenarioDesignerPage() {
+  const { scenarioId = "" } = useParams();
+  const navigate = useNavigate();
   const { session } = useAuthSession();
-  const getWriteToken = useCsrfToken();
-  const workspaceId = session?.defaultWorkspace.id ?? "";
-  const scenarioId = currentScenarioId();
-
+  const getWriteToken = useWriteToken();
+  const workspaceId =
+    session?.currentWorkspace.id ?? session?.defaultWorkspace.id ?? "";
   const [draft, setDraft] = useState<ScenarioDetail | null>(null);
-  const [loadError, setLoadError] = useState<string | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const [isSaving, setIsSaving] = useState(false);
-  const [isReloading, setIsReloading] = useState(false);
-
+  const [selectedStepId, setSelectedStepId] = useState<string | null>(null);
   const [dirty, setDirty] = useState(false);
   const [renamingName, setRenamingName] = useState(false);
-  const [tagText, setTagText] = useState("");
-  const [selectedStepId, setSelectedStepId] = useState<string | null>(null);
-  const [activeStepTab, setActiveStepTab] = useState<StepTabKey>("params");
-  const [actionError, setActionError] = useState<string | null>(null);
-
-  const [envGroups, setEnvGroups] = useState<EnvGroupSummary[]>([]);
-  const [dependencyFiles, setDependencyFiles] = useState<
-    DependencyFileSummary[]
-  >([]);
-  const [idleNodes, setIdleNodes] = useState<LoadNodeSummary[]>([]);
-  const [isLoadingNodes, setIsLoadingNodes] = useState(false);
-
   const [showConfig, setShowConfig] = useState(false);
-  const [activeConfigTab, setActiveConfigTab] =
-    useState<ConfigTabKey>("settings");
-  const configBackupRef = useRef<{
-    draft: ScenarioDetail | null;
-    dirty: boolean;
-  } | null>(null);
   const [showDebug, setShowDebug] = useState(false);
-  const [selectedEnvId, setSelectedEnvId] = useState(
-    () =>
-      window.localStorage.getItem(
-        `surgepilot:scenario:${currentScenarioId()}:env`,
-      ) ?? "",
-  );
-  const [selectedNodeId, setSelectedNodeId] = useState("");
-  const [isStartingDebug, setIsStartingDebug] = useState(false);
-  const [needsReload, setNeedsReload] = useState(false);
-  const [isCloning, setIsCloning] = useState(false);
-  const [isArchiving, setIsArchiving] = useState(false);
-  const [archiveOpen, setArchiveOpen] = useState(false);
-
+  const [activeConfigTab, setActiveConfigTab] =
+    useState<GlobalConfigTabKey>("settings");
   const [showCurlImport, setShowCurlImport] = useState(false);
   const [showOpenApiImport, setShowOpenApiImport] = useState(false);
-  const [openApiSpecs, setOpenApiSpecs] = useState<Awaited<ReturnType<typeof listScenarioOpenApiSpecSources>> | null>(null);
-  const [openApiOperations, setOpenApiOperations] = useState<Awaited<ReturnType<typeof listScenarioOpenApiOperations>> | null>(null);
   const [selectedOpenApiSpecId, setSelectedOpenApiSpecId] = useState("");
-  const [selectedOpenApiRefs, setSelectedOpenApiRefs] = useState<OpenApiOperationRef[]>([]);
-  const [openApiPreview, setOpenApiPreview] = useState<OpenApiStepDraftPreviewResponse | null>(null);
+  const [selectedOpenApiRefs, setSelectedOpenApiRefs] = useState<
+    OpenApiOperationRef[]
+  >([]);
+  const [openApiPreview, setOpenApiPreview] =
+    useState<OpenApiStepDraftPreviewResponse | null>(null);
   const [openApiError, setOpenApiError] = useState<string | null>(null);
-  const [isLoadingOpenApi, setIsLoadingOpenApi] = useState(false);
-  const [isPreviewingOpenApi, setIsPreviewingOpenApi] = useState(false);
   const [curlImportText, setCurlImportText] = useState("");
   const [curlImportPreview, setCurlImportPreview] =
     useState<CurlImportParseResponse | null>(null);
@@ -613,147 +241,245 @@ export function ScenarioDesignerPage() {
   );
   const [applyCurlBaseUrl, setApplyCurlBaseUrl] = useState(false);
   const [curlImportError, setCurlImportError] = useState<string | null>(null);
-  const [isPreviewingCurl, setIsPreviewingCurl] = useState(false);
-
-  const envStorageKey = `surgepilot:scenario:${scenarioId}:env`;
-
-  const fetchScenario = useMemo(
-    () => async () => {
-      if (!workspaceId || !scenarioId) return;
-      setIsLoading(true);
-      setLoadError(null);
-      try {
-        const data = await getScenario(scenarioId, workspaceId);
-        setDraft({
-          ...data,
-          globalHeaders: data.globalHeaders ?? [],
-          variables: data.variables ?? [],
-          dataSources: data.dataSources ?? [],
-        });
-        setTagText(data.tags.join(", "));
-        setSelectedStepId(data.steps[0]?.id ?? null);
+  const [activeStepTab, setActiveStepTab] = useState<StepTabKey>("params");
+  const [tagText, setTagText] = useState("");
+  const [dataSourceVariableTextById, setDataSourceVariableTextById] = useState<
+    Record<string, string>
+  >({});
+  const [selectedEnvId, setSelectedEnvId] = useState(
+    () => window.localStorage.getItem(`surgepilot:scenario:${scenarioId}:env`) ?? "",
+  );
+  const [selectedNodeId, setSelectedNodeId] = useState("");
+  const [actionError, setActionError] = useState<string | null>(null);
+  const bypassNavigationBlockRef = useRef(false);
+  const dirtyRef = useRef(false);
+  const configDraftBackupRef = useRef<ScenarioDetail | null>(null);
+  const configDirtyBackupRef = useRef(false);
+  const hydratedScenarioIdRef = useRef<string | null>(null);
+  const blocker = useBlocker(
+    ({ currentLocation, nextLocation }) =>
+      dirty &&
+      !bypassNavigationBlockRef.current &&
+      currentLocation.pathname !== nextLocation.pathname,
+  );
+  const workspaceSwitchGuard = useMemo(
+    () => ({
+      dirty,
+      safePath: "/scenarios",
+      onAbandon: () => {
+        bypassNavigationBlockRef.current = true;
+        window.localStorage.removeItem(`surgepilot:scenario:${scenarioId}:env`);
         setDirty(false);
-        setRenamingName(false);
-      } catch (error) {
-        setLoadError(errorMessage(error, "save"));
-      } finally {
-        setIsLoading(false);
-      }
-    },
-    [scenarioId, workspaceId],
+        setShowDebug(false);
+        setActionError(null);
+      },
+    }),
+    [dirty, scenarioId],
   );
+  useWorkspaceSwitchGuard(workspaceSwitchGuard);
+  const scenarioQuery = useQuery({
+    enabled: Boolean(workspaceId && scenarioId),
+    queryKey: ["scenario", workspaceId, scenarioId],
+    queryFn: () => getScenario(scenarioId, workspaceId),
+  });
+  const envQuery = useQuery({
+    enabled: Boolean(workspaceId),
+    queryKey: ["env-groups", workspaceId, "scenario-picker"],
+    queryFn: () => listEnvGroups({ workspaceId, pageSize: 100, sort: "name" }),
+  });
+  const nodeQuery = useQuery({
+    enabled: showDebug && Boolean(workspaceId),
+    queryKey: ["load-nodes", workspaceId, "idle-debug"],
+    queryFn: () =>
+      listLoadNodes({
+        workspaceId,
+        status: "idle",
+        limit: 100,
+        offset: 0,
+        sort: "host",
+      }),
+  });
+  const dependencyFilesQuery = useQuery({
+    enabled: Boolean(workspaceId),
+    queryKey: ["dependency-files", workspaceId, "scenario-editor"],
+    queryFn: () =>
+      listDependencyFiles({
+        workspaceId,
+        pageSize: 100,
+        sort: "filename",
+      }),
+  });
+  const openApiSpecQuery = useQuery({
+    enabled: showOpenApiImport && Boolean(workspaceId && scenarioId),
+    queryKey: ["scenario-openapi-specs", workspaceId, scenarioId],
+    queryFn: () => listScenarioOpenApiSpecSources(scenarioId, workspaceId),
+    staleTime: OPENAPI_QUERY_STALE_TIME_MS,
+  });
+  const openApiOperationQuery = useQuery({
+    enabled:
+      showOpenApiImport &&
+      Boolean(workspaceId && scenarioId && selectedOpenApiSpecId),
+    queryKey: [
+      "scenario-openapi-operations",
+      workspaceId,
+      scenarioId,
+      selectedOpenApiSpecId,
+    ],
+    queryFn: () =>
+      listScenarioOpenApiOperations(
+        scenarioId,
+        selectedOpenApiSpecId,
+        workspaceId,
+      ),
+    staleTime: OPENAPI_QUERY_STALE_TIME_MS,
+  });
+  useEffect(() => {
+    dirtyRef.current = dirty;
+  }, [dirty]);
 
   useEffect(() => {
-    if (session !== null) {
-      void fetchScenario();
-    }
-  }, [session, fetchScenario]);
-
-  useEffect(() => {
-    if (!workspaceId) return;
-    let active = true;
-    listEnvGroups({ workspaceId, pageSize: 100, sort: "name" })
-      .then((data) => {
-        if (active) setEnvGroups(data.items);
-      })
-      .catch(() => {
-        if (active) setEnvGroups([]);
-      });
-    listDependencyFiles({ workspaceId, pageSize: 100, sort: "filename" })
-      .then((data) => {
-        if (active) setDependencyFiles(data.items);
-      })
-      .catch(() => {
-        if (active) setDependencyFiles([]);
-      });
-    return () => {
-      active = false;
-    };
-  }, [workspaceId]);
-
-  const fetchIdleNodes = useMemo(
-    () => async () => {
-      if (!workspaceId) return;
-      setIsLoadingNodes(true);
-      try {
-        const data = await listLoadNodes({
-          workspaceId,
-          status: "idle",
-          limit: 100,
-          offset: 0,
-          sort: "host",
-        });
-        setIdleNodes(data.items);
-      } catch {
-        setIdleNodes([]);
-      } finally {
-        setIsLoadingNodes(false);
-      }
-    },
-    [workspaceId],
-  );
-
-  useEffect(() => {
-    if (showDebug) {
-      void fetchIdleNodes();
-    }
-  }, [showDebug, fetchIdleNodes]);
-
-  useEffect(() => {
-    if (!showOpenApiImport || !workspaceId || !scenarioId) return;
-    setIsLoadingOpenApi(true);
-    void listScenarioOpenApiSpecSources(scenarioId, workspaceId)
-      .then(setOpenApiSpecs)
-      .catch(() => setOpenApiSpecs(null))
-      .finally(() => setIsLoadingOpenApi(false));
-  }, [showOpenApiImport, scenarioId, workspaceId]);
-
-  useEffect(() => {
-    if (!showOpenApiImport || !workspaceId || !scenarioId || !selectedOpenApiSpecId) {
-      setOpenApiOperations(null);
+    if (!scenarioQuery.data) {
       return;
     }
-    setIsLoadingOpenApi(true);
-    void listScenarioOpenApiOperations(scenarioId, selectedOpenApiSpecId, workspaceId)
-      .then(setOpenApiOperations)
-      .catch(() => setOpenApiOperations(null))
-      .finally(() => setIsLoadingOpenApi(false));
-  }, [showOpenApiImport, scenarioId, selectedOpenApiSpecId, workspaceId]);
-
-  useEffect(() => {
-    if (selectedEnvId) {
-      window.localStorage.setItem(envStorageKey, selectedEnvId);
-    } else {
-      window.localStorage.removeItem(envStorageKey);
+    const isFirstHydrateForScenario =
+      hydratedScenarioIdRef.current !== scenarioId;
+    if (dirtyRef.current && !isFirstHydrateForScenario) {
+      return;
     }
-  }, [envStorageKey, selectedEnvId]);
-
+    setDraft(scenarioQuery.data);
+    setTagText(scenarioQuery.data.tags.join(", "));
+    setDataSourceVariableTextById(
+      dataSourceVariableText(scenarioQuery.data.dataSources),
+    );
+    setSelectedStepId(scenarioQuery.data.steps[0]?.id ?? null);
+    hydratedScenarioIdRef.current = scenarioId;
+    setDirty(false);
+    setRenamingName(false);
+  }, [scenarioId, scenarioQuery.data]);
   useEffect(() => {
-    if (!dirty) return undefined;
+    if (selectedEnvId)
+      window.localStorage.setItem(
+        `surgepilot:scenario:${scenarioId}:env`,
+        selectedEnvId,
+      );
+    else window.localStorage.removeItem(`surgepilot:scenario:${scenarioId}:env`);
+  }, [scenarioId, selectedEnvId]);
+  useEffect(() => {
     const handler = (event: BeforeUnloadEvent) => {
+      if (!dirty) return;
       event.preventDefault();
       event.returnValue = "";
     };
     window.addEventListener("beforeunload", handler);
     return () => window.removeEventListener("beforeunload", handler);
   }, [dirty]);
-
-  const workspaceSwitchGuard = useMemo(
-    () => ({
-      dirty,
-      safePath: "/scenarios",
-      onAbandon: () => {
-        window.localStorage.removeItem(envStorageKey);
-        setSelectedEnvId("");
-        setShowDebug(false);
-        setActionError(null);
-        setDirty(false);
-      },
-    }),
-    [dirty, envStorageKey],
-  );
-  useWorkspaceSwitchGuard(workspaceSwitchGuard);
-
+  const saveMutation = useMutation({
+    mutationFn: async (next: ScenarioDetail) =>
+      patchScenario(
+        next.id,
+        toPatchPayload(next, next.revision),
+        workspaceId,
+        await getWriteToken(),
+      ),
+    onSuccess: (updated) => {
+      setDraft(updated);
+      setTagText(updated.tags.join(", "));
+      setDataSourceVariableTextById(
+        dataSourceVariableText(updated.dataSources),
+      );
+      setDirty(false);
+      setRenamingName(false);
+      setActionError(null);
+    },
+    onError: (error) => {
+      const details = (error as ApiError | undefined)?.body?.details ?? [];
+      const fields = details
+        .map((detail) =>
+          typeof detail === "object" && detail && "field" in detail
+            ? String(detail.field)
+            : "",
+        )
+        .filter(Boolean);
+      const firstGlobalField = fields.find((field) =>
+        /^(baseUrlExpression|defaultSettings|globalHeaders|variables|dataSources)/.test(
+          field,
+        ),
+      );
+      if (firstGlobalField) {
+        setShowConfig(true);
+        if (firstGlobalField.startsWith("globalHeaders"))
+          setActiveConfigTab("headers");
+        else if (firstGlobalField.startsWith("variables"))
+          setActiveConfigTab("variables");
+        else if (firstGlobalField.startsWith("dataSources"))
+          setActiveConfigTab("dataSources");
+        else setActiveConfigTab("settings");
+      }
+      setActionError(errorMessage(error, "save"));
+    },
+  });
+  const debugMutation = useMutation({
+    mutationFn: async (next: ScenarioDetail) =>
+      createRun(
+        {
+          runType: "debug",
+          sourceType: "debug_scenario",
+          sourceId: next.id,
+          expectedSourceRevision: next.revision,
+          envGroupId: selectedEnvId || null,
+          selectedNodeId,
+          confirmHighConcurrency: false,
+        },
+        workspaceId,
+        await getWriteToken(),
+      ),
+    onSuccess: (run) => navigate(`/runs/${run.id}`),
+    onError: (error) => {
+      bypassNavigationBlockRef.current = false;
+      setActionError(errorMessage(error, "debug"));
+      void nodeQuery.refetch();
+    },
+  });
+  const curlImportMutation = useMutation({
+    mutationFn: async (rawCurl: string) =>
+      parseScenarioCurlImport({ rawCurl }, workspaceId, await getWriteToken()),
+    onSuccess: (preview) => {
+      setCurlImportPreview(preview);
+      setApplyCurlBaseUrl(false);
+      setCurlImportError(null);
+    },
+    onError: (error) => {
+      setCurlImportPreview(null);
+      setCurlImportError(
+        (error as ApiError | undefined)?.body?.code === "VALIDATION_ERROR"
+          ? "The cURL command could not be imported. Check the command and try again."
+          : "Import preview failed. Refresh and try again.",
+      );
+    },
+  });
+  const openApiDraftMutation = useMutation({
+    mutationFn: async () =>
+      generateScenarioOpenApiStepDrafts(
+        scenarioId,
+        {
+          specId: selectedOpenApiSpecId,
+          operationRefs: selectedOpenApiRefs,
+          insert: selectedStepId
+            ? { mode: "after_step", stepId: selectedStepId }
+            : { mode: "append" },
+        },
+        workspaceId,
+        await getWriteToken(),
+      ),
+    onSuccess: (preview) => {
+      setOpenApiPreview(preview);
+      setOpenApiError(null);
+    },
+    onError: () => {
+      setOpenApiPreview(null);
+      setOpenApiError("OpenAPI preview failed. Refresh and try again.");
+    },
+  });
   const selectedStep = useMemo(
     () =>
       draft?.steps.find((step) => step.id === selectedStepId) ??
@@ -762,17 +488,13 @@ export function ScenarioDesignerPage() {
   );
   const enabledStepCount =
     draft?.steps.filter((step) => step.enabled !== false).length ?? 0;
-  const enabledDataSourceCount =
-    draft?.dataSources.filter((item) => item.enabled !== false).length ?? 0;
   const selectedEnvName =
-    envGroups.find((env) => env.id === selectedEnvId)?.name ??
+    envQuery.data?.items.find((env) => env.id === selectedEnvId)?.name ??
     scenarioCopy.noEnvironment;
-
   function updateDraft(updater: (current: ScenarioDetail) => ScenarioDetail) {
     setDraft((current) => (current ? updater(current) : current));
     setDirty(true);
   }
-
   function updateStep(stepId: string, fields: Partial<ScenarioStep>) {
     updateDraft((current) => ({
       ...current,
@@ -781,7 +503,6 @@ export function ScenarioDesignerPage() {
       ),
     }));
   }
-
   function updateDataSource(
     dataSourceId: string,
     fields: Partial<ScenarioDataSource>,
@@ -795,100 +516,114 @@ export function ScenarioDesignerPage() {
       ),
     }));
   }
-
   function updateGlobalHeader(
     headerId: string,
     fields: Partial<ScenarioNamedValue>,
   ) {
     updateDraft((current) => ({
       ...current,
-      globalHeaders: (current.globalHeaders ?? []).map((header) =>
+      globalHeaders: current.globalHeaders.map((header) =>
         header.id === headerId ? { ...header, ...fields } : header,
       ),
     }));
   }
-
   function updateScenarioVariable(
     variableId: string,
     fields: Partial<ScenarioVariable>,
   ) {
     updateDraft((current) => ({
       ...current,
-      variables: (current.variables ?? []).map((variable) =>
+      variables: current.variables.map((variable) =>
         variable.id === variableId ? { ...variable, ...fields } : variable,
       ),
     }));
   }
-
-  function addStep() {
-    if (!draft) return;
-    const step = newStep();
-    setSelectedStepId(step.id);
-    updateDraft((current) => ({ ...current, steps: [...current.steps, step] }));
+  function cloneScenarioDetail(detail: ScenarioDetail): ScenarioDetail {
+    return JSON.parse(JSON.stringify(detail)) as ScenarioDetail;
   }
-
+  function openGlobalConfiguration() {
+    if (draft) {
+      configDraftBackupRef.current = cloneScenarioDetail(draft);
+      configDirtyBackupRef.current = dirty;
+    }
+    setActiveConfigTab("settings");
+    setShowConfig(true);
+  }
+  function cancelGlobalConfiguration() {
+    if (configDraftBackupRef.current) {
+      const restored = configDraftBackupRef.current;
+      setDraft(restored);
+      setTagText(restored.tags.join(", "));
+      setDataSourceVariableTextById(
+        dataSourceVariableText(restored.dataSources),
+      );
+      setDirty(configDirtyBackupRef.current);
+    }
+    configDraftBackupRef.current = null;
+    setShowConfig(false);
+  }
+  function doneGlobalConfiguration() {
+    configDraftBackupRef.current = null;
+    setShowConfig(false);
+  }
   function moveStep(stepId: string, direction: -1 | 1) {
     updateDraft((current) => {
       const index = current.steps.findIndex((step) => step.id === stepId);
       const target = index + direction;
-      if (index < 0 || target < 0 || target >= current.steps.length) {
+      if (index < 0 || target < 0 || target >= current.steps.length)
         return current;
-      }
       const next = [...current.steps];
       const [moved] = next.splice(index, 1);
       next.splice(target, 0, moved);
       return { ...current, steps: next };
     });
   }
-
-  function duplicateSelectedStep() {
-    if (!selectedStep) return;
-    const copy = cloneStep(selectedStep);
-    setSelectedStepId(copy.id);
-    updateDraft((current) => ({
-      ...current,
-      steps: [...current.steps, copy],
-    }));
+  function stepTabCount(tab: StepTabKey) {
+    if (!selectedStep) return 0;
+    if (tab === "params") return selectedStep.queryParams?.length ?? 0;
+    if (tab === "headers") return selectedStep.headers?.length ?? 0;
+    if (tab === "files") return selectedStep.uploadFiles?.length ?? 0;
+    if (tab === "extractors") return selectedStep.extractors?.length ?? 0;
+    if (tab === "assertions") return selectedStep.assertions?.length ?? 0;
+    if (tab === "scripts") return selectedStep.scripts?.length ?? 0;
+    return 0;
   }
-
-  function removeSelectedStep() {
-    if (!selectedStep) return;
-    updateDraft((current) => {
-      const remaining = current.steps.filter(
-        (step) => step.id !== selectedStep.id,
-      );
-      if (remaining[0]) {
-        setSelectedStepId(remaining[0].id);
-      } else {
-        setSelectedStepId(null);
-      }
-      return { ...current, steps: remaining };
-    });
+  async function startDebug() {
+    if (!draft || !selectedNodeId || enabledStepCount < 1) return;
+    const saved = dirty ? await saveMutation.mutateAsync(draft) : draft;
+    bypassNavigationBlockRef.current = true;
+    await debugMutation.mutateAsync(saved);
   }
-
   function resetOpenApiImportModal() {
     setShowOpenApiImport(false);
     setSelectedOpenApiSpecId("");
     setSelectedOpenApiRefs([]);
     setOpenApiPreview(null);
     setOpenApiError(null);
+    openApiDraftMutation.reset();
   }
-
   function toggleOpenApiOperation(ref: OpenApiOperationRef) {
     setOpenApiPreview(null);
-    const selected = selectedOpenApiRefs.some((item) => openApiRefsEqual(item, ref));
-    if (!selected && selectedOpenApiRefs.length >= OPENAPI_MAX_OPERATION_SELECTION) {
-      setOpenApiError(`Select up to ${OPENAPI_MAX_OPERATION_SELECTION} operations at a time.`);
+    const isSelected = selectedOpenApiRefs.some((item) =>
+      openApiRefsEqual(item, ref),
+    );
+    if (
+      !isSelected &&
+      selectedOpenApiRefs.length >= OPENAPI_MAX_OPERATION_SELECTION
+    ) {
+      setOpenApiError(
+        `Select up to ${OPENAPI_MAX_OPERATION_SELECTION} operations at a time.`,
+      );
       return;
     }
     setOpenApiError(null);
-    setSelectedOpenApiRefs((current) =>
-      current.some((item) => openApiRefsEqual(item, ref))
-        ? current.filter((item) => !openApiRefsEqual(item, ref))
-        : [...current, ref],
-    );
+    setSelectedOpenApiRefs((current) => {
+      if (current.some((item) => openApiRefsEqual(item, ref))) {
+        return current.filter((item) => !openApiRefsEqual(item, ref));
+      }
+      return [...current, ref];
+    });
   }
-
   function moveOpenApiOperation(index: number, direction: -1 | 1) {
     setOpenApiPreview(null);
     setSelectedOpenApiRefs((current) => {
@@ -900,37 +635,17 @@ export function ScenarioDesignerPage() {
       return next;
     });
   }
-
-  async function previewOpenApiImport() {
-    if (!selectedOpenApiSpecId || selectedOpenApiRefs.length === 0) return;
-    setIsPreviewingOpenApi(true);
-    setOpenApiError(null);
-    try {
-      const preview = await generateScenarioOpenApiStepDrafts(
-        scenarioId,
-        {
-          specId: selectedOpenApiSpecId,
-          operationRefs: selectedOpenApiRefs,
-          insert: selectedStepId ? { mode: "after_step", stepId: selectedStepId } : { mode: "append" },
-        },
-        workspaceId,
-        await getWriteToken(),
-      );
-      setOpenApiPreview(preview);
-    } catch {
-      setOpenApiPreview(null);
-      setOpenApiError("OpenAPI preview failed. Refresh and try again.");
-    } finally {
-      setIsPreviewingOpenApi(false);
-    }
-  }
-
   function confirmOpenApiImport() {
     if (!openApiPreview) return;
     updateDraft((current) => {
-      const selectedIndex = current.steps.findIndex((step) => step.id === selectedStepId);
-      const insertAt = selectedIndex >= 0 ? selectedIndex + 1 : current.steps.length;
-      const importedSteps = openApiPreview.items.map((item) => stepFromOpenApiGeneratedDraft(item.step));
+      const selectedIndex = current.steps.findIndex(
+        (step) => step.id === selectedStepId,
+      );
+      const insertAt =
+        selectedIndex >= 0 ? selectedIndex + 1 : current.steps.length;
+      const importedSteps = openApiPreview.items.map((item) =>
+        stepFromOpenApiGeneratedDraft(item.step),
+      );
       const nextSteps = [...current.steps];
       nextSteps.splice(insertAt, 0, ...importedSteps);
       setSelectedStepId(importedSteps[0]?.id ?? selectedStepId);
@@ -938,192 +653,6 @@ export function ScenarioDesignerPage() {
     });
     resetOpenApiImportModal();
   }
-
-  function stepTabCount(tab: StepTabKey) {
-    if (!selectedStep) return 0;
-    if (tab === "params") return selectedStep.queryParams?.length ?? 0;
-    if (tab === "headers") return selectedStep.headers?.length ?? 0;
-    if (tab === "files") return selectedStep.uploadFiles?.length ?? 0;
-    if (tab === "extractors") return selectedStep.extractors?.length ?? 0;
-    if (tab === "assertions") return selectedStep.assertions?.length ?? 0;
-    if (tab === "scripts") return selectedStep.scripts?.length ?? 0;
-    return 0;
-  }
-
-  async function handleSave(): Promise<ScenarioDetail | null> {
-    if (!draft) return null;
-    setIsSaving(true);
-    setActionError(null);
-    try {
-      const token = await getWriteToken();
-      const updated = await patchScenario(
-        draft.id,
-        toPatchPayload(draft, draft.revision),
-        workspaceId,
-        token,
-      );
-      setDraft({
-        ...updated,
-        globalHeaders: updated.globalHeaders ?? [],
-        variables: updated.variables ?? [],
-        dataSources: updated.dataSources ?? [],
-      });
-      setTagText(updated.tags.join(", "));
-      setDirty(false);
-      setRenamingName(false);
-      return updated;
-    } catch (error) {
-      setActionError(errorMessage(error, "save"));
-      const details = (error as ApiError | undefined)?.body?.details ?? [];
-      const firstGlobalField = details
-        .map((detail) =>
-          typeof detail === "object" && detail && "field" in detail
-            ? String(detail.field)
-            : "",
-        )
-        .find((field) =>
-          /^(baseUrlExpression|defaultSettings|globalHeaders|variables|dataSources)/.test(
-            field,
-          ),
-        );
-      if (firstGlobalField) {
-        setShowConfig(true);
-        if (firstGlobalField.startsWith("globalHeaders")) {
-          setActiveConfigTab("headers");
-        } else if (firstGlobalField.startsWith("variables")) {
-          setActiveConfigTab("variables");
-        } else if (firstGlobalField.startsWith("dataSources")) {
-          setActiveConfigTab("dataSources");
-        } else {
-          setActiveConfigTab("settings");
-        }
-      }
-      if (isRevisionConflict(error)) {
-        setNeedsReload(true);
-      }
-      return null;
-    } finally {
-      setIsSaving(false);
-    }
-  }
-
-  async function handleStartDebug() {
-    if (!draft || !selectedNodeId) return;
-    setIsStartingDebug(true);
-    setActionError(null);
-    setNeedsReload(false);
-    try {
-      const saved = dirty ? await handleSave() : draft;
-      if (!saved) return;
-      const token = await getWriteToken();
-      const run = await createRun(
-        {
-          runType: "debug",
-          sourceType: "debug_scenario",
-          sourceId: saved.id,
-          expectedSourceRevision: saved.revision,
-          envGroupId: selectedEnvId || null,
-          selectedNodeId,
-        },
-        workspaceId,
-        token,
-      );
-      setDirty(false);
-      navigateTo(`/runs/${run.id}`);
-    } catch (error) {
-      setActionError(errorMessage(error, "debug"));
-      if (
-        (error as ApiError | undefined)?.body?.code === "LOAD_NODE_BUSY"
-      ) {
-        void fetchIdleNodes();
-      }
-      if (isRevisionConflict(error)) {
-        setNeedsReload(true);
-      }
-    } finally {
-      setIsStartingDebug(false);
-    }
-  }
-
-  async function handleReload() {
-    setIsReloading(true);
-    setActionError(null);
-    setNeedsReload(false);
-    try {
-      await fetchScenario();
-    } finally {
-      setIsReloading(false);
-    }
-  }
-
-  async function handleClone() {
-    if (!draft) return;
-    setIsCloning(true);
-    setActionError(null);
-    try {
-      const token = await getWriteToken();
-      const cloned = await cloneScenario(draft.id, {}, workspaceId, token);
-      setDirty(false);
-      navigateTo(`/scenarios/${cloned.id}`);
-    } catch (error) {
-      setActionError(lifecycleErrorMessage(error));
-    } finally {
-      setIsCloning(false);
-    }
-  }
-
-  async function handleArchive() {
-    if (!draft) return;
-    setIsArchiving(true);
-    setActionError(null);
-    try {
-      const token = await getWriteToken();
-      await deleteScenario(draft.id, workspaceId, token);
-      setDirty(false);
-      setArchiveOpen(false);
-      navigateTo("/scenarios");
-    } catch (error) {
-      setActionError(lifecycleErrorMessage(error));
-    } finally {
-      setIsArchiving(false);
-    }
-  }
-
-  function openGlobalConfiguration() {
-    configBackupRef.current = {
-      draft: draft ? (JSON.parse(JSON.stringify(draft)) as ScenarioDetail) : null,
-      dirty,
-    };
-    setActiveConfigTab("settings");
-    setShowConfig(true);
-  }
-
-  function cancelGlobalConfiguration() {
-    const backup = configBackupRef.current;
-    if (backup) {
-      if (backup.draft) {
-        setDraft(backup.draft);
-        setTagText(backup.draft.tags.join(", "));
-        setSelectedStepId(backup.draft.steps[0]?.id ?? null);
-      }
-      setDirty(backup.dirty);
-    }
-    configBackupRef.current = null;
-    setShowConfig(false);
-  }
-
-  function doneGlobalConfiguration() {
-    if (!draft) return;
-    const invalidTab = firstInvalidConfigTab(draft);
-    if (invalidTab) {
-      setActionError("Scenario needs attention before it can be saved.");
-      setActiveConfigTab(invalidTab);
-      return;
-    }
-    configBackupRef.current = null;
-    setShowConfig(false);
-  }
-
   function resetCurlImportModal() {
     setShowCurlImport(false);
     setCurlImportText("");
@@ -1131,33 +660,8 @@ export function ScenarioDesignerPage() {
     setCurlImportMode("append");
     setApplyCurlBaseUrl(false);
     setCurlImportError(null);
+    curlImportMutation.reset();
   }
-
-  async function previewCurlImport() {
-    if (!curlImportText.trim()) return;
-    setIsPreviewingCurl(true);
-    setCurlImportError(null);
-    try {
-      const token = await getWriteToken();
-      const preview = await parseScenarioCurlImport(
-        { rawCurl: curlImportText },
-        workspaceId,
-        token,
-      );
-      setCurlImportPreview(preview);
-      setApplyCurlBaseUrl(false);
-    } catch (error) {
-      setCurlImportPreview(null);
-      setCurlImportError(
-        (error as ApiError | undefined)?.body?.code === "VALIDATION_ERROR"
-          ? "The cURL command could not be imported. Check the command and try again."
-          : "Import preview failed. Refresh and try again.",
-      );
-    } finally {
-      setIsPreviewingCurl(false);
-    }
-  }
-
   function confirmCurlImport() {
     if (!curlImportPreview) return;
     updateDraft((current) => {
@@ -1189,208 +693,150 @@ export function ScenarioDesignerPage() {
     });
     resetCurlImportModal();
   }
-
-  function openDebug() {
-    setActionError(null);
-    setNeedsReload(false);
-    setSelectedNodeId("");
-    setShowDebug(true);
-  }
-
-  if (session === null) {
-    return null;
-  }
-
-  if (isLoading) {
-    return (
-      <div className="mx-auto max-w-container-max p-8 text-sm text-text-muted">
-        Loading Scenario...
-      </div>
-    );
-  }
-
-  if (loadError || draft === null) {
-    return (
-      <div className="mx-auto max-w-container-max rounded-xl border border-error/30 bg-error-container p-6">
-        <p className="text-sm text-on-error-container">
-          {loadError ?? "The Scenario could not be loaded."}
-        </p>
-        <div className="mt-4 flex gap-3">
-          <a
-            className="inline-flex items-center rounded-lg border border-white/10 px-4 py-2 text-sm text-text-main transition hover:bg-white/5"
-            href="/scenarios"
+  if (scenarioQuery.isLoading || draft === null)
+    return <div className="p-8 text-text-muted">Loading Scenario…</div>;
+  return (
+    <section className="mx-auto max-w-7xl space-y-5">
+      <div
+        className="flex flex-wrap items-start justify-between gap-4 rounded-3xl border border-white/10 bg-white/[0.05] p-5"
+        data-testid="scenario-designer-header"
+      >
+        <div>
+          <div className="flex flex-wrap items-center gap-3">
+            {renamingName ? (
+              <input
+                aria-label={scenarioCopy.renameInputLabel}
+                autoFocus
+                className="min-w-0 max-w-lg rounded-xl border border-primary/40 bg-black/20 px-3 py-1 font-display text-3xl font-semibold text-white outline-none focus:ring-2 focus:ring-primary/30"
+                onBlur={() => setRenamingName(false)}
+                onChange={(event) =>
+                  updateDraft((current) => ({
+                    ...current,
+                    name: event.target.value,
+                  }))
+                }
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") event.currentTarget.blur();
+                }}
+                value={draft.name}
+              />
+            ) : (
+              <>
+                <h1 className="font-display text-3xl font-semibold text-white">
+                  {draft.name}
+                </h1>
+                <IconActionButton
+                  Icon={Pencil}
+                  label={scenarioCopy.rename}
+                  onClick={() => setRenamingName(true)}
+                />
+              </>
+            )}
+            <span className="rounded-full border border-white/10 bg-black/20 px-3 py-1 font-mono text-[11px] text-secondary">
+              Revision {draft.revision}
+            </span>
+            <span
+              className={`rounded-full border px-3 py-1 font-mono text-[11px] ${
+                dirty
+                  ? "border-warning/30 bg-warning/10 text-warning"
+                  : "border-success/30 bg-success/10 text-success"
+              }`}
+            >
+              {dirty ? "Unsaved changes" : "Saved"}
+            </span>
+          </div>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <select
+            aria-label="Environment"
+            className="rounded-xl border border-white/10 bg-surface-container-low px-3 py-2 text-sm text-white"
+            value={selectedEnvId}
+            onChange={(e) => setSelectedEnvId(e.target.value)}
           >
-            Back to Scenarios
-          </a>
+            <option value="">No environment</option>
+            {(envQuery.data?.items ?? []).map((env) => (
+              <option key={env.id} value={env.id}>
+                {env.name}
+              </option>
+            ))}
+          </select>
+          {selectedEnvId ? (
+            <button
+              className="rounded-lg border border-white/10 px-2 py-1 text-xs text-text-muted"
+              onClick={() => setSelectedEnvId("")}
+              type="button"
+            >
+              Clear
+            </button>
+          ) : null}
           <button
-            className="inline-flex items-center rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-on-primary transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-60"
-            disabled={isReloading}
-            onClick={() => void handleReload()}
+            className="rounded-xl border border-primary/30 bg-primary/10 px-4 py-2 text-sm font-semibold text-primary"
+            onClick={openGlobalConfiguration}
             type="button"
           >
-            {isReloading ? "Reloading..." : "Reload"}
+            Global Config
+          </button>
+          <button
+            className="rounded-xl border border-white/10 px-4 py-2 text-sm text-white disabled:opacity-40"
+            disabled={!dirty}
+            onClick={() => draft && saveMutation.mutate(draft)}
+            type="button"
+          >
+            Save
+          </button>
+          <button
+            title={
+              dirty
+                ? "Unsaved changes will be saved before the debug run."
+                : undefined
+            }
+            className="rounded-xl bg-primary px-4 py-2 text-sm font-semibold text-on-primary disabled:opacity-40"
+            disabled={enabledStepCount < 1}
+            onClick={() => setShowDebug(true)}
+            type="button"
+          >
+            Debug
           </button>
         </div>
       </div>
-    );
-  }
-
-  return (
-    <div className="mx-auto flex max-w-container-max flex-col gap-5">
-      <section className="surgepilot-glass rounded-2xl p-5">
-        <div className="flex flex-wrap items-start justify-between gap-4">
-          <div className="min-w-0">
-            <div className="flex flex-wrap items-center gap-3">
-              {renamingName ? (
-                <input
-                  aria-label={scenarioCopy.renameInputLabel}
-                  autoFocus
-                  className="min-w-0 max-w-lg rounded-lg border border-primary/40 bg-surface-container px-3 py-1 font-display text-[26px] font-semibold leading-9 text-white outline-none focus:border-primary/50"
-                  onChange={(event) =>
-                    updateDraft((current) => ({
-                      ...current,
-                      name: event.target.value,
-                    }))
-                  }
-                  onKeyDown={(event) => {
-                    if (event.key === "Enter") {
-                      event.currentTarget.blur();
-                    }
-                  }}
-                  onBlur={() => setRenamingName(false)}
-                  value={draft.name}
-                />
-              ) : (
-                <>
-                  <h1 className="font-display text-[26px] font-semibold leading-9 text-white">
-                    {draft.name}
-                  </h1>
-                  <button
-                    aria-label={scenarioCopy.rename}
-                    className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-white/10 text-text-muted transition hover:border-primary/30 hover:bg-white/5 hover:text-white"
-                    onClick={() => setRenamingName(true)}
-                    title={scenarioCopy.rename}
-                    type="button"
-                  >
-                    <Pencil className="h-4 w-4" />
-                  </button>
-                </>
-              )}
-              <span className="rounded-full border border-white/10 bg-black/20 px-3 py-1 font-mono text-[11px] text-secondary">
-                Revision {draft.revision}
-              </span>
-              <span
-                className={cn(
-                  "rounded-full border px-3 py-1 font-mono text-[11px]",
-                  dirty
-                    ? "border-warning/30 bg-warning/10 text-warning"
-                    : "border-success/30 bg-success/10 text-success",
-                )}
-              >
-                {dirty ? "Unsaved changes" : "Saved"}
-              </span>
-            </div>
-            <div className="mt-3 flex flex-wrap gap-x-6 gap-y-1 font-mono text-xs text-text-muted">
-              <span>
-                Updated {formatDate(draft.updatedAt)}
-              </span>
-              {draft.description ? (
-                <span className="max-w-2xl truncate normal-case">
-                  {draft.description}
-                </span>
-              ) : null}
-            </div>
-          </div>
-          <div className="flex flex-wrap items-center gap-2">
-            <label className="grid gap-1 text-sm text-text-muted">
-              <span className="sr-only">Environment</span>
-              <select
-                aria-label="Environment"
-                className="h-10 rounded-lg border border-white/10 bg-surface-container-low px-3 text-sm text-text-main outline-none"
-                onChange={(event) => setSelectedEnvId(event.target.value)}
-                value={selectedEnvId}
-              >
-                <option value="">{scenarioCopy.noEnvironment}</option>
-                {envGroups.map((env) => (
-                  <option key={env.id} value={env.id}>
-                    {env.name}
-                  </option>
-                ))}
-              </select>
-            </label>
-            {selectedEnvId ? (
-              <button
-                className="rounded-lg border border-white/10 px-2 py-1 text-xs text-text-muted transition hover:bg-white/5 hover:text-white"
-                onClick={() => setSelectedEnvId("")}
-                type="button"
-              >
-                Clear
-              </button>
-            ) : null}
-            <button
-              className="rounded-lg border border-primary/30 bg-primary/10 px-4 py-2 text-sm font-semibold text-primary transition hover:bg-primary/20"
-              onClick={openGlobalConfiguration}
-              type="button"
-            >
-              Global Config
-            </button>
-            <button
-              className="rounded-lg border border-white/10 px-4 py-2 text-sm text-text-main transition hover:bg-white/5 disabled:cursor-not-allowed disabled:opacity-40"
-              disabled={!dirty || isSaving}
-              onClick={() => void handleSave()}
-              type="button"
-            >
-              {isSaving ? "Saving..." : "Save"}
-            </button>
-            <button
-              aria-label={`${scenarioCopy.clone} ${draft.name}`}
-              className="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-white/10 text-text-muted transition hover:border-primary/30 hover:bg-white/5 hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
-              disabled={isCloning}
-              onClick={() => void handleClone()}
-              title={scenarioCopy.clone}
-              type="button"
-            >
-              <Copy className="h-4 w-4" />
-            </button>
-            <button
-              aria-label={`${scenarioCopy.archive} ${draft.name}`}
-              className="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-white/10 text-text-muted transition hover:border-error/30 hover:bg-white/5 hover:text-error"
-              onClick={() => setArchiveOpen(true)}
-              title={scenarioCopy.archive}
-              type="button"
-            >
-              <Archive className="h-4 w-4" />
-            </button>
-            <button
-              className="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-on-primary transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-40"
-              disabled={enabledStepCount < 1}
-              onClick={openDebug}
-              title={
-                dirty
-                  ? "Unsaved changes will be saved before the debug run."
-                  : undefined
-              }
-              type="button"
-            >
-              Debug
-            </button>
-          </div>
+      {actionError ? (
+        <div className="rounded-xl border border-error/30 bg-error-container p-3 text-sm text-on-error-container">
+          {actionError}
         </div>
-        <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-white/10 bg-black/20 px-4 py-3">
+      ) : null}
+      <div
+        className="rounded-3xl border border-white/10 bg-white/[0.045] p-4"
+        data-testid="scenario-designer-summary"
+      >
+        <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="text-sm text-text-muted">
             Base URL:{" "}
             <code className="font-mono text-primary">
               {draft.baseUrlExpression}
             </code>
           </div>
-          <div className="flex flex-wrap gap-x-4 gap-y-1 font-mono text-xs text-secondary">
+          <div className="flex flex-wrap gap-2 font-mono text-xs text-secondary">
             <span>
-              {enabledDataSourceCount} data sources
+              {
+                draft.dataSources.filter((item) => item.enabled !== false)
+                  .length
+              }{" "}
+              data sources
             </span>
             <span>
-              {enabledStepCount} enabled steps
+              {
+                draft.globalHeaders.filter((item) => item.enabled !== false)
+                  .length
+              }{" "}
+              global headers
             </span>
-            <span>timeout {Math.round(draft.defaultSettings.timeoutMs / 1000)}s</span>
+            <span>
+              {draft.variables.filter((item) => item.enabled !== false).length}{" "}
+              variables
+            </span>
+            <span>
+              timeout {Math.round(draft.defaultSettings.timeoutMs / 1000)}s
+            </span>
             <span>think-time {draft.defaultSettings.thinkTimeMs}ms</span>
             <span>
               keep-alive {draft.defaultSettings.keepAlive ? "on" : "off"}
@@ -1398,77 +844,59 @@ export function ScenarioDesignerPage() {
             <span>
               redirects {draft.defaultSettings.followRedirects ? "on" : "off"}
             </span>
+            <span className="text-primary">Global Config</span>
           </div>
         </div>
-        {actionError ? (
-          <div className="mt-4 flex items-center justify-between gap-4 rounded-xl border border-error/30 bg-error-container px-4 py-3 text-sm text-on-error-container">
-            <span>{actionError}</span>
-            {needsReload ? (
-              <button
-                className="shrink-0 rounded-lg border border-white/10 px-3 py-1 text-xs text-text-main transition hover:bg-white/5"
-                onClick={() => void handleReload()}
-                type="button"
-              >
-                Reload
-              </button>
-            ) : null}
-          </div>
-        ) : null}
-      </section>
-
-      <div className="grid items-start gap-5 xl:grid-cols-[320px_minmax(0,1fr)]">
-        <aside className="surgepilot-glass rounded-2xl p-4">
-          <div className="mb-3">
-            <h2 className="text-sm font-semibold text-white">Steps</h2>
-            <div className="mt-3 grid grid-cols-3 gap-2">
+      </div>
+      <div className="grid gap-5 xl:grid-cols-[340px_1fr]">
+        <aside className="rounded-3xl border border-white/10 bg-white/[0.045] p-4">
+          <div className="mb-3 space-y-2">
+            <h2 className="font-semibold text-white">Steps</h2>
+            <div className="grid grid-cols-3 gap-2">
               <button
                 aria-label="Add Step"
-                className="inline-flex items-center justify-center gap-2 rounded-lg bg-primary px-3 py-2 text-sm font-semibold text-on-primary transition hover:brightness-110"
-                onClick={addStep}
+                className="flex items-center justify-center gap-1 rounded-lg bg-primary px-2 py-1.5 text-sm font-semibold text-on-primary"
+                onClick={() =>
+                  updateDraft((current) => {
+                    const step = newStep();
+                    setSelectedStepId(step.id);
+                    return { ...current, steps: [...current.steps, step] };
+                  })
+                }
                 title="Add a blank HTTP Step"
                 type="button"
               >
-                <Plus className="h-4 w-4" />
-                Add Step
+                <Plus aria-hidden className="h-4 w-4" />
+                <span>Add</span>
               </button>
               <button
                 aria-label="Import cURL"
-                className="inline-flex items-center justify-center gap-2 rounded-lg border border-white/10 px-3 py-2 text-sm font-semibold text-text-main transition hover:bg-white/5 disabled:cursor-not-allowed disabled:opacity-40"
+                className="flex items-center justify-center gap-1 rounded-lg border border-white/10 px-2 py-1.5 text-sm font-semibold text-white disabled:opacity-40"
                 disabled={draft === null}
                 onClick={() => setShowCurlImport(true)}
                 title="Import one Step from cURL"
                 type="button"
               >
-                <Terminal className="h-4 w-4" />
-                cURL
+                <Terminal aria-hidden className="h-4 w-4" />
+                <span>cURL</span>
               </button>
               <button
                 aria-label="From OpenAPI"
-                className="inline-flex items-center justify-center gap-2 rounded-lg border border-white/10 px-3 py-2 text-sm font-semibold text-text-main transition hover:bg-white/5 disabled:cursor-not-allowed disabled:opacity-40"
+                className="flex items-center justify-center gap-1 rounded-lg border border-white/10 px-2 py-1.5 text-sm font-semibold text-white disabled:opacity-40"
                 disabled={draft === null}
                 onClick={() => setShowOpenApiImport(true)}
-                title="Generate Steps from OpenAPI"
+                title="Generate Step drafts from API Catalog operations"
                 type="button"
               >
-                OpenAPI
+                <FileCode2 aria-hidden className="h-4 w-4" />
+                <span>API</span>
               </button>
             </div>
           </div>
-          {draft.steps.length === 0 ? (
-            <p className="rounded-xl border border-dashed border-white/10 p-4 text-sm text-text-muted">
-              Add a Step to define the first request. Debug Runs require at
-              least one enabled Step.
-            </p>
-          ) : null}
           <div className="space-y-2">
             {draft.steps.map((step, index) => (
               <div
-                className={cn(
-                  "rounded-2xl border p-2",
-                  step.id === selectedStep?.id
-                    ? "border-primary/50 bg-primary/10"
-                    : "border-white/10 bg-black/10",
-                )}
+                className={`rounded-2xl border p-2 ${step.id === selectedStep?.id ? "border-primary/50 bg-primary/10" : "border-white/10 bg-black/10"}`}
                 key={step.id}
               >
                 <button
@@ -1477,16 +905,11 @@ export function ScenarioDesignerPage() {
                   type="button"
                 >
                   <div className="flex items-center justify-between gap-2">
-                    <span
-                      className={cn(
-                        "truncate font-medium text-white",
-                        step.enabled === false && "opacity-50 line-through",
-                      )}
-                    >
+                    <span className="font-medium text-white">
                       {index + 1}. {step.name}
                     </span>
-                    <span className="shrink-0 font-mono text-xs text-primary">
-                      {step.enabled === false ? "off" : step.method}
+                    <span className="font-mono text-xs text-primary">
+                      {step.method}
                     </span>
                   </div>
                   <p className="mt-1 truncate font-mono text-xs text-text-muted">
@@ -1496,7 +919,7 @@ export function ScenarioDesignerPage() {
                 <div className="mt-2 flex items-center gap-2 border-t border-white/10 pt-2">
                   <button
                     aria-label={`Move ${step.name} up`}
-                    className="rounded-lg border border-white/10 px-2 py-1 text-xs text-text-muted transition hover:bg-white/5 disabled:cursor-not-allowed disabled:opacity-40"
+                    className="rounded-lg border border-white/10 px-2 py-1 text-xs text-text-muted disabled:opacity-40"
                     disabled={index === 0}
                     onClick={() => moveStep(step.id, -1)}
                     type="button"
@@ -1505,7 +928,7 @@ export function ScenarioDesignerPage() {
                   </button>
                   <button
                     aria-label={`Move ${step.name} down`}
-                    className="rounded-lg border border-white/10 px-2 py-1 text-xs text-text-muted transition hover:bg-white/5 disabled:cursor-not-allowed disabled:opacity-40"
+                    className="rounded-lg border border-white/10 px-2 py-1 text-xs text-text-muted disabled:opacity-40"
                     disabled={index === draft.steps.length - 1}
                     onClick={() => moveStep(step.id, 1)}
                     type="button"
@@ -1520,46 +943,51 @@ export function ScenarioDesignerPage() {
             ))}
           </div>
         </aside>
-
-        <main className="surgepilot-glass rounded-2xl p-5">
+        <main className="rounded-3xl border border-white/10 bg-white/[0.045] p-5">
           {selectedStep ? (
             <div className="space-y-5">
-              <div className="rounded-2xl border border-white/10 bg-black/20 p-3">
-                <div className="grid gap-3 lg:grid-cols-[150px_minmax(0,1fr)_auto] lg:items-end">
-                  <Field label="Method">
+              <div
+                className="sticky top-20 z-10 rounded-2xl border border-white/10 bg-surface-container-low/95 p-3 backdrop-blur-xl"
+                data-testid="step-request-bar"
+              >
+                <div className="grid gap-3 xl:grid-cols-[160px_1fr_auto] xl:items-end">
+                  <label className="grid gap-1 text-sm text-text-muted">
+                    Method
                     <select
-                      aria-label="Method"
-                      className={cn(inputClass(false), "text-text-main")}
-                      onChange={(event) =>
+                      className="rounded-xl border border-white/10 bg-surface-container-low px-3 py-2 text-white"
+                      value={selectedStep.method}
+                      onChange={(e) =>
                         updateStep(selectedStep.id, {
-                          method: event.target.value as ScenarioStep["method"],
+                          method: e.target.value as ScenarioStep["method"],
                         })
                       }
-                      value={selectedStep.method}
                     >
-                      {HTTP_METHODS.map((method) => (
-                        <option key={method} value={method}>
-                          {method}
-                        </option>
+                      {[
+                        "GET",
+                        "POST",
+                        "PUT",
+                        "PATCH",
+                        "DELETE",
+                        "HEAD",
+                        "OPTIONS",
+                      ].map((method) => (
+                        <option key={method}>{method}</option>
                       ))}
                     </select>
-                  </Field>
-                  <Field label="Path">
+                  </label>
+                  <label className="grid gap-1 text-sm text-text-muted">
+                    Path
                     <input
-                      aria-label="Path"
-                      className={cn(inputClass(false), "font-mono text-text-main")}
-                      onChange={(event) =>
-                        updateStep(selectedStep.id, {
-                          path: event.target.value,
-                        })
-                      }
-                      placeholder="/health"
+                      className="rounded-xl border border-white/10 bg-black/20 px-3 py-2 font-mono text-white"
                       value={selectedStep.path}
+                      onChange={(e) =>
+                        updateStep(selectedStep.id, { path: e.target.value })
+                      }
                     />
-                  </Field>
-                  <div className="flex flex-wrap gap-2 pb-0.5">
+                  </label>
+                  <div className="flex flex-wrap justify-end gap-2">
                     <button
-                      className="rounded-lg border border-white/10 px-3 py-2 text-sm text-text-main transition hover:bg-white/5"
+                      className="rounded-xl border border-white/10 px-3 py-2 text-sm text-white"
                       onClick={() =>
                         updateStep(selectedStep.id, {
                           enabled: !selectedStep.enabled,
@@ -1570,22 +998,34 @@ export function ScenarioDesignerPage() {
                       {selectedStep.enabled ? "Disable" : "Enable"}
                     </button>
                     <button
-                      className="rounded-lg border border-white/10 px-3 py-2 text-sm text-text-main transition hover:bg-white/5"
-                      onClick={duplicateSelectedStep}
+                      className="rounded-xl border border-white/10 px-3 py-2 text-sm text-white"
+                      onClick={() =>
+                        updateDraft((current) => ({
+                          ...current,
+                          steps: [...current.steps, cloneStep(selectedStep)],
+                        }))
+                      }
                       type="button"
                     >
                       Duplicate
                     </button>
                     <button
-                      className="rounded-lg border border-error/30 px-3 py-2 text-sm text-error transition hover:bg-error/10"
-                      onClick={removeSelectedStep}
+                      className="rounded-xl border border-error/30 px-3 py-2 text-sm text-error"
+                      onClick={() =>
+                        updateDraft((current) => ({
+                          ...current,
+                          steps: current.steps.filter(
+                            (step) => step.id !== selectedStep.id,
+                          ),
+                        }))
+                      }
                       type="button"
                     >
                       Delete
                     </button>
                   </div>
                 </div>
-                <div className="mt-3 rounded-xl border border-white/10 bg-black/30 p-3">
+                <div className="rounded-2xl border border-white/10 bg-black/20 p-3">
                   <p className="font-mono text-[11px] uppercase tracking-[0.18em] text-secondary">
                     URL Preview
                   </p>
@@ -1594,7 +1034,6 @@ export function ScenarioDesignerPage() {
                   </p>
                 </div>
               </div>
-
               <div
                 aria-label="Step configuration tabs"
                 className="flex flex-wrap gap-2 border-b border-white/10"
@@ -1606,12 +1045,11 @@ export function ScenarioDesignerPage() {
                   return (
                     <button
                       aria-selected={isActive}
-                      className={cn(
-                        "-mb-px inline-flex items-center gap-2 border-b-2 px-3 py-2 text-sm font-medium transition",
+                      className={`-mb-px inline-flex items-center gap-2 border-b-2 px-3 py-2 text-sm font-medium transition ${
                         isActive
                           ? "border-primary text-white"
-                          : "border-transparent text-text-muted hover:text-white",
-                      )}
+                          : "border-transparent text-text-muted hover:text-white"
+                      }`}
                       key={tab.key}
                       onClick={() => setActiveStepTab(tab.key)}
                       role="tab"
@@ -1627,7 +1065,6 @@ export function ScenarioDesignerPage() {
                   );
                 })}
               </div>
-
               {activeStepTab === "params" ? (
                 <FieldSection
                   title="Query Params"
@@ -1648,32 +1085,99 @@ export function ScenarioDesignerPage() {
                     </MiniButton>
                   }
                 >
-                  <NamedValueRows
-                    items={selectedStep.queryParams}
-                    label="Query param"
-                    onChange={(id, fields) =>
-                      updateStep(selectedStep.id, {
-                        queryParams: (selectedStep.queryParams ?? []).map(
-                          (item) =>
-                            item.id === id ? { ...item, ...fields } : item,
-                        ),
-                      })
-                    }
-                    onRemove={(id) =>
-                      updateStep(selectedStep.id, {
-                        queryParams: (selectedStep.queryParams ?? []).filter(
-                          (item) => item.id !== id,
-                        ),
-                      })
-                    }
-                  />
+                  <div className="space-y-2">
+                    {(selectedStep.queryParams ?? []).map((item, index) => (
+                      <div
+                        className="grid gap-2 rounded-xl border border-white/10 bg-white/[0.03] p-3 md:grid-cols-[1fr_1fr_auto_auto]"
+                        key={item.id}
+                      >
+                        <label className="grid gap-1 text-xs text-text-muted">
+                          Query param {index + 1} name
+                          <input
+                            aria-label={`Query param ${index + 1} name`}
+                            className={textInputClass("font-mono")}
+                            value={item.name}
+                            onChange={(event) =>
+                              updateStep(selectedStep.id, {
+                                queryParams: (
+                                  selectedStep.queryParams ?? []
+                                ).map((current) =>
+                                  current.id === item.id
+                                    ? { ...current, name: event.target.value }
+                                    : current,
+                                ),
+                              })
+                            }
+                          />
+                        </label>
+                        <label className="grid gap-1 text-xs text-text-muted">
+                          Query param {index + 1} value
+                          <input
+                            aria-label={`Query param ${index + 1} value`}
+                            className={textInputClass("font-mono")}
+                            value={item.value}
+                            onChange={(event) =>
+                              updateStep(selectedStep.id, {
+                                queryParams: (
+                                  selectedStep.queryParams ?? []
+                                ).map((current) =>
+                                  current.id === item.id
+                                    ? { ...current, value: event.target.value }
+                                    : current,
+                                ),
+                              })
+                            }
+                          />
+                        </label>
+                        <label className="flex items-end gap-2 pb-2 text-xs text-text-muted">
+                          <input
+                            checked={item.enabled !== false}
+                            onChange={(event) =>
+                              updateStep(selectedStep.id, {
+                                queryParams: (
+                                  selectedStep.queryParams ?? []
+                                ).map((current) =>
+                                  current.id === item.id
+                                    ? {
+                                        ...current,
+                                        enabled: event.target.checked,
+                                      }
+                                    : current,
+                                ),
+                              })
+                            }
+                            type="checkbox"
+                          />
+                          Enabled
+                        </label>
+                        <div className="flex items-end">
+                          <MiniButton
+                            onClick={() =>
+                              updateStep(selectedStep.id, {
+                                queryParams: (
+                                  selectedStep.queryParams ?? []
+                                ).filter((current) => current.id !== item.id),
+                              })
+                            }
+                            tone="danger"
+                          >
+                            Remove
+                          </MiniButton>
+                        </div>
+                      </div>
+                    ))}
+                    {(selectedStep.queryParams ?? []).length === 0 ? (
+                      <p className="text-sm text-text-muted">
+                        No query params.
+                      </p>
+                    ) : null}
+                  </div>
                 </FieldSection>
               ) : null}
-
               {activeStepTab === "headers" ? (
                 <FieldSection
                   title="Headers"
-                  description="Add request headers. Duplicate header names must be unique when enabled."
+                  description="Add request headers for this step."
                   action={
                     <MiniButton
                       onClick={() =>
@@ -1690,40 +1194,308 @@ export function ScenarioDesignerPage() {
                     </MiniButton>
                   }
                 >
-                  <NamedValueRows
-                    items={selectedStep.headers}
-                    label="Header"
-                    onChange={(id, fields) =>
-                      updateStep(selectedStep.id, {
-                        headers: (selectedStep.headers ?? []).map((item) =>
-                          item.id === id ? { ...item, ...fields } : item,
-                        ),
-                      })
-                    }
-                    onRemove={(id) =>
-                      updateStep(selectedStep.id, {
-                        headers: (selectedStep.headers ?? []).filter(
-                          (item) => item.id !== id,
-                        ),
-                      })
-                    }
-                  />
+                  <div className="space-y-2">
+                    {(selectedStep.headers ?? []).map((item, index) => (
+                      <div
+                        className="grid gap-2 rounded-xl border border-white/10 bg-white/[0.03] p-3 md:grid-cols-[1fr_1fr_auto_auto]"
+                        key={item.id}
+                      >
+                        <label className="grid gap-1 text-xs text-text-muted">
+                          Header {index + 1} name
+                          <input
+                            aria-label={`Header ${index + 1} name`}
+                            className={textInputClass("font-mono")}
+                            value={item.name}
+                            onChange={(event) =>
+                              updateStep(selectedStep.id, {
+                                headers: (selectedStep.headers ?? []).map(
+                                  (current) =>
+                                    current.id === item.id
+                                      ? { ...current, name: event.target.value }
+                                      : current,
+                                ),
+                              })
+                            }
+                          />
+                        </label>
+                        <label className="grid gap-1 text-xs text-text-muted">
+                          Header {index + 1} value
+                          <input
+                            aria-label={`Header ${index + 1} value`}
+                            className={textInputClass("font-mono")}
+                            value={item.value}
+                            onChange={(event) =>
+                              updateStep(selectedStep.id, {
+                                headers: (selectedStep.headers ?? []).map(
+                                  (current) =>
+                                    current.id === item.id
+                                      ? {
+                                          ...current,
+                                          value: event.target.value,
+                                        }
+                                      : current,
+                                ),
+                              })
+                            }
+                          />
+                        </label>
+                        <label className="flex items-end gap-2 pb-2 text-xs text-text-muted">
+                          <input
+                            checked={item.enabled !== false}
+                            onChange={(event) =>
+                              updateStep(selectedStep.id, {
+                                headers: (selectedStep.headers ?? []).map(
+                                  (current) =>
+                                    current.id === item.id
+                                      ? {
+                                          ...current,
+                                          enabled: event.target.checked,
+                                        }
+                                      : current,
+                                ),
+                              })
+                            }
+                            type="checkbox"
+                          />
+                          Enabled
+                        </label>
+                        <div className="flex items-end">
+                          <MiniButton
+                            onClick={() =>
+                              updateStep(selectedStep.id, {
+                                headers: (selectedStep.headers ?? []).filter(
+                                  (current) => current.id !== item.id,
+                                ),
+                              })
+                            }
+                            tone="danger"
+                          >
+                            Remove
+                          </MiniButton>
+                        </div>
+                      </div>
+                    ))}
+                    {(selectedStep.headers ?? []).length === 0 ? (
+                      <p className="text-sm text-text-muted">No headers.</p>
+                    ) : null}
+                  </div>
                 </FieldSection>
               ) : null}
-
               {activeStepTab === "body" ? (
-                <BodyEditor
-                  step={selectedStep}
-                  onChange={(fields) =>
-                    updateStep(selectedStep.id, { body: fields })
-                  }
-                />
+                <FieldSection
+                  title="Body"
+                  description="Choose the request body format for this step."
+                >
+                  <div className="space-y-3">
+                    <label className="grid gap-1 text-sm text-text-muted">
+                      Body type
+                      <select
+                        aria-label="Body type"
+                        className={textInputClass()}
+                        value={selectedStep.body?.type ?? "none"}
+                        onChange={(event) =>
+                          updateStep(selectedStep.id, {
+                            body: {
+                              type: event.target.value as NonNullable<
+                                ScenarioStep["body"]
+                              >["type"],
+                              contentType:
+                                event.target.value === "raw"
+                                  ? (selectedStep.body?.contentType ?? "")
+                                  : null,
+                              rawText:
+                                event.target.value === "raw"
+                                  ? (selectedStep.body?.rawText ?? "")
+                                  : null,
+                              formFields:
+                                event.target.value === "form"
+                                  ? (selectedStep.body?.formFields ?? [])
+                                  : [],
+                            },
+                          })
+                        }
+                      >
+                        <option value="none">None</option>
+                        <option value="raw">Raw</option>
+                        <option value="form">Form</option>
+                      </select>
+                    </label>
+                    {selectedStep.body?.type === "raw" ? (
+                      <div className="grid gap-3">
+                        <label className="grid gap-1 text-sm text-text-muted">
+                          Raw content type
+                          <input
+                            aria-label="Raw content type"
+                            className={textInputClass("font-mono")}
+                            value={selectedStep.body.contentType ?? ""}
+                            onChange={(event) =>
+                              updateStep(selectedStep.id, {
+                                body: {
+                                  ...(selectedStep.body ?? { type: "raw" }),
+                                  type: "raw",
+                                  contentType: event.target.value,
+                                  formFields: [],
+                                },
+                              })
+                            }
+                          />
+                        </label>
+                        <label className="grid gap-1 text-sm text-text-muted">
+                          Raw request body
+                          <textarea
+                            aria-label="Raw request body"
+                            className="min-h-32 rounded-xl border border-white/10 bg-black/20 px-3 py-2 font-mono text-sm text-white"
+                            value={selectedStep.body.rawText ?? ""}
+                            onChange={(event) =>
+                              updateStep(selectedStep.id, {
+                                body: {
+                                  ...(selectedStep.body ?? { type: "raw" }),
+                                  type: "raw",
+                                  rawText: event.target.value,
+                                  formFields: [],
+                                },
+                              })
+                            }
+                          />
+                        </label>
+                      </div>
+                    ) : null}
+                    {selectedStep.body?.type === "form" ? (
+                      <div className="space-y-2">
+                        <MiniButton
+                          onClick={() =>
+                            updateStep(selectedStep.id, {
+                              body: {
+                                ...(selectedStep.body ?? { type: "form" }),
+                                type: "form",
+                                contentType: null,
+                                rawText: null,
+                                formFields: [
+                                  ...(selectedStep.body?.formFields ?? []),
+                                  newFormField(),
+                                ],
+                              },
+                            })
+                          }
+                          tone="primary"
+                        >
+                          Add form field
+                        </MiniButton>
+                        {(selectedStep.body.formFields ?? []).map(
+                          (item, index) => (
+                            <div
+                              className="grid gap-2 rounded-xl border border-white/10 bg-white/[0.03] p-3 md:grid-cols-[1fr_1fr_auto_auto]"
+                              key={item.id}
+                            >
+                              <label className="grid gap-1 text-xs text-text-muted">
+                                Form field {index + 1} name
+                                <input
+                                  aria-label={`Form field ${index + 1} name`}
+                                  className={textInputClass("font-mono")}
+                                  value={item.name}
+                                  onChange={(event) =>
+                                    updateStep(selectedStep.id, {
+                                      body: {
+                                        ...selectedStep.body,
+                                        type: "form",
+                                        formFields: (
+                                          selectedStep.body?.formFields ?? []
+                                        ).map((current) =>
+                                          current.id === item.id
+                                            ? {
+                                                ...current,
+                                                name: event.target.value,
+                                              }
+                                            : current,
+                                        ),
+                                      },
+                                    })
+                                  }
+                                />
+                              </label>
+                              <label className="grid gap-1 text-xs text-text-muted">
+                                Form field {index + 1} value
+                                <input
+                                  aria-label={`Form field ${index + 1} value`}
+                                  className={textInputClass("font-mono")}
+                                  value={item.value}
+                                  onChange={(event) =>
+                                    updateStep(selectedStep.id, {
+                                      body: {
+                                        ...selectedStep.body,
+                                        type: "form",
+                                        formFields: (
+                                          selectedStep.body?.formFields ?? []
+                                        ).map((current) =>
+                                          current.id === item.id
+                                            ? {
+                                                ...current,
+                                                value: event.target.value,
+                                              }
+                                            : current,
+                                        ),
+                                      },
+                                    })
+                                  }
+                                />
+                              </label>
+                              <label className="flex items-end gap-2 pb-2 text-xs text-text-muted">
+                                <input
+                                  checked={item.enabled !== false}
+                                  onChange={(event) =>
+                                    updateStep(selectedStep.id, {
+                                      body: {
+                                        ...selectedStep.body,
+                                        type: "form",
+                                        formFields: (
+                                          selectedStep.body?.formFields ?? []
+                                        ).map((current) =>
+                                          current.id === item.id
+                                            ? {
+                                                ...current,
+                                                enabled: event.target.checked,
+                                              }
+                                            : current,
+                                        ),
+                                      },
+                                    })
+                                  }
+                                  type="checkbox"
+                                />
+                                Enabled
+                              </label>
+                              <div className="flex items-end">
+                                <MiniButton
+                                  onClick={() =>
+                                    updateStep(selectedStep.id, {
+                                      body: {
+                                        ...selectedStep.body,
+                                        type: "form",
+                                        formFields: (
+                                          selectedStep.body?.formFields ?? []
+                                        ).filter(
+                                          (current) => current.id !== item.id,
+                                        ),
+                                      },
+                                    })
+                                  }
+                                  tone="danger"
+                                >
+                                  Remove
+                                </MiniButton>
+                              </div>
+                            </div>
+                          ),
+                        )}
+                      </div>
+                    ) : null}
+                  </div>
+                </FieldSection>
               ) : null}
-
               {activeStepTab === "files" ? (
                 <FieldSection
                   title="Upload Files"
-                  description="Attach Dependency Files already uploaded in this Workspace."
+                  description="Attach files from Dependency Files to this request."
                   action={
                     <MiniButton
                       onClick={() =>
@@ -1736,171 +1508,703 @@ export function ScenarioDesignerPage() {
                       }
                       tone="primary"
                     >
-                      Add file
+                      Add upload file
                     </MiniButton>
                   }
                 >
                   <div className="space-y-2">
-                    {(selectedStep.uploadFiles ?? []).map((file, index) => (
-                      <UploadFileRow
-                        dependencyFiles={dependencyFiles}
-                        file={file}
-                        index={index}
-                        key={file.id}
-                        onChange={(fields) =>
-                          updateStep(selectedStep.id, {
-                            uploadFiles: (selectedStep.uploadFiles ?? []).map(
-                              (item) =>
-                                item.id === file.id
-                                  ? { ...item, ...fields }
-                                  : item,
-                            ),
-                          })
-                        }
-                        onRemove={() =>
-                          updateStep(selectedStep.id, {
-                            uploadFiles: (selectedStep.uploadFiles ?? []).filter(
-                              (item) => item.id !== file.id,
-                            ),
-                          })
-                        }
-                      />
+                    {(selectedStep.uploadFiles ?? []).map((item, index) => (
+                      <div
+                        className="grid gap-2 rounded-xl border border-white/10 bg-white/[0.03] p-3 lg:grid-cols-[1fr_1.4fr_1fr_auto_auto]"
+                        key={item.id}
+                      >
+                        <label className="grid gap-1 text-xs text-text-muted">
+                          Upload file {index + 1} field name
+                          <input
+                            aria-label={`Upload file ${index + 1} field name`}
+                            className={textInputClass("font-mono")}
+                            value={item.fieldName}
+                            onChange={(event) =>
+                              updateStep(selectedStep.id, {
+                                uploadFiles: (
+                                  selectedStep.uploadFiles ?? []
+                                ).map((current) =>
+                                  current.id === item.id
+                                    ? {
+                                        ...current,
+                                        fieldName: event.target.value,
+                                      }
+                                    : current,
+                                ),
+                              })
+                            }
+                          />
+                        </label>
+                        <label className="grid gap-1 text-xs text-text-muted">
+                          Upload file {index + 1} dependency file
+                          <select
+                            aria-label={`Upload file ${index + 1} dependency file`}
+                            className={textInputClass()}
+                            value={item.dependencyFileId}
+                            onChange={(event) =>
+                              updateStep(selectedStep.id, {
+                                uploadFiles: (
+                                  selectedStep.uploadFiles ?? []
+                                ).map((current) =>
+                                  current.id === item.id
+                                    ? {
+                                        ...current,
+                                        dependencyFileId: event.target.value,
+                                      }
+                                    : current,
+                                ),
+                              })
+                            }
+                          >
+                            <option value="">Select a Dependency File</option>
+                            {(dependencyFilesQuery.data?.items ?? []).map(
+                              (file) => (
+                                <option key={file.id} value={file.id}>
+                                  {file.filename}
+                                </option>
+                              ),
+                            )}
+                          </select>
+                        </label>
+                        <label className="grid gap-1 text-xs text-text-muted">
+                          Upload file {index + 1} MIME type
+                          <input
+                            aria-label={`Upload file ${index + 1} MIME type`}
+                            className={textInputClass("font-mono")}
+                            value={item.mimeType ?? ""}
+                            onChange={(event) =>
+                              updateStep(selectedStep.id, {
+                                uploadFiles: (
+                                  selectedStep.uploadFiles ?? []
+                                ).map((current) =>
+                                  current.id === item.id
+                                    ? {
+                                        ...current,
+                                        mimeType: event.target.value || null,
+                                      }
+                                    : current,
+                                ),
+                              })
+                            }
+                          />
+                        </label>
+                        <label className="flex items-end gap-2 pb-2 text-xs text-text-muted">
+                          <input
+                            checked={item.enabled !== false}
+                            onChange={(event) =>
+                              updateStep(selectedStep.id, {
+                                uploadFiles: (
+                                  selectedStep.uploadFiles ?? []
+                                ).map((current) =>
+                                  current.id === item.id
+                                    ? {
+                                        ...current,
+                                        enabled: event.target.checked,
+                                      }
+                                    : current,
+                                ),
+                              })
+                            }
+                            type="checkbox"
+                          />
+                          Enabled
+                        </label>
+                        <div className="flex items-end">
+                          <MiniButton
+                            onClick={() =>
+                              updateStep(selectedStep.id, {
+                                uploadFiles: (
+                                  selectedStep.uploadFiles ?? []
+                                ).filter((current) => current.id !== item.id),
+                              })
+                            }
+                            tone="danger"
+                          >
+                            Remove
+                          </MiniButton>
+                        </div>
+                      </div>
                     ))}
                     {(selectedStep.uploadFiles ?? []).length === 0 ? (
                       <p className="text-sm text-text-muted">
-                        No upload files yet.
+                        No upload files.
                       </p>
                     ) : null}
                   </div>
                 </FieldSection>
               ) : null}
-
               {activeStepTab === "extractors" ? (
                 <FieldSection
                   title="Extractors"
-                  description="Capture response values into variables used by later enabled Steps."
-                  action={
-                    <MiniButton
-                      onClick={() =>
-                        updateStep(selectedStep.id, {
-                          extractors: [
-                            ...(selectedStep.extractors ?? []),
-                            newExtractor("jsonpath"),
-                          ],
-                        })
-                      }
-                      tone="primary"
-                    >
-                      Add extractor
-                    </MiniButton>
-                  }
-                >
-                  <div className="space-y-2">
-                    {(selectedStep.extractors ?? []).map((extractor, index) => (
-                      <ExtractorRow
-                        extractor={extractor}
-                        index={index}
-                        key={extractor.id}
-                        onChange={(fields) =>
-                          updateStep(selectedStep.id, {
-                            extractors: (selectedStep.extractors ?? []).map(
-                              (item) =>
-                                item.id === extractor.id
-                                  ? { ...item, ...fields }
-                                  : item,
-                            ),
-                          })
-                        }
-                        onRemove={() =>
-                          updateStep(selectedStep.id, {
-                            extractors: (selectedStep.extractors ?? []).filter(
-                              (item) => item.id !== extractor.id,
-                            ),
-                          })
-                        }
-                      />
-                    ))}
-                    {(selectedStep.extractors ?? []).length === 0 ? (
-                      <p className="text-sm text-text-muted">
-                        No extractors yet.
-                      </p>
-                    ) : null}
-                  </div>
-                </FieldSection>
-              ) : null}
-
-              {activeStepTab === "assertions" ? (
-                <FieldSection
-                  title="Assertions"
-                  description="Assert the response status, body text, or JSONPath value."
+                  description="Capture values from the response for later steps."
                   action={
                     <div className="flex flex-wrap gap-2">
-                      {(
-                        [
-                          ["status_code", "Status Code"],
-                          ["body_contains", "Body Contains"],
-                          ["jsonpath_exists", "JSONPath Exists"],
-                          ["jsonpath_equals", "JSONPath Equals"],
-                        ] as Array<
-                          [ScenarioAssertion["type"], string]
-                        >
-                      ).map(([type, label]) => (
-                        <MiniButton
-                          key={type}
-                          onClick={() =>
-                            updateStep(selectedStep.id, {
-                              assertions: [
-                                ...(selectedStep.assertions ?? []),
-                                newAssertion(type),
-                              ],
-                            })
-                          }
-                          tone="neutral"
-                        >
-                          + {label}
-                        </MiniButton>
-                      ))}
+                      <MiniButton
+                        onClick={() =>
+                          updateStep(selectedStep.id, {
+                            extractors: [
+                              ...(selectedStep.extractors ?? []),
+                              newExtractor("jsonpath"),
+                            ],
+                          })
+                        }
+                        tone="primary"
+                      >
+                        Add JSONPath extractor
+                      </MiniButton>
+                      <MiniButton
+                        onClick={() =>
+                          updateStep(selectedStep.id, {
+                            extractors: [
+                              ...(selectedStep.extractors ?? []),
+                              newExtractor("regexp"),
+                            ],
+                          })
+                        }
+                        tone="primary"
+                      >
+                        Add Regexp extractor
+                      </MiniButton>
                     </div>
                   }
                 >
                   <div className="space-y-2">
-                    {(selectedStep.assertions ?? []).map((assertion, index) => (
-                      <AssertionRow
-                        assertion={assertion}
-                        index={index}
-                        key={assertion.id}
-                        onChange={(fields) =>
-                          updateStep(selectedStep.id, {
-                            assertions: (selectedStep.assertions ?? []).map(
-                              (item) =>
-                                item.id === assertion.id
-                                  ? { ...item, ...fields }
-                                  : item,
-                            ),
-                          })
-                        }
-                        onRemove={() =>
-                          updateStep(selectedStep.id, {
-                            assertions: (selectedStep.assertions ?? []).filter(
-                              (item) => item.id !== assertion.id,
-                            ),
-                          })
-                        }
-                      />
+                    {(selectedStep.extractors ?? []).map((item, index) => (
+                      <div
+                        className="space-y-3 rounded-xl border border-white/10 bg-white/[0.03] p-3"
+                        key={item.id}
+                      >
+                        <div className="grid gap-2 lg:grid-cols-[0.9fr_1fr_1.6fr_0.7fr_auto_auto]">
+                          <label className="grid gap-1 text-xs text-text-muted">
+                            Extractor {index + 1} type
+                            <select
+                              className={textInputClass()}
+                              value={item.type}
+                              onChange={(event) =>
+                                updateStep(selectedStep.id, {
+                                  extractors: (
+                                    selectedStep.extractors ?? []
+                                  ).map((current) =>
+                                    current.id === item.id
+                                      ? {
+                                          ...current,
+                                          type: event.target
+                                            .value as ScenarioExtractor["type"],
+                                          template:
+                                            event.target.value === "regexp"
+                                              ? (current.template ?? "1")
+                                              : null,
+                                        }
+                                      : current,
+                                  ),
+                                })
+                              }
+                            >
+                              <option value="jsonpath">JSONPath</option>
+                              <option value="regexp">Regexp</option>
+                            </select>
+                          </label>
+                          <label className="grid gap-1 text-xs text-text-muted">
+                            Extractor {index + 1} variable name
+                            <input
+                              aria-label={`Extractor ${index + 1} variable name`}
+                              className={textInputClass("font-mono")}
+                              value={item.variableName}
+                              onChange={(event) =>
+                                updateStep(selectedStep.id, {
+                                  extractors: (
+                                    selectedStep.extractors ?? []
+                                  ).map((current) =>
+                                    current.id === item.id
+                                      ? {
+                                          ...current,
+                                          variableName: event.target.value,
+                                        }
+                                      : current,
+                                  ),
+                                })
+                              }
+                            />
+                          </label>
+                          <label className="grid gap-1 text-xs text-text-muted">
+                            Extractor {index + 1} expression
+                            <input
+                              aria-label={`Extractor ${index + 1} expression`}
+                              className={textInputClass("font-mono")}
+                              value={item.expression}
+                              onChange={(event) =>
+                                updateStep(selectedStep.id, {
+                                  extractors: (
+                                    selectedStep.extractors ?? []
+                                  ).map((current) =>
+                                    current.id === item.id
+                                      ? {
+                                          ...current,
+                                          expression: event.target.value,
+                                        }
+                                      : current,
+                                  ),
+                                })
+                              }
+                            />
+                          </label>
+                          <label className="grid gap-1 text-xs text-text-muted">
+                            Match no
+                            <input
+                              className={textInputClass("font-mono")}
+                              type="number"
+                              value={item.matchNo}
+                              onChange={(event) =>
+                                updateStep(selectedStep.id, {
+                                  extractors: (
+                                    selectedStep.extractors ?? []
+                                  ).map((current) =>
+                                    current.id === item.id
+                                      ? {
+                                          ...current,
+                                          matchNo: Number(event.target.value),
+                                        }
+                                      : current,
+                                  ),
+                                })
+                              }
+                            />
+                          </label>
+                          <label className="flex items-end gap-2 pb-2 text-xs text-text-muted">
+                            <input
+                              checked={item.enabled !== false}
+                              onChange={(event) =>
+                                updateStep(selectedStep.id, {
+                                  extractors: (
+                                    selectedStep.extractors ?? []
+                                  ).map((current) =>
+                                    current.id === item.id
+                                      ? {
+                                          ...current,
+                                          enabled: event.target.checked,
+                                        }
+                                      : current,
+                                  ),
+                                })
+                              }
+                              type="checkbox"
+                            />
+                            Enabled
+                          </label>
+                          <div className="flex items-end">
+                            <MiniButton
+                              onClick={() =>
+                                updateStep(selectedStep.id, {
+                                  extractors: (
+                                    selectedStep.extractors ?? []
+                                  ).filter((current) => current.id !== item.id),
+                                })
+                              }
+                              tone="danger"
+                            >
+                              Remove
+                            </MiniButton>
+                          </div>
+                        </div>
+                        <div className="grid gap-2 md:grid-cols-3">
+                          <label className="grid gap-1 text-xs text-text-muted">
+                            Default value
+                            <input
+                              className={textInputClass("font-mono")}
+                              value={item.defaultValue ?? ""}
+                              onChange={(event) =>
+                                updateStep(selectedStep.id, {
+                                  extractors: (
+                                    selectedStep.extractors ?? []
+                                  ).map((current) =>
+                                    current.id === item.id
+                                      ? {
+                                          ...current,
+                                          defaultValue: event.target.value,
+                                        }
+                                      : current,
+                                  ),
+                                })
+                              }
+                            />
+                          </label>
+                          <label className="grid gap-1 text-xs text-text-muted">
+                            Subject
+                            <select
+                              className={textInputClass()}
+                              value={item.subject ?? "body"}
+                              onChange={(event) =>
+                                updateStep(selectedStep.id, {
+                                  extractors: (
+                                    selectedStep.extractors ?? []
+                                  ).map((current) =>
+                                    current.id === item.id
+                                      ? {
+                                          ...current,
+                                          subject: event.target.value,
+                                        }
+                                      : current,
+                                  ),
+                                })
+                              }
+                            >
+                              <option value="body">body</option>
+                              <option value="body-unescaped">
+                                body-unescaped
+                              </option>
+                              <option value="body-as-document">
+                                body-as-document
+                              </option>
+                              <option value="response-headers">
+                                response-headers
+                              </option>
+                              <option value="request-headers">
+                                request-headers
+                              </option>
+                              <option value="url">url</option>
+                              <option value="code">code</option>
+                              <option value="message">message</option>
+                            </select>
+                          </label>
+                          {item.type === "regexp" ? (
+                            <label className="grid gap-1 text-xs text-text-muted">
+                              Extractor {index + 1} template
+                              <input
+                                aria-label={`Extractor ${index + 1} template`}
+                                className={textInputClass("font-mono")}
+                                value={item.template ?? ""}
+                                onChange={(event) =>
+                                  updateStep(selectedStep.id, {
+                                    extractors: (
+                                      selectedStep.extractors ?? []
+                                    ).map((current) =>
+                                      current.id === item.id
+                                        ? {
+                                            ...current,
+                                            template: event.target.value,
+                                          }
+                                        : current,
+                                    ),
+                                  })
+                                }
+                              />
+                            </label>
+                          ) : null}
+                        </div>
+                      </div>
                     ))}
-                    {(selectedStep.assertions ?? []).length === 0 ? (
-                      <p className="text-sm text-text-muted">
-                        No assertions yet.
-                      </p>
+                    {(selectedStep.extractors ?? []).length === 0 ? (
+                      <p className="text-sm text-text-muted">No extractors.</p>
                     ) : null}
                   </div>
                 </FieldSection>
               ) : null}
-
+              {activeStepTab === "assertions" ? (
+                <FieldSection
+                  title="Assertions"
+                  description="Check the response before the step is considered successful."
+                  action={
+                    <div className="flex flex-wrap gap-2">
+                      <MiniButton
+                        onClick={() =>
+                          updateStep(selectedStep.id, {
+                            assertions: [
+                              ...(selectedStep.assertions ?? []),
+                              newAssertion("status_code"),
+                            ],
+                          })
+                        }
+                        tone="primary"
+                      >
+                        Add Status Code assertion
+                      </MiniButton>
+                      <MiniButton
+                        onClick={() =>
+                          updateStep(selectedStep.id, {
+                            assertions: [
+                              ...(selectedStep.assertions ?? []),
+                              newAssertion("body_contains"),
+                            ],
+                          })
+                        }
+                        tone="primary"
+                      >
+                        Add Body Contains assertion
+                      </MiniButton>
+                      <MiniButton
+                        onClick={() =>
+                          updateStep(selectedStep.id, {
+                            assertions: [
+                              ...(selectedStep.assertions ?? []),
+                              newAssertion("jsonpath_exists"),
+                            ],
+                          })
+                        }
+                        tone="primary"
+                      >
+                        Add JSONPath Exists assertion
+                      </MiniButton>
+                      <MiniButton
+                        onClick={() =>
+                          updateStep(selectedStep.id, {
+                            assertions: [
+                              ...(selectedStep.assertions ?? []),
+                              newAssertion("jsonpath_equals"),
+                            ],
+                          })
+                        }
+                        tone="primary"
+                      >
+                        Add JSONPath Equals assertion
+                      </MiniButton>
+                    </div>
+                  }
+                >
+                  <div className="space-y-2">
+                    {(selectedStep.assertions ?? []).map((item, index) => (
+                      <div
+                        className="space-y-3 rounded-xl border border-white/10 bg-white/[0.03] p-3"
+                        key={item.id}
+                      >
+                        <div className="grid gap-2 lg:grid-cols-[1fr_1fr_auto_auto]">
+                          <label className="grid gap-1 text-xs text-text-muted">
+                            Assertion {index + 1} type
+                            <select
+                              className={textInputClass()}
+                              value={item.type}
+                              onChange={(event) =>
+                                updateStep(selectedStep.id, {
+                                  assertions: (
+                                    selectedStep.assertions ?? []
+                                  ).map((current) =>
+                                    current.id === item.id
+                                      ? {
+                                          ...newAssertion(
+                                            event.target
+                                              .value as ScenarioAssertion["type"],
+                                          ),
+                                          id: current.id,
+                                          enabled: current.enabled,
+                                        }
+                                      : current,
+                                  ),
+                                })
+                              }
+                            >
+                              <option value="status_code">Status Code</option>
+                              <option value="body_contains">
+                                Body Contains
+                              </option>
+                              <option value="jsonpath_exists">
+                                JSONPath Exists
+                              </option>
+                              <option value="jsonpath_equals">
+                                JSONPath Equals
+                              </option>
+                            </select>
+                          </label>
+                          {item.type === "status_code" ? (
+                            <label className="grid gap-1 text-xs text-text-muted">
+                              Assertion {index + 1} expected status
+                              <input
+                                aria-label={`Assertion ${index + 1} expected status`}
+                                className={textInputClass("font-mono")}
+                                type="number"
+                                value={item.expectedStatus ?? 200}
+                                onChange={(event) =>
+                                  updateStep(selectedStep.id, {
+                                    assertions: (
+                                      selectedStep.assertions ?? []
+                                    ).map((current) =>
+                                      current.id === item.id
+                                        ? {
+                                            ...current,
+                                            expectedStatus: Number(
+                                              event.target.value,
+                                            ),
+                                          }
+                                        : current,
+                                    ),
+                                  })
+                                }
+                              />
+                            </label>
+                          ) : null}
+                          {item.type === "body_contains" ? (
+                            <label className="grid gap-1 text-xs text-text-muted">
+                              Assertion {index + 1} contains
+                              <input
+                                aria-label={`Assertion ${index + 1} contains`}
+                                className={textInputClass("font-mono")}
+                                value={item.contains ?? ""}
+                                onChange={(event) =>
+                                  updateStep(selectedStep.id, {
+                                    assertions: (
+                                      selectedStep.assertions ?? []
+                                    ).map((current) =>
+                                      current.id === item.id
+                                        ? {
+                                            ...current,
+                                            contains: event.target.value,
+                                          }
+                                        : current,
+                                    ),
+                                  })
+                                }
+                              />
+                            </label>
+                          ) : null}
+                          {item.type === "jsonpath_exists" ||
+                          item.type === "jsonpath_equals" ? (
+                            <label className="grid gap-1 text-xs text-text-muted">
+                              Assertion {index + 1} JSONPath
+                              <input
+                                aria-label={`Assertion ${index + 1} JSONPath`}
+                                className={textInputClass("font-mono")}
+                                value={item.jsonpath ?? ""}
+                                onChange={(event) =>
+                                  updateStep(selectedStep.id, {
+                                    assertions: (
+                                      selectedStep.assertions ?? []
+                                    ).map((current) =>
+                                      current.id === item.id
+                                        ? {
+                                            ...current,
+                                            jsonpath: event.target.value,
+                                          }
+                                        : current,
+                                    ),
+                                  })
+                                }
+                              />
+                            </label>
+                          ) : null}
+                          {item.type === "jsonpath_equals" ? (
+                            <label className="grid gap-1 text-xs text-text-muted">
+                              Assertion {index + 1} expected value
+                              <input
+                                aria-label={`Assertion ${index + 1} expected value`}
+                                className={textInputClass("font-mono")}
+                                value={item.expectedValue ?? ""}
+                                onChange={(event) =>
+                                  updateStep(selectedStep.id, {
+                                    assertions: (
+                                      selectedStep.assertions ?? []
+                                    ).map((current) =>
+                                      current.id === item.id
+                                        ? {
+                                            ...current,
+                                            expectedValue: event.target.value,
+                                          }
+                                        : current,
+                                    ),
+                                  })
+                                }
+                              />
+                            </label>
+                          ) : null}
+                          <label className="flex items-end gap-2 pb-2 text-xs text-text-muted">
+                            <input
+                              checked={item.enabled !== false}
+                              onChange={(event) =>
+                                updateStep(selectedStep.id, {
+                                  assertions: (
+                                    selectedStep.assertions ?? []
+                                  ).map((current) =>
+                                    current.id === item.id
+                                      ? {
+                                          ...current,
+                                          enabled: event.target.checked,
+                                        }
+                                      : current,
+                                  ),
+                                })
+                              }
+                              type="checkbox"
+                            />
+                            Enabled
+                          </label>
+                          <div className="flex items-end">
+                            <MiniButton
+                              onClick={() =>
+                                updateStep(selectedStep.id, {
+                                  assertions: (
+                                    selectedStep.assertions ?? []
+                                  ).filter((current) => current.id !== item.id),
+                                })
+                              }
+                              tone="danger"
+                            >
+                              Remove
+                            </MiniButton>
+                          </div>
+                        </div>
+                        {item.type === "body_contains" ||
+                        item.type === "jsonpath_equals" ? (
+                          <div className="flex flex-wrap gap-4 text-xs text-text-muted">
+                            <label className="flex items-center gap-2">
+                              <input
+                                checked={item.regexp}
+                                onChange={(event) =>
+                                  updateStep(selectedStep.id, {
+                                    assertions: (
+                                      selectedStep.assertions ?? []
+                                    ).map((current) =>
+                                      current.id === item.id
+                                        ? {
+                                            ...current,
+                                            regexp: event.target.checked,
+                                          }
+                                        : current,
+                                    ),
+                                  })
+                                }
+                                type="checkbox"
+                              />
+                              Regexp
+                            </label>
+                            {item.type === "body_contains" ? (
+                              <label className="flex items-center gap-2">
+                                <input
+                                  checked={item.not}
+                                  onChange={(event) =>
+                                    updateStep(selectedStep.id, {
+                                      assertions: (
+                                        selectedStep.assertions ?? []
+                                      ).map((current) =>
+                                        current.id === item.id
+                                          ? {
+                                              ...current,
+                                              not: event.target.checked,
+                                            }
+                                          : current,
+                                      ),
+                                    })
+                                  }
+                                  type="checkbox"
+                                />
+                                Not
+                              </label>
+                            ) : null}
+                          </div>
+                        ) : null}
+                      </div>
+                    ))}
+                    {(selectedStep.assertions ?? []).length === 0 ? (
+                      <p className="text-sm text-text-muted">No assertions.</p>
+                    ) : null}
+                  </div>
+                </FieldSection>
+              ) : null}
               {activeStepTab === "scripts" ? (
                 <FieldSection
                   title="Scripts"
-                  description="Request-level Groovy JSR223 scripts execute on the selected Load Node as part of JMeter. Keep script text bounded and use only variables this Step can see."
+                  description="Request-level Groovy JSR223 scripts execute on the selected Load Node."
                   action={
                     <div className="flex flex-wrap gap-2">
                       <MiniButton
@@ -1925,57 +2229,150 @@ export function ScenarioDesignerPage() {
                             ],
                           })
                         }
-                        tone="neutral"
+                        tone="primary"
                       >
                         Add Groovy after script
                       </MiniButton>
                     </div>
                   }
                 >
-                  <div className="space-y-3">
-                    {(selectedStep.scripts ?? []).map((script, index) => (
-                      <ScriptRow
-                        index={index}
-                        key={script.id}
-                        onChange={(fields) =>
-                          updateStep(selectedStep.id, {
-                            scripts: (selectedStep.scripts ?? []).map((item) =>
-                              item.id === script.id
-                                ? { ...item, ...fields }
-                                : item,
-                            ),
-                          })
-                        }
-                        onRemove={() =>
-                          updateStep(selectedStep.id, {
-                            scripts: (selectedStep.scripts ?? []).filter(
-                              (item) => item.id !== script.id,
-                            ),
-                          })
-                        }
-                        script={script}
-                      />
+                  <div className="space-y-2">
+                    {(selectedStep.scripts ?? []).map((item, index) => (
+                      <div
+                        className="space-y-3 rounded-xl border border-warning/20 bg-warning/5 p-3"
+                        key={item.id}
+                      >
+                        <div className="grid gap-2 md:grid-cols-[1fr_auto_auto]">
+                          <label className="grid gap-1 text-xs text-text-muted">
+                            Execute
+                            <select
+                              className={textInputClass()}
+                              value={item.execute}
+                              onChange={(event) =>
+                                updateStep(selectedStep.id, {
+                                  scripts: (selectedStep.scripts ?? []).map(
+                                    (current) =>
+                                      current.id === item.id
+                                        ? {
+                                            ...current,
+                                            execute: event.target
+                                              .value as ScenarioScript["execute"],
+                                          }
+                                        : current,
+                                  ),
+                                })
+                              }
+                            >
+                              <option value="before">Before request</option>
+                              <option value="after">After request</option>
+                            </select>
+                          </label>
+                          <label className="flex items-end gap-2 pb-2 text-xs text-text-muted">
+                            <input
+                              checked={item.enabled !== false}
+                              onChange={(event) =>
+                                updateStep(selectedStep.id, {
+                                  scripts: (selectedStep.scripts ?? []).map(
+                                    (current) =>
+                                      current.id === item.id
+                                        ? {
+                                            ...current,
+                                            enabled: event.target.checked,
+                                          }
+                                        : current,
+                                  ),
+                                })
+                              }
+                              type="checkbox"
+                            />
+                            Enabled
+                          </label>
+                          <div className="flex items-end">
+                            <MiniButton
+                              onClick={() =>
+                                updateStep(selectedStep.id, {
+                                  scripts: (selectedStep.scripts ?? []).filter(
+                                    (current) => current.id !== item.id,
+                                  ),
+                                })
+                              }
+                              tone="danger"
+                            >
+                              Remove
+                            </MiniButton>
+                          </div>
+                        </div>
+                        <label className="grid gap-1 text-xs text-text-muted">
+                          Script {index + 1} Groovy file
+                          <select
+                            aria-label={`Script ${index + 1} Groovy file`}
+                            className={textInputClass()}
+                            value={item.dependencyFileId ?? ""}
+                            onChange={(event) =>
+                              updateStep(selectedStep.id, {
+                                scripts: (selectedStep.scripts ?? []).map(
+                                  (current) =>
+                                    current.id === item.id
+                                      ? {
+                                          ...current,
+                                          dependencyFileId: event.target.value,
+                                        }
+                                      : current,
+                                ),
+                              })
+                            }
+                          >
+                            <option value="">
+                              Select a Groovy Dependency File
+                            </option>
+                            {(dependencyFilesQuery.data?.items ?? []).map(
+                              (file) => {
+                                const isGroovy = file.filename
+                                  .toLowerCase()
+                                  .endsWith(".groovy");
+                                return (
+                                  <option
+                                    disabled={!isGroovy}
+                                    key={file.id}
+                                    value={file.id}
+                                  >
+                                    {file.filename}
+                                    {isGroovy ? "" : " (not .groovy)"}
+                                  </option>
+                                );
+                              },
+                            )}
+                          </select>
+                          <span className="text-[11px] text-text-muted">
+                            Upload Groovy scripts in Assets → Dependency Files,
+                            then select them here. Enabled scripts are validated
+                            by the API.
+                          </span>
+                        </label>
+                      </div>
                     ))}
                     {(selectedStep.scripts ?? []).length === 0 ? (
-                      <p className="text-sm text-text-muted">
-                        No scripts. Most requests do not need one.
-                      </p>
+                      <p className="text-sm text-text-muted">No scripts.</p>
                     ) : null}
                   </div>
                 </FieldSection>
               ) : null}
-
               {activeStepTab === "settings" ? (
                 <FieldSection
                   title="Step Settings"
                   description="Optional request-level overrides. Blank values inherit Scenario defaults."
                 >
-                  <div className="grid gap-3">
+                  <div
+                    className="grid gap-3"
+                    data-testid="step-settings-fields"
+                  >
                     <label className="grid gap-1 text-sm text-text-muted md:grid-cols-[260px_1fr] md:items-center">
                       Step think time override (ms)
                       <input
                         aria-label="Step think time override (ms)"
                         className={textInputClass("font-mono")}
+                        type="number"
+                        value={selectedStep.settings?.thinkTimeMs ?? ""}
                         onChange={(event) =>
                           updateStep(selectedStep.id, {
                             settings: {
@@ -1992,8 +2389,6 @@ export function ScenarioDesignerPage() {
                             },
                           })
                         }
-                        type="number"
-                        value={selectedStep.settings?.thinkTimeMs ?? ""}
                       />
                     </label>
                     <label className="grid gap-1 text-sm text-text-muted md:grid-cols-[260px_1fr] md:items-center">
@@ -2001,6 +2396,8 @@ export function ScenarioDesignerPage() {
                       <input
                         aria-label="Step timeout override (ms)"
                         className={textInputClass("font-mono")}
+                        type="number"
+                        value={selectedStep.settings?.timeoutMs ?? ""}
                         onChange={(event) =>
                           updateStep(selectedStep.id, {
                             settings: {
@@ -2017,8 +2414,6 @@ export function ScenarioDesignerPage() {
                             },
                           })
                         }
-                        type="number"
-                        value={selectedStep.settings?.timeoutMs ?? ""}
                       />
                     </label>
                     <label className="grid gap-1 text-sm text-text-muted md:grid-cols-[260px_1fr] md:items-center">
@@ -2026,6 +2421,9 @@ export function ScenarioDesignerPage() {
                       <select
                         aria-label="Step follow redirects override"
                         className={textInputClass()}
+                        value={booleanOverrideValue(
+                          selectedStep.settings?.followRedirects,
+                        )}
                         onChange={(event) =>
                           updateStep(selectedStep.id, {
                             settings: {
@@ -2041,9 +2439,6 @@ export function ScenarioDesignerPage() {
                             },
                           })
                         }
-                        value={booleanOverrideValue(
-                          selectedStep.settings?.followRedirects,
-                        )}
                       >
                         <option value="">Inherit</option>
                         <option value="true">On</option>
@@ -2055,6 +2450,9 @@ export function ScenarioDesignerPage() {
                       <select
                         aria-label="Step keep alive override"
                         className={textInputClass()}
+                        value={booleanOverrideValue(
+                          selectedStep.settings?.keepAlive,
+                        )}
                         onChange={(event) =>
                           updateStep(selectedStep.id, {
                             settings: {
@@ -2070,9 +2468,6 @@ export function ScenarioDesignerPage() {
                             },
                           })
                         }
-                        value={booleanOverrideValue(
-                          selectedStep.settings?.keepAlive,
-                        )}
                       >
                         <option value="">Inherit</option>
                         <option value="true">On</option>
@@ -2085,402 +2480,58 @@ export function ScenarioDesignerPage() {
             </div>
           ) : (
             <div className="rounded-2xl border border-dashed border-white/15 p-10 text-center">
-              <h2 className="text-lg font-semibold text-white">
+              <h2 className="text-xl font-semibold text-white">
                 No Step selected
               </h2>
-              <p className="mt-2 text-sm text-text-muted">
-                Add a Step to start editing this Scenario.
-              </p>
               <button
-                className="mt-5 inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-on-primary transition hover:brightness-110"
-                onClick={addStep}
+                className="mt-4 rounded-xl bg-primary px-4 py-2 font-semibold text-on-primary"
+                onClick={() =>
+                  updateDraft((current) => {
+                    const step = newStep();
+                    setSelectedStepId(step.id);
+                    return { ...current, steps: [...current.steps, step] };
+                  })
+                }
                 type="button"
               >
-                <Plus className="h-4 w-4" />
                 Add Step
               </button>
             </div>
           )}
         </main>
       </div>
-
-      {showConfig && draft ? (
-        <div
-          aria-label="Global Configuration"
-          aria-modal="true"
-          className="fixed inset-0 z-50 flex items-start justify-end bg-black/50 p-0"
-          role="dialog"
-        >
-          <div className="flex h-dvh w-full max-w-3xl flex-col overflow-hidden border-l border-white/10 bg-surface-container-low shadow-2xl">
-            <div className="flex items-start justify-between border-b border-white/10 p-6">
-              <div>
-                <h2 className="text-xl font-semibold text-white">
-                  Global Configuration
-                </h2>
-                <p className="mt-1 text-sm text-text-muted">
-                  Configure Scenario defaults, global headers, non-secret variables, and CSV data sources for generated JMeter runs.
-                </p>
-              </div>
+      {blocker.state === "blocked" ? (
+        <div className="fixed inset-0 z-50 grid place-items-center bg-black/60 p-4">
+          <div className="w-full max-w-md rounded-3xl border border-white/10 bg-surface-container-low p-6 shadow-2xl">
+            <h2 className="text-xl font-semibold text-white">
+              Leave without saving?
+            </h2>
+            <p className="mt-2 text-sm text-text-muted">
+              This Scenario has unsaved changes. Save before leaving or discard
+              the draft.
+            </p>
+            <div className="mt-6 flex flex-wrap justify-end gap-2">
               <button
-                aria-label="Close global configuration"
-                className="rounded-lg p-2 text-text-muted transition hover:bg-white/5 hover:text-white"
-                onClick={doneGlobalConfiguration}
+                className="rounded-xl border border-white/10 px-4 py-2 text-sm text-white"
+                onClick={() => blocker.reset()}
                 type="button"
               >
-                <X className="h-5 w-5" />
-              </button>
-            </div>
-            <div
-              aria-label="Global Configuration tabs"
-              className="flex flex-wrap gap-2 border-b border-white/10 px-6"
-              role="tablist"
-            >
-              {configTabs.map((tab) => {
-                const isActive = activeConfigTab === tab.key;
-                return (
-                  <button
-                    aria-selected={isActive}
-                    className={cn(
-                      "-mb-px inline-flex items-center gap-2 border-b-2 px-3 py-2 text-sm font-medium transition",
-                      isActive
-                        ? "border-primary text-white"
-                        : "border-transparent text-text-muted hover:text-white",
-                    )}
-                    key={tab.key}
-                    onClick={() => setActiveConfigTab(tab.key)}
-                    role="tab"
-                    type="button"
-                  >
-                    {tab.label}
-                  </button>
-                );
-              })}
-            </div>
-            <div className="min-h-0 flex-1 overflow-y-auto p-6">
-              {activeConfigTab === "settings" ? (
-                <div className="space-y-4">
-                  <Field label="Scenario name">
-                    <input
-                      className={inputClass(false)}
-                      onChange={(event) =>
-                        updateDraft((current) => ({
-                          ...current,
-                          name: event.target.value,
-                        }))
-                      }
-                      value={draft.name}
-                    />
-                  </Field>
-                  <Field label="Base URL expression">
-                    <input
-                      aria-label="Base URL expression"
-                      className={cn(inputClass(false), "font-mono text-text-main")}
-                      onChange={(event) =>
-                        updateDraft((current) => ({
-                          ...current,
-                          baseUrlExpression: event.target.value,
-                        }))
-                      }
-                      placeholder="${base_url}"
-                      value={draft.baseUrlExpression}
-                    />
-                  </Field>
-                  <div className="grid gap-3 sm:grid-cols-2">
-                    <Field label="Scenario description">
-                      <textarea
-                        aria-label="Scenario description"
-                        className={cn(
-                          inputClass(false),
-                          "min-h-24 resize-y py-3 text-text-main",
-                        )}
-                        onChange={(event) =>
-                          updateDraft((current) => ({
-                            ...current,
-                            description: event.target.value || null,
-                          }))
-                        }
-                        value={draft.description ?? ""}
-                      />
-                    </Field>
-                    <Field label="Tags">
-                      <input
-                        aria-label="Tags"
-                        className={cn(inputClass(false), "font-mono text-text-main")}
-                        onChange={(event) => {
-                          setTagText(event.target.value);
-                          updateDraft((current) => ({
-                            ...current,
-                            tags: parseCsvNames(event.target.value),
-                          }));
-                        }}
-                        placeholder="checkout, smoke"
-                        value={tagText}
-                      />
-                    </Field>
-                  </div>
-                  <div className="grid gap-3 sm:grid-cols-2">
-                    <Field label="Think time (ms)">
-                      <input
-                        className={cn(inputClass(false), "font-mono text-text-main")}
-                        onChange={(event) =>
-                          updateDraft((current) => ({
-                            ...current,
-                            defaultSettings: {
-                              ...current.defaultSettings,
-                              thinkTimeMs: Number(event.target.value),
-                            },
-                          }))
-                        }
-                        type="number"
-                        value={draft.defaultSettings.thinkTimeMs}
-                      />
-                    </Field>
-                    <Field label="Timeout (ms)">
-                      <input
-                        className={cn(inputClass(false), "font-mono text-text-main")}
-                        onChange={(event) =>
-                          updateDraft((current) => ({
-                            ...current,
-                            defaultSettings: {
-                              ...current.defaultSettings,
-                              timeoutMs: Number(event.target.value),
-                            },
-                          }))
-                        }
-                        type="number"
-                        value={draft.defaultSettings.timeoutMs}
-                      />
-                    </Field>
-                  </div>
-                  <div className="flex flex-wrap gap-4 text-sm text-text-muted">
-                    {[
-                      ["followRedirects", "Follow redirects"],
-                      ["keepAlive", "Keep alive"],
-                      ["storeCache", "Store cache"],
-                      ["storeCookie", "Store cookies"],
-                      ["retrieveResources", "Retrieve resources"],
-                    ].map(([key, label]) => (
-                      <label className="flex items-center gap-2" key={key}>
-                        <input
-                          checked={Boolean(
-                            draft.defaultSettings[
-                              key as keyof ScenarioDetail["defaultSettings"]
-                            ],
-                          )}
-                          onChange={(event) =>
-                            updateDraft((current) => ({
-                              ...current,
-                              defaultSettings: {
-                                ...current.defaultSettings,
-                                [key]: event.target.checked,
-                              },
-                            }))
-                          }
-                          type="checkbox"
-                        />
-                        {label}
-                      </label>
-                    ))}
-                  </div>
-                </div>
-              ) : null}
-              {activeConfigTab === "headers" ? (
-                <FieldSection
-                  title="Global Headers"
-                  description="Apply HTTP headers to every enabled request. Step headers with the same name override these values."
-                  action={
-                    <MiniButton
-                      onClick={() =>
-                        updateDraft((current) => ({
-                          ...current,
-                          globalHeaders: [
-                            ...(current.globalHeaders ?? []),
-                            newNamedValue(),
-                          ],
-                        }))
-                      }
-                      tone="primary"
-                    >
-                      Add global header
-                    </MiniButton>
-                  }
-                >
-                  <NamedValueRows
-                    emptyText="No global headers."
-                    items={draft.globalHeaders}
-                    label="Global header"
-                    onChange={updateGlobalHeader}
-                    onRemove={(id) =>
-                      updateDraft((current) => ({
-                        ...current,
-                        globalHeaders: (current.globalHeaders ?? []).filter(
-                          (item) => item.id !== id,
-                        ),
-                      }))
-                    }
-                  />
-                </FieldSection>
-              ) : null}
-              {activeConfigTab === "variables" ? (
-                <FieldSection
-                  title="Scenario Variables"
-                  description="Values are ordinary non-secret Scenario defaults. Env Group variables override duplicate names during execution."
-                  action={
-                    <MiniButton
-                      onClick={() =>
-                        updateDraft((current) => ({
-                          ...current,
-                          variables: [
-                            ...(current.variables ?? []),
-                            newNamedValue(),
-                          ],
-                        }))
-                      }
-                      tone="primary"
-                    >
-                      Add variable
-                    </MiniButton>
-                  }
-                >
-                  <NamedValueRows
-                    emptyText="No scenario variables."
-                    items={draft.variables}
-                    label="Scenario variable"
-                    onChange={updateScenarioVariable}
-                    onRemove={(id) =>
-                      updateDraft((current) => ({
-                        ...current,
-                        variables: (current.variables ?? []).filter(
-                          (item) => item.id !== id,
-                        ),
-                      }))
-                    }
-                  />
-                </FieldSection>
-              ) : null}
-              {activeConfigTab === "dataSources" ? (
-                <FieldSection
-                  title="CSV Data Sources"
-                  description="Reference CSV Dependency Files to loop variables across Steps."
-                  action={
-                    <MiniButton
-                      onClick={() =>
-                        updateDraft((current) => ({
-                          ...current,
-                          dataSources: [
-                            newDataSource(),
-                            ...current.dataSources,
-                          ],
-                        }))
-                      }
-                      tone="primary"
-                    >
-                      Add CSV data source
-                    </MiniButton>
-                  }
-                >
-                  <div className="space-y-3">
-                    {draft.dataSources.map((dataSource, index) => (
-                      <DataSourceRow
-                        dataSource={dataSource}
-                        dependencyFiles={dependencyFiles}
-                        index={index}
-                        key={dataSource.id}
-                        onChange={(fields) =>
-                          updateDataSource(dataSource.id, fields)
-                        }
-                        onRemove={() =>
-                          updateDraft((current) => ({
-                            ...current,
-                            dataSources: current.dataSources.filter(
-                              (item) => item.id !== dataSource.id,
-                            ),
-                          }))
-                        }
-                      />
-                    ))}
-                    {draft.dataSources.length === 0 ? (
-                      <p className="text-sm text-text-muted">
-                        No CSV data sources.
-                      </p>
-                    ) : null}
-                  </div>
-                </FieldSection>
-              ) : null}
-            </div>
-            <div className="flex justify-end gap-3 border-t border-white/10 p-6">
-              <button
-                className="rounded-lg border border-white/10 px-4 py-2 text-sm text-text-main transition hover:bg-white/5"
-                onClick={cancelGlobalConfiguration}
-                type="button"
-              >
-                Cancel
+                Stay
               </button>
               <button
-                className="rounded-lg border border-primary/40 bg-primary/10 px-4 py-2 text-sm font-semibold text-primary transition hover:bg-primary/20"
-                onClick={doneGlobalConfiguration}
+                className="rounded-xl border border-error/30 px-4 py-2 text-sm text-error"
+                onClick={() => blocker.proceed()}
                 type="button"
               >
-                Done
+                Discard and leave
               </button>
             </div>
           </div>
         </div>
       ) : null}
-
-      {showOpenApiImport ? (
-        <div aria-label={scenarioCopy.openApiImportTitle} aria-modal="true" className="fixed inset-0 z-50 grid place-items-center bg-black/60 p-4" role="dialog">
-          <div className="max-h-[90vh] w-full max-w-5xl overflow-y-auto rounded-2xl border border-white/10 bg-surface-container-low p-6 shadow-2xl">
-            <div className="flex items-start justify-between gap-4">
-              <div>
-                <h2 className="text-xl font-semibold text-white">{scenarioCopy.openApiImportTitle}</h2>
-                <p className="mt-1 text-sm text-text-muted">{scenarioCopy.openApiImportDescription}</p>
-              </div>
-              <button className="rounded-lg border border-white/10 px-3 py-1.5 text-sm text-text-main" onClick={resetOpenApiImportModal} type="button">Cancel</button>
-            </div>
-            <div className="mt-5 grid gap-5 lg:grid-cols-2">
-              <div className="space-y-4">
-                <label className="grid gap-1 text-sm text-text-muted">
-                  API Catalog spec
-                  <select aria-label="API Catalog spec" className={textInputClass()} disabled={isLoadingOpenApi} onChange={(event) => { setSelectedOpenApiSpecId(event.target.value); setSelectedOpenApiRefs([]); setOpenApiPreview(null); setOpenApiError(null); }} value={selectedOpenApiSpecId}>
-                    <option value="">{isLoadingOpenApi ? "Loading API Catalog specs…" : "Select a spec"}</option>
-                    {(openApiSpecs?.items ?? []).map((spec) => <option key={spec.id} value={spec.id}>{spec.name} · {spec.documentVersion}</option>)}
-                  </select>
-                </label>
-                {(openApiSpecs?.items ?? []).length === 0 && !isLoadingOpenApi ? <p className="rounded-xl border border-dashed border-white/15 p-4 text-sm text-text-muted">No API Catalog specs are available in this Workspace.</p> : null}
-                <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
-                  <p className="font-medium text-white">Operations</p>
-                  <p className="text-sm text-text-muted">Select one or more supported operations.</p>
-                  <div className="mt-3 max-h-64 space-y-2 overflow-y-auto">
-                    {(openApiOperations?.items ?? []).map((operation) => {
-                      const checked = selectedOpenApiRefs.some((ref) => openApiRefsEqual(ref, operation.ref));
-                      return <label className="flex items-start gap-3 rounded-xl border border-white/10 bg-white/5 p-3 text-sm" key={openApiOperationKey(operation.ref)}>
-                        <input checked={checked} className="mt-1" disabled={!operation.supportedForGeneration || (!checked && selectedOpenApiRefs.length >= OPENAPI_MAX_OPERATION_SELECTION)} onChange={() => toggleOpenApiOperation(operation.ref)} type="checkbox" />
-                        <span><span className="block font-medium text-white">{operation.displayName}</span><span className="mt-1 block font-mono text-xs text-text-muted">{operation.method} {operation.path}</span></span>
-                      </label>;
-                    })}
-                  </div>
-                </div>
-                {selectedOpenApiRefs.length > 0 ? <div className="rounded-2xl border border-white/10 bg-black/20 p-4"><p className="font-medium text-white">Generation order</p><div className="mt-3 space-y-2">{selectedOpenApiRefs.map((ref, index) => <div className="flex items-center justify-between gap-3 rounded-xl border border-white/10 bg-white/5 px-3 py-2" key={openApiOperationKey(ref)}><span className="font-mono text-xs text-white">{index + 1}. {ref.method} {ref.path}</span><span className="flex gap-1"><MiniButton disabled={index === 0} onClick={() => moveOpenApiOperation(index, -1)}>Up</MiniButton><MiniButton disabled={index === selectedOpenApiRefs.length - 1} onClick={() => moveOpenApiOperation(index, 1)}>Down</MiniButton></span></div>)}</div></div> : null}
-                {openApiError ? <p className="rounded-xl border border-error/30 bg-error-container p-3 text-sm text-on-error-container">{openApiError}</p> : null}
-                <button className="rounded-xl bg-primary px-4 py-2 text-sm font-semibold text-on-primary disabled:opacity-40" disabled={isPreviewingOpenApi || !selectedOpenApiSpecId || selectedOpenApiRefs.length === 0} onClick={() => void previewOpenApiImport()} type="button">{isPreviewingOpenApi ? "Generating…" : "Preview Step drafts"}</button>
-              </div>
-              <div className="space-y-3 rounded-2xl border border-white/10 bg-black/20 p-4">
-                {openApiPreview ? <><p className="font-mono text-[11px] uppercase tracking-[0.18em] text-secondary">Draft preview</p><p className="text-sm text-text-muted">These Steps are editable and are not saved until you save the Scenario.</p><div className="space-y-3">{openApiPreview.items.map((item, index) => <div className="rounded-xl border border-white/10 bg-white/5 p-3" key={`${openApiOperationKey(item.operationRef)}-${index}`}><p className="font-mono text-sm font-semibold text-primary">{index + 1}. {item.step.method} {item.step.path}</p><p className="mt-1 text-sm text-white">{item.step.name}</p>{item.warnings.length > 0 ? <ul className="mt-2 space-y-1 text-sm text-warning">{item.warnings.map((warning, warningIndex) => <li key={`${warning.code}-${warningIndex}`}>{warning.message}</li>)}</ul> : null}</div>)}</div><button className="w-full rounded-xl bg-primary px-4 py-2 text-sm font-semibold text-on-primary" onClick={confirmOpenApiImport} type="button">Insert Step drafts</button></> : <p className="rounded-xl border border-dashed border-white/15 p-6 text-center text-sm text-text-muted">Preview appears here before anything is added to the Scenario draft.</p>}
-              </div>
-            </div>
-          </div>
-        </div>
-      ) : null}
-
       {showCurlImport ? (
-        <div
-          aria-label={scenarioCopy.curlImportTitle}
-          aria-modal="true"
-          className="fixed inset-0 z-50 grid place-items-center bg-black/60 p-4"
-          role="dialog"
-        >
-          <div className="max-h-[90vh] w-full max-w-4xl overflow-y-auto rounded-2xl border border-white/10 bg-surface-container-low p-6 shadow-2xl">
+        <div className="fixed inset-0 z-50 grid place-items-center bg-black/60 p-4">
+          <div className="max-h-[90vh] w-full max-w-4xl overflow-y-auto rounded-3xl border border-white/10 bg-surface-container-low p-6 shadow-2xl">
             <div className="flex flex-wrap items-start justify-between gap-4">
               <div>
                 <h2 className="text-xl font-semibold text-white">
@@ -2491,28 +2542,25 @@ export function ScenarioDesignerPage() {
                 </p>
               </div>
               <button
-                className="rounded-lg border border-white/10 px-3 py-1.5 text-sm text-text-main transition hover:bg-white/5"
+                className="text-sm text-text-muted"
                 onClick={resetCurlImportModal}
                 type="button"
               >
                 Close
               </button>
             </div>
-            <div className="mt-5 grid gap-5 lg:grid-cols-2">
+            <div className="mt-5 grid gap-5 lg:grid-cols-[1fr_1fr]">
               <div className="space-y-3">
-                <Field label="cURL command">
+                <label className="grid gap-1 text-sm text-text-muted">
+                  cURL command
                   <textarea
                     aria-label="cURL command"
-                    className={cn(
-                      inputClass(false),
-                      "min-h-44 resize-y py-2 font-mono text-xs text-text-main",
-                    )}
-                    onChange={(event) => setCurlImportText(event.target.value)}
+                    className="min-h-44 rounded-2xl border border-white/10 bg-black/30 px-3 py-2 font-mono text-sm text-white"
                     placeholder="curl -X POST https://api.example.test/v1/orders"
-                    spellCheck={false}
                     value={curlImportText}
+                    onChange={(event) => setCurlImportText(event.target.value)}
                   />
-                </Field>
+                </label>
                 {curlImportError ? (
                   <div className="rounded-xl border border-error/30 bg-error-container p-3 text-sm text-on-error-container">
                     {curlImportError}
@@ -2520,15 +2568,19 @@ export function ScenarioDesignerPage() {
                 ) : null}
                 <div className="flex flex-wrap gap-2">
                   <button
-                    className="rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-on-primary transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-40"
-                    disabled={isPreviewingCurl || !curlImportText.trim()}
-                    onClick={() => void previewCurlImport()}
+                    className="rounded-xl bg-primary px-4 py-2 text-sm font-semibold text-on-primary disabled:opacity-40"
+                    disabled={
+                      curlImportMutation.isPending || !curlImportText.trim()
+                    }
+                    onClick={() => curlImportMutation.mutate(curlImportText)}
                     type="button"
                   >
-                    {isPreviewingCurl ? "Previewing..." : "Preview import"}
+                    {curlImportMutation.isPending
+                      ? "Previewing…"
+                      : "Preview import"}
                   </button>
                   <button
-                    className="rounded-lg border border-white/10 px-4 py-2 text-sm text-text-main transition hover:bg-white/5"
+                    className="rounded-xl border border-white/10 px-4 py-2 text-sm text-white"
                     onClick={() => {
                       setCurlImportPreview(null);
                       setCurlImportError(null);
@@ -2684,7 +2736,7 @@ export function ScenarioDesignerPage() {
                       </label>
                     </div>
                     <button
-                      className="w-full rounded-xl bg-primary px-4 py-2 text-sm font-semibold text-on-primary transition hover:brightness-110"
+                      className="w-full rounded-xl bg-primary px-4 py-2 text-sm font-semibold text-on-primary"
                       onClick={confirmCurlImport}
                       type="button"
                     >
@@ -2702,791 +2754,902 @@ export function ScenarioDesignerPage() {
           </div>
         </div>
       ) : null}
-
+      {showOpenApiImport ? (
+        <div className="fixed inset-0 z-50 grid place-items-center bg-black/60 p-4">
+          <div
+            aria-labelledby="openapi-import-title"
+            className="max-h-[90vh] w-full max-w-5xl overflow-y-auto rounded-3xl border border-white/10 bg-surface-container-low p-6 shadow-2xl"
+            role="dialog"
+          >
+            <div className="flex flex-wrap items-start justify-between gap-4">
+              <div>
+                <h2
+                  className="text-xl font-semibold text-white"
+                  id="openapi-import-title"
+                >
+                  {scenarioCopy.openApiImportTitle}
+                </h2>
+                <p className="mt-1 max-w-3xl text-sm text-text-muted">
+                  {scenarioCopy.openApiImportDescription}
+                </p>
+              </div>
+              <button
+                className="text-sm text-text-muted"
+                onClick={resetOpenApiImportModal}
+                type="button"
+              >
+                Close
+              </button>
+            </div>
+            <div className="mt-5 grid gap-5 lg:grid-cols-[0.95fr_1.05fr]">
+              <div className="space-y-4">
+                <label className="grid gap-1 text-sm text-text-muted">
+                  API Catalog spec
+                  <select
+                    aria-label="API Catalog spec"
+                    className="rounded-xl border border-white/10 bg-black/30 px-3 py-2 text-white"
+                    disabled={openApiSpecQuery.isFetching}
+                    onChange={(event) => {
+                      setSelectedOpenApiSpecId(event.target.value);
+                      setSelectedOpenApiRefs([]);
+                      setOpenApiPreview(null);
+                      setOpenApiError(null);
+                    }}
+                    value={selectedOpenApiSpecId}
+                  >
+                    <option value="">
+                      {openApiSpecQuery.isFetching
+                        ? "Loading API Catalog specs…"
+                        : "Select a spec"}
+                    </option>
+                    {(openApiSpecQuery.data?.items ?? []).map((spec) => (
+                      <option key={spec.id} value={spec.id}>
+                        {spec.name} · {spec.documentVersion}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                {openApiSpecQuery.isSuccess &&
+                (openApiSpecQuery.data?.items ?? []).length === 0 ? (
+                  <div className="rounded-xl border border-dashed border-white/15 p-4 text-sm text-text-muted">
+                    No API Catalog specs are available in this Workspace.
+                  </div>
+                ) : null}
+                <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <p className="font-medium text-white">Operations</p>
+                      <p className="text-sm text-text-muted">
+                        Select one or more supported operations.
+                      </p>
+                    </div>
+                    {openApiOperationQuery.isFetching ? (
+                      <span className="text-xs text-text-muted">
+                        Loading operations…
+                      </span>
+                    ) : null}
+                  </div>
+                  <div className="mt-3 max-h-64 space-y-2 overflow-y-auto pr-1">
+                    {(openApiOperationQuery.data?.items ?? []).map(
+                      (operation) => {
+                        const checked = selectedOpenApiRefs.some((ref) =>
+                          openApiRefsEqual(ref, operation.ref),
+                        );
+                        return (
+                          <label
+                            className={`flex items-start gap-3 rounded-xl border p-3 text-sm ${
+                              operation.supportedForGeneration
+                                ? "border-white/10 bg-white/5"
+                                : "border-warning/20 bg-warning/10 opacity-70"
+                            }`}
+                            key={openApiOperationKey(operation.ref)}
+                          >
+                            <input
+                              checked={checked}
+                              className="mt-1"
+                              disabled={
+                                openApiOperationQuery.isFetching ||
+                                !operation.supportedForGeneration ||
+                                (!checked &&
+                                  selectedOpenApiRefs.length >=
+                                    OPENAPI_MAX_OPERATION_SELECTION)
+                              }
+                              onChange={() =>
+                                toggleOpenApiOperation(operation.ref)
+                              }
+                              type="checkbox"
+                            />
+                            <span>
+                              <span className="block font-medium text-white">
+                                {operation.displayName}
+                              </span>
+                              <span className="mt-1 block font-mono text-xs text-text-muted">
+                                {operation.method} {operation.path}
+                              </span>
+                            </span>
+                          </label>
+                        );
+                      },
+                    )}
+                    {selectedOpenApiSpecId &&
+                    openApiOperationQuery.isSuccess &&
+                    (openApiOperationQuery.data?.items ?? []).length === 0 ? (
+                      <p className="text-sm text-text-muted">
+                        This spec does not contain supported operations.
+                      </p>
+                    ) : null}
+                  </div>
+                </div>
+                {selectedOpenApiRefs.length > 0 ? (
+                  <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
+                    <p className="font-medium text-white">Generation order</p>
+                    <p className="mt-1 text-xs text-text-muted">
+                      {selectedOpenApiRefs.length} /{" "}
+                      {OPENAPI_MAX_OPERATION_SELECTION} operations selected.
+                    </p>
+                    <div className="mt-3 space-y-2">
+                      {selectedOpenApiRefs.map((ref, index) => (
+                        <div
+                          className="flex items-center justify-between gap-3 rounded-xl border border-white/10 bg-white/5 px-3 py-2"
+                          key={openApiOperationKey(ref)}
+                        >
+                          <span className="font-mono text-xs text-white">
+                            {index + 1}. {ref.method} {ref.path}
+                          </span>
+                          <span className="flex gap-1">
+                            <MiniButton
+                              disabled={index === 0}
+                              onClick={() => moveOpenApiOperation(index, -1)}
+                            >
+                              Up
+                            </MiniButton>
+                            <MiniButton
+                              disabled={
+                                index === selectedOpenApiRefs.length - 1
+                              }
+                              onClick={() => moveOpenApiOperation(index, 1)}
+                            >
+                              Down
+                            </MiniButton>
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ) : null}
+                {openApiError ? (
+                  <div className="rounded-xl border border-error/30 bg-error-container p-3 text-sm text-on-error-container">
+                    {openApiError}
+                  </div>
+                ) : null}
+                <button
+                  className="rounded-xl bg-primary px-4 py-2 text-sm font-semibold text-on-primary disabled:opacity-40"
+                  disabled={
+                    openApiDraftMutation.isPending ||
+                    openApiOperationQuery.isFetching ||
+                    !selectedOpenApiSpecId ||
+                    selectedOpenApiRefs.length === 0
+                  }
+                  onClick={() => openApiDraftMutation.mutate()}
+                  type="button"
+                >
+                  {openApiDraftMutation.isPending
+                    ? "Generating…"
+                    : "Preview Step drafts"}
+                </button>
+              </div>
+              <div className="space-y-3 rounded-2xl border border-white/10 bg-black/20 p-4">
+                {openApiPreview ? (
+                  <>
+                    <div>
+                      <p className="font-mono text-[11px] uppercase tracking-[0.18em] text-secondary">
+                        Draft preview
+                      </p>
+                      <p className="mt-2 text-sm text-text-muted">
+                        These Steps are editable and are not saved until you
+                        save the Scenario.
+                      </p>
+                    </div>
+                    <div className="space-y-3">
+                      {openApiPreview.items.map((item, index) => (
+                        <div
+                          className="rounded-xl border border-white/10 bg-white/5 p-3"
+                          key={`${openApiOperationKey(item.operationRef)}-${index}`}
+                        >
+                          <p className="font-mono text-sm font-semibold text-primary">
+                            {index + 1}. {item.step.method} {item.step.path}
+                          </p>
+                          <p className="mt-1 text-sm text-white">
+                            {item.step.name}
+                          </p>
+                          <div className="mt-2 flex flex-wrap gap-2 text-xs text-text-muted">
+                            <span>
+                              {(item.step.queryParams ?? []).length} params
+                            </span>
+                            <span>
+                              {(item.step.headers ?? []).length} headers
+                            </span>
+                            <span>
+                              {item.step.body?.type === "raw"
+                                ? `${item.step.body.contentType ?? "raw"} body`
+                                : "no body"}
+                            </span>
+                          </div>
+                          {(item.warnings ?? []).length > 0 ? (
+                            <ul className="mt-2 space-y-1 text-sm text-warning">
+                              {item.warnings.map((warning, warningIndex) => (
+                                <li key={`${warning.code}-${warningIndex}`}>
+                                  {warning.message}
+                                </li>
+                              ))}
+                            </ul>
+                          ) : null}
+                        </div>
+                      ))}
+                    </div>
+                    <button
+                      className="w-full rounded-xl bg-primary px-4 py-2 text-sm font-semibold text-on-primary"
+                      onClick={confirmOpenApiImport}
+                      type="button"
+                    >
+                      Insert Step drafts
+                    </button>
+                  </>
+                ) : (
+                  <div className="rounded-xl border border-dashed border-white/15 p-6 text-center text-sm text-text-muted">
+                    Preview appears here before anything is added to the
+                    Scenario draft.
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      ) : null}
+      {showConfig ? (
+        <div className="fixed inset-0 z-50 grid place-items-center bg-black/60 p-4">
+          <div
+            aria-label="Global Configuration"
+            className="max-h-[90vh] w-full max-w-5xl overflow-y-auto rounded-3xl border border-white/10 bg-surface-container-low p-6"
+            role="dialog"
+          >
+            <div className="flex flex-wrap items-start justify-between gap-4">
+              <div>
+                <h2 className="text-xl font-semibold text-white">
+                  Global Configuration
+                </h2>
+                <p className="mt-1 text-sm text-text-muted">
+                  Configure Scenario defaults, global headers, non-secret
+                  variables, and CSV data sources for generated JMeter runs.
+                </p>
+              </div>
+              <div className="flex gap-2">
+                <button
+                  className="rounded-xl border border-white/10 px-4 py-2 text-sm text-white"
+                  onClick={cancelGlobalConfiguration}
+                  type="button"
+                >
+                  Cancel
+                </button>
+                <button
+                  className="rounded-xl bg-primary px-4 py-2 text-sm font-semibold text-on-primary"
+                  onClick={doneGlobalConfiguration}
+                  type="button"
+                >
+                  Done
+                </button>
+              </div>
+            </div>
+            <div
+              aria-label="Global Configuration tabs"
+              className="mt-5 flex flex-wrap gap-2 border-b border-white/10"
+              role="tablist"
+            >
+              {globalConfigTabs.map((tab) => {
+                const isActive = activeConfigTab === tab.key;
+                const count =
+                  tab.key === "headers"
+                    ? draft.globalHeaders.length
+                    : tab.key === "variables"
+                      ? draft.variables.length
+                      : tab.key === "dataSources"
+                        ? draft.dataSources.length
+                        : 0;
+                return (
+                  <button
+                    aria-selected={isActive}
+                    className={`-mb-px inline-flex items-center gap-2 border-b-2 px-3 py-2 text-sm font-medium transition ${
+                      isActive
+                        ? "border-primary text-white"
+                        : "border-transparent text-text-muted hover:text-white"
+                    }`}
+                    key={tab.key}
+                    onClick={() => setActiveConfigTab(tab.key)}
+                    role="tab"
+                    type="button"
+                  >
+                    {tab.label}
+                    {count > 0 ? (
+                      <span className="rounded-full border border-white/10 bg-white/5 px-1.5 py-0.5 font-mono text-[10px] text-secondary">
+                        {count}
+                      </span>
+                    ) : null}
+                  </button>
+                );
+              })}
+            </div>
+            {activeConfigTab === "settings" ? (
+              <div className="mt-5 space-y-4">
+                <label className="grid gap-1 text-sm text-text-muted">
+                  Scenario name
+                  <input
+                    className="rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-white"
+                    value={draft.name}
+                    onChange={(e) =>
+                      updateDraft((current) => ({
+                        ...current,
+                        name: e.target.value,
+                      }))
+                    }
+                  />
+                </label>
+                <label className="grid gap-1 text-sm text-text-muted">
+                  Base URL expression
+                  <input
+                    className="rounded-xl border border-white/10 bg-black/20 px-3 py-2 font-mono text-white"
+                    value={draft.baseUrlExpression}
+                    onChange={(e) =>
+                      updateDraft((current) => ({
+                        ...current,
+                        baseUrlExpression: e.target.value,
+                      }))
+                    }
+                  />
+                </label>
+                <div className="grid gap-3 sm:grid-cols-[1.5fr_1fr]">
+                  <label className="grid gap-1 text-sm text-text-muted">
+                    Scenario description
+                    <textarea
+                      aria-label="Scenario description"
+                      className="min-h-24 rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-white"
+                      value={draft.description ?? ""}
+                      onChange={(event) =>
+                        updateDraft((current) => ({
+                          ...current,
+                          description: event.target.value || null,
+                        }))
+                      }
+                    />
+                  </label>
+                  <label className="grid gap-1 text-sm text-text-muted">
+                    Tags
+                    <input
+                      aria-label="Tags"
+                      className="rounded-xl border border-white/10 bg-black/20 px-3 py-2 font-mono text-white"
+                      placeholder="checkout, smoke"
+                      value={tagText}
+                      onChange={(event) => {
+                        setTagText(event.target.value);
+                        updateDraft((current) => ({
+                          ...current,
+                          tags: parseCsvNames(event.target.value),
+                        }));
+                      }}
+                    />
+                  </label>
+                </div>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <label className="grid gap-1 text-sm text-text-muted">
+                    Think time (ms)
+                    <input
+                      className="rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-white"
+                      type="number"
+                      value={draft.defaultSettings.thinkTimeMs}
+                      onChange={(e) =>
+                        updateDraft((current) => ({
+                          ...current,
+                          defaultSettings: {
+                            ...current.defaultSettings,
+                            thinkTimeMs: Number(e.target.value),
+                          },
+                        }))
+                      }
+                    />
+                  </label>
+                  <label className="grid gap-1 text-sm text-text-muted">
+                    Timeout (ms)
+                    <input
+                      className="rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-white"
+                      type="number"
+                      value={draft.defaultSettings.timeoutMs}
+                      onChange={(e) =>
+                        updateDraft((current) => ({
+                          ...current,
+                          defaultSettings: {
+                            ...current.defaultSettings,
+                            timeoutMs: Number(e.target.value),
+                          },
+                        }))
+                      }
+                    />
+                  </label>
+                </div>
+                <div className="flex flex-wrap gap-4 text-sm text-text-muted">
+                  {[
+                    ["followRedirects", "Follow redirects"],
+                    ["keepAlive", "Keep alive"],
+                    ["storeCache", "Store cache"],
+                    ["storeCookie", "Store cookies"],
+                    ["retrieveResources", "Retrieve resources"],
+                  ].map(([key, label]) => (
+                    <label className="flex items-center gap-2" key={key}>
+                      <input
+                        checked={Boolean(
+                          draft.defaultSettings[
+                            key as keyof typeof draft.defaultSettings
+                          ],
+                        )}
+                        onChange={(event) =>
+                          updateDraft((current) => ({
+                            ...current,
+                            defaultSettings: {
+                              ...current.defaultSettings,
+                              [key]: event.target.checked,
+                            },
+                          }))
+                        }
+                        type="checkbox"
+                      />
+                      {label}
+                    </label>
+                  ))}
+                </div>
+              </div>
+            ) : null}
+            {activeConfigTab === "headers" ? (
+              <FieldSection
+                title="Global Headers"
+                description="Apply HTTP headers to every enabled request. Step headers with the same name override these values."
+                action={
+                  <MiniButton
+                    onClick={() =>
+                      updateDraft((current) => ({
+                        ...current,
+                        globalHeaders: [
+                          ...current.globalHeaders,
+                          newNamedValue(),
+                        ],
+                      }))
+                    }
+                    tone="primary"
+                  >
+                    Add global header
+                  </MiniButton>
+                }
+              >
+                <div className="space-y-2">
+                  {draft.globalHeaders.map((item, index) => (
+                    <div
+                      className="grid gap-2 rounded-xl border border-white/10 bg-white/[0.03] p-3 md:grid-cols-[1fr_1fr_auto_auto]"
+                      key={item.id}
+                    >
+                      <label className="grid gap-1 text-xs text-text-muted">
+                        Global header {index + 1} name
+                        <input
+                          aria-label={`Global header ${index + 1} name`}
+                          className={textInputClass("font-mono")}
+                          value={item.name}
+                          onChange={(event) =>
+                            updateGlobalHeader(item.id, {
+                              name: event.target.value,
+                            })
+                          }
+                        />
+                      </label>
+                      <label className="grid gap-1 text-xs text-text-muted">
+                        Global header {index + 1} value
+                        <input
+                          aria-label={`Global header ${index + 1} value`}
+                          className={textInputClass("font-mono")}
+                          value={item.value}
+                          onChange={(event) =>
+                            updateGlobalHeader(item.id, {
+                              value: event.target.value,
+                            })
+                          }
+                        />
+                      </label>
+                      <label className="flex items-end gap-2 pb-2 text-xs text-text-muted">
+                        <input
+                          checked={item.enabled !== false}
+                          onChange={(event) =>
+                            updateGlobalHeader(item.id, {
+                              enabled: event.target.checked,
+                            })
+                          }
+                          type="checkbox"
+                        />
+                        Enabled
+                      </label>
+                      <div className="flex items-end">
+                        <MiniButton
+                          onClick={() =>
+                            updateDraft((current) => ({
+                              ...current,
+                              globalHeaders: current.globalHeaders.filter(
+                                (header) => header.id !== item.id,
+                              ),
+                            }))
+                          }
+                          tone="danger"
+                        >
+                          Remove
+                        </MiniButton>
+                      </div>
+                    </div>
+                  ))}
+                  {draft.globalHeaders.length === 0 ? (
+                    <p className="text-sm text-text-muted">
+                      No global headers.
+                    </p>
+                  ) : null}
+                </div>
+              </FieldSection>
+            ) : null}
+            {activeConfigTab === "variables" ? (
+              <FieldSection
+                title="Scenario Variables"
+                description="Values are ordinary non-secret Scenario defaults. Env Group variables override duplicate names during execution."
+                action={
+                  <MiniButton
+                    onClick={() =>
+                      updateDraft((current) => ({
+                        ...current,
+                        variables: [...current.variables, newNamedValue()],
+                      }))
+                    }
+                    tone="primary"
+                  >
+                    Add variable
+                  </MiniButton>
+                }
+              >
+                <div className="space-y-2">
+                  {draft.variables.map((item, index) => (
+                    <div
+                      className="grid gap-2 rounded-xl border border-white/10 bg-white/[0.03] p-3 md:grid-cols-[1fr_1fr_auto_auto]"
+                      key={item.id}
+                    >
+                      <label className="grid gap-1 text-xs text-text-muted">
+                        Scenario variable {index + 1} name
+                        <input
+                          aria-label={`Scenario variable ${index + 1} name`}
+                          className={textInputClass("font-mono")}
+                          value={item.name}
+                          onChange={(event) =>
+                            updateScenarioVariable(item.id, {
+                              name: event.target.value,
+                            })
+                          }
+                        />
+                      </label>
+                      <label className="grid gap-1 text-xs text-text-muted">
+                        Scenario variable {index + 1} value
+                        <input
+                          aria-label={`Scenario variable ${index + 1} value`}
+                          className={textInputClass("font-mono")}
+                          value={item.value}
+                          onChange={(event) =>
+                            updateScenarioVariable(item.id, {
+                              value: event.target.value,
+                            })
+                          }
+                        />
+                      </label>
+                      <label className="flex items-end gap-2 pb-2 text-xs text-text-muted">
+                        <input
+                          checked={item.enabled !== false}
+                          onChange={(event) =>
+                            updateScenarioVariable(item.id, {
+                              enabled: event.target.checked,
+                            })
+                          }
+                          type="checkbox"
+                        />
+                        Enabled
+                      </label>
+                      <div className="flex items-end">
+                        <MiniButton
+                          onClick={() =>
+                            updateDraft((current) => ({
+                              ...current,
+                              variables: current.variables.filter(
+                                (variable) => variable.id !== item.id,
+                              ),
+                            }))
+                          }
+                          tone="danger"
+                        >
+                          Remove
+                        </MiniButton>
+                      </div>
+                    </div>
+                  ))}
+                  {draft.variables.length === 0 ? (
+                    <p className="text-sm text-text-muted">
+                      No scenario variables.
+                    </p>
+                  ) : null}
+                </div>
+              </FieldSection>
+            ) : null}
+            {activeConfigTab === "dataSources" ? (
+              <FieldSection
+                title="CSV Data Sources"
+                description="Attach CSV files from Dependency Files for variables used by Steps."
+                action={
+                  <MiniButton
+                    onClick={() =>
+                      updateDraft((current) => ({
+                        ...current,
+                        dataSources: [...current.dataSources, newDataSource()],
+                      }))
+                    }
+                    tone="primary"
+                  >
+                    Add CSV data source
+                  </MiniButton>
+                }
+              >
+                <div className="space-y-3">
+                  {draft.dataSources.map((item, index) => (
+                    <div
+                      className="space-y-3 rounded-xl border border-white/10 bg-white/[0.03] p-3"
+                      key={item.id}
+                    >
+                      <div className="grid gap-3 lg:grid-cols-[1.5fr_1fr_0.7fr_auto]">
+                        <label className="grid gap-1 text-xs text-text-muted">
+                          Data source {index + 1} dependency file
+                          <select
+                            aria-label={`Data source ${index + 1} dependency file`}
+                            className={textInputClass()}
+                            value={item.dependencyFileId}
+                            onChange={(event) => {
+                              const file =
+                                dependencyFilesQuery.data?.items.find(
+                                  (candidate) =>
+                                    candidate.id === event.target.value,
+                                );
+                              updateDataSource(item.id, {
+                                dependencyFileId: event.target.value,
+                                displayName:
+                                  item.displayName || file?.filename || "",
+                              });
+                            }}
+                          >
+                            <option value="">Select a Dependency File</option>
+                            {(dependencyFilesQuery.data?.items ?? []).map(
+                              (file) => (
+                                <option key={file.id} value={file.id}>
+                                  {file.filename}
+                                </option>
+                              ),
+                            )}
+                          </select>
+                        </label>
+                        <label className="grid gap-1 text-xs text-text-muted">
+                          Data source {index + 1} display name
+                          <input
+                            aria-label={`Data source ${index + 1} display name`}
+                            className={textInputClass()}
+                            value={item.displayName}
+                            onChange={(event) =>
+                              updateDataSource(item.id, {
+                                displayName: event.target.value,
+                              })
+                            }
+                          />
+                        </label>
+                        <label className="grid gap-1 text-xs text-text-muted">
+                          Delimiter
+                          <input
+                            aria-label={`Data source ${index + 1} delimiter`}
+                            className={textInputClass("font-mono")}
+                            value={item.delimiter ?? ""}
+                            onChange={(event) =>
+                              updateDataSource(item.id, {
+                                delimiter: event.target.value || null,
+                              })
+                            }
+                          />
+                        </label>
+                        <div className="flex items-end">
+                          <MiniButton
+                            onClick={() =>
+                              updateDraft((current) => ({
+                                ...current,
+                                dataSources: current.dataSources.filter(
+                                  (currentItem) => currentItem.id !== item.id,
+                                ),
+                              }))
+                            }
+                            tone="danger"
+                          >
+                            Remove
+                          </MiniButton>
+                        </div>
+                      </div>
+                      <label className="grid gap-1 text-xs text-text-muted">
+                        Data source {index + 1} variable names
+                        <input
+                          aria-label={`Data source ${index + 1} variable names`}
+                          className={textInputClass("font-mono")}
+                          placeholder="user_id, token"
+                          value={
+                            dataSourceVariableTextById[item.id] ??
+                            (item.variableNames ?? []).join(", ")
+                          }
+                          onChange={(event) => {
+                            setDataSourceVariableTextById((current) => ({
+                              ...current,
+                              [item.id]: event.target.value,
+                            }));
+                            updateDataSource(item.id, {
+                              variableNames: parseCsvNames(event.target.value),
+                            });
+                          }}
+                        />
+                      </label>
+                      <div className="flex flex-wrap gap-4 text-xs text-text-muted">
+                        <label className="flex items-center gap-2">
+                          <input
+                            checked={item.enabled !== false}
+                            onChange={(event) =>
+                              updateDataSource(item.id, {
+                                enabled: event.target.checked,
+                              })
+                            }
+                            type="checkbox"
+                          />
+                          Enabled
+                        </label>
+                        <label className="flex items-center gap-2">
+                          <input
+                            checked={item.loop}
+                            onChange={(event) =>
+                              updateDataSource(item.id, {
+                                loop: event.target.checked,
+                              })
+                            }
+                            type="checkbox"
+                          />
+                          Loop
+                        </label>
+                        <label className="flex items-center gap-2">
+                          <input
+                            checked={item.randomOrder}
+                            onChange={(event) =>
+                              updateDataSource(item.id, {
+                                randomOrder: event.target.checked,
+                              })
+                            }
+                            type="checkbox"
+                          />
+                          Random order
+                        </label>
+                        <label className="flex items-center gap-2">
+                          Quoted
+                          <select
+                            aria-label={`Data source ${index + 1} quoted`}
+                            className="rounded-lg border border-white/10 bg-black/20 px-2 py-1 text-white"
+                            value={
+                              item.quoted === null ? "" : String(item.quoted)
+                            }
+                            onChange={(event) =>
+                              updateDataSource(item.id, {
+                                quoted: parseBooleanOverride(
+                                  event.target.value,
+                                ),
+                              })
+                            }
+                          >
+                            <option value="">Auto</option>
+                            <option value="true">Yes</option>
+                            <option value="false">No</option>
+                          </select>
+                        </label>
+                      </div>
+                    </div>
+                  ))}
+                  {draft.dataSources.length === 0 ? (
+                    <p className="text-sm text-text-muted">
+                      No CSV data sources.
+                    </p>
+                  ) : null}
+                </div>
+              </FieldSection>
+            ) : null}
+          </div>
+        </div>
+      ) : null}
       {showDebug ? (
-        <div
-          aria-label={scenarioCopy.debugRun}
-          aria-modal="true"
-          className="fixed inset-y-0 right-0 z-50 flex w-full max-w-md flex-col overflow-y-auto border-l border-white/10 bg-surface-container-low p-6 shadow-2xl"
-          role="dialog"
-        >
+        <div className="fixed inset-y-0 right-0 z-50 w-full max-w-md border-l border-white/10 bg-surface-container-low p-6 shadow-2xl">
           <div className="flex items-start justify-between">
             <div>
-              <h2 className="text-xl font-semibold text-white">
-                {scenarioCopy.debugRun}
-              </h2>
+              <h2 className="text-xl font-semibold text-white">Debug Run</h2>
               <p className="mt-1 text-sm text-text-muted">
                 1 virtual user · 1 iteration
               </p>
             </div>
             <button
-              className="rounded-lg p-2 text-text-muted transition hover:bg-white/5 hover:text-white"
+              className="text-text-muted"
               onClick={() => setShowDebug(false)}
               type="button"
             >
-              <X className="h-5 w-5" />
+              Close
             </button>
           </div>
           <div className="mt-6 space-y-4">
             <div className="rounded-2xl border border-white/10 p-4">
               <p className="text-sm text-text-muted">Environment</p>
-              <p className="mt-1 text-text-main">{selectedEnvName}</p>
+              <p className="mt-1 text-white">{selectedEnvName}</p>
               <select
                 aria-label="Debug Environment"
-                className="mt-3 w-full rounded-lg border border-white/10 bg-surface-container px-3 py-2 text-sm text-text-main outline-none"
-                onChange={(event) => setSelectedEnvId(event.target.value)}
+                className="mt-3 w-full rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-white"
                 value={selectedEnvId}
+                onChange={(event) => setSelectedEnvId(event.target.value)}
               >
-                <option value="">{scenarioCopy.noEnvironment}</option>
-                {envGroups.map((env) => (
+                <option value="">No environment</option>
+                {(envQuery.data?.items ?? []).map((env) => (
                   <option key={env.id} value={env.id}>
                     {env.name}
                   </option>
                 ))}
               </select>
             </div>
-            <Field label="Load Node">
+            <label className="grid gap-1 text-sm text-text-muted">
+              Load Node
               <select
-                aria-label="Load Node"
-                className={cn(inputClass(false), "text-text-main")}
-                onChange={(event) => setSelectedNodeId(event.target.value)}
+                className="rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-white"
                 value={selectedNodeId}
+                onChange={(e) => setSelectedNodeId(e.target.value)}
               >
                 <option value="">Select an idle node</option>
-                {idleNodes.map((node) => (
+                {(nodeQuery.data?.items ?? []).map((node) => (
                   <option key={node.id} value={node.id}>
                     {node.host}
                   </option>
                 ))}
               </select>
-            </Field>
-            {isLoadingNodes ? (
-              <p className="text-sm text-text-muted">
-                Loading idle Load Nodes...
-              </p>
-            ) : null}
-            {!isLoadingNodes && idleNodes.length === 0 ? (
-              <p className="rounded-xl border border-warning/30 bg-warning/10 p-3 text-sm text-warning">
+            </label>
+            {nodeQuery.data?.items.length === 0 ? (
+              <p className="text-sm text-warning">
                 {scenarioCopy.noNodes}{" "}
-                <button
-                  className="font-semibold text-primary underline"
-                  onClick={navigateToLoadNodes}
-                  type="button"
-                >
+                <Link className="text-primary" to="/resources/load-nodes">
                   Open Load Nodes
-                </button>
+                </Link>
               </p>
             ) : null}
             {scriptsEnabled(draft) ? (
               <p className="rounded-xl border border-warning/30 bg-warning/10 p-3 text-sm text-warning">
-                This Scenario contains custom JSR223 scripts.
+                This Scenario contains custom scripts.
               </p>
             ) : null}
-            {actionError ? (
-              <div className="rounded-xl border border-error/30 bg-error-container p-3 text-sm text-on-error-container">
-                {actionError}
-              </div>
-            ) : null}
             <button
-              className="inline-flex w-full items-center justify-center rounded-xl bg-primary px-4 py-3 font-semibold text-on-primary transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-40"
-              disabled={!selectedNodeId || isStartingDebug}
-              onClick={() => void handleStartDebug()}
+              className="w-full rounded-xl bg-primary px-4 py-3 font-semibold text-on-primary disabled:opacity-40"
+              disabled={
+                !selectedNodeId ||
+                debugMutation.isPending ||
+                saveMutation.isPending
+              }
+              onClick={() => void startDebug()}
               type="button"
             >
-              {isStartingDebug ? "Starting Debug Run..." : "Start Debug Run"}
+              Start Debug Run
             </button>
           </div>
         </div>
       ) : null}
-
-      {archiveOpen ? (
-        <div
-          aria-label={scenarioCopy.archiveTitle}
-          aria-modal="true"
-          className="fixed inset-0 z-50 grid place-items-center bg-black/60 p-4"
-          role="dialog"
-        >
-          <div className="w-[min(440px,calc(100vw-32px))] rounded-2xl border border-white/10 bg-surface-container-low p-6 shadow-2xl">
-            <h2 className="text-lg font-semibold text-white">
-              {scenarioCopy.archiveTitle}
-            </h2>
-            <p className="mt-2 text-sm leading-6 text-text-muted">
-              Archive {draft.name}? {scenarioCopy.archiveBody}
-            </p>
-            {actionError ? (
-              <p className="mt-4 rounded-lg border border-error/30 bg-error-container px-4 py-3 text-sm text-on-error-container">
-                {actionError}
-              </p>
-            ) : null}
-            <div className="mt-6 flex justify-end gap-3">
-              <button
-                className="rounded-lg border border-white/10 px-4 py-2 text-sm text-text-main transition hover:bg-white/5"
-                onClick={() => {
-                  setArchiveOpen(false);
-                  setActionError(null);
-                }}
-                type="button"
-              >
-                Cancel
-              </button>
-              <button
-                className="rounded-lg bg-error-container px-4 py-2 text-sm font-semibold text-on-error-container transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-60"
-                disabled={isArchiving}
-                onClick={() => void handleArchive()}
-                type="button"
-              >
-                {isArchiving ? "Archiving..." : scenarioCopy.archive}
-              </button>
-            </div>
-          </div>
-        </div>
-      ) : null}
-    </div>
-  );
-}
-
-function BodyEditor({
-  step,
-  onChange,
-}: {
-  step: ScenarioStep;
-  onChange: (body: ScenarioStep["body"]) => void;
-}) {
-  const body = stepBody(step);
-  return (
-    <FieldSection
-      title="Body"
-      description="Define a request body when the method allows one."
-    >
-      <div className="grid gap-4">
-        <Field label="Body type">
-          <select
-            aria-label="Body type"
-            className={cn(inputClass(false), "text-text-main")}
-            onChange={(event) => {
-              const type = event.target.value as
-                | "none"
-                | "raw"
-                | "form";
-              if (type === "none") {
-                onChange({
-                  type,
-                  contentType: null,
-                  rawText: null,
-                  formFields: [],
-                });
-              } else if (type === "raw") {
-                onChange({
-                  type,
-                  contentType: body.contentType ?? "application/json",
-                  rawText: body.rawText ?? "",
-                  formFields: [],
-                });
-              } else {
-                onChange({
-                  type,
-                  contentType: null,
-                  rawText: null,
-                  formFields: body.formFields ?? [],
-                });
-              }
-            }}
-            value={body.type}
-          >
-            <option value="none">None</option>
-            <option value="raw">Raw</option>
-            <option value="form">Form fields</option>
-          </select>
-        </Field>
-        {body.type === "raw" ? (
-          <>
-            <Field label="Content type">
-              <input
-                aria-label="Content type"
-                className={cn(inputClass(false), "font-mono text-text-main")}
-                list="scenario-content-types"
-                onChange={(event) =>
-                  onChange({ ...body, contentType: event.target.value || null })
-                }
-                value={body.contentType ?? ""}
-              />
-              <datalist id="scenario-content-types">
-                {RAW_CONTENT_TYPES.map((contentType) => (
-                  <option key={contentType} value={contentType} />
-                ))}
-              </datalist>
-            </Field>
-            <Field label="Body text">
-              <textarea
-                aria-label="Body text"
-                className={cn(
-                  inputClass(false),
-                  "min-h-40 resize-y py-3 font-mono text-xs text-text-main",
-                )}
-                onChange={(event) =>
-                  onChange({ ...body, rawText: event.target.value })
-                }
-                placeholder='{"key": "value"}'
-                value={body.rawText ?? ""}
-              />
-            </Field>
-          </>
-        ) : null}
-        {body.type === "form" ? (
-          <FieldSection
-            title="Form Fields"
-            description="Form fields are sent as application/x-www-form-urlencoded."
-            action={
-              <MiniButton
-                onClick={() =>
-                  onChange({ ...body, formFields: [...(body.formFields ?? []), newFormField()] })
-                }
-                tone="primary"
-              >
-                Add form field
-              </MiniButton>
-            }
-          >
-            <NamedValueRows
-              items={body.formFields as ScenarioNamedValue[] | undefined}
-              label="Form field"
-              onChange={(id, fields) =>
-                onChange({
-                  ...body,
-                  formFields: (body.formFields ?? []).map((item) =>
-                    item.id === id
-                      ? ({ ...item, ...fields } as ScenarioFormField)
-                      : item,
-                  ),
-                })
-              }
-              onRemove={(id) =>
-                onChange({
-                  ...body,
-                  formFields: (body.formFields ?? []).filter(
-                    (item) => item.id !== id,
-                  ),
-                })
-              }
-            />
-          </FieldSection>
-        ) : null}
-        {body.type === "none" ? (
-          <p className="text-sm text-text-muted">
-            This request is sent without a body.
-          </p>
-        ) : null}
-      </div>
-    </FieldSection>
-  );
-}
-
-function UploadFileRow({
-  dependencyFiles,
-  file,
-  index,
-  onChange,
-  onRemove,
-}: {
-  dependencyFiles: DependencyFileSummary[];
-  file: ScenarioUploadFile;
-  index: number;
-  onChange: (fields: Partial<ScenarioUploadFile>) => void;
-  onRemove: () => void;
-}) {
-  return (
-    <div className="grid gap-2 rounded-xl border border-white/10 bg-black/10 p-3 md:grid-cols-[1fr_1.2fr_1fr_auto_auto] md:items-end">
-      <Field label={`Upload file ${index + 1} field name`}>
-        <input
-          aria-label={`Upload file ${index + 1} field name`}
-          className={cn(textInputClass(), "font-mono")}
-          onChange={(event) => onChange({ fieldName: event.target.value })}
-          placeholder="file"
-          value={file.fieldName}
-        />
-      </Field>
-      <Field label="Dependency File">
-        <select
-          aria-label={`Upload file ${index + 1} Dependency File`}
-          className={cn(textInputClass(), "text-text-main")}
-          onChange={(event) => {
-            const selected = dependencyFiles.find(
-              (item) => item.id === event.target.value,
-            );
-            onChange({
-              dependencyFileId: event.target.value,
-              mimeType: selected?.contentType ?? null,
-            });
-          }}
-          value={file.dependencyFileId}
-        >
-          <option value="">Select a Dependency File</option>
-          {dependencyFiles.map((item) => (
-            <option key={item.id} value={item.id}>
-              {item.filename}
-            </option>
-          ))}
-        </select>
-      </Field>
-      <Field label="MIME type">
-        <input
-          aria-label={`Upload file ${index + 1} MIME type`}
-          className={cn(textInputClass(), "font-mono")}
-          onChange={(event) =>
-            onChange({ mimeType: event.target.value || null })
-          }
-          value={file.mimeType ?? ""}
-        />
-      </Field>
-      <label className="flex items-end gap-2 pb-2 text-xs text-text-muted">
-        <input
-          checked={file.enabled !== false}
-          onChange={(event) => onChange({ enabled: event.target.checked })}
-          type="checkbox"
-        />
-        Enabled
-      </label>
-      <div className="flex items-end">
-        <MiniButton onClick={onRemove} tone="danger">
-          Remove
-        </MiniButton>
-      </div>
-    </div>
-  );
-}
-
-function ExtractorRow({
-  extractor,
-  index,
-  onChange,
-  onRemove,
-}: {
-  extractor: ScenarioExtractor;
-  index: number;
-  onChange: (fields: Partial<ScenarioExtractor>) => void;
-  onRemove: () => void;
-}) {
-  return (
-    <div className="rounded-xl border border-white/10 bg-black/10 p-3">
-      <div className="grid gap-2 md:grid-cols-[160px_1fr_1fr_auto_auto] md:items-end">
-        <Field label="Type">
-          <select
-            aria-label={`Extractor ${index + 1} type`}
-            className={cn(textInputClass(), "text-text-main")}
-            onChange={(event) => {
-              const type = event.target.value as ScenarioExtractor["type"];
-              onChange({
-                type,
-                expression: type === "jsonpath" ? "$." : "",
-                template: type === "regexp" ? "1" : null,
-              });
-            }}
-            value={extractor.type}
-          >
-            <option value="jsonpath">JSONPath</option>
-            <option value="regexp">Regexp</option>
-          </select>
-        </Field>
-        <Field label="Variable name">
-          <input
-            aria-label={`Extractor ${index + 1} variable name`}
-            className={cn(textInputClass(), "font-mono")}
-            onChange={(event) => onChange({ variableName: event.target.value })}
-            placeholder="user_id"
-            value={extractor.variableName}
-          />
-        </Field>
-        <Field label={extractor.type === "jsonpath" ? "JSONPath expression" : "Regexp"}>
-          <input
-            aria-label={`Extractor ${index + 1} expression`}
-            className={cn(textInputClass(), "font-mono")}
-            onChange={(event) => onChange({ expression: event.target.value })}
-            value={extractor.expression}
-          />
-        </Field>
-        <Field label="Subject">
-          <select
-            aria-label={`Extractor ${index + 1} subject`}
-            className={cn(textInputClass(), "text-text-main")}
-            onChange={(event) =>
-              onChange({ subject: event.target.value || null })
-            }
-            value={extractor.subject ?? "body"}
-          >
-            {EXTRACTOR_SUBJECTS.map((subject) => (
-              <option key={subject} value={subject}>
-                {subject}
-              </option>
-            ))}
-          </select>
-        </Field>
-        <div className="flex items-end gap-2">
-          <label className="flex items-center gap-2 pb-2 text-xs text-text-muted">
-            <input
-              checked={extractor.enabled !== false}
-              onChange={(event) => onChange({ enabled: event.target.checked })}
-              type="checkbox"
-            />
-            Enabled
-          </label>
-          <MiniButton onClick={onRemove} tone="danger">
-            Remove
-          </MiniButton>
-        </div>
-      </div>
-      <div className="mt-2 grid gap-2 md:grid-cols-[1fr_1fr_1fr]">
-        <Field label="Match number">
-          <input
-            aria-label={`Extractor ${index + 1} match number`}
-            className={cn(textInputClass(), "font-mono")}
-            min={0}
-            onChange={(event) =>
-              onChange({ matchNo: Number(event.target.value) })
-            }
-            type="number"
-            value={extractor.matchNo}
-          />
-        </Field>
-        {extractor.type === "regexp" ? (
-          <Field label="Template group">
-            <input
-              aria-label={`Extractor ${index + 1} template`}
-              className={cn(textInputClass(), "font-mono")}
-              onChange={(event) => onChange({ template: event.target.value || null })}
-              placeholder="1"
-              value={extractor.template ?? ""}
-            />
-          </Field>
-        ) : null}
-        <Field label="Default value">
-          <input
-            aria-label={`Extractor ${index + 1} default value`}
-            className={cn(textInputClass(), "font-mono")}
-            onChange={(event) => onChange({ defaultValue: event.target.value })}
-            value={extractor.defaultValue}
-          />
-        </Field>
-      </div>
-    </div>
-  );
-}
-
-function AssertionRow({
-  assertion,
-  index,
-  onChange,
-  onRemove,
-}: {
-  assertion: ScenarioAssertion;
-  index: number;
-  onChange: (fields: Partial<ScenarioAssertion>) => void;
-  onRemove: () => void;
-}) {
-  return (
-    <div className="rounded-xl border border-white/10 bg-black/10 p-3">
-      <div className="grid gap-2 md:grid-cols-[180px_1fr_auto_auto] md:items-end">
-        <Field label="Type">
-          <select
-            aria-label={`Assertion ${index + 1} type`}
-            className={cn(textInputClass(), "text-text-main")}
-            onChange={(event) => {
-              const type = event.target.value as ScenarioAssertion["type"];
-              onChange({
-                type,
-                expectedStatus: type === "status_code" ? 200 : null,
-                contains: type === "body_contains" ? "" : null,
-                jsonpath:
-                  type === "jsonpath_exists" || type === "jsonpath_equals"
-                    ? "$."
-                    : null,
-                expectedValue: type === "jsonpath_equals" ? "" : null,
-              });
-            }}
-            value={assertion.type}
-          >
-            <option value="status_code">Status Code</option>
-            <option value="body_contains">Body Contains</option>
-            <option value="jsonpath_exists">JSONPath Exists</option>
-            <option value="jsonpath_equals">JSONPath Equals</option>
-          </select>
-        </Field>
-        {assertion.type === "status_code" ? (
-          <Field label="Expected status">
-            <input
-              aria-label={`Assertion ${index + 1} expected status`}
-              className={cn(textInputClass(), "font-mono")}
-              onChange={(event) =>
-                onChange({ expectedStatus: Number(event.target.value) })
-              }
-              type="number"
-              value={assertion.expectedStatus ?? 200}
-            />
-          </Field>
-        ) : null}
-        {assertion.type === "body_contains" ? (
-          <Field label="Contains text">
-            <input
-              aria-label={`Assertion ${index + 1} contains`}
-              className={cn(textInputClass(), "font-mono")}
-              onChange={(event) => onChange({ contains: event.target.value })}
-              value={assertion.contains ?? ""}
-            />
-          </Field>
-        ) : null}
-        {assertion.type === "jsonpath_exists" ||
-        assertion.type === "jsonpath_equals" ? (
-          <>
-            <Field label="JSONPath">
-              <input
-                aria-label={`Assertion ${index + 1} jsonpath`}
-                className={cn(textInputClass(), "font-mono")}
-                onChange={(event) => onChange({ jsonpath: event.target.value })}
-                value={assertion.jsonpath ?? ""}
-              />
-            </Field>
-            {assertion.type === "jsonpath_equals" ? (
-              <Field label="Expected value">
-                <input
-                  aria-label={`Assertion ${index + 1} expected value`}
-                  className={cn(textInputClass(), "font-mono")}
-                  onChange={(event) =>
-                    onChange({ expectedValue: event.target.value })
-                  }
-                  value={assertion.expectedValue ?? ""}
-                />
-              </Field>
-            ) : null}
-          </>
-        ) : null}
-        <div className="flex items-end gap-3 pb-2 text-xs text-text-muted">
-          {assertion.type !== "status_code" ? (
-            <>
-              <label className="flex items-center gap-1">
-                <input
-                  checked={assertion.not === true}
-                  onChange={(event) => onChange({ not: event.target.checked })}
-                  type="checkbox"
-                />
-                Not
-              </label>
-              <label className="flex items-center gap-1">
-                <input
-                  checked={assertion.regexp === true}
-                  onChange={(event) =>
-                    onChange({ regexp: event.target.checked })
-                  }
-                  type="checkbox"
-                />
-                Regexp
-              </label>
-            </>
-          ) : null}
-          <label className="flex items-center gap-1">
-            <input
-              checked={assertion.enabled !== false}
-              onChange={(event) => onChange({ enabled: event.target.checked })}
-              type="checkbox"
-            />
-            Enabled
-          </label>
-          <MiniButton onClick={onRemove} tone="danger">
-            Remove
-          </MiniButton>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function ScriptRow({
-  script,
-  index,
-  onChange,
-  onRemove,
-}: {
-  script: ScenarioScript;
-  index: number;
-  onChange: (fields: Partial<ScenarioScript>) => void;
-  onRemove: () => void;
-}) {
-  return (
-    <div className="rounded-xl border border-white/10 bg-black/10 p-3">
-      <div className="flex flex-wrap items-center gap-3">
-        <span className="font-mono text-xs text-secondary">
-          Script {index + 1}
-        </span>
-        <select
-          aria-label={`Script ${index + 1} execute`}
-          className={cn(textInputClass("w-auto"), "text-text-main")}
-          onChange={(event) =>
-            onChange({
-              execute: event.target.value as ScenarioScript["execute"],
-            })
-          }
-          value={script.execute}
-        >
-          <option value="before">Before request</option>
-          <option value="after">After request</option>
-        </select>
-        <label className="flex items-center gap-2 text-xs text-text-muted">
-          <input
-            checked={script.enabled !== false}
-            onChange={(event) => onChange({ enabled: event.target.checked })}
-            type="checkbox"
-          />
-          Enabled
-        </label>
-        <div className="ml-auto">
-          <MiniButton onClick={onRemove} tone="danger">
-            Remove
-          </MiniButton>
-        </div>
-      </div>
-      <div className="mt-2">
-        <Field label="Groovy script text">
-          <textarea
-            aria-label={`Script ${index + 1} text`}
-            className={cn(
-              textInputClass(),
-              "min-h-24 resize-y py-2 font-mono text-xs text-text-main",
-            )}
-            onChange={(event) => onChange({ scriptText: event.target.value })}
-            placeholder="vars.put('token', vars.get('base_token'))"
-            spellCheck={false}
-            value={script.scriptText ?? ""}
-          />
-        </Field>
-      </div>
-    </div>
-  );
-}
-
-function DataSourceRow({
-  dataSource,
-  dependencyFiles,
-  index,
-  onChange,
-  onRemove,
-}: {
-  dataSource: ScenarioDataSource;
-  dependencyFiles: DependencyFileSummary[];
-  index: number;
-  onChange: (fields: Partial<ScenarioDataSource>) => void;
-  onRemove: () => void;
-}) {
-  return (
-    <div className="rounded-xl border border-white/10 bg-black/10 p-3">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <span className="font-mono text-xs text-secondary">
-          Data source {index + 1}
-        </span>
-        <label className="flex items-center gap-2 text-xs text-text-muted">
-          <input
-            checked={dataSource.enabled !== false}
-            onChange={(event) => onChange({ enabled: event.target.checked })}
-            type="checkbox"
-          />
-          Enabled
-        </label>
-      </div>
-      <div className="mt-2 grid gap-2 md:grid-cols-[1.2fr_1fr_auto] md:items-end">
-        <Field label="CSV Dependency File">
-          <select
-            aria-label={`Data source ${index + 1} Dependency File`}
-            className={cn(textInputClass(), "text-text-main")}
-            onChange={(event) => {
-              const selected = dependencyFiles.find(
-                (item) => item.id === event.target.value,
-              );
-              onChange({
-                dependencyFileId: event.target.value,
-                displayName: selected?.filename ?? dataSource.displayName,
-              });
-            }}
-            value={dataSource.dependencyFileId}
-          >
-            <option value="">Select a CSV file</option>
-            {dependencyFiles.map((item) => (
-              <option key={item.id} value={item.id}>
-                {item.filename}
-              </option>
-            ))}
-          </select>
-        </Field>
-        <Field label="Display name">
-          <input
-            aria-label={`Data source ${index + 1} display name`}
-            className={cn(textInputClass(), "font-mono")}
-            onChange={(event) => onChange({ displayName: event.target.value })}
-            value={dataSource.displayName}
-          />
-        </Field>
-        <Field label="Delimiter">
-          <select
-            aria-label={`Data source ${index + 1} delimiter`}
-            className={cn(textInputClass(), "text-text-main")}
-            onChange={(event) => onChange({ delimiter: event.target.value })}
-            value={dataSource.delimiter ?? ","}
-          >
-            {DELIMITER_OPTIONS.map((option) => (
-              <option key={option.value} value={option.value}>
-                {option.label}
-              </option>
-            ))}
-          </select>
-        </Field>
-      </div>
-      <div className="mt-2 grid gap-2 md:grid-cols-[1fr_1fr_1fr_auto] md:items-end">
-        <Field label="Variable names">
-          <input
-            aria-label={`Data source ${index + 1} variable names`}
-            className={cn(textInputClass(), "font-mono")}
-            onChange={(event) =>
-              onChange({ variableNames: parseCsvNames(event.target.value) })
-            }
-            placeholder="username, password"
-            value={(dataSource.variableNames ?? []).join(", ")}
-          />
-        </Field>
-        <div className="flex flex-wrap gap-4 text-xs text-text-muted">
-          <label className="flex items-center gap-2">
-            <input
-              checked={dataSource.loop !== false}
-              onChange={(event) => onChange({ loop: event.target.checked })}
-              type="checkbox"
-            />
-            Loop
-          </label>
-          <label className="flex items-center gap-2">
-            <input
-              checked={dataSource.randomOrder === true}
-              onChange={(event) =>
-                onChange({ randomOrder: event.target.checked })
-              }
-              type="checkbox"
-            />
-            Random order
-          </label>
-        </div>
-        <label className="flex items-center gap-2 text-xs text-text-muted">
-          Quoted
-          <select
-            aria-label={`Data source ${index + 1} quoted`}
-            className="rounded-lg border border-white/10 bg-black/20 px-2 py-1 text-sm text-text-main"
-            onChange={(event) =>
-              onChange({ quoted: parseBooleanOverride(event.target.value) })
-            }
-            value={dataSource.quoted === null ? "" : String(dataSource.quoted)}
-          >
-            <option value="">Auto</option>
-            <option value="true">Yes</option>
-            <option value="false">No</option>
-          </select>
-        </label>
-        <MiniButton onClick={onRemove} tone="danger">
-          Remove
-        </MiniButton>
-      </div>
-    </div>
+    </section>
   );
 }

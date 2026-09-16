@@ -63,15 +63,13 @@ function requestMethod(input: RequestInfo | URL, init?: RequestInit) {
   return init?.method ?? "GET";
 }
 
-function requestHeader(input: RequestInfo | URL, init: RequestInit | undefined, name: string) {
-  if (input instanceof Request) return input.headers.get(name);
-  return new Headers(init?.headers).get(name);
+function requestHeader(input: RequestInfo | URL, name: string) {
+  return input instanceof Request ? input.headers.get(name) : null;
 }
 
-function requestJson(input: RequestInfo | URL, init?: RequestInit) {
-  if (input instanceof Request) return input.clone().json() as Promise<unknown>;
-  if (typeof init?.body === "string") return Promise.resolve(JSON.parse(init.body) as unknown);
-  return Promise.resolve(null);
+function requestJson(input: RequestInfo | URL) {
+  if (!(input instanceof Request)) return null;
+  return input.clone().json() as Promise<unknown>;
 }
 
 function mockFetch(sessionResponse = authSession) {
@@ -145,9 +143,7 @@ describe("P2-02 Account API keys", () => {
       if (typeof resetCallback === "function") resetCallback();
     });
 
-    await waitFor(() =>
-      expect(screen.getByRole("button", { name: "Copy Workspace ID" })).toHaveTextContent("Copy"),
-    );
+    expect(screen.getByRole("button", { name: "Copy Workspace ID" })).toHaveTextContent("Copy");
   });
 
   it("announces a danger message when the Workspace ID cannot be copied", async () => {
@@ -227,8 +223,8 @@ describe("P2-02 Account API keys", () => {
         requestMethod(input, init) === "POST",
     );
     expect(postCall).toBeTruthy();
-    expect(requestHeader(postCall?.[0] as RequestInfo, postCall?.[1], "x-csrf-token")).toBe(csrfToken);
-    const body = (await requestJson(postCall?.[0] as RequestInfo, postCall?.[1])) as Record<string, unknown>;
+    expect(requestHeader(postCall?.[0] as Request, "x-csrf-token")).toBe(csrfToken);
+    const body = (await requestJson(postCall?.[0] as Request)) as Record<string, unknown>;
     expect(body.scopes).toEqual(["read", "config:write", "dependency:write"]);
     expect(body.workspaceAllowlist).toEqual([workspaceId]);
     expect(JSON.stringify(body)).not.toMatch(/tokens:write/i);
@@ -244,7 +240,7 @@ describe("P2-02 Account API keys", () => {
           ([input, init]) =>
             requestUrl(input).endsWith(`/api/v1/account/api-tokens/${tokenId}`) &&
             requestMethod(input, init) === "DELETE" &&
-            requestHeader(input, init, "x-csrf-token") === csrfToken,
+            requestHeader(input, "x-csrf-token") === csrfToken,
         ),
       ).toBe(true),
     );

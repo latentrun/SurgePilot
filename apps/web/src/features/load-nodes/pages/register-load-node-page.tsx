@@ -1,12 +1,14 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { CheckCircle2, Copy, KeyRound, ShieldCheck } from "lucide-react";
+import { Link, useNavigate } from "react-router-dom";
 
 import {
   createLoadNode,
-  getCsrfToken,
   getLoadNodeConnectivitySummary,
+  getCsrfToken,
   scanLoadNodeSshHostKey,
   type LoadNodeAuthType,
-  type LoadNodeConnectivitySummary,
   type LoadNodeCreateRequest,
   type LoadNodeDetail,
   type LoadNodeScope,
@@ -14,6 +16,7 @@ import {
 } from "../../../app/api-client";
 import { useAuthSession } from "../../../app/auth-session";
 import { useWorkspaceSwitchGuard } from "../../../app/workspace-switch-guard";
+import { copyText } from "../../../utils/clipboard";
 import { LoadNodeConnectivitySummaryCard } from "../components/load-node-connectivity-summary";
 import { loadNodeErrorMessage } from "./load-node-copy";
 
@@ -56,30 +59,9 @@ const HOST_REQUIREMENTS: { label: string; value: string }[] = [
 const HOST_VERIFY_COMMAND =
   'uname -m && (. /etc/os-release; echo "$PRETTY_NAME") && java -version && python3 --version && tar --version';
 
-function cn(...inputs: (string | boolean | null | undefined)[]) {
-  return inputs.filter(Boolean).join(" ");
-}
-
 function useCsrfToken() {
   const { csrfToken } = useAuthSession();
   return async () => csrfToken ?? (await getCsrfToken()).csrfToken;
-}
-
-async function copyText(text: string): Promise<{
-  ok: boolean;
-  reason?: string;
-}> {
-  try {
-    await navigator.clipboard.writeText(text);
-    return { ok: true };
-  } catch {
-    return { ok: false, reason: "Clipboard access is unavailable." };
-  }
-}
-
-function navigateToLoadNodes() {
-  window.history.replaceState({}, "", "/resources/load-nodes");
-  window.dispatchEvent(new PopStateEvent("popstate"));
 }
 
 function toPayload(
@@ -131,30 +113,19 @@ function validate(
   trustedHostKey: LoadNodeSshHostKeyScanResponse | null,
 ) {
   const errors: Record<string, string> = {};
-  if (!form.host.trim()) {
-    errors.host = "Host is required.";
-  }
-  if (form.sshPort < 1 || form.sshPort > 65535) {
+  if (!form.host.trim()) errors.host = "Host is required.";
+  if (form.sshPort < 1 || form.sshPort > 65535)
     errors.sshPort = "Port must be between 1 and 65535.";
-  }
-  if (!form.sshUser.trim()) {
-    errors.sshUser = "SSH user is required.";
-  }
-  if (form.runnerHome && !form.runnerHome.trim().startsWith("/")) {
+  if (!form.sshUser.trim()) errors.sshUser = "SSH user is required.";
+  if (form.runnerHome && !form.runnerHome.startsWith("/"))
     errors.runnerHome = "Runner home must be an absolute path.";
-  }
-  if (form.scope === "public" && role !== "admin") {
+  if (form.scope === "public" && role !== "admin")
     errors.scope = "Only Admin can register Public nodes.";
-  }
-  if (form.authType === "password" && !form.password) {
+  if (form.authType === "password" && !form.password)
     errors.password = "Password is required.";
-  }
-  if (form.authType === "private_key" && !form.privateKey) {
+  if (form.authType === "private_key" && !form.privateKey)
     errors.privateKey = "SSH private key is required.";
-  }
-  if (!trustedHostKey) {
-    errors.sshHostKey = "Scan and confirm the SSH host key.";
-  }
+  if (!trustedHostKey) errors.sshHostKey = "Scan and confirm the SSH host key.";
   return errors;
 }
 
@@ -174,93 +145,11 @@ function formHasDraft(form: FormState) {
   );
 }
 
-function CheckCircle2({ className }: { className?: string }) {
-  return (
-    <svg
-      aria-hidden="true"
-      className={className}
-      fill="none"
-      height="16"
-      stroke="currentColor"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      strokeWidth="2"
-      viewBox="0 0 24 24"
-      width="16"
-    >
-      <path d="M21.801 10A10 10 0 1 1 17 3.335" />
-      <path d="m9 11 3 3L22 4" />
-    </svg>
-  );
-}
-
-function KeyRound({ className }: { className?: string }) {
-  return (
-    <svg
-      aria-hidden="true"
-      className={className}
-      fill="none"
-      height="16"
-      stroke="currentColor"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      strokeWidth="2"
-      viewBox="0 0 24 24"
-      width="16"
-    >
-      <path d="M2.586 17.414A2 2 0 0 0 2 18.828V21a1 1 0 0 0 1 1h3a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h1a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h.172a2 2 0 0 0 1.414-.586l.814-.814a6.5 6.5 0 1 0-4-4z" />
-      <circle cx="16.5" cy="7.5" r="0.5" fill="currentColor" />
-    </svg>
-  );
-}
-
-function ShieldCheck({ className }: { className?: string }) {
-  return (
-    <svg
-      aria-hidden="true"
-      className={className}
-      fill="none"
-      height="16"
-      stroke="currentColor"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      strokeWidth="2"
-      viewBox="0 0 24 24"
-      width="16"
-    >
-      <path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1 1 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z" />
-      <path d="m9 12 2 2 4-4" />
-    </svg>
-  );
-}
-
-function Copy({ className }: { className?: string }) {
-  return (
-    <svg
-      aria-hidden="true"
-      className={className}
-      fill="none"
-      height="16"
-      stroke="currentColor"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      strokeWidth="2"
-      viewBox="0 0 24 24"
-      width="16"
-    >
-      <rect height="13" rx="2" ry="2" width="13" x="9" y="9" />
-      <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
-    </svg>
-  );
-}
-
 export function RegisterLoadNodePage() {
+  const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const { session } = useAuthSession();
   const getWriteToken = useCsrfToken();
-  const workspaceId = session?.defaultWorkspace.id ?? "";
-  const role = session?.user.role;
-  const isAdmin = role === "admin";
-
   const [form, setForm] = useState<FormState>(defaultForm);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [apiError, setApiError] = useState<string | null>(null);
@@ -268,11 +157,54 @@ export function RegisterLoadNodePage() {
   const [trustedHostKey, setTrustedHostKey] =
     useState<LoadNodeSshHostKeyScanResponse | null>(null);
   const [copyFeedback, setCopyFeedback] = useState<string | null>(null);
-  const [isScanning, setIsScanning] = useState(false);
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [connectivitySummary, setConnectivitySummary] =
-    useState<LoadNodeConnectivitySummary>();
-  const [connectivityFailed, setConnectivityFailed] = useState(false);
+  const workspaceId = session?.defaultWorkspace.id ?? "";
+  const role = session?.user.role;
+  const isAdmin = role === "admin";
+  const connectivityQuery = useQuery({
+    enabled: session !== null,
+    queryKey: ["load-node-connectivity-summary"],
+    queryFn: getLoadNodeConnectivitySummary,
+  });
+
+  const createMutation = useMutation({
+    mutationFn: async () =>
+      createLoadNode(
+        toPayload(form, trustedHostKey as LoadNodeSshHostKeyScanResponse),
+        workspaceId,
+        await getWriteToken(),
+      ),
+    onSuccess: async (node) => {
+      await queryClient.invalidateQueries({
+        queryKey: ["load-nodes", workspaceId],
+      });
+      setApiError(null);
+      setCopyFeedback(null);
+      if (node.authType === "generated_key") {
+        setCreated(node);
+      } else {
+        navigate("/resources/load-nodes");
+      }
+    },
+    onError: (error) => setApiError(loadNodeErrorMessage(error)),
+  });
+
+  const scanMutation = useMutation({
+    mutationFn: async () =>
+      scanLoadNodeSshHostKey(
+        { scope: form.scope, host: form.host, sshPort: form.sshPort },
+        workspaceId,
+        await getWriteToken(),
+      ),
+    onSuccess: (result) => {
+      setTrustedHostKey(result);
+      setErrors((current) => ({ ...current, sshHostKey: "" }));
+      setApiError(null);
+    },
+    onError: (error) => {
+      setTrustedHostKey(null);
+      setApiError(loadNodeErrorMessage(error));
+    },
+  });
 
   const workspaceSwitchGuard = useMemo(
     () => ({
@@ -290,32 +222,7 @@ export function RegisterLoadNodePage() {
   );
   useWorkspaceSwitchGuard(workspaceSwitchGuard);
 
-  useEffect(() => {
-    if (session === null) {
-      return undefined;
-    }
-    let active = true;
-    getLoadNodeConnectivitySummary()
-      .then((summary) => {
-        if (active) {
-          setConnectivitySummary(summary);
-          setConnectivityFailed(false);
-        }
-      })
-      .catch(() => {
-        if (active) {
-          setConnectivitySummary(undefined);
-          setConnectivityFailed(true);
-        }
-      });
-    return () => {
-      active = false;
-    };
-  }, [session]);
-
-  if (session === null) {
-    return null;
-  }
+  if (session === null) return null;
 
   function update<K extends keyof FormState>(key: K, value: FormState[K]) {
     setForm((current) => ({ ...current, [key]: value }));
@@ -328,80 +235,47 @@ export function RegisterLoadNodePage() {
   async function handleCopy(text: string) {
     setCopyFeedback(null);
     const result = await copyText(text);
-    setCopyFeedback(result.ok ? "Copied." : result.reason ?? "Copy failed.");
+    setCopyFeedback(result.ok ? "Copied." : result.reason);
   }
 
-  async function handleScan() {
-    if (!form.host.trim()) return;
-    setIsScanning(true);
-    setApiError(null);
-    try {
-      const token = await getWriteToken();
-      const result = await scanLoadNodeSshHostKey(
-        { scope: form.scope, host: form.host, sshPort: form.sshPort },
-        workspaceId,
-        token,
-      );
-      setTrustedHostKey(result);
-      setErrors((current) => ({ ...current, sshHostKey: "" }));
-    } catch (error) {
-      setTrustedHostKey(null);
-      setApiError(loadNodeErrorMessage(error));
-    } finally {
-      setIsScanning(false);
-    }
-  }
-
-  async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
+  async function submit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const nextErrors = validate(form, role, trustedHostKey);
     setErrors(nextErrors);
     setApiError(null);
-    if (Object.values(nextErrors).some(Boolean)) {
-      return;
-    }
-    setIsSubmitting(true);
+    if (Object.values(nextErrors).some(Boolean)) return;
     try {
-      const token = await getWriteToken();
-      const node = await createLoadNode(
-        toPayload(form, trustedHostKey as LoadNodeSshHostKeyScanResponse),
-        workspaceId,
-        token,
-      );
-      if (node.authType === "generated_key") {
-        setCreated(node);
-      } else {
-        navigateToLoadNodes();
-      }
-    } catch (error) {
-      setApiError(loadNodeErrorMessage(error));
-    } finally {
-      setIsSubmitting(false);
+      await createMutation.mutateAsync();
+    } catch {
+      // mutation owns visible API error
     }
   }
 
   if (created) {
     return (
-      <div className="mx-auto flex max-w-container-max flex-col gap-8">
-        <section className="surgepilot-glass rounded-2xl p-8">
+      <section className="mx-auto max-w-3xl">
+        <div className="surgepilot-glass rounded-3xl p-8">
           <div className="flex items-center gap-3 text-success">
             <CheckCircle2 className="h-7 w-7" />
-            <h1 className="font-display text-[28px] font-semibold leading-9 text-white">
+            <h1 className="font-display text-2xl font-semibold text-white">
               Load Node Registered
             </h1>
           </div>
-          <p className="mt-3 max-w-3xl text-sm leading-6 text-text-muted">
+          <p className="mt-3 text-sm text-text-muted">
             Add this public key to the target host before initializing the node.
-            The private key is encrypted and never displayed. Before
-            initializing, confirm the host meets the target requirements listed
-            on the registration form.
+            The private key is encrypted and never displayed.
+          </p>
+          <p className="mt-2 text-sm text-text-muted">
+            Before initializing, confirm the host meets the target requirements:
+            Ubuntu 24.04+ or Debian 12+, x86_64 or aarch64, Java 11+, and
+            python3 3.12+.
           </p>
           <div className="mt-6">
             <LoadNodeConnectivitySummaryCard
               isAdmin={isAdmin}
-              loadFailed={connectivityFailed}
+              loadFailed={connectivityQuery.isError}
               successContext
-              summary={connectivitySummary}
+              summary={connectivityQuery.data}
             />
           </div>
           <div className="mt-6 rounded-2xl border border-white/10 bg-black/30 p-4">
@@ -410,9 +284,11 @@ export function RegisterLoadNodePage() {
                 Installation key
               </span>
               <button
-                className="inline-flex items-center gap-1 rounded-lg border border-white/10 px-2 py-1 text-xs text-text-muted transition hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
+                className="inline-flex items-center gap-1 rounded-lg border border-white/10 px-2 py-1 text-xs text-text-muted disabled:cursor-not-allowed disabled:opacity-40"
                 disabled={!created.generatedPublicKey}
-                onClick={() => void handleCopy(created.generatedPublicKey ?? "")}
+                onClick={() =>
+                  void handleCopy(created.generatedPublicKey ?? "")
+                }
                 type="button"
               >
                 <Copy className="h-3 w-3" />
@@ -427,84 +303,89 @@ export function RegisterLoadNodePage() {
             </pre>
           </div>
           <div className="mt-6 flex gap-3">
-            <a
-              className="inline-flex items-center rounded-lg bg-primary px-4 py-2 font-mono text-[12px] font-bold uppercase tracking-wide text-on-primary"
-              href="/resources/load-nodes"
+            <Link
+              className="rounded-lg border border-white/10 px-4 py-2 text-white"
+              to="/resources/load-nodes"
             >
               Back to Load Nodes
-            </a>
+            </Link>
           </div>
-        </section>
-      </div>
+        </div>
+      </section>
     );
   }
 
   return (
-    <div className="mx-auto flex max-w-container-max flex-col gap-8">
-      <div>
-        <h1 className="font-display text-[34px] font-semibold leading-10 text-white">
+    <section className="mx-auto max-w-6xl">
+      <div className="mb-6">
+        <h1 className="font-display text-3xl font-semibold text-white">
           Register Load Node
         </h1>
-        <p className="mt-2 max-w-3xl text-base leading-6 text-text-muted">
+        <p className="mt-2 text-sm text-text-muted">
           Enter the SSH connection details and credentials. You can initialize
           the node after registration.
         </p>
       </div>
-
-      <div className="grid items-start gap-8 lg:grid-cols-[minmax(0,1fr)_340px]">
+      <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_320px]">
         <form
-          className="surgepilot-glass grid gap-5 rounded-2xl p-6 sm:grid-cols-2"
-          onSubmit={(event) => void handleSubmit(event)}
+          className="surgepilot-glass grid gap-5 rounded-3xl p-6 sm:grid-cols-2"
+          onSubmit={(event) => void submit(event)}
         >
           {apiError ? (
             <div className="rounded-xl border border-error/30 bg-error-container px-4 py-3 text-sm text-on-error-container sm:col-span-2">
               {apiError}
             </div>
           ) : null}
-
-          <Field label="Scope" error={errors.scope}>
+          <label className="grid gap-1 text-sm text-text-muted">
+            Scope
             <select
-              className={cn(inputClass(Boolean(errors.scope)), "text-text-main")}
-              onChange={(event) =>
-                update("scope", event.target.value as LoadNodeScope)
-              }
+              className="rounded-xl border border-white/10 bg-surface-container-low px-3 py-2 text-white"
               value={form.scope}
+              onChange={(e) => update("scope", e.target.value as LoadNodeScope)}
             >
               <option value="workspace">Private</option>
-              <option disabled={!isAdmin} value="public">
+              <option disabled={role !== "admin"} value="public">
                 Public
               </option>
             </select>
-          </Field>
-          <Field label="Host/IP" error={errors.host}>
+            {errors.scope ? (
+              <span className="text-error">{errors.scope}</span>
+            ) : null}
+          </label>
+          <label className="grid gap-1 text-sm text-text-muted">
+            Host/IP
             <input
-              className={cn(inputClass(Boolean(errors.host)), "text-text-main")}
-              onChange={(event) => update("host", event.target.value)}
-              placeholder="10.0.2.15"
+              className="rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-white"
               value={form.host}
+              onChange={(e) => update("host", e.target.value)}
             />
-          </Field>
-          <Field label="Port" error={errors.sshPort}>
+            {errors.host ? (
+              <span className="text-error">{errors.host}</span>
+            ) : null}
+          </label>
+          <label className="grid gap-1 text-sm text-text-muted">
+            Port
             <input
-              className={cn(
-                inputClass(Boolean(errors.sshPort)),
-                "text-text-main",
-              )}
-              onChange={(event) =>
-                update("sshPort", Number(event.target.value))
-              }
+              className="rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-white"
               type="number"
               value={form.sshPort}
+              onChange={(e) => update("sshPort", Number(e.target.value))}
             />
-          </Field>
-          <Field label="SSH user" error={errors.sshUser}>
+            {errors.sshPort ? (
+              <span className="text-error">{errors.sshPort}</span>
+            ) : null}
+          </label>
+          <label className="grid gap-1 text-sm text-text-muted">
+            SSH user
             <input
-              className={cn(inputClass(Boolean(errors.sshUser)), "text-text-main")}
-              onChange={(event) => update("sshUser", event.target.value)}
+              className="rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-white"
               value={form.sshUser}
+              onChange={(e) => update("sshUser", e.target.value)}
             />
-          </Field>
-
+            {errors.sshUser ? (
+              <span className="text-error">{errors.sshUser}</span>
+            ) : null}
+          </label>
           <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4 sm:col-span-2">
             <div className="mb-3 flex items-center justify-between gap-3">
               <div>
@@ -517,13 +398,12 @@ export function RegisterLoadNodePage() {
                 </p>
               </div>
               <button
-                className="inline-flex shrink-0 items-center gap-2 rounded-lg border border-primary/30 px-3 py-2 text-sm font-semibold text-primary transition hover:bg-primary/10 disabled:cursor-not-allowed disabled:opacity-50"
-                disabled={isScanning || !form.host.trim()}
-                onClick={() => void handleScan()}
+                className="rounded-lg border border-primary/30 px-3 py-2 text-sm font-semibold text-primary disabled:cursor-not-allowed disabled:opacity-50"
+                disabled={scanMutation.isPending || !form.host.trim()}
+                onClick={() => void scanMutation.mutateAsync()}
                 type="button"
               >
-                <KeyRound className="h-4 w-4" />
-                {isScanning ? "Scanning..." : "Scan key"}
+                {scanMutation.isPending ? "Scanning..." : "Scan key"}
               </button>
             </div>
             {errors.sshHostKey ? (
@@ -560,100 +440,91 @@ export function RegisterLoadNodePage() {
               </p>
             )}
           </div>
-
-          <Field label="Runner home" error={errors.runnerHome}>
+          <label className="grid gap-1 text-sm text-text-muted sm:col-span-2">
+            Runner home
             <input
-              className={cn(
-                inputClass(Boolean(errors.runnerHome)),
-                "text-text-main",
-              )}
-              onChange={(event) => update("runnerHome", event.target.value)}
+              className="rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-white"
               placeholder="Use API default"
               value={form.runnerHome}
+              onChange={(e) => update("runnerHome", e.target.value)}
             />
-          </Field>
-          <Field label="Maintainer">
+            {errors.runnerHome ? (
+              <span className="text-error">{errors.runnerHome}</span>
+            ) : null}
+          </label>
+          <label className="grid gap-1 text-sm text-text-muted">
+            Maintainer
             <input
-              className={cn(inputClass(false), "text-text-main")}
-              onChange={(event) => update("maintainer", event.target.value)}
+              className="rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-white"
               value={form.maintainer}
+              onChange={(e) => update("maintainer", e.target.value)}
             />
-          </Field>
-          <div className="sm:col-span-2">
-            <Field label="Remark">
-              <input
-                className={cn(inputClass(false), "text-text-main")}
-                onChange={(event) => update("remark", event.target.value)}
-                value={form.remark}
-              />
-            </Field>
-          </div>
-
+          </label>
+          <label className="grid gap-1 text-sm text-text-muted">
+            Remark
+            <input
+              className="rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-white"
+              value={form.remark}
+              onChange={(e) => update("remark", e.target.value)}
+            />
+          </label>
           <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4 sm:col-span-2">
             <div className="mb-4 flex items-center gap-2 text-white">
               <KeyRound className="h-4 w-4 text-primary" />
-              <h2 className="text-sm font-semibold">SSH credentials</h2>
+              SSH credentials
             </div>
-            <Field label="Authentication method">
+            <label className="grid gap-1 text-sm text-text-muted">
+              Authentication method
               <select
-                className={cn(inputClass(false), "text-text-main")}
-                onChange={(event) =>
-                  update("authType", event.target.value as LoadNodeAuthType)
-                }
+                className="rounded-xl border border-white/10 bg-surface-container-low px-3 py-2 text-white"
                 value={form.authType}
+                onChange={(e) =>
+                  update("authType", e.target.value as LoadNodeAuthType)
+                }
               >
                 <option value="password">Password</option>
                 <option value="private_key">SSH private key</option>
                 <option value="generated_key">Generate keypair</option>
               </select>
-            </Field>
+            </label>
             {form.authType === "password" ? (
-              <div className="mt-3">
-                <Field label="Password" error={errors.password}>
-                  <input
-                    autoComplete="new-password"
-                    className={cn(
-                      inputClass(Boolean(errors.password)),
-                      "text-text-main",
-                    )}
-                    onChange={(event) =>
-                      update("password", event.target.value)
-                    }
-                    type="password"
-                    value={form.password}
-                  />
-                </Field>
-              </div>
+              <label className="mt-3 grid gap-1 text-sm text-text-muted">
+                Password
+                <input
+                  className="rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-white"
+                  type="password"
+                  value={form.password}
+                  onChange={(e) => update("password", e.target.value)}
+                />
+                {errors.password ? (
+                  <span className="text-error">{errors.password}</span>
+                ) : null}
+              </label>
             ) : null}
             {form.authType === "private_key" ? (
               <>
-                <div className="mt-3">
-                  <Field label="SSH private key" error={errors.privateKey}>
-                    <textarea
-                      className={cn(
-                        inputClass(Boolean(errors.privateKey)),
-                        "min-h-32 resize-y py-3 font-mono text-xs text-text-main",
-                      )}
-                      onChange={(event) =>
-                        update("privateKey", event.target.value)
-                      }
-                      value={form.privateKey}
-                    />
-                  </Field>
-                </div>
-                <div className="mt-3">
-                  <Field label="Private key passphrase (optional)">
-                    <input
-                      autoComplete="new-password"
-                      className={cn(inputClass(false), "text-text-main")}
-                      onChange={(event) =>
-                        update("privateKeyPassphrase", event.target.value)
-                      }
-                      type="password"
-                      value={form.privateKeyPassphrase}
-                    />
-                  </Field>
-                </div>
+                <label className="mt-3 grid gap-1 text-sm text-text-muted">
+                  SSH private key
+                  <textarea
+                    className="min-h-32 rounded-xl border border-white/10 bg-black/20 px-3 py-2 font-mono text-xs text-white"
+                    value={form.privateKey}
+                    onChange={(e) => update("privateKey", e.target.value)}
+                  />
+                  {errors.privateKey ? (
+                    <span className="text-error">{errors.privateKey}</span>
+                  ) : null}
+                </label>
+                <label className="mt-3 grid gap-1 text-sm text-text-muted">
+                  Private key passphrase (optional)
+                  <input
+                    className="rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-white"
+                    type="password"
+                    value={form.privateKeyPassphrase}
+                    onChange={(e) =>
+                      update("privateKeyPassphrase", e.target.value)
+                    }
+                  />
+                </label>
               </>
             ) : null}
             {form.authType === "generated_key" ? (
@@ -663,31 +534,29 @@ export function RegisterLoadNodePage() {
               </p>
             ) : null}
           </div>
-
           <div className="flex justify-end gap-3 sm:col-span-2">
-            <a
-              className="inline-flex items-center rounded-lg border border-white/10 px-4 py-2 text-sm text-text-main transition hover:bg-white/5"
-              href="/resources/load-nodes"
+            <Link
+              className="rounded-lg border border-white/10 px-4 py-2 text-white"
+              to="/resources/load-nodes"
             >
               Cancel
-            </a>
+            </Link>
             <button
-              className="inline-flex h-11 items-center justify-center rounded-lg bg-primary px-5 py-2 font-mono text-[12px] font-bold uppercase tracking-wide text-on-primary transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-60"
-              disabled={isSubmitting}
+              className="rounded-lg bg-primary px-4 py-2 font-semibold text-on-primary"
+              disabled={createMutation.isPending}
               type="submit"
             >
-              {isSubmitting ? "Registering..." : "Register Load Node"}
+              Register Load Node
             </button>
           </div>
         </form>
-
-        <aside className="surgepilot-glass grid gap-6 rounded-2xl p-6">
+        <aside className="grid gap-6">
           <LoadNodeConnectivitySummaryCard
             isAdmin={isAdmin}
-            loadFailed={connectivityFailed}
-            summary={connectivitySummary}
+            loadFailed={connectivityQuery.isError}
+            summary={connectivityQuery.data}
           />
-          <div>
+          <div className="surgepilot-glass rounded-3xl p-6">
             <div className="mb-4 flex items-center gap-2 text-white">
               <ShieldCheck className="h-4 w-4 text-primary" />
               <h2 className="text-sm font-semibold">Requirements</h2>
@@ -695,68 +564,41 @@ export function RegisterLoadNodePage() {
             <ul className="grid gap-3">
               {HOST_REQUIREMENTS.map((requirement) => (
                 <li
-                  className="flex items-start gap-2 text-sm text-text-main"
                   key={requirement.label}
+                  className="flex items-start gap-2 text-sm text-text-main"
                 >
                   <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-success" />
                   <span>
-                    <span className="font-semibold">
-                      {requirement.label}:
-                    </span>{" "}
+                    <span className="font-semibold">{requirement.label}:</span>{" "}
                     {requirement.value}
                   </span>
                 </li>
               ))}
             </ul>
-          </div>
-          <div className="rounded-2xl border border-white/10 bg-black/30 p-4">
-            <div className="mb-2 flex items-center justify-between">
-              <span className="font-mono text-[11px] uppercase tracking-[0.18em] text-primary">
-                Verify on host
-              </span>
-              <button
-                className="inline-flex items-center gap-1 rounded-lg border border-white/10 px-2 py-1 text-xs text-text-muted transition hover:text-white"
-                onClick={() => void handleCopy(HOST_VERIFY_COMMAND)}
-                type="button"
-              >
-                <Copy className="h-3 w-3" />
-                Copy
-              </button>
+            <div className="mt-4 rounded-2xl border border-white/10 bg-black/30 p-3">
+              <div className="mb-2 flex items-center justify-between">
+                <span className="font-mono text-[11px] uppercase tracking-[0.18em] text-primary">
+                  Verify on host
+                </span>
+                <button
+                  className="inline-flex items-center gap-1 rounded-lg border border-white/10 px-2 py-1 text-xs text-text-muted"
+                  onClick={() => void handleCopy(HOST_VERIFY_COMMAND)}
+                  type="button"
+                >
+                  <Copy className="h-3 w-3" />
+                  Copy
+                </button>
+              </div>
+              {copyFeedback ? (
+                <p className="mb-2 text-xs text-text-muted">{copyFeedback}</p>
+              ) : null}
+              <pre className="whitespace-pre-wrap break-all font-mono text-xs text-text-main">
+                {HOST_VERIFY_COMMAND}
+              </pre>
             </div>
-            {copyFeedback ? (
-              <p className="mb-2 text-xs text-text-muted">{copyFeedback}</p>
-            ) : null}
-            <pre className="whitespace-pre-wrap break-all font-mono text-xs text-text-main">
-              {HOST_VERIFY_COMMAND}
-            </pre>
           </div>
         </aside>
       </div>
-    </div>
-  );
-}
-
-function inputClass(hasError: boolean) {
-  return cn(
-    "h-10 w-full rounded-lg border bg-surface-container px-3 text-sm outline-none transition focus:border-primary/50",
-    hasError ? "border-error/60" : "border-white/10",
-  );
-}
-
-function Field({
-  children,
-  error,
-  label,
-}: Readonly<{ children: React.ReactNode; error?: string; label: string }>) {
-  return (
-    <label className="block">
-      <span className="mb-1.5 block text-sm font-medium text-text-main">
-        {label}
-      </span>
-      {children}
-      {error ? (
-        <span className="mt-1.5 block text-xs text-error">{error}</span>
-      ) : null}
-    </label>
+    </section>
   );
 }

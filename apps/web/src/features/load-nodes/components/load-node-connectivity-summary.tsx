@@ -1,4 +1,7 @@
+import { Link } from "react-router-dom";
+
 import type { LoadNodeConnectivitySummary } from "../../../app/api-client";
+import { cn } from "../../../utils/cn";
 
 type Props = Readonly<{
   summary?: LoadNodeConnectivitySummary;
@@ -6,10 +9,6 @@ type Props = Readonly<{
   loadFailed?: boolean;
   successContext?: boolean;
 }>;
-
-function cn(...inputs: (string | boolean | null | undefined)[]) {
-  return inputs.filter(Boolean).join(" ");
-}
 
 function badgeTone(readiness?: LoadNodeConnectivitySummary["readiness"]) {
   if (readiness === "ready") {
@@ -81,12 +80,12 @@ export function LoadNodeConnectivitySummaryCard({
           until the Load Node API Base URL is fixed.
           <div className="mt-2">
             {isAdmin ? (
-              <a
+              <Link
                 className="font-semibold underline underline-offset-4"
-                href="/admin/system-settings"
+                to="/admin/system-settings"
               >
                 Open System Settings
-              </a>
+              </Link>
             ) : (
               <span>Contact an administrator to update System Settings.</span>
             )}

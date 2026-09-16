@@ -1,10 +1,10 @@
 import type {
   CurlImportStepDraft,
+  OpenApiGeneratedStepDraft,
   ScenarioCreateRequest,
   ScenarioDetail,
   ScenarioPatchRequest,
   ScenarioStep,
-  OpenApiGeneratedStepDraft,
 } from "../../app/api-client";
 
 export type ScenarioNamedValue = NonNullable<
@@ -20,12 +20,8 @@ export type ScenarioDataSource = NonNullable<
   ScenarioDetail["dataSources"]
 >[number];
 export type ScenarioVariable = NonNullable<ScenarioDetail["variables"]>[number];
-export type ScenarioExtractor = NonNullable<
-  ScenarioStep["extractors"]
->[number];
-export type ScenarioAssertion = NonNullable<
-  ScenarioStep["assertions"]
->[number];
+export type ScenarioExtractor = NonNullable<ScenarioStep["extractors"]>[number];
+export type ScenarioAssertion = NonNullable<ScenarioStep["assertions"]>[number];
 export type ScenarioScript = NonNullable<ScenarioStep["scripts"]>[number];
 
 export const defaultSettings = {
@@ -113,7 +109,7 @@ export function newScript(execute: ScenarioScript["execute"]): ScenarioScript {
     id: ulid(),
     execute,
     language: "groovy",
-    scriptText: "",
+    dependencyFileId: "",
     enabled: true,
   };
 }
@@ -185,26 +181,22 @@ export function cloneStep(step: ScenarioStep): ScenarioStep {
 }
 
 function materializeNamedValue<
-  T extends { name: string; value?: string; enabled?: boolean },
+  T extends { name: string; value: string; enabled?: boolean },
 >(item: T) {
   return {
     id: ulid(),
     name: item.name,
-    value: item.value ?? "",
+    value: item.value,
     enabled: item.enabled ?? true,
   };
 }
 
-/**
- * Materializes a request-only cURL import Step draft into an editable Scenario
- * Step. The API preview never returns persistent IDs, so the merge layer owns
- * every Step and child ID here.
- */
-export function stepFromCurlImportDraft(
-  draft: CurlImportStepDraft,
-  preserveStepId?: string,
+function stepFromGeneratedDraft(
+  draft: CurlImportStepDraft | OpenApiGeneratedStepDraft,
+  options: { preserveStepId?: string; includeDefaultAssertions?: boolean } = {},
 ): ScenarioStep {
   const base = newStep();
+  const includeDefaultAssertions = options.includeDefaultAssertions ?? true;
   const body = draft.body ?? {
     type: "none" as const,
     contentType: null,
@@ -213,7 +205,7 @@ export function stepFromCurlImportDraft(
   };
   return {
     ...base,
-    id: preserveStepId ?? base.id,
+    id: options.preserveStepId ?? base.id,
     enabled: draft.enabled ?? true,
     name: draft.name,
     method: draft.method,
@@ -228,6 +220,7 @@ export function stepFromCurlImportDraft(
     },
     uploadFiles: [],
     extractors: [],
+    assertions: includeDefaultAssertions ? base.assertions : [],
     scripts: [],
     settings: {
       thinkTimeMs: null,
@@ -236,43 +229,19 @@ export function stepFromCurlImportDraft(
       keepAlive: draft.settings?.keepAlive ?? null,
     },
   };
+}
+
+export function stepFromCurlImportDraft(
+  draft: CurlImportStepDraft,
+  preserveStepId?: string,
+): ScenarioStep {
+  return stepFromGeneratedDraft(draft, { preserveStepId });
 }
 
 export function stepFromOpenApiGeneratedDraft(
   draft: OpenApiGeneratedStepDraft,
 ): ScenarioStep {
-  const base = newStep();
-  const body = draft.body ?? {
-    type: "none" as const,
-    contentType: null,
-    rawText: null,
-    formFields: [],
-  };
-  return {
-    ...base,
-    enabled: draft.enabled ?? true,
-    name: draft.name,
-    method: draft.method,
-    path: draft.path,
-    queryParams: (draft.queryParams ?? []).map(materializeNamedValue),
-    headers: (draft.headers ?? []).map(materializeNamedValue),
-    body: {
-      type: body.type ?? "none",
-      contentType: body.contentType ?? null,
-      rawText: body.rawText ?? null,
-      formFields: (body.formFields ?? []).map(materializeNamedValue),
-    },
-    uploadFiles: [],
-    extractors: [],
-    assertions: [],
-    scripts: [],
-    settings: {
-      thinkTimeMs: null,
-      timeoutMs: draft.settings?.timeoutMs ?? null,
-      followRedirects: draft.settings?.followRedirects ?? null,
-      keepAlive: draft.settings?.keepAlive ?? null,
-    },
-  };
+  return stepFromGeneratedDraft(draft, { includeDefaultAssertions: false });
 }
 
 export function blankScenarioPayload(
@@ -302,9 +271,9 @@ export function toPatchPayload(
     tags: detail.tags,
     baseUrlExpression: detail.baseUrlExpression,
     defaultSettings: detail.defaultSettings,
-    globalHeaders: detail.globalHeaders ?? [],
-    variables: detail.variables ?? [],
-    dataSources: detail.dataSources ?? [],
+    globalHeaders: detail.globalHeaders,
+    variables: detail.variables,
+    dataSources: detail.dataSources,
     steps: detail.steps,
   };
 }

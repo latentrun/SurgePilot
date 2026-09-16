@@ -65,7 +65,7 @@ export function toPatchPayload(detail: TestPlanDetail): TestPlanPatchRequest {
       scenarioId: item.scenarioId,
       enabled: true,
       order: index,
-      loadSettings: item.loadSettings ?? { ...defaultLoadSettings },
+      loadSettings: item.loadSettings ?? defaultLoadSettings,
     })),
     slaRules: detail.slaRules.map((rule) => ({
       id: rule.id,
@@ -141,13 +141,15 @@ const STANDARD_ONLY_NOT_RUNNABLE_REASONS = new Set([
 
 export function canRunDraft(detail: TestPlanDetail | null) {
   if (!detail) return false;
-  const mode = detail.resource.mode ?? "manual";
-  const hasResource = mode === "auto"
-    ? Boolean(detail.resource.poolType && detail.resource.nodeCount)
-    : Boolean(
-        detail.resource.poolType &&
-        (detail.resource.selectedNodeIds?.length || detail.resource.selectedNodeId),
-      );
+  const resourceMode = detail.resource.mode ?? "manual";
+  const hasResource =
+    resourceMode === "auto"
+      ? Boolean(detail.resource.poolType && detail.resource.nodeCount)
+      : Boolean(
+          detail.resource.poolType &&
+            (detail.resource.selectedNodeIds?.length ||
+              detail.resource.selectedNodeId),
+        );
   return (
     detail.scenarioItems.length > 0 &&
     hasResource
@@ -160,9 +162,8 @@ export function canDebugSavedPlan(detail: TestPlanDetail | null) {
     detail.scenarioItems.length === 0 ||
     !detail.resource.poolType ||
     !detail.resource.selectedNodeId
-  ) {
+  )
     return false;
-  }
   if (detail.runnable) return true;
   return (
     detail.notRunnableReasons.length > 0 &&
@@ -183,43 +184,23 @@ export function expectedConcurrency(detail: TestPlanDetail | null) {
     : Math.max(...values);
 }
 
-export type LoadSettingsProblemKey =
-  | "termination"
-  | "stepsRequireRampUp"
-  | "targetRpsRequiresHoldFor";
-
-export function loadSettingsProblem(
-  item: TestPlanScenarioItem,
-): LoadSettingsProblemKey | null {
-  const settings = item.loadSettings ?? defaultLoadSettings;
-  const hasHold =
-    settings.holdForSeconds !== null && settings.holdForSeconds !== undefined;
-  const hasIterations =
-    settings.iterations !== null && settings.iterations !== undefined;
-  if (hasHold === hasIterations) return "termination";
-  if (settings.steps && settings.rampUpSeconds <= 0) {
-    return "stepsRequireRampUp";
-  }
-  if (settings.targetRps && !hasHold) {
-    return "targetRpsRequiresHoldFor";
-  }
-  return null;
-}
-
 export function validateLoadSettings(detail: TestPlanDetail | null) {
   if (!detail) return [];
   const errors: string[] = [];
   detail.scenarioItems.forEach((item, index) => {
-    const problem = loadSettingsProblem(item);
-    if (problem === "termination") {
+    const settings = item.loadSettings ?? defaultLoadSettings;
+    const hasHold =
+      settings.holdForSeconds !== null && settings.holdForSeconds !== undefined;
+    const hasIterations =
+      settings.iterations !== null && settings.iterations !== undefined;
+    if (hasHold === hasIterations)
       errors.push(testPlanCopy.loadSettingErrors.termination(index + 1));
-    } else if (problem === "stepsRequireRampUp") {
+    if (settings.steps && settings.rampUpSeconds <= 0)
       errors.push(testPlanCopy.loadSettingErrors.stepsRequireRampUp(index + 1));
-    } else if (problem === "targetRpsRequiresHoldFor") {
+    if (settings.targetRps && !hasHold)
       errors.push(
         testPlanCopy.loadSettingErrors.targetRpsRequiresHoldFor(index + 1),
       );
-    }
   });
   return errors;
 }

@@ -1,0 +1,23 @@
+{
+  "source": "Stitch",
+  "projectId": "17419140391009354434",
+  "assets": [
+    {
+      "name": "SurgePilot Minimal Crystalline Logo",
+      "screenId": "d42531ed4d284d6aafcf2b0442ea68ab",
+      "file": "logo.svg",
+      "format": "image/svg+xml",
+      "width": 400,
+      "height": 400
+    },
+    {
+      "name": "SurgePilot Home Radial Topology",
+      "screenId": "68be6dec901e4fca88e3889c2bbd0413",
+      "file": "home.html",
+      "format": "text/html",
+      "width": 2560,
+      "height": 15420
+    }
+  ],
+  "runtimePolicy": "Reference files are design inputs only. Runtime Web assets must be local and must not request Stitch, Google Fonts, Tailwind CDN, Material Symbols, or googleusercontent assets."
+}

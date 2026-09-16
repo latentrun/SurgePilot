@@ -2,6 +2,7 @@ export const testPlanCopy = {
   title: "Test Plans",
   subtitle:
     "Orchestrate saved Scenarios, load settings, resources, and SLAs for repeatable runs.",
+  listEyebrow: "Execution design",
   emptyTitle: "No test plans yet",
   emptyDescription:
     "Create a Test Plan to combine Scenarios with load settings and a Load Node.",
@@ -12,15 +13,9 @@ export const testPlanCopy = {
   archiveTitle: "Archive Test Plan",
   archiveBody:
     "This Test Plan will be hidden from active lists. Historical Run Reports keep their saved snapshots.",
-  resourceInUse:
-    "Test Plan cannot be archived while it is referenced by active execution state or visible dependent resources.",
   highConcurrencyTitle: "Confirm high concurrency",
   highConcurrencyBody:
     "This run exceeds the configured single-node soft limit. Confirm that the selected node is prepared for this load.",
-  highConcurrencyMeta: (value: number, softLimit: number) =>
-    `Expected: ${value} / Soft limit: ${softLimit}`,
-  highConcurrencyFromList:
-    "Open the editor to confirm high concurrency before running.",
   unsavedPrompt: "You have unsaved Test Plan changes. Leave without saving?",
   staleRevision: "Test Plan changed elsewhere. Reload and try again.",
   notRunnable: "Complete the required sections before starting a Run.",
@@ -29,21 +24,22 @@ export const testPlanCopy = {
   listLoadError: "Unable to load Test Plans.",
   detailLoadError: "Unable to load Test Plan.",
   actionFailed: "Action failed. Refresh and try again.",
-  nodeBusy: "Selected Load Node is no longer idle. Refresh resources and try again.",
-  validationError:
-    "Review the highlighted Test Plan settings before running.",
+  resourceInUse:
+    "Test Plan cannot be archived while it is referenced by active execution state or visible dependent resources.",
+  nodeBusy:
+    "Selected Load Node is no longer idle. Refresh resources and try again.",
+  highConcurrencyFromList:
+    "Open the editor to confirm high concurrency before running.",
+  validationError: "Review the highlighted Test Plan settings before running.",
   backToList: "← Test Plans",
   untitled: "Untitled Test Plan",
   saved: "Saved",
   unsaved: "Unsaved changes",
   save: "Save",
-  saving: "Saving...",
   debug: "Debug",
   saveAndDebug: "Save and Debug",
   runNow: "Run Now",
   saveAndRunNow: "Save and Run Now",
-  startingDebug: "Starting Debug Run...",
-  startingRun: "Starting Run...",
   cancel: "Cancel",
   create: "Create",
   clone: "Clone",
@@ -64,6 +60,7 @@ export const testPlanCopy = {
     "Rules define failure conditions for Standard Runs. Examples: fail > 1%, avg_rt > 1000ms, and p95 > 2000ms. Up to five rules are evaluated.",
   addRule: "Add Rule",
   noSlaRules: "No SLA Rules configured.",
+  actions: "Actions",
   actionsHelp: "Runs always use the latest saved Test Plan revision.",
   expectedConcurrencyLabel: "Expected single-node concurrency",
   searchLabel: "Search test plans",
@@ -71,8 +68,6 @@ export const testPlanCopy = {
   sortLabel: "Sort test plans",
   noEnvironment: "No environment",
   noNode: "No node",
-  noNodes: "No idle Load Nodes are available for the selected pool.",
-  noScenarios: "No saved Scenarios are available to add.",
   noTags: "No tags",
   previewTitle: "Generated YAML Preview",
   previewDescription:
@@ -94,6 +89,8 @@ export const testPlanCopy = {
     `Revision ${revision} · ${dirty ? "Unsaved changes" : "Saved"}`,
   expectedConcurrency: (value: number, softLimit: number) =>
     `Expected single-node concurrency: ${value} (soft limit ${softLimit})`,
+  highConcurrencyMeta: (value: number, softLimit: number) =>
+    `Expected: ${value} / Soft limit: ${softLimit}`,
   nodeOption: (host: string, status: string) => `${host} · ${status}`,
   loadSettingErrors: {
     termination: (index: number) =>

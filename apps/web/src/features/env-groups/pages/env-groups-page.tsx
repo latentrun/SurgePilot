@@ -1,11 +1,17 @@
+import { useEffect, useMemo, useState } from "react";
+import * as Dialog from "@radix-ui/react-dialog";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
-  createContext,
-  useCallback,
-  useContext,
-  useEffect,
-  useMemo,
-  useState,
-} from "react";
+  ChevronLeft,
+  ChevronRight,
+  Copy,
+  Pencil,
+  Plus,
+  RefreshCw,
+  Search,
+  Trash2,
+  X,
+} from "lucide-react";
 
 import {
   ApiError,
@@ -16,19 +22,17 @@ import {
   getEnvGroup,
   listEnvGroups,
   patchEnvGroup,
-  type EnvGroupCreateRequest,
   type EnvGroupDetail,
-  type EnvGroupPatchRequest,
   type EnvGroupSummary,
   type EnvGroupVariableRead,
   type EnvGroupVariableWrite,
 } from "../../../app/api-client";
 import { useAuthSession } from "../../../app/auth-session";
 import { useWorkspaceSwitchGuard } from "../../../app/workspace-switch-guard";
+import { cn } from "../../../utils/cn";
 
 type FormMode = "create" | "edit";
 type VariableType = "plain" | "secret";
-
 type VariableRow = {
   id: string;
   key: string;
@@ -91,18 +95,17 @@ function variablesFromRows(
 ): Record<string, EnvGroupVariableWrite> {
   return Object.fromEntries(
     rows
-      .filter((row) => row.key.trim() !== "")
+      .filter((row) => row.key !== "")
       .map((row) => {
-        const key = row.key.trim();
         if (row.type === "secret") {
           const entry: EnvGroupVariableWrite =
             row.hasExistingSecret && row.value === ""
               ? { type: "secret" }
               : { type: "secret", value: row.value };
-          return [key, entry];
+          return [row.key, entry];
         }
         return [
-          key,
+          row.key,
           { type: "plain", value: row.value } satisfies EnvGroupVariableWrite,
         ];
       }),
@@ -203,297 +206,8 @@ function useCsrfToken() {
   return async () => csrfToken ?? (await getCsrfToken()).csrfToken;
 }
 
-function cn(...inputs: (string | boolean | null | undefined)[]) {
-  return inputs.filter(Boolean).join(" ");
-}
-
-const DialogContext = createContext<{ onClose: () => void }>({
-  onClose: () => {},
-});
-
-const Dialog = {
-  Root({
-    children,
-    onOpenChange,
-    open,
-  }: {
-    children: React.ReactNode;
-    onOpenChange?: (open: boolean) => void;
-    open: boolean;
-  }) {
-    if (!open) return null;
-    const onClose = () => onOpenChange?.(false);
-    return (
-      <DialogContext.Provider value={{ onClose }}>
-        <div data-dialog-root="">{children}</div>
-      </DialogContext.Provider>
-    );
-  },
-  Portal({ children }: { children: React.ReactNode }) {
-    return <>{children}</>;
-  },
-  Overlay({
-    className,
-    onClick,
-  }: {
-    className?: string;
-    onClick?: () => void;
-  }) {
-    const { onClose } = useContext(DialogContext);
-    return (
-      <div
-        aria-hidden="true"
-        className={
-          className ?? "fixed inset-0 z-50 bg-black/50 backdrop-blur-sm"
-        }
-        onClick={() => {
-          onClick?.();
-          onClose();
-        }}
-      />
-    );
-  },
-  Content({
-    "aria-label": ariaLabel,
-    children,
-    className,
-  }: {
-    "aria-label"?: string;
-    children: React.ReactNode;
-    className?: string;
-  }) {
-    return (
-      <div
-        aria-label={ariaLabel}
-        aria-modal="true"
-        className={className}
-        role="dialog"
-      >
-        {children}
-      </div>
-    );
-  },
-  Title({
-    children,
-    className,
-  }: {
-    children: React.ReactNode;
-    className?: string;
-  }) {
-    return <h2 className={className}>{children}</h2>;
-  },
-  Description({
-    children,
-    className,
-  }: {
-    children: React.ReactNode;
-    className?: string;
-  }) {
-    return <p className={className}>{children}</p>;
-  },
-  Close({
-    children,
-    className,
-    onClick,
-  }: {
-    children: React.ReactNode;
-    className?: string;
-    onClick?: () => void;
-  }) {
-    const { onClose } = useContext(DialogContext);
-    return (
-      <button
-        aria-label="Close"
-        className={className}
-        onClick={() => {
-          onClick?.();
-          onClose();
-        }}
-        type="button"
-      >
-        {children}
-      </button>
-    );
-  },
-};
-
-function Plus({ className }: { className?: string }) {
-  return (
-    <svg
-      aria-hidden="true"
-      className={className}
-      fill="none"
-      height="16"
-      stroke="currentColor"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      strokeWidth="2"
-      viewBox="0 0 24 24"
-      width="16"
-    >
-      <path d="M5 12h14M12 5v14" />
-    </svg>
-  );
-}
-
-function Search({ className }: { className?: string }) {
-  return (
-    <svg
-      aria-hidden="true"
-      className={className}
-      fill="none"
-      height="16"
-      stroke="currentColor"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      strokeWidth="2"
-      viewBox="0 0 24 24"
-      width="16"
-    >
-      <circle cx="11" cy="11" r="8" />
-      <path d="m21 21-4.3-4.3" />
-    </svg>
-  );
-}
-
-function Pencil({ className }: { className?: string }) {
-  return (
-    <svg
-      aria-hidden="true"
-      className={className}
-      fill="none"
-      height="16"
-      stroke="currentColor"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      strokeWidth="2"
-      viewBox="0 0 24 24"
-      width="16"
-    >
-      <path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z" />
-      <path d="m15 5 4 4" />
-    </svg>
-  );
-}
-
-function Copy({ className }: { className?: string }) {
-  return (
-    <svg
-      aria-hidden="true"
-      className={className}
-      fill="none"
-      height="16"
-      stroke="currentColor"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      strokeWidth="2"
-      viewBox="0 0 24 24"
-      width="16"
-    >
-      <rect height="13" rx="2" ry="2" width="13" x="9" y="9" />
-      <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
-    </svg>
-  );
-}
-
-function Trash2({ className }: { className?: string }) {
-  return (
-    <svg
-      aria-hidden="true"
-      className={className}
-      fill="none"
-      height="16"
-      stroke="currentColor"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      strokeWidth="2"
-      viewBox="0 0 24 24"
-      width="16"
-    >
-      <path d="M3 6h18M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2M10 11v6M14 11v6" />
-    </svg>
-  );
-}
-
-function RefreshCw({ className }: { className?: string }) {
-  return (
-    <svg
-      aria-hidden="true"
-      className={className}
-      fill="none"
-      height="16"
-      stroke="currentColor"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      strokeWidth="2"
-      viewBox="0 0 24 24"
-      width="16"
-    >
-      <path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8" />
-      <path d="M21 3v5h-5M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16" />
-      <path d="M8 16H3v5" />
-    </svg>
-  );
-}
-
-function ChevronLeft({ className }: { className?: string }) {
-  return (
-    <svg
-      aria-hidden="true"
-      className={className}
-      fill="none"
-      height="16"
-      stroke="currentColor"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      strokeWidth="2"
-      viewBox="0 0 24 24"
-      width="16"
-    >
-      <path d="m15 18-6-6 6-6" />
-    </svg>
-  );
-}
-
-function ChevronRight({ className }: { className?: string }) {
-  return (
-    <svg
-      aria-hidden="true"
-      className={className}
-      fill="none"
-      height="16"
-      stroke="currentColor"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      strokeWidth="2"
-      viewBox="0 0 24 24"
-      width="16"
-    >
-      <path d="m9 18 6-6-6-6" />
-    </svg>
-  );
-}
-
-function X({ className }: { className?: string }) {
-  return (
-    <svg
-      aria-hidden="true"
-      className={className}
-      fill="none"
-      height="16"
-      stroke="currentColor"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      strokeWidth="2"
-      viewBox="0 0 24 24"
-      width="16"
-    >
-      <path d="M18 6 6 18M6 6l12 12" />
-    </svg>
-  );
-}
-
 export function EnvGroupsPage() {
+  const queryClient = useQueryClient();
   const { session } = useAuthSession();
   const getWriteToken = useCsrfToken();
   const [q, setQ] = useState("");
@@ -503,103 +217,70 @@ export function EnvGroupsPage() {
   const [form, setForm] = useState<FormState>(emptyForm);
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
   const [formApiError, setFormApiError] = useState<string | null>(null);
-  const [deleteTarget, setDeleteTarget] = useState<EnvGroupSummary | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<EnvGroupSummary | null>(
+    null,
+  );
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [page, setPage] = useState(1);
 
-  const [items, setItems] = useState<EnvGroupSummary[]>([]);
-  const [total, setTotal] = useState(0);
-  const [isLoading, setIsLoading] = useState(true);
-  const [isFetching, setIsFetching] = useState(false);
-  const [listError, setListError] = useState<unknown | null>(null);
-
-  const [detailLoading, setDetailLoading] = useState(false);
-  const [detailError, setDetailError] = useState<unknown | null>(null);
-
-  const [isSaving, setIsSaving] = useState(false);
-  const [isDuplicating, setIsDuplicating] = useState(false);
-  const [isDeleting, setIsDeleting] = useState(false);
-
   const workspaceId = session?.defaultWorkspace.id ?? "";
-
-  const fetchList = useCallback(async () => {
-    if (!workspaceId) return;
-    setIsFetching(true);
-    try {
-      const data = await listEnvGroups({
-        workspaceId,
-        page,
-        pageSize,
-        q,
-        sort: "-createdAt",
-      });
-      setItems(data.items);
-      setTotal(data.total);
-      setListError(null);
-    } catch (err) {
-      setListError(err);
-    } finally {
-      setIsLoading(false);
-      setIsFetching(false);
-    }
-  }, [workspaceId, page, q]);
+  const listQueryKey = ["env-groups", workspaceId, q, page];
+  const listQuery = useQuery({
+    enabled: session !== null,
+    queryKey: listQueryKey,
+    queryFn: () =>
+      listEnvGroups({ workspaceId, page, pageSize, q, sort: "-createdAt" }),
+  });
+  const detailQuery = useQuery({
+    enabled: formOpen && formMode === "edit" && editingId !== null,
+    queryKey: ["env-group", workspaceId, editingId],
+    queryFn: () => getEnvGroup(editingId as string, workspaceId),
+  });
 
   useEffect(() => {
-    if (session !== null) {
-      void fetchList();
+    if (
+      formOpen &&
+      formMode === "edit" &&
+      editingId !== null &&
+      detailQuery.data
+    ) {
+      setForm(detailToForm(detailQuery.data));
+      setFormErrors({});
+      setFormApiError(null);
     }
-  }, [session, fetchList]);
+  }, [detailQuery.data, editingId, formMode, formOpen]);
 
-  useEffect(() => {
-    if (formOpen && formMode === "edit" && editingId !== null && workspaceId) {
-      setDetailLoading(true);
-      setDetailError(null);
-      getEnvGroup(editingId, workspaceId)
-        .then((detail) => {
-          setForm(detailToForm(detail));
-          setFormErrors({});
-          setFormApiError(null);
-        })
-        .catch((err) => {
-          setDetailError(err);
-        })
-        .finally(() => {
-          setDetailLoading(false);
-        });
-    }
-  }, [editingId, formMode, formOpen, workspaceId]);
-
-  const isEmpty = !isLoading && !listError && items.length === 0;
+  const rows = listQuery.data?.items ?? [];
+  const isEmpty =
+    !listQuery.isLoading && !listQuery.isError && rows.length === 0;
+  const total = listQuery.data?.total ?? 0;
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
-  const canPageBackward = page > 1 && !isFetching;
-  const canPageForward = page < totalPages && !isFetching;
+  const canPageBackward = page > 1 && !listQuery.isFetching;
+  const canPageForward = page < totalPages && !listQuery.isFetching;
 
-  async function handleSave() {
-    setIsSaving(true);
-    setFormApiError(null);
-    try {
+  const saveMutation = useMutation({
+    mutationFn: async () => {
       const token = await getWriteToken();
-      const payload: EnvGroupCreateRequest | EnvGroupPatchRequest = {
-        name: form.name.trim(),
-        description: form.description.trim() || null,
+      const payload = {
+        name: form.name,
+        description: form.description,
         variables: variablesFromRows(form.variables),
       };
       if (formMode === "create") {
-        await createEnvGroup(payload as EnvGroupCreateRequest, workspaceId, token);
-      } else {
-        await patchEnvGroup(
-          editingId as string,
-          payload as EnvGroupPatchRequest,
-          workspaceId,
-          token,
-        );
+        return createEnvGroup(payload, workspaceId, token);
       }
+      return patchEnvGroup(editingId as string, payload, workspaceId, token);
+    },
+    onSuccess: async () => {
       setPage(1);
-      await fetchList();
+      await queryClient.invalidateQueries({
+        queryKey: ["env-groups", workspaceId],
+      });
       setFormOpen(false);
       setEditingId(null);
       setForm(emptyForm);
-    } catch (error) {
+    },
+    onError: (error) => {
       if (
         error instanceof ApiError &&
         error.body.code === "ENV_GROUP_NAME_CONFLICT"
@@ -630,38 +311,34 @@ export function EnvGroupsPage() {
         return;
       }
       setFormApiError(errorMessage(error));
-    } finally {
-      setIsSaving(false);
-    }
-  }
+    },
+  });
 
-  async function handleDuplicate(id: string) {
-    setIsDuplicating(true);
-    try {
-      const token = await getWriteToken();
-      await duplicateEnvGroup(id, workspaceId, token);
+  const duplicateMutation = useMutation({
+    mutationFn: async (envGroupId: string) =>
+      duplicateEnvGroup(envGroupId, workspaceId, await getWriteToken()),
+    onSuccess: async () => {
       setPage(1);
-      await fetchList();
-    } catch (error) {
-      console.error(error);
-    } finally {
-      setIsDuplicating(false);
-    }
-  }
+      await queryClient.invalidateQueries({
+        queryKey: ["env-groups", workspaceId],
+      });
+    },
+  });
 
-  async function handleDelete(id: string) {
-    setIsDeleting(true);
-    setDeleteError(null);
-    try {
-      const token = await getWriteToken();
-      await deleteEnvGroup(id, workspaceId, token);
-      if (items.length === 1 && page > 1) {
+  const deleteMutation = useMutation({
+    mutationFn: async (envGroupId: string) =>
+      deleteEnvGroup(envGroupId, workspaceId, await getWriteToken()),
+    onSuccess: async () => {
+      if (rows.length === 1 && page > 1) {
         setPage((current) => Math.max(1, current - 1));
       }
-      await fetchList();
+      await queryClient.invalidateQueries({
+        queryKey: ["env-groups", workspaceId],
+      });
       setDeleteTarget(null);
       setDeleteError(null);
-    } catch (error) {
+    },
+    onError: (error) => {
       if (error instanceof ApiError && error.body.code === "ENV_GROUP_IN_USE") {
         setDeleteError(
           "This Env Group is used by a scenario or test plan and cannot be deleted yet.",
@@ -669,10 +346,8 @@ export function EnvGroupsPage() {
         return;
       }
       setDeleteError(errorMessage(error));
-    } finally {
-      setIsDeleting(false);
-    }
-  }
+    },
+  });
 
   function openCreate() {
     setFormMode("create");
@@ -745,7 +420,11 @@ export function EnvGroupsPage() {
     if (Object.keys(nextErrors).length > 0) {
       return;
     }
-    await handleSave();
+    try {
+      await saveMutation.mutateAsync();
+    } catch {
+      // Mutation onError owns user-visible API errors.
+    }
   }
 
   return (
@@ -786,19 +465,19 @@ export function EnvGroupsPage() {
       </div>
 
       <section className="surgepilot-glass overflow-hidden rounded-xl">
-        {isLoading ? (
+        {listQuery.isLoading ? (
           <div className="p-8 text-sm text-text-muted">
             Loading Env Groups...
           </div>
         ) : null}
-        {listError ? (
+        {listQuery.isError ? (
           <div className="flex items-center justify-between gap-4 p-8">
             <p className="text-sm text-error">
-              {errorMessage(listError)}
+              {errorMessage(listQuery.error)}
             </p>
             <button
               className="inline-flex items-center gap-2 rounded-lg border border-white/10 px-3 py-2 text-sm text-text-main"
-              onClick={() => void fetchList()}
+              onClick={() => listQuery.refetch()}
               type="button"
             >
               <RefreshCw className="h-4 w-4" />
@@ -820,7 +499,7 @@ export function EnvGroupsPage() {
             </p>
           </div>
         ) : null}
-        {items.length > 0 ? (
+        {rows.length > 0 ? (
           <>
             <table className="w-full border-collapse text-left">
               <thead className="border-b border-white/10 bg-white/5">
@@ -843,7 +522,7 @@ export function EnvGroupsPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-white/5">
-                {items.map((group) => (
+                {rows.map((group) => (
                   <tr
                     className="transition hover:bg-white/[0.03]"
                     key={group.id}
@@ -874,9 +553,9 @@ export function EnvGroupsPage() {
                           <Pencil className="h-4 w-4" />
                         </IconButton>
                         <IconButton
-                          disabled={isDuplicating}
+                          disabled={duplicateMutation.isPending}
                           label={`Duplicate ${group.name}`}
-                          onClick={() => void handleDuplicate(group.id)}
+                          onClick={() => duplicateMutation.mutate(group.id)}
                         >
                           <Copy className="h-4 w-4" />
                         </IconButton>
@@ -925,10 +604,7 @@ export function EnvGroupsPage() {
       <Dialog.Root onOpenChange={setFormOpen} open={formOpen}>
         <Dialog.Portal>
           <Dialog.Overlay className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm" />
-          <Dialog.Content
-            aria-label={formMode === "create" ? "Create Env Group" : "Edit Env Group"}
-            className="fixed right-0 top-0 z-50 flex h-dvh w-full max-w-3xl flex-col border-l border-white/10 bg-surface-container-low shadow-2xl"
-          >
+          <Dialog.Content className="fixed right-0 top-0 z-50 flex h-dvh w-full max-w-3xl flex-col border-l border-white/10 bg-surface-container-low shadow-2xl">
             <div className="flex items-start justify-between border-b border-white/10 p-6">
               <div>
                 <Dialog.Title className="text-xl font-semibold text-white">
@@ -941,26 +617,23 @@ export function EnvGroupsPage() {
                   test plans can reuse.
                 </Dialog.Description>
               </div>
-              <Dialog.Close
-                className="rounded-lg p-2 text-secondary transition hover:bg-white/5 hover:text-white"
-                onClick={() => setFormOpen(false)}
-              >
+              <Dialog.Close className="rounded-lg p-2 text-secondary transition hover:bg-white/5 hover:text-white">
                 <X className="h-5 w-5" />
               </Dialog.Close>
             </div>
 
-            {formMode === "edit" && detailLoading ? (
+            {formMode === "edit" && detailQuery.isLoading ? (
               <div className="p-6 text-sm text-text-muted">
                 Loading Env Group...
               </div>
             ) : null}
-            {formMode === "edit" && detailError ? (
+            {formMode === "edit" && detailQuery.isError ? (
               <div className="p-6 text-sm text-error">
-                {errorMessage(detailError)}
+                {errorMessage(detailQuery.error)}
               </div>
             ) : null}
 
-            {(formMode === "create" || (!detailLoading && !detailError)) && (
+            {(formMode === "create" || detailQuery.data) && (
               <form
                 className="flex min-h-0 flex-1 flex-col"
                 onSubmit={handleSubmit}
@@ -1116,18 +789,15 @@ export function EnvGroupsPage() {
                   </div>
                 </div>
                 <div className="flex justify-end gap-3 border-t border-white/10 p-6">
-                  <Dialog.Close
-                    className="rounded-lg border border-white/10 px-4 py-2 text-sm text-text-main"
-                    onClick={() => setFormOpen(false)}
-                  >
+                  <Dialog.Close className="rounded-lg border border-white/10 px-4 py-2 text-sm text-text-main">
                     Cancel
                   </Dialog.Close>
                   <button
                     className="rounded-lg bg-primary-container px-4 py-2 font-mono text-[12px] font-bold uppercase tracking-wide text-on-primary disabled:cursor-not-allowed disabled:opacity-60"
-                    disabled={isSaving}
+                    disabled={saveMutation.isPending}
                     type="submit"
                   >
-                    {isSaving ? "Saving" : "Save Env Group"}
+                    {saveMutation.isPending ? "Saving" : "Save Env Group"}
                   </button>
                 </div>
               </form>
@@ -1142,10 +812,7 @@ export function EnvGroupsPage() {
       >
         <Dialog.Portal>
           <Dialog.Overlay className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm" />
-          <Dialog.Content
-            aria-label="Delete Env Group"
-            className="fixed left-1/2 top-1/2 z-50 w-[min(420px,calc(100vw-32px))] -translate-x-1/2 -translate-y-1/2 rounded-xl border border-white/10 bg-surface-container-low p-6 shadow-2xl"
-          >
+          <Dialog.Content className="fixed left-1/2 top-1/2 z-50 w-[min(420px,calc(100vw-32px))] -translate-x-1/2 -translate-y-1/2 rounded-xl border border-white/10 bg-surface-container-low p-6 shadow-2xl">
             <Dialog.Title className="text-lg font-semibold text-white">
               Delete Env Group
             </Dialog.Title>
@@ -1156,21 +823,18 @@ export function EnvGroupsPage() {
               <p className="mt-4 text-sm text-error">{deleteError}</p>
             ) : null}
             <div className="mt-6 flex justify-end gap-3">
-              <Dialog.Close
-                className="rounded-lg border border-white/10 px-4 py-2 text-sm text-text-main"
-                onClick={() => setDeleteTarget(null)}
-              >
+              <Dialog.Close className="rounded-lg border border-white/10 px-4 py-2 text-sm text-text-main">
                 Cancel
               </Dialog.Close>
               <button
                 className="rounded-lg bg-error-container px-4 py-2 text-sm font-semibold text-on-error-container disabled:cursor-not-allowed disabled:opacity-60"
-                disabled={isDeleting}
+                disabled={deleteMutation.isPending}
                 onClick={() =>
-                  deleteTarget && void handleDelete(deleteTarget.id)
+                  deleteTarget && deleteMutation.mutate(deleteTarget.id)
                 }
                 type="button"
               >
-                {isDeleting ? "Deleting" : "Delete"}
+                {deleteMutation.isPending ? "Deleting" : "Delete"}
               </button>
             </div>
           </Dialog.Content>

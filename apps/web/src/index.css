@@ -1,0 +1,112 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --color-background: #0a0e1a;
+  --color-border-subtle: rgba(255, 255, 255, 0.1);
+  --color-error: #ffb4ab;
+  --color-error-container: rgba(147, 0, 10, 0.32);
+  --color-on-error-container: #ffdad6;
+  --color-on-primary: #00363e;
+  --color-primary: #8aebff;
+  --color-primary-container: #22d3ee;
+  --color-secondary: #94a3b8;
+  --color-success: #2fd9a0;
+  --color-surface-container: rgba(255, 255, 255, 0.05);
+  --color-surface-container-low: #171b28;
+  --color-text-main: #dfe2f3;
+  --color-text-muted: #bbc9cd;
+  --color-warning: #ffd166;
+  --color-aurora-cyan: #06b6d4;
+  --color-aurora-magenta: #ec4899;
+  --color-aurora-purple: #6d28d9;
+}
+
+body {
+  margin: 0;
+  background: var(--color-background);
+  font-family:
+    Geist,
+    ui-sans-serif,
+    system-ui,
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    sans-serif;
+}
+
+body::selection {
+  background: rgba(34, 211, 238, 0.28);
+  color: var(--color-primary);
+}
+
+.surgepilot-aurora-surface {
+  background:
+    linear-gradient(135deg, rgba(6, 182, 212, 0.16), transparent 30%),
+    linear-gradient(225deg, rgba(109, 40, 217, 0.14), transparent 34%),
+    linear-gradient(315deg, rgba(236, 72, 153, 0.1), transparent 32%), #0a0e1a;
+}
+
+.surgepilot-aurora-surface::before {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  content: "";
+  background-image:
+    linear-gradient(rgba(255, 255, 255, 0.035) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.035) 1px, transparent 1px);
+  background-size: 56px 56px;
+  mask-image: linear-gradient(to bottom, rgba(0, 0, 0, 0.55), transparent 78%);
+}
+
+
+.surgepilot-sidebar-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: transparent transparent;
+  mask-image: linear-gradient(
+    to bottom,
+    transparent,
+    black 18px,
+    black calc(100% - 18px),
+    transparent
+  );
+}
+
+.surgepilot-sidebar-scroll:hover {
+  scrollbar-color: rgba(148, 163, 184, 0.45) transparent;
+}
+
+.surgepilot-sidebar-scroll::-webkit-scrollbar {
+  width: 6px;
+}
+
+.surgepilot-sidebar-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.surgepilot-sidebar-scroll::-webkit-scrollbar-thumb {
+  border-radius: 999px;
+  background: transparent;
+}
+
+.surgepilot-sidebar-scroll:hover::-webkit-scrollbar-thumb {
+  background: rgba(148, 163, 184, 0.45);
+}
+
+.surgepilot-glass {
+  border: 1px solid var(--color-border-subtle);
+  background: rgba(255, 255, 255, 0.05);
+  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.36);
+  backdrop-filter: blur(12px);
+}
+
+.surgepilot-hairline {
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(34, 211, 238, 0.75),
+    rgba(236, 72, 153, 0.46),
+    transparent
+  );
+}

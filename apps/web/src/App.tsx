@@ -1,111 +1,18 @@
-import { useEffect, useState } from "react";
+import { RouterProvider, createBrowserRouter } from "react-router-dom";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { useState } from "react";
 
-import { AuthSessionProvider, useAuthSession } from "./app/auth-session";
-import {
-  WorkspaceSwitchGuardProvider,
-  type WorkspaceSwitchGuard,
-} from "./app/workspace-switch-guard";
-import { LoginPage } from "./features/auth/pages/login-page";
-import { RegisterPage } from "./features/auth/pages/register-page";
-import { EnvGroupsPage } from "./features/env-groups/pages/env-groups-page";
-import { DependencyFilesPage } from "./features/dependency-files/pages/dependency-files-page";
-import { LoadNodesPage } from "./features/load-nodes/pages/load-nodes-page";
-import { RegisterLoadNodePage } from "./features/load-nodes/pages/register-load-node-page";
-import { ScenarioListPage } from "./features/scenarios/pages/scenario-list-page";
-import { ScenarioDesignerPage } from "./features/scenarios/pages/scenario-designer-page";
-import { TestPlanListPage } from "./features/test-plans/pages/test-plan-list-page";
-import { TestPlanEditorPage } from "./features/test-plans/pages/test-plan-editor-page";
-import { RunListPage } from "./features/runs/pages/run-list-page";
-import { RunReportPage } from "./features/runs/pages/run-report-page";
-import { MonitoringPage } from "./features/monitoring/pages/monitoring-page";
-import { AppLayout } from "./app/layouts/app-layout";
-import { OverviewPage } from "./features/overview/pages/overview-page";
-import { AdminSetupStatusPage } from "./features/admin/pages/setup-status-page";
-import { AdminWorkspacesPage } from "./features/admin/pages/workspaces-page";
-import { AdminUsersPage } from "./features/admin/pages/users-page";
-import { AdminSystemSettingsPage } from "./features/admin/pages/system-settings-page";
-import { ApiCatalogListPage } from "./features/api-catalog/pages/api-catalog-list-page";
-import { ApiCatalogDetailPage } from "./features/api-catalog/pages/api-catalog-detail-page";
-import { ApiKeysPage } from "./features/account/pages/api-keys-page";
-import { HelpPage } from "./features/help/pages/help-page";
-
-function LoadingPage() {
-  return (
-    <main>
-      <p>Loading SurgePilot…</p>
-    </main>
-  );
-}
-
-function AppRoutes({
-  workspaceSwitchGuard,
-}: Readonly<{ workspaceSwitchGuard: WorkspaceSwitchGuard | null }>) {
-  const { isAuthenticated, isRestoring } = useAuthSession();
-  const [pathname, setPathname] = useState(() => window.location.pathname);
-
-  useEffect(() => {
-    const onPopState = () => setPathname(window.location.pathname);
-    window.addEventListener("popstate", onPopState);
-    return () => window.removeEventListener("popstate", onPopState);
-  }, []);
-
-  if (isRestoring) return <LoadingPage />;
-  if (!isAuthenticated) return pathname === "/register" ? <RegisterPage /> : <LoginPage />;
-
-  let page: React.ReactNode;
-  if (pathname === "/assets/env-groups") {
-    page = <EnvGroupsPage />;
-  } else if (pathname === "/assets/dependency-files") {
-    page = <DependencyFilesPage />;
-  } else if (pathname.startsWith("/api-catalog/")) {
-    page = <ApiCatalogDetailPage specId={decodeURIComponent(pathname.slice("/api-catalog/".length))} />;
-  } else if (pathname === "/api-catalog") {
-    page = <ApiCatalogListPage />;
-  } else if (pathname === "/resources/load-nodes/new") {
-    page = <RegisterLoadNodePage />;
-  } else if (pathname === "/resources/load-nodes") {
-    page = <LoadNodesPage />;
-  } else if (pathname.startsWith("/scenarios/")) {
-    page = <ScenarioDesignerPage />;
-  } else if (pathname === "/scenarios") {
-    page = <ScenarioListPage />;
-  } else if (pathname.startsWith("/test-plans/")) {
-    page = <TestPlanEditorPage />;
-  } else if (pathname === "/test-plans") {
-    page = <TestPlanListPage />;
-  } else if (pathname === "/runs") {
-    page = <RunListPage />;
-  } else if (pathname.startsWith("/runs/")) {
-    const runId = decodeURIComponent(pathname.slice("/runs/".length));
-    page = <RunReportPage runId={runId} />;
-  } else if (pathname === "/observability/monitoring") {
-    page = <MonitoringPage />;
-  } else if (pathname === "/account/api-keys") {
-    page = <ApiKeysPage />;
-  } else if (pathname === "/help") {
-    page = <HelpPage />;
-  } else if (pathname === "/admin/setup-status") {
-    page = <AdminSetupStatusPage />;
-  } else if (pathname === "/admin/workspaces") {
-    page = <AdminWorkspacesPage />;
-  } else if (pathname === "/admin/users") {
-    page = <AdminUsersPage />;
-  } else if (pathname === "/admin/system-settings") {
-    page = <AdminSystemSettingsPage />;
-  } else {
-    page = <OverviewPage />;
-  }
-  return <AppLayout pathname={pathname} workspaceSwitchGuard={workspaceSwitchGuard}>{page}</AppLayout>;
-}
+import { AuthSessionProvider } from "./app/auth-session";
+import { routes } from "./app/router";
 
 export function App() {
-  const [guard, setGuard] = useState<WorkspaceSwitchGuard | null>(null);
+  const [queryClient] = useState(() => new QueryClient());
 
   return (
-    <AuthSessionProvider>
-      <WorkspaceSwitchGuardProvider onGuardChange={setGuard}>
-        <AppRoutes workspaceSwitchGuard={guard} />
-      </WorkspaceSwitchGuardProvider>
-    </AuthSessionProvider>
+    <QueryClientProvider client={queryClient}>
+      <AuthSessionProvider>
+        <RouterProvider router={createBrowserRouter(routes)} />
+      </AuthSessionProvider>
+    </QueryClientProvider>
   );
 }
