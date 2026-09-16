@@ -46,3 +46,16 @@ The approved visual source is the archived Stitch reference material in `referen
 - `docs/sdd/08-frontend-routing-and-ui-rules.md`
 - `docs/sdd/02-repo-structure-and-dev-workflow.md`
 - `apps/web/AGENTS.md`
+
+## Verification Backfill
+
+The reconstructed ADR-0013 verification is recorded in
+`docs/sdd/slices/P2-07-public-launch-github-pages-seo.md` §14. The self-hosted Landing route,
+Logo, and authentication behavior are covered by the Web feature tests in
+`apps/web/src/features/marketing/` and `apps/web/src/components/surgepilot-logo.test.tsx`, and
+the pre-routing crawler isolation that keeps every self-hosted Web route out of search results is
+covered by `tests/contract/test_p2_07_public_launch.py`, which checks the `apps/web`
+`robots`/`googlebot` directives and the Nginx `X-Robots-Tag` header. The public marketing homepage
+remains a separate static VitePress surface, and its visual-parity and synthetic-demonstration
+label checks live in `docs/site/tests/verify-built-site.mjs`, so no product API, database,
+migration, runner, contract, or external runtime design asset is introduced.

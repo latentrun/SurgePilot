@@ -90,7 +90,7 @@ help:
 	@printf "  make verify-p2-02-public-api-lifecycle  Run P2-02 Public API lifecycle E2E\n"
 	@printf "  make docs-site          Start the VitePress marketing and documentation site\n"
 	@printf "  make docs-site-build    Build the VitePress marketing and documentation site\n"
-	@printf "  make verify-p2-07-public-launch  Run the VitePress site test and P2-07 launch contract checks\n"
+	@printf "  make verify-p2-07-public-launch  Run the VitePress site test and P2-07 launch and localized-docs contract checks\n"
 	@printf "  make verify-p1-08-debug-http-trace-e2e  Run P1-08 Debug HTTP Trace browser acceptance\n"
 	@printf "  make verify-runner-ssh  Run near-real SSH/SFTP runner control smoke\n"
 	@printf "  make verify-runner-ssh-fast  Run SSH smoke with existing local image, without rebuilding\n"
@@ -450,7 +450,7 @@ docs-site-build:
 
 verify-p2-07-public-launch:
 	pnpm --filter @surgepilot/docs test
-	uv run --all-packages pytest tests/contract/test_p2_07_public_launch.py -q
+	uv run --all-packages pytest tests/contract/test_p2_07_public_launch.py tests/contract/test_user_docs_locales.py -q
 
 _verify-runner-ssh:
 	uv run --all-packages python scripts/run_runtime_builder.py --output-dir "$(RUNNER_SSH_RUNTIME_ARTIFACT_DIR)" --build-dir "$(RUNNER_SSH_RUNTIME_BUILD_DIR)" --cache-dir "$(RUNNER_SSH_RUNTIME_CACHE_DIR)" --env-file "$(RUNNER_SSH_RUNTIME_ENV_FILE)" --fixed-version "$(RUNNER_SSH_RUNTIME_VERSION)"

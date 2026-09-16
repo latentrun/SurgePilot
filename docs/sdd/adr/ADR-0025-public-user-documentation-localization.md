@@ -91,3 +91,15 @@ without adding useful isolation for six mirrored pages.
 - `docs/sdd/adr/ADR-0026-p2-public-launch-github-pages-seo.md`
 - `docs/site/.vitepress/config.mts`
 - `tests/contract/test_env_example_drift.py`
+
+## Verification Backfill
+
+The reconstructed ADR-0025 verification is recorded in
+`docs/sdd/slices/P2-07-public-launch-github-pages-seo.md` §14. `tests/contract/test_user_docs_locales.py`
+enforces the exact six-page English page set and the exact `zh-CN` and `ja` mirrors, requires
+locale-relative Markdown targets to resolve, and keeps every localized Configuration page aligned
+with the source and tagged-release `.env.example` key set. `docs/site/package.json` binds the
+VitePress build to `docs/site/tests/verify-built-site.mjs`, which confirms the localized pages emit
+meaningful static HTML with unique metadata, self-canonical URLs, and reciprocal
+`en`/`zh-CN`/`ja`/`x-default` alternates below the `/docs/` project base. Theme configuration and
+navigation stay explicit per locale with no browser-language detection or root redirect.

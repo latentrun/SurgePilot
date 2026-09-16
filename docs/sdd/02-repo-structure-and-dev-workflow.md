@@ -763,6 +763,16 @@ Rules:
 10. Purchased/fake Stars, fabricated benchmark/adoption/status/Star claims, hosted-service claims, blog/CMS,
    programmatic SEO, custom-domain launch, and automatic translation remain forbidden.
 
+Reconstruction verification backfill: the P2-07 acceptance commands are `make docs-site` and
+`make docs-site-build` for the VitePress package under `docs/site`, and
+`make verify-p2-07-public-launch`, which runs the built/rendered site verification together with
+`tests/contract/test_p2_07_public_launch.py` and `tests/contract/test_user_docs_locales.py`. The
+private build-and-verify workflow is `.github/workflows/pages-build.yml`, which holds
+`contents: read` only and no Pages deployment authority. Rendered browser, asset-budget, and
+anonymous repository/Release/Pages smoke steps remain environment- or launch-gated and are not
+part of default `make verify`. The full backfill is recorded in
+`docs/sdd/slices/P2-07-public-launch-github-pages-seo.md` §14.
+
 ---
 
 ## 6. Environment and Secrets

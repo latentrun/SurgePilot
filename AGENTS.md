@@ -323,6 +323,8 @@ make verify
 
 During Slice work, if full `make verify` is not available or the active Slice narrows validation, run the closest available subset, state the gap, and keep the implementation on a path that converges to `make verify`.
 
+P2-07 public-site work additionally uses `make docs-site`, `make docs-site-build`, and `make verify-p2-07-public-launch`; the last runs the built/rendered VitePress site verification together with `tests/contract/test_p2_07_public_launch.py` and `tests/contract/test_user_docs_locales.py`. The private build-and-verify workflow is `.github/workflows/pages-build.yml`, which holds `contents: read` only and no Pages deployment authority. Rendered browser, asset-budget, and anonymous repository/Release/Pages smoke checks remain environment- or launch-gated and are not part of default `make verify`.
+
 The P0-final target state for `make verify` includes at least:
 
 - lint and format checks.

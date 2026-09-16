@@ -236,3 +236,23 @@ P2-07 does not authorize:
 - `docs/sdd/slices/P2-06-lan-first-deployment-usability.md`
 - `docs/site`
 - `apps/web/src/features/marketing`
+
+## Verification Backfill
+
+The reconstructed ADR-0026 verification is recorded in
+`docs/sdd/slices/P2-07-public-launch-github-pages-seo.md` §14. `docs/site/tests/verify-built-site.mjs`
+checks the built marketing homepage and the eighteen documentation pages for unique metadata,
+self-canonical URLs, reciprocal locale alternates plus `x-default`, Open Graph and Twitter
+metadata, JSON-LD structured data, the canonical-only sitemap, the Pages-compatible `robots.txt`,
+and the `noindex` 404 page under the `/SurgePilot/` project base.
+`docs/site/tests/verify-browser.mjs` checks the rendered document head and locale navigation.
+`tests/contract/test_p2_07_public_launch.py` covers the self-hosted Web `noindex` isolation,
+landing markup parity, README and authorship evidence, License/Security/Contributing/Code of
+Conduct policies, repository metadata, the demo and launch material, and the private
+`.github/workflows/pages-build.yml` workflow, which holds `contents: read` only and no deployment
+authority. `tests/contract/test_user_docs_locales.py` covers the exact English/`zh-CN`/`ja` page
+sets. Verification commands are `make docs-site`, `make docs-site-build`,
+`make verify-p2-07-public-launch`, and full `make verify` before public candidate approval. The
+rendered browser and asset-budget checks require a local Node and Chromium runtime, and the
+anonymous repository, tagged Release, and Pages smoke steps remain gated by the owner-approved
+public launch.
