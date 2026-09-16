@@ -104,5 +104,12 @@ public workflow dispatch capability.
 - `apps/api/app/services/system_openapi_bootstrap.py` owns `build_curated_openapi_payload()`, `import_system_openapi()`, and `bootstrap_system_openapi_best_effort()`. The auth route invokes the wrapper only after an explicit `first_user=True` result, using an independent session and best-effort MinIO compensation.
 - Focused verification is recorded in `apps/api/tests/test_p2_04_openapi_export.py`, `apps/api/tests/test_p2_04_ai_skill.py`, `apps/api/tests/test_p2_04_system_openapi_bootstrap.py`, `tests/contract/test_p2_04_help_ai_agents_openapi.py`, `apps/web/src/features/help/help.test.tsx`, and `tests/e2e/p2_04_help_ai_agents.spec.ts`. Contract refresh uses `make generate-contracts`; the checkpoint's targeted verification commands are `make test`, `make lint`, `make contracts-stale-check`, `make verify`, and the focused Playwright command recorded in the Slice SDD.
 
+## P2-06 factual backfill
+
+- P2-06 is release-path only. The tagged-release wrapper is `infra/release/surgepilot`, the release Compose file is `infra/release/docker-compose.release.yml`, and the configuration, bootstrap, and node-facing helpers are `scripts/release_preflight.py`, `scripts/bootstrap_deployment_env.py`, and `scripts/node_facing_startup.py`.
+- Verification coverage is in `tests/test_release_wrapper.py`, `tests/test_release_preflight.py`, `tests/test_bootstrap_deployment_env.py`, `tests/test_node_facing_startup.py`, `tests/test_release_installer.py`, `tests/contract/test_p2_05_distribution.py`, `tests/contract/test_env_example_drift.py`, and `apps/api/tests/test_p0_00_services.py`; the environment-dependent LAN smoke is `scripts/verify_p2_05_release_stack.py` with `tests/test_p2_05_release_stack_verifier.py`.
+- The interaction contract is: a missing release `.env` requires an interactive host shell, the confirmed host and port values are persisted with Demo off, `amd64,arm64`, and `SESSION_COOKIE_SECURE=false`, a complete existing `.env` is described and read-only by default, an explicit `No` opens the standard-LAN four-field update, and non-interactive startup never prompts or rewrites.
+- Native Linux amd64/arm64 LAN external-node acceptance and the installer workflow smoke require native runners, Docker networking, and real SSH nodes, so they remain outside default `make verify`.
+
 Other P2 slices remain outside this checkpoint and require their own accepted scope and
 implementation history.

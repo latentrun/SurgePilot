@@ -1046,3 +1046,48 @@ Reviewers should explicitly confirm:
     correct fail-closed boundaries?
 11. Does allowing only explicit canonical loopback forms, with no default or new mode variable,
     provide local evaluation without weakening non-loopback release-smoke evidence?
+
+## 21. Reconstruction Verification Backfill
+
+The reconstructed P2-06 verification stays inside the `ADR-0018`, `ADR-0020`, `ADR-0021`, and
+`ADR-0024` boundary and adds no migration, API route, database table, Web page, service,
+dependency, installer format, or release mode. The authoritative focused coverage is:
+
+1. POSIX wrapper behavior in `tests/test_release_wrapper.py`: host and port prompt ownership, TTY
+   and non-TTY first run, default-Yes review, `No` re-entry and advanced-HTTPS exit, EOF and
+   invalid input, process-level quickstart override rejection, published-port reuse for the same
+   Compose project, non-destructive failure ordering, and bounded ready output.
+2. Release configuration primitives in `tests/test_release_preflight.py`: LAN host normalization
+   where bare and single-bracket IPv6 inputs render one identical bracketed origin, canonical
+   loopback local-only forms, legacy IPv4 and ambiguous-input rejection, strict
+   `SESSION_COOKIE_SECURE=true|false` parsing, direct-LAN port consistency, and the
+   `auto`/`amd64`/`arm64`/`amd64,arm64` Runtime boundary.
+3. Atomic release `.env` and optional Demo state in `tests/test_bootstrap_deployment_env.py`: the
+   seven persisted quickstart values, owner-only atomic publication, concurrent winner behavior,
+   existing-state reuse without repair, and Demo credential and SSH host-identity safety with
+   restart-stable fingerprints.
+4. Release Compose and workflow boundaries in `tests/contract/test_p2_05_distribution.py`: default
+   `8080`/`8086` publication, Demo-off default, required node-facing variables with no internal
+   fallback, no new raw service ports, source Compose internal defaults, and the non-interactive
+   complete-`.env` smoke fixtures. `tests/contract/test_env_example_drift.py` keeps the release and
+   source `.env.example` files aligned, and `tests/test_node_facing_startup.py` covers the shared
+   node-facing startup helpers.
+5. Strict session-cookie transport parsing in `apps/api/tests/test_p0_00_services.py`, which keeps
+   the dedicated parser stricter than the generic boolean helper and rejects empty, misspelled, and
+   numeric values.
+6. The release-stack LAN smoke in `scripts/verify_p2_05_release_stack.py` with
+   `tests/test_p2_05_release_stack_verifier.py`, and the remote node-write smoke in
+   `scripts/verify_p1_00_monitoring_remote_node_write.py` with
+   `tests/test_p1_00_monitoring_remote_node_write_verifier.py`.
+
+Verification commands are the focused `uv run --all-packages pytest` selections for the wrapper,
+preflight, bootstrap, node-facing startup, and installer suites, `make test`, `make verify`,
+`make verify-p2-05-release-stack`, and `make verify-p1-00-monitoring-remote-node-write`.
+
+Remaining risks: native Linux amd64/arm64 LAN external-node acceptance and the installer workflow
+smoke require native GitHub runners, Docker networking, and real SSH nodes, so they remain outside
+default `make verify`; Apple Silicon Docker Desktop and Intel macOS remain manual or best-effort
+records; the supported Docker and Compose minimum versions remain an operator prerequisite; and the
+reconstruction publishes as `latentrun/SurgePilot` on `main` with `ghcr.io/latentrun/*` images, so
+the frozen previous-owner repository, GHCR namespace, and non-`main` branch references are
+deliberately rewritten.

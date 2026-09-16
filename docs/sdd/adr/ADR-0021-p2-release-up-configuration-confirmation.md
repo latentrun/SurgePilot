@@ -155,3 +155,13 @@ automatic rollback.
 - `scripts/bootstrap_deployment_env.py`
 - `scripts/release_preflight.py`
 - `AGENTS.md`
+
+## Verification Backfill
+
+`tests/test_release_preflight.py` verifies the non-secret fixed-order configuration description and
+strict input validation; `tests/test_bootstrap_deployment_env.py` verifies that exactly the four
+allowlisted network assignments change and that LF/CRLF non-target bytes are preserved;
+`tests/test_release_wrapper.py` verifies default-Yes read-only acceptance, repeated `No` re-entry,
+the interactive four-field standard-LAN update, advanced-HTTPS manual-edit exit, EOF and invalid
+input, and that every failure path stops before Runtime or Compose side effects. The full P2-06
+verification backfill is recorded in `docs/sdd/slices/P2-06-lan-first-deployment-usability.md` §21.
