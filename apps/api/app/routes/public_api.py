@@ -827,6 +827,7 @@ def public_list_load_nodes(
                 status=node.status,
                 runner_version=node.runner_version,
                 bundle_version=node.bundle_version,
+                runtime_version=node.runtime_version,
                 last_checked_at=iso_z(node.last_checked_at),
                 last_heartbeat_at=iso_z(node.last_heartbeat_at),
                 created_at=iso_z(node.created_at) or "",
