@@ -1,115 +1,66 @@
-# P2 Slice index
+# P2 Slice writing brief / thin index
 
-P2 capabilities require a named accepted Slice SDD and its governing ADR. This index does not
-activate later capabilities by itself.
+## Purpose / Usage
 
-## Active reconstruction surface
+This document is only a P2 Slice writing brief and scope index. It does not replace the PRD, `docs/sdd/00-product-scope-and-priority.md`, `AGENTS.md`, ADRs, or any real Slice SDD.
 
-`P2-00-api-catalog-scalar.md` is active through `ADR-0010`. It covers documentation asset
-management only: upload, list, detail, authorized content proxy, delete, and read-only Scalar
-rendering. It does not authorize Scenario/Test Plan generation, operation import, request sending,
-or the P2-04 system OpenAPI bootstrap exception governed by `ADR-0016`.
+P2 capabilities remain inactive until a named accepted P2 Slice SDD and any required governance decision activate implementation. This index does not authorize implementation by itself. `P2-00-api-catalog-scalar.md` is active through `ADR-0010`; `P2-01-openapi-step-generation.md` is active through `ADR-0011`; `P2-02-public-api-substrate.md` is active through `ADR-0012`; `P2-03-env-group-secret.md` is active through `ADR-0014`; `P2-04-help-ai-agents-system-openapi-bootstrap.md` is active through `ADR-0016`; `P2-05-cross-platform-distribution.md` is active through `ADR-0017`, its source-preview amendment `ADR-0019`, and its user-local platform Release installer amendment `ADR-0024`; `P2-06-lan-first-deployment-usability.md` is active through `ADR-0018`, its new-release Runtime default amendment `ADR-0020`, its release `up` configuration confirmation amendment `ADR-0021`, and its separate installation amendment `ADR-0024` as release-path amendments to P2-05; `P2-07-public-launch-github-pages-seo.md` is active through `ADR-0026`. `ADR-0013` remains limited to the self-hosted static Marketing Landing / Logo only, while ADR-0026 separately governs the public Pages marketing site.
 
-`P2-01-openapi-step-generation.md` is active through `ADR-0011`. It covers Scenario-editor
-OpenAPI Step draft generation from authorized API Catalog spec assets; it does not authorize
-API Catalog generation actions, Scenario/Test Plan generation, remote fetches, or conversion
-services.
+## Authoritative References
 
-`P2-02-public-api-substrate.md` is active through `ADR-0012`. It covers Account self-service API
-keys on the browser session surface, PAT Bearer-authenticated public business operations under
-`/api/public/v1/*`, the separate public OpenAPI artifact, bounded public Dependency File
-operations, and one governed repo-maintained Public API AI skill source package. PAT
-create/list/revoke stays session-only and self-only; it does not authorize public key-management
-routes, admin-managed keys, an SDK, an MCP server, a skills runtime, or release publication of the
-skill.
+Use only these references for P2 Slice drafting decisions:
 
-`P2-03-env-group-secret.md` is active through `ADR-0014`. It covers Env Group `plain | secret`
-typed variables, session masked secret read models, session-only secret writes, plain-only public
-DTOs, the required one-time string-map-to-plain migration `0017_p2_03_env_group_secret`, and public
-API secret exclusion. It does not authorize Snapshot encryption, key rotation, a reveal API, or
-external Secret Manager integration.
+- P2 scope: `docs/sdd/00-product-scope-and-priority.md` §7.
+- Frontend planned-route boundary: `docs/sdd/08-frontend-routing-and-ui-rules.md` §5.4.
+- API contracts: `docs/sdd/04-api-contract-guidelines.md`.
+- Security and Workspace boundary: `docs/sdd/06-security-permission-workspace.md`.
+- Storage boundary: `docs/sdd/07-storage-artifacts-minio.md`.
+- Agent constraints for architecture, contracts, language, and verification gates: `AGENTS.md`.
 
-`P2-04-help-ai-agents-system-openapi-bootstrap.md` is active through `ADR-0016`. It covers
-authenticated Help AI Agents guidance, a session-authenticated request-built Public API AI skill
-source download, shared runtime/script OpenAPI export, and a best-effort first-Admin import of
-SurgePilot's own curated Web/business OpenAPI into the Default Workspace API Catalog. It does not
-authorize user/external automatic ingestion, retries/workers, SDK, MCP, marketplace, installer,
-release publication, built-in agent runtime, AI generation/tuning/analysis, or API Catalog to
-Scenario/Test Plan generation.
+## P2 Slice Index
 
-`P2-05-cross-platform-distribution.md` is active through `ADR-0017`, its source-preview amendment
-`ADR-0019`, and its user-local platform Release installer amendment `ADR-0024`. It covers one
-complete tagged-release mode: GHCR multi-architecture SurgePilot application images, a bounded
-GitHub Release bundle, a version-pinned user-local installer and bundle checksum, native-built
-Linux amd64/arm64 Runtime assets, release Compose plus `surgepilot up`, complete source Compose plus
-`make start-full-stack`, and a source-only control-plane preview through `make start-preview`. It
-does not authorize Kubernetes, package-manager or system installers, Docker Hub mirroring, an
-all-in-one image, native macOS Load Nodes/Runtime, automatic upgrades, a Runtime UI/catalog,
-signing or SBOM publication, or standalone Public API AI skill release.
+The following files are the current P2 Slice index. Real active Slice SDDs are authoritative only for their own scoped capability.
 
-`P2-06-lan-first-deployment-usability.md` is active through `ADR-0018`, its new-release Runtime
-default amendment `ADR-0020`, its release `up` configuration confirmation amendment `ADR-0021`,
-and its separate installation amendment `ADR-0024` as release-path amendments to P2-05. It covers
-the tagged-release LAN-first startup contract only: an interactive first-run host/port confirmation
-with a warned canonical-loopback evaluation exception, persisted node-facing URL/port consistency,
-Demo off by default, required node-facing origins, default authenticated InfluxDB publication, a
-strict session-cookie transport value, non-interactive complete-`.env` fixtures, a new-release
-`amd64,arm64` Runtime default without an architecture prompt, and read-only default-Yes release
-`up` configuration review with explicit interactive four-field standard-LAN updates. ADR-0017
-decisions 7 and 8 are superseded only as those amendments specify. It does not authorize network
-discovery, a Web/API configuration surface, automatic or non-interactive rewriting, advanced-HTTPS
-quick editing, non-network changes, source-startup changes, package-manager/system installers, or
-public workflow dispatch capability.
+1. `docs/sdd/slices/P2-00-api-catalog-scalar.md` -- active P2 Slice SDD for API Catalog documentation asset management using Scalar API Reference as the detail-page renderer, authorized by `docs/sdd/adr/ADR-0010-p2-api-catalog-scalar.md`. It does not authorize P0/P1 implementation or any API Catalog → Scenario/Test Plan generation chain.
+2. `docs/sdd/slices/P2-01-openapi-step-generation.md` -- active P2 Slice SDD for Scenario editor OpenAPI Step draft generation from authorized API Catalog spec assets, authorized by `docs/sdd/adr/ADR-0011-p2-openapi-step-generation.md`. It is not an API Catalog detail-page action and does not authorize Scenario/Test Plan generation chains.
+3. `docs/sdd/slices/P2-02-public-api-substrate.md` -- active P2 Slice SDD for programmatic public API substrate, Account self-service API keys, PAT Bearer public business API, public OpenAPI export, structured config writes, Run lifecycle access, bounded Dependency File list/upload/delete, and one governed repo-maintained Public API AI skill source package, authorized by `docs/sdd/adr/ADR-0012-p2-public-api-substrate.md`. The Dependency File extension reuses existing storage/validation/Workspace/reference-protection rules and does not authorize public preview/download. It does not authorize public key-management routes, admin-managed keys, Help/download UI outside P2-04, release distribution, SDK, MCP server, skills runtime, or any API Catalog → Scenario/Test Plan generation chain.
+4. `docs/sdd/slices/P2-03-env-group-secret.md` -- active P2 Slice SDD for Env Group `plain | secret` typed variables, session masked secret read models, session-only secret writes, plain-only public DTOs, required one-time string-map-to-plain migration, and public API secret exclusion, authorized by `docs/sdd/adr/ADR-0014-p2-env-group-secret.md`. It does not authorize Snapshot encryption, key rotation, reveal API, or external Secret Manager integration.
+5. `docs/sdd/slices/P2-04-help-ai-agents-system-openapi-bootstrap.md` -- active P2 Slice SDD for authenticated Help AI Agents guidance, session-authenticated request-built Public API AI skill source download, shared runtime/script OpenAPI export, and best-effort first-Admin import of SurgePilot's own curated Web/business OpenAPI into Default Workspace API Catalog, authorized by `docs/sdd/adr/ADR-0016-p2-help-ai-agents-system-openapi-bootstrap.md`. It does not authorize user/external automatic ingestion, release distribution, SDK, MCP, marketplace, installer, agent runtime, retries/workers, AI generation/tuning/analysis, or API Catalog to Scenario/Test Plan generation.
+6. `docs/sdd/slices/P2-05-cross-platform-distribution.md` -- active P2 Slice SDD for one complete tagged-release mode using GHCR multi-architecture SurgePilot application images, a bounded GitHub Release bundle, the version-pinned user-local installer and checksum authorized by ADR-0024, native-built Linux amd64/arm64 Runtime assets, release Compose plus `surgepilot up`, source Compose plus complete `make start-full-stack` and control-plane-only `make start-preview` entries, and Monitoring, authorized by `docs/sdd/adr/ADR-0017-p2-cross-platform-distribution.md`, amended for source preview by `ADR-0019`, and amended for LAN-first release startup by P2-06/ADR-0018 plus its new-release Runtime default through ADR-0020, release configuration confirmation through ADR-0021, and separate installation entry through ADR-0024. It does not authorize Kubernetes, package-manager/system installers, Docker Hub mirroring, all-in-one images, native macOS Load Nodes/Runtime, automatic upgrades, Runtime UI/catalog, signing/SBOM publication, or standalone Public API AI skill release.
+7. `docs/sdd/slices/P2-06-lan-first-deployment-usability.md` -- active P2 Slice SDD for release-only interactive LAN first-run bootstrap with an explicit warned loopback-origin evaluation exception, persisted node-facing URL/port consistency, Demo-off release default, strict cookie transport configuration, default authenticated InfluxDB publication, non-interactive CI `.env` fixtures, and the separate user-local installation entry authorized by ADR-0024. It is authorized by `docs/sdd/adr/ADR-0018-p2-lan-first-release-bootstrap.md` and amended by `docs/sdd/adr/ADR-0020-p2-release-dual-runtime-default.md`, `docs/sdd/adr/ADR-0021-p2-release-up-configuration-confirmation.md`, and `docs/sdd/adr/ADR-0024-p2-user-local-release-installer.md`. New tagged-release deployments persist `amd64,arm64` without an architecture prompt. Every valid `up` displays the bounded non-secret configuration; interactive default-Yes is read-only, explicit No/re-entry/Yes may change only four standard-LAN network fields, non-interactive startup never rewrites, and advanced HTTPS remains manual-edit-only. All four Runtime values remain available for advanced use, and source startup remains native-only. The loopback exception does not change all-interface published-port binding. It does not add network discovery, Web/API configuration surfaces, package-manager/system installers, or public workflow dispatch capability.
+8. `docs/sdd/slices/P2-07-public-launch-github-pages-seo.md` -- active P2 Slice SDD for the coordinated `latentrun/SurgePilot` public launch, one statically generated VitePress Pages marketing/docs site, original AI-authored baseline evidence, explicitly labelled synthetic Landing dashboard/Run/Distributed mesh UI demonstrations, publication SEO and international alternates, self-hosted Web `noindex`, demo/social assets, and public-readiness gates, authorized by `docs/sdd/adr/ADR-0026-p2-public-launch-github-pages-seo.md`. It does not authorize hosted SurgePilot, pricing, billing, leads, a blog/CMS, programmatic SEO, custom-domain launch, automatic translation, product localization, fabricated benchmark/adoption/status/Star claims, or changes to product/release execution contracts.
 
-## P2-00 factual backfill
+## Cross-cutting Constraints
 
-- API routes live in `apps/api/app/routes/api_catalog.py` and are registered by `apps/api/app/main.py`.
-- Metadata is persisted by `apps/api/app/models/api_catalog.py` and migration
-  `apps/api/migrations/versions/0015_p2_00_api_catalog.py`; raw content remains behind the existing
-  server-side storage boundary under `api-catalog-specs/{workspaceId}/{specId}/{safeFilename}`.
-- The generated source of truth is `packages/contracts/openapi/api.openapi.json`, with generated
-  client/types consumed by the Web API client.
-- The Web routes are `/api-catalog` and `/api-catalog/:specId`; Scalar is pinned to
-  `@scalar/api-reference-react@0.9.47` and receives only the same-origin content URL.
-- Verification coverage is in `apps/api/tests/test_p2_00_api_catalog_api.py`,
-  `packages/contracts/tests/api-catalog-openapi.test.mjs`, and
-  `apps/web/src/features/api-catalog/api-catalog.test.tsx`.
+Contract-first rules, Workspace isolation, permission checks, Runner/Web/API boundaries, language rules, and verification gates remain governed by the authoritative references above. This README intentionally does not restate those rules.
 
-## P2-01 factual backfill
+P2 placeholder or index documents must not create clickable P2 UI, callable P2 API behavior, or P2 execution dependencies. Implementation requires a real accepted P2 Slice SDD plus any required governance activation.
 
-- Scenario-scoped generation is registered in `apps/api/app/routes/scenarios.py`; parsing and mapping are in `apps/api/app/services/openapi_step_generation.py`, with schemas in `apps/api/app/schemas/scenarios.py`.
-- The focused verification set is `apps/api/tests/test_p2_01_openapi_step_generation.py`, `tests/contract/test_p2_01_openapi_step_generation_openapi.py`, and the OpenAPI interaction test in `apps/web/src/features/scenarios/scenarios.test.tsx`.
-- P2-01 remains transient: confirming a preview changes only the in-memory Scenario draft; the existing Scenario save/PATCH flow remains the persistence boundary. API Catalog deletion or replacement does not rewrite generated Steps, and API Catalog detail has no generation/import action.
+P2 API Catalog remains documentation asset management only. It must not create, update, import, or generate Scenario/Test Plan behavior.
 
-## P2-02 factual backfill
+P2 OpenAPI Step Generation is a Scenario editor Step draft helper only. It must not create Scenario/Test Plan records, must not expose generation actions from API Catalog detail pages, and must not persist API Catalog operation resources.
 
-- Session token management lives in `apps/api/app/routes/account_api_tokens.py` with operation IDs `listAccountApiTokens`, `createAccountApiToken`, and `deleteAccountApiToken`; the programmatic routes live in `apps/api/app/routes/public_api.py` under `/public/v1/*`.
-- The public OpenAPI artifact is `packages/contracts/openapi/public-api.openapi.json`, the internal artifact is `packages/contracts/openapi/api.openapi.json`, and the bundled skill snapshot is `packages/ai-skills/surgepilot-public-api/references/public-api.openapi.json`. `make generate-contracts` refreshes both artifacts and the skill snapshot, and `make contracts-stale-check` keeps them aligned.
-- Verification coverage is in `apps/api/tests/test_p2_02_api_tokens_api.py`, `apps/api/tests/test_p2_02_public_api.py`, `apps/api/tests/test_p2_02_load_node_connectivity.py`, `tests/contract/test_p2_02_public_api_openapi.py`, `apps/web/src/features/account/api-keys.test.tsx`, and `apps/web/src/features/load-nodes/load-node-connectivity-summary.test.tsx`.
-- Deployment `.env`/bootstrap/Makefile startup governance, the node-facing startup Make wiring, and the SSH lifecycle verifier (`scripts/verify_p2_02_public_api_lifecycle.py` and `tests/test_p2_02_public_api_lifecycle_verifier.py`) belong to the later startup checkpoint and are not part of R15.
+P2-04's system OpenAPI bootstrap is a one-time best-effort system-owned Catalog asset exception. It does not authorize automatic ingestion of user, external, remote, repository, or arbitrary OpenAPI documents.
 
-## P2-03 factual backfill
+P2-05's platform release artifacts do not change P2-02/P2-04 Public API AI skill distribution boundaries. The platform bundle may publish application images and Linux Runtime assets only; the skill remains repository source plus the authenticated request-built download.
 
-- Typed Env Group variables live in `apps/api/app/schemas/env_groups.py` (`EnvGroupPlainVariableWrite`, `EnvGroupSecretVariableWrite`, `EnvGroupPlainVariableRead`, `EnvGroupSecretVariableRead`, the masked `EnvGroupDetail`, and the plain-only public DTOs); the typed service helpers are `normalize_variables`, `validate_variables`, `validate_public_variables`, `mask_variables`, `public_plain_variables`, `internal_env_values`, `env_group_runtime_values`, `env_group_has_secret_variables`, `reject_public_secret_bearing_group`, and `raise_public_secret_copy_denied` in `apps/api/app/services/env_groups.py`.
-- The one-time string-map-to-plain migration is `apps/api/migrations/versions/0017_p2_03_env_group_secret.py` (revision `0017_p2_03`, down_revision `0016_p2_02`); it rewrites `env_groups.variables` in place and creates no table.
-- Session routes in `apps/api/app/routes/env_groups.py` return masked detail, and `apps/api/app/routes/public_api.py` keeps public Env Group create/patch/copy plain-only with `ENV_GROUP_SECRET_PUBLIC_COPY_DENIED` for secret-bearing copy.
-- Verification coverage is in `apps/api/tests/test_p2_03_env_group_secret.py`, the typed updates in `apps/api/tests/test_p0_01_env_groups_api.py`, `apps/api/tests/test_p0_01_env_groups_service.py`, `apps/api/tests/test_p0_05_scenarios_api.py`, `apps/api/tests/test_p0_06_test_plans_api.py`, `apps/api/tests/test_p1_04_scenario_testplan_polish_api.py`, and `apps/api/tests/test_p2_02_public_api.py`, the contract assertions in `tests/contract/test_p0_01_env_groups_openapi.py` and `tests/contract/test_p2_02_public_api_openapi.py`, and the Web assertions in `apps/web/src/features/env-groups/env-groups.test.tsx`.
-- `ENV_GROUP_SECRET_PUBLIC_COPY_DENIED` is registered in `apps/api/app/main.py` and both OpenAPI artifacts, and the bundled `packages/ai-skills/surgepilot-public-api/references/public-api.openapi.json` snapshot stays byte-identical to `packages/contracts/openapi/public-api.openapi.json`.
+ADR-0019's source preview changes only Make/Compose startup orchestration and Runtime build output.
+It adds no API, OpenAPI, Workspace, permission, database, Web, Runner, skill, or release capability.
 
-## P2-04 factual backfill
+ADR-0020 changes only the missing-`.env` tagged-release Runtime default and removes the first-run
+architecture prompt. It preserves existing release `.env` values and every other ADR-0018 LAN,
+Demo, cookie, InfluxDB, published-port, non-interactive, source-startup, and capability boundary.
 
-- Help is registered by the pathname switch in `apps/web/src/App.tsx` and rendered by `apps/web/src/features/help/pages/help-page.tsx`; the account download wrapper is `downloadPublicApiAiSkill` and the API route is `apps/api/app/routes/account_ai_skill.py`.
-- `apps/api/app/services/skill_bundle.py` owns `default_skill_bundle_dir()` and resolves the container path first, then the repository fallback. Each authenticated request builds `surgepilot-public-api-skill.zip` from the governed source package without a Workspace header, persistence, or cache.
-- `apps/api/app/services/openapi_export.py` owns normalization, Web/public path filtering, schema reachability pruning, public error-code pruning, and `_export_document`; `scripts/export_openapi.py` and `apps/api/app/services/system_openapi_bootstrap.py` use that shared implementation.
-- `apps/api/app/services/system_openapi_bootstrap.py` owns `build_curated_openapi_payload()`, `import_system_openapi()`, and `bootstrap_system_openapi_best_effort()`. The auth route invokes the wrapper only after an explicit `first_user=True` result, using an independent session and best-effort MinIO compensation.
-- Focused verification is recorded in `apps/api/tests/test_p2_04_openapi_export.py`, `apps/api/tests/test_p2_04_ai_skill.py`, `apps/api/tests/test_p2_04_system_openapi_bootstrap.py`, `tests/contract/test_p2_04_help_ai_agents_openapi.py`, `apps/web/src/features/help/help.test.tsx`, and `tests/e2e/p2_04_help_ai_agents.spec.ts`. Contract refresh uses `make generate-contracts`; the checkpoint's targeted verification commands are `make test`, `make lint`, `make contracts-stale-check`, `make verify`, and the focused Playwright command recorded in the Slice SDD.
+ADR-0021 changes only tagged-release `up` configuration review and explicit interactive
+standard-LAN re-entry. Automatic and non-interactive rewriting remains forbidden; advanced HTTPS
+requires manual editing, all non-network values are preserved, and source startup is unchanged.
 
-## P2-06 factual backfill
+ADR-0026 adds only the public repository/Pages/SEO/authorship-evidence and self-hosted indexing
+boundary defined by P2-07. It consumes P2-05/P2-06 release artifacts without changing release
+startup, Runtime, Compose, installer, or integrity contracts.
 
-- P2-06 is release-path only. The tagged-release wrapper is `infra/release/surgepilot`, the release Compose file is `infra/release/docker-compose.release.yml`, and the configuration, bootstrap, and node-facing helpers are `scripts/release_preflight.py`, `scripts/bootstrap_deployment_env.py`, and `scripts/node_facing_startup.py`.
-- Verification coverage is in `tests/test_release_wrapper.py`, `tests/test_release_preflight.py`, `tests/test_bootstrap_deployment_env.py`, `tests/test_node_facing_startup.py`, `tests/test_release_installer.py`, `tests/contract/test_p2_05_distribution.py`, `tests/contract/test_env_example_drift.py`, and `apps/api/tests/test_p0_00_services.py`; the environment-dependent LAN smoke is `scripts/verify_p2_05_release_stack.py` with `tests/test_p2_05_release_stack_verifier.py`.
-- The interaction contract is: a missing release `.env` requires an interactive host shell, the confirmed host and port values are persisted with Demo off, `amd64,arm64`, and `SESSION_COOKIE_SECURE=false`, a complete existing `.env` is described and read-only by default, an explicit `No` opens the standard-LAN four-field update, and non-interactive startup never prompts or rewrites.
-- Native Linux amd64/arm64 LAN external-node acceptance and the installer workflow smoke require native runners, Docker networking, and real SSH nodes, so they remain outside default `make verify`.
+## Revision Protocol
 
-Other P2 slices remain outside this checkpoint and require their own accepted scope and
-implementation history.
+This README must not independently enlarge P2 scope. Any new or changed P2 capability must first update the PRD or add a confirmed ADR, then synchronize `docs/sdd/00-product-scope-and-priority.md`, `docs/sdd/02-repo-structure-and-dev-workflow.md`, `AGENTS.md`, and this index where applicable.
+
+Before submitting changes to this README, verify that it still avoids implementation design duplication and does not activate P2 capabilities by itself.
