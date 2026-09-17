@@ -1,9 +1,5 @@
 # P2-05 Development Release Validation Implementation Plan
 
-**Execution status:** The reserved-version guard and `.github/workflows/release-validation.yml` are
-implemented; final job names and the acceptance/evidence matrix are recorded in
-`docs/sdd/slices/P2-05-cross-platform-distribution.md` §19.
-
 **Goal:** Add one minimal GitHub Actions workflow that validates P2-05 on pull requests and performs an explicit public GHCR multi-architecture validation from trusted `validation-*` tags without creating a public release.
 
 **Architecture:** Keep `.github/workflows/release.yml` as the production create-only workflow. Add `.github/workflows/release-validation.yml` with separate read-only PR jobs and package-writing validation-tag jobs, reusing the existing Runtime builder, image Dockerfiles, release bundle builder, release wrapper, and release-stack verifier. Reserve `v0.0.0` for local validation artifacts and reject it in the production release preflight.
@@ -116,10 +112,10 @@ Add one `verify` job that runs the existing setup, contract generation, and `mak
 
 - [x] **Step 3: Add trusted validation-tag preflight**
 
-The tag preflight must checkout with `fetch-depth: 0`, explicitly fetch `main`, validate the tag prefix and SHA, prove ancestry, and anonymously inspect each `package-bootstrap` tag before allowing package writes:
+The tag preflight must checkout with `fetch-depth: 0`, explicitly fetch `dev`, validate the tag prefix and SHA, prove ancestry, and anonymously inspect each `package-bootstrap` tag before allowing package writes:
 
 ```bash
-git fetch --no-tags --force origin main:refs/remotes/origin/main
+git fetch --no-tags origin main:refs/remotes/origin/main
 suffix=${GITHUB_REF_NAME#validation-}
 [[ "$GITHUB_REF_NAME" =~ ^validation-[0-9a-f]{12,40}$ ]]
 [[ "$GITHUB_SHA" == "$suffix"* ]]
@@ -202,15 +198,15 @@ uv run --all-packages pytest \
 
 Expected: PASS.
 
-### Task 4: Final verification and recorded evidence
+### Task 4: Final verification, independent review, and completion
 
 **Files:**
-- Verify: `.github/workflows/release.yml`, `.github/workflows/release-validation.yml`, and the
-  P2-05 Slice record.
+- Review: `origin/main...HEAD`
+- Update: review description/comment
 
 **Interfaces:**
-- Consumes: the completed release-validation implementation and its verification evidence.
-- Produces: the recorded release-validation acceptance evidence.
+- Consumes: all implementation changes and verification evidence.
+- Produces: independently reviewed implementation prepared for review.
 
 - [x] **Step 1: Run final repository gates**
 
@@ -223,55 +219,14 @@ make verify-e2e
 
 Expected: all commands exit zero.
 
-- [x] **Step 2: Confirm the release-validation acceptance facts**
+- [x] **Step 2: Request an independent read-only review**
 
-Confirm exact §19 compliance, job permissions, tag trust/ancestry, absence of package writes from
-read-only pull-request jobs, GHCR tag derivation, Runtime local reuse, anonymous digest access,
-`v0.0.0` rejection, and the absence of a public Release.
+The reviewer must compare `origin/main...HEAD` and check exact §19 compliance, job permissions, tag trust/ancestry, absence of PR writes, GHCR tag derivation, Runtime local reuse, anonymous access, `v0.0.0` rejection, no public Release, tests, and over-design risk.
 
-- [x] **Step 3: Re-run the affected gates after a confirmed defect**
+- [x] **Step 3: Fix confirmed findings with TDD and re-run affected gates**
 
-Any correctness, security, or documented-behavior defect must be fixed and the affected gates
-re-run before the release-validation surface is accepted.
+No Critical or Important finding may remain. Minor findings that affect correctness, security, or documented behavior must also be fixed.
 
----
+- [x] **Step 4: Commit and update the review record**
 
-Reconstruction verification backfill: the implemented release-validation surface is the reserved
-`v0.0.0` production guard plus `.github/workflows/release-validation.yml`; final job names, the
-`main`-ancestry tag trust rules, and the acceptance/evidence matrix are recorded in
-`docs/sdd/slices/P2-05-cross-platform-distribution.md` §19. Focused verification is
-`tests/contract/test_p2_05_distribution.py` together with `tests/test_release_runtime_artifact.py`,
-`tests/test_release_preflight.py`, and `tests/test_release_wrapper.py`, with
-`make generate-contracts` and `make verify` as repository gates. The Runtime fetch, builder, and
-release-stack paths stay consistent with the published P2-05 artifacts through
-`scripts/fetch_runtime_release.py`, `scripts/run_runtime_builder.py`,
-`scripts/release_runtime_artifact.py`, and `make verify-p2-05-release-stack`.
-
-Runtime identity backfill: the reconstructed Load Node and Run Runtime identity chain is the frozen
-migration sequence `0016_p2_02` -> `0017_p2_03` -> `0018_p1_09` ->
-`0019_p2_02_ssh_host_key` -> `0020_p0_runtime_version` -> `0021_p0_run_allocation_runtime`.
-`0019_p2_02_load_node_ssh_host_key_trust.py` adds `ssh_host_key_algorithm`,
-`ssh_host_key_public_key`, `ssh_host_key_fingerprint_sha256`, `ssh_host_key_trusted_at`, and
-`ssh_host_key_trusted_by` to `load_nodes`, constrains `ssh_host_key_trusted_by` to `users.id`, and
-resets every non-archived, non-disabled node to `uninitialized` with
-`LOAD_NODE_SSH_HOST_KEY_UNTRUSTED`; `0020_p0_runtime_version.py` adds nullable `runtime_version` to
-`load_nodes` and `load_node_initialization_attempts`; and `0021_p0_run_allocation_runtime.py` adds
-nullable `expected_runtime_version` to `run_node_allocations` and refuses to upgrade while any Run
-is `initializing`, `running`, or `stopping`. The matching mapped columns are in
-`apps/api/app/models/load_nodes.py` (the `ssh_host_key_*` fields plus `runtime_version` on both the
-node and the initialization attempt) and `apps/api/app/models/runs.py` (`expected_runtime_version`
-on the allocation). Migration verification is
-`apps/api/tests/test_p0_04_runtime_identity_migration.py` for the active-Run refusal and the
-untouched legacy allocation and `apps/api/tests/test_p0_07_migrations.py` for the SQLite upgrade
-path, together with the Load Node initialization, allocation, Runner protocol, and release
-verification suites recorded in the P2-05 Slice.
-
-Remaining risks: native amd64/arm64 Runtime and image construction, anonymous GHCR digest access,
-and the digest-pinned release-stack smoke need native runners and are environment- or release-gated;
-the first real `vX.Y.Z` public Runtime download, semantic create-only conflict handling, and
-Draft-to-final Release ordering remain proven only by that first release; the `0021` allocation
-column stays nullable for legacy terminal allocations, so a callback without a matching persisted
-expected version fails closed with `RUNNER_RUNTIME_MISMATCH`; and Apple Silicon Docker Desktop
-remains a manual acceptance item. The reconstruction publishes as `latentrun/SurgePilot` on
-`main` with `ghcr.io/latentrun/*` images, so frozen previous-owner and non-`main` branch references
-are deliberately rewritten.
+Commit only after fresh verification and update the review with scope, design alignment, verification, known limitations, and the final independent review conclusion.

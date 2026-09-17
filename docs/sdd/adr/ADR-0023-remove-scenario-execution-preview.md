@@ -54,3 +54,4 @@ Rejected. A callable generated contract for a deliberately unsupported product s
 - `docs/sdd/04-api-contract-guidelines.md`
 - `docs/sdd/08-frontend-routing-and-ui-rules.md`
 - `docs/sdd/09-testing-and-acceptance-strategy.md`
+- `https://github.com/latentrun/SurgePilot/issues/122`

@@ -722,28 +722,6 @@ release Compose startup. Source `make start-full-stack` remains native-only and 
 remains `auto`. ADR-0020 and ADR-0021 change none of ADR-0018's other LAN host, Demo, cookie,
 InfluxDB, published-port, non-interactive smoke, or capability boundaries.
 
-Reconstruction verification backfill: the deferred Runtime identity work is carried by the frozen
-migration chain `0016_p2_02` -> `0017_p2_03` -> `0018_p1_09` -> `0019_p2_02_ssh_host_key` ->
-`0020_p0_runtime_version` -> `0021_p0_run_allocation_runtime`. `0019` adds the `load_nodes` SSH
-host-key trust columns and resets untrusted nodes, `0020` adds nullable `runtime_version` to
-`load_nodes` and `load_node_initialization_attempts`, and `0021` adds nullable
-`expected_runtime_version` to `run_node_allocations` while refusing to upgrade with active Runs. The
-mapped model columns live in `apps/api/app/models/load_nodes.py` and `apps/api/app/models/runs.py`.
-The Runtime fetch, builder, and release-stack paths stay consistent with the published P2-05
-artifacts through `scripts/fetch_runtime_release.py`, `scripts/run_runtime_builder.py`,
-`scripts/release_runtime_artifact.py`, and `make verify-p2-05-release-stack`. Verification uses
-`make generate-contracts`, `make verify`, the focused `uv run --all-packages pytest` selections for
-the migration, Load Node initialization, allocation, Runner protocol, and release suites,
-`make verify-runtime-compat`, and `make verify-e2e`. Remaining risks: native Linux amd64/arm64
-Runtime compatibility, the digest-pinned release-stack smoke, and real SSH two-node acceptance need
-native runners, Docker networking, and real nodes and stay outside default `make verify`; the first
-real `vX.Y.Z` release still owns the public Runtime download and semantic create-only publication;
-an allocation or callback whose expected Runtime version is missing or mismatched fails closed with
-`RUNNER_RUNTIME_MISMATCH`; and Runtime version switching and rollback remain external deployment
-behavior. The reconstruction publishes as `latentrun/SurgePilot` on `main` with
-`ghcr.io/latentrun/*` images, so frozen previous-owner, GHCR, and non-`main` branch references are
-deliberately rewritten.
-
 ### 5.5 P2-07 Public Launch and GitHub Pages
 
 ADR-0026/P2-07 adds one public repository and Pages delivery surface without changing product or
@@ -774,7 +752,7 @@ Rules:
 6. The original AI-authored baseline claim must state the human/AI role boundary and bind the
    strong claim to one audited semantic tag. Future community work may be human- or AI-authored.
 7. Private CI may build and inspect the exact future artifact but cannot deploy Pages. Public
-   activation waits for privacy/license review, organization migration, full verification,
+   activation waits for history/privacy/license review, organization migration, full verification,
    anonymous tagged Release readiness, and exact Pages smoke.
 8. The coordinated public launch consumes existing P2-05/P2-06 Release artifacts without changing
    Runtime, installer, Compose, startup, or publication integrity contracts.
@@ -784,16 +762,6 @@ Rules:
    Landing-scoped reduced-motion override.
 10. Purchased/fake Stars, fabricated benchmark/adoption/status/Star claims, hosted-service claims, blog/CMS,
    programmatic SEO, custom-domain launch, and automatic translation remain forbidden.
-
-Reconstruction verification backfill: the P2-07 acceptance commands are `make docs-site` and
-`make docs-site-build` for the VitePress package under `docs/site`, and
-`make verify-p2-07-public-launch`, which runs the built/rendered site verification together with
-`tests/contract/test_p2_07_public_launch.py` and `tests/contract/test_user_docs_locales.py`. The
-private build-and-verify workflow is `.github/workflows/pages-build.yml`, which holds
-`contents: read` only and no Pages deployment authority. Rendered browser, asset-budget, and
-anonymous repository/Release/Pages smoke steps remain environment- or launch-gated and are not
-part of default `make verify`. The full backfill is recorded in
-`docs/sdd/slices/P2-07-public-launch-github-pages-seo.md` §14.
 
 ---
 

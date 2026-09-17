@@ -1183,7 +1183,8 @@ Implementation backfill:
 4. A real MinIO storage adapter round-trip is wired into `make verify-e2e` after the dev MinIO profile starts.
 5. Storage warning logs use safe error codes at warning level; raw MinIO exception details are limited to debug logs.
 6. Review follow-up adds resolved `x-workspace-id` on Workspace-scoped error responses, keeps download OpenAPI `200` binary-only, surfaces extension allowlist field-level upload errors in Web, and strengthens MinIO readiness from bucket-exists to a write/read/delete probe.
-7. Dependency File upload, download, and metadata delete audit writes use an independent DB session and transaction. Upload and metadata delete commit the user-visible metadata change before best-effort audit persistence, so audit DB failure is logged but cannot roll back a successful P0-02 user operation.
+7. P0-05 Scenario Dependency File references are now used by the P0-02 reference-check boundary so active Scenario data-source/upload references return `FILE_IN_USE`; historical Run Snapshot references do not change P0-02 metadata-only delete semantics.
+8. Dependency File upload, download, and metadata delete audit writes use an independent DB session and transaction. Upload and metadata delete commit the user-visible metadata change before best-effort audit persistence, so audit DB failure is logged but cannot roll back a successful P0-02 user operation.
 
 ---
 

@@ -76,6 +76,7 @@ The bootstrap import is best-effort and non-critical. A worker or queue would in
 
 - `docs/sdd/adr/ADR-0010-p2-api-catalog-scalar.md`
 - `docs/sdd/adr/ADR-0012-p2-public-api-substrate.md`
+- `docs/sdd/adr/ADR-0013-p2-static-marketing-landing-logo.md`
 
 ## References
 

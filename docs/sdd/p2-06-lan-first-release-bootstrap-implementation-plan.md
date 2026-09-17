@@ -1,5 +1,8 @@
 # P2-06 LAN-first Release Bootstrap Implementation Plan
 
+Every behavior change follows red-green-refactor; do not add a production behavior without first
+observing its focused test fail.
+
 **Goal:** Activate ADR-0018 and make the tagged release `./surgepilot up` establish one explicit,
 persistent, LAN-usable node-facing topology before starting services.
 

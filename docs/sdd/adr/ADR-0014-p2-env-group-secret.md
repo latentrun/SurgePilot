@@ -56,7 +56,6 @@ Ongoing dual-format compatibility would increase implementation and test complex
 13. Run Snapshot may internally persist execution-needed plaintext env values until a later Snapshot Security Slice; external snapshot/report/public views must not expose secret plaintext.
 14. Execution Bundle generation uses an internal full view and does not change the Runner protocol.
 15. Internal/public OpenAPI artifacts and generated Web contracts must be regenerated from FastAPI/Pydantic schemas; public artifacts must exclude hidden-value fields, masked-read fields, secret write/copy examples, plaintext examples, and reconstructable secret fields.
-16. Verification backfill: session typed-contract coverage is in `apps/api/tests/test_p0_01_env_groups_api.py` and `apps/api/tests/test_p0_01_env_groups_service.py`; end-to-end secret masking, preserve/replace, old string-map rejection, server-side duplicate copy, public secret write/patch/copy rejection, non-echoing validation errors, and internal snapshot/execution-bundle materialization are in `apps/api/tests/test_p2_03_env_group_secret.py`; the typed internal contract is in `tests/contract/test_p0_01_env_groups_openapi.py`; public artifact exclusion and skill-snapshot alignment are in `tests/contract/test_p2_02_public_api_openapi.py`; and Web typed-secret component assertions are in `apps/web/src/features/env-groups/env-groups.test.tsx`. The reconstruction registers `ENV_GROUP_SECRET_PUBLIC_COPY_DENIED` in `apps/api/app/main.py` and both generated OpenAPI artifacts. `make test`, `make lint`, `make contracts-stale-check`, and `make verify` are the verification commands. Snapshot encryption, key governance, a reveal API, external Secret Manager integration, and a generic redaction framework remain out of scope.
 
 ## Consequences
 
@@ -66,7 +65,7 @@ Ongoing dual-format compatibility would increase implementation and test complex
 4. Web and API code must use the session masked read model only for browser session surfaces; public routes must use plain-only DTOs.
 5. Existing development data with old string-map variables must be converted by the required one-time migration; runtime code must not keep dual-schema compatibility.
 6. Snapshot plaintext remains a known temporary risk until a separate Snapshot Security design adds encryption and key governance.
-7. After this ADR is accepted, governance docs must stay synchronized: `AGENTS.md`, `docs/sdd/00-product-scope-and-priority.md`, `docs/sdd/slices/P2-README.md`, and `docs/sdd/02-repo-structure-and-dev-workflow.md` §12 must reference this Slice and ADR as the Env Group Secret authorization source.
+7. After this ADR is accepted, governance docs must stay synchronized: `AGENTS.md`, `docs/sdd/00-product-scope-and-priority.md`, `docs/sdd/slices/P2-README.md`, and `docs/sdd/02-repo-structure-and-dev-workflow.md` §12 must reference this Slice and ADR as the Env Group Secret authorization source while preserving ADR-0013 exclusively for static Marketing Landing / Logo.
 
 ## Related ADRs
 
