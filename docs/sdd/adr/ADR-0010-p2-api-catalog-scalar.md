@@ -1,7 +1,7 @@
 # ADR-0010 P2 API Catalog Scalar
 
 - Status: Accepted
-- Scope: P2 API Catalog documentation asset management and read-only Scalar API Reference rendering
+- Scope: P2 API Catalog documentation asset management, read-only Scalar API Reference rendering, and the ADR-0016 system bootstrap exception
 - Active Slice: `docs/sdd/slices/P2-00-api-catalog-scalar.md`
 - Slice Status: Accepted for implementation; design frozen as the P2-00 Slice SDD
 - Supersedes: none
@@ -25,7 +25,8 @@ The accepted architecture is:
 4. Render detail pages with Scalar API Reference from the authorized `contentUrl` only.
 5. Disable request sending and external Scalar integrations, including Test Request / Try it affordances, API client buttons, auth persistence, hosted proxy, Agent, MCP, developer tools, and telemetry when supported by the integration.
 6. Reuse the existing AppLayout, route/module style, Tailwind tokens, CSS variables, source-owned primitives, generated contracts, session auth, Workspace header, and CSRF rules.
-7. Keep API Catalog isolated from Scenario, Step, Test Plan, Run, Runner, Artifact, Taurus builder, scheduling, SSO, Secret, non-MinIO storage, and OpenAPI Step generation behavior.
+7. Keep API Catalog isolated from Scenario, Step, Test Plan, Run, Runner, Artifact, Taurus builder, scheduling, SSO, Secret, non-MinIO storage, and OpenAPI Step generation behavior. ADR-0016 adds only a Help explanation and one system-owned first-Admin bootstrap import of SurgePilot's own curated Web/business OpenAPI; it does not add a Catalog generation action.
+8. Allow ADR-0016/P2-04 to invoke the existing API Catalog service after first-Admin registration commit, using an independent session, for one best-effort Default Workspace import deduplicated by `workspace_id + sha256 + status != deleted`.
 
 ## Boundaries
 
@@ -36,12 +37,13 @@ In scope:
 - Metadata persistence, SHA-256 digest, size, source format, document title/version, and safe status.
 - API-mediated content proxy with private/no-store cache headers.
 - Web list/detail/upload/delete UI and read-only Scalar rendering.
+- One ADR-0016/P2-04 system-owned bootstrap import of SurgePilot's own current curated Web/business OpenAPI into Default Workspace, reusing the same validation, MinIO, metadata, content proxy, and rendering boundaries.
 - API, contract, Web, Scalar hardening, and E2E/smoke tests required by the Slice.
 
 Out of scope:
 
 - API operation import, operation resources, version diff, coverage analysis, SDK generation, mock server, AI Agent chat, or schema registry.
-- User-provided, externally fetched, scheduled, startup-reconciled, background automatic OpenAPI ingestion, and the P2-04 first-Admin system OpenAPI bootstrap; those are outside this Slice.
+- User-provided, externally fetched, scheduled, startup-reconciled, or background automatic OpenAPI ingestion. The ADR-0016 first-Admin system document is the only automatic import exception.
 - API Catalog → Scenario/Test Plan generation, OpenAPI Step auto-generation, Scenario/Test Plan mutation, Run creation, Artifact generation, or Taurus YAML changes.
 - Independent docs service, queue/worker platform, external API Gateway, external object storage backend, self-built OpenAPI renderer, or second UI component/theme system.
 - Any P2 capability other than API Catalog documentation asset management.
@@ -52,17 +54,11 @@ Out of scope:
 - API contracts follow FastAPI/Pydantic schemas → OpenAPI export → generated `@surgepilot/contracts` client/types → Web consumption.
 - The implementation must backfill final API files, migration/model/storage facts, Scalar package/version/import mode, Web module paths, tests, verification commands, and risks in the Slice SDD.
 - Any future change that adds operation import, generation, remote request sending, a different renderer architecture, a new storage backend, or a new UI system requires a new or updated ADR/Scope Gate before implementation.
-- P2-04 system OpenAPI bootstrap remains outside this Slice and is not available from the P2-00 API Catalog implementation.
+- ADR-0016 does not alter the documentation-only model: the imported system asset has no Scenario/Test Plan generation, execution, operation resource, version management, or update/retry behavior.
 
 ## Implementation Backfill
 
 - The current detail route fetches authorized API Catalog metadata to obtain the same-origin `contentUrl`, then renders the source-owned Scalar wrapper as the primary API Reference surface rather than duplicating a separate metadata/card view outside Scalar.
 - `AppLayout` treats `/api-catalog/:specId` as an embedded-content page: the global sidebar and top bar remain, while standard page padding is removed so Scalar can use the available viewport.
 - The Scalar wrapper remains documentation-only: it uses a Shadow DOM/style boundary, restores host `body` class/style mutations, handles explicit Scalar sidebar operation navigation through Scalar's supported callback without replacing global History API methods, delegates tag-only sidebar clicks to Scalar's own expand/collapse behavior, defaults the isolated reference canvas to Scalar dark mode, mirrors later theme behavior only inside the isolated renderer/teleport nodes, and keeps request sending, proxying, auth persistence, Agent/MCP, Try it/Test Request, and API Catalog generation actions disabled. Initial URL fragments and Scalar's passive section-to-hash synchronization do not trigger SurgePilot-owned scrolling.
-- Web verification covers the active list/detail route surface and Scalar hardening boundary; API and contract verification cover list/detail/content/delete, current Workspace enforcement, storage containment, and no API Catalog Scenario/Test Plan/OpenAPI generation entry points.
-- R13 focused verification files are `apps/api/tests/test_p2_00_api_catalog_api.py`,
-  `packages/contracts/tests/api-catalog-openapi.test.mjs`, and
-  `apps/web/src/features/api-catalog/api-catalog.test.tsx`. They cover route/service/storage
-  boundaries, generated operation freshness, Web route/rendering boundaries, disabled request
-  sending, and no direct MinIO exposure. The ADR-0016 P2-04 bootstrap exception remains
-  documentation-only and is not implemented by P2-00.
+- Web and E2E coverage includes list/detail/upload/delete flows, current Workspace header usage, Scalar hardening/style containment/navigation behavior, and no API Catalog Scenario/Test Plan/OpenAPI generation entry points.

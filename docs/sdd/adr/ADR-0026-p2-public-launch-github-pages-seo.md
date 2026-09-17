@@ -122,10 +122,11 @@ only when it includes or links to this exact responsibility boundary:
   verification-failure resolution, deployment, and release assets.
 
 One reviewed semantic-version tag, selected during public-readiness review, identifies the original
-AI-authored public baseline. The claim applies to that baseline and its preserved baseline record. Future community contributions may be human- or AI-authored and require no model or
-prompt attestation.
+AI-authored public baseline. The claim applies to that baseline and its preserved baseline record.
+Future community contributions may be human- or AI-authored and require no model or prompt
+attestation.
 
-Private Codex conversations are not a launch dependency. Repository governance materials,
+Private development records are not a launch dependency. Repository governance materials,
 contracts, verification gates, and release artifacts form the primary evidence chain.
 
 ### 5. SEO and internationalization
@@ -153,9 +154,9 @@ metadata, public-readiness checks, README copy, authorship evidence, demo assets
 runbook. Private CI may build and validate the site.
 
 At the repository owner's explicit review decision, those private-stage changes may be delivered
-as sequential, independently verified changes in the launch preparation review so the entire preparation has one atomic
-review/revert boundary. This delivery choice does not waive any acceptance gate and does not
-authorize public activation from that PR.
+as sequential, independently verified changes in the launch preparation review so the entire
+preparation has one atomic review/revert boundary. This delivery choice does not waive any
+acceptance gate and does not authorize public activation from that review.
 
 Pages deployment permissions and public deployment remain inactive until the dedicated launch
 gate confirms:
@@ -200,7 +201,7 @@ P2-07 does not authorize:
 2. a blog, CMS, programmatic SEO, automatic content generation, or multi-version documentation;
 3. a custom domain at initial launch;
 4. automatic translation, language redirection, or product UI/API-message localization;
-5. publication of private Codex conversations;
+5. publication of private development records;
 6. mandatory AI provenance for future community contributions;
 7. a new UI component system or cross-app marketing component package;
 8. fabricated benchmark, adoption, service-status, GitHub Star, or other social-proof claims; the
@@ -236,23 +237,3 @@ P2-07 does not authorize:
 - `docs/sdd/slices/P2-06-lan-first-deployment-usability.md`
 - `docs/site`
 - `apps/web/src/features/marketing`
-
-## Verification Backfill
-
-The reconstructed ADR-0026 verification is recorded in
-`docs/sdd/slices/P2-07-public-launch-github-pages-seo.md` §14. `docs/site/tests/verify-built-site.mjs`
-checks the built marketing homepage and the eighteen documentation pages for unique metadata,
-self-canonical URLs, reciprocal locale alternates plus `x-default`, Open Graph and Twitter
-metadata, JSON-LD structured data, the canonical-only sitemap, the Pages-compatible `robots.txt`,
-and the `noindex` 404 page under the `/SurgePilot/` project base.
-`docs/site/tests/verify-browser.mjs` checks the rendered document head and locale navigation.
-`tests/contract/test_p2_07_public_launch.py` covers the self-hosted Web `noindex` isolation,
-landing markup parity, README and authorship evidence, License/Security/Contributing/Code of
-Conduct policies, repository metadata, the demo and launch material, and the private
-`.github/workflows/pages-build.yml` workflow, which holds `contents: read` only and no deployment
-authority. `tests/contract/test_user_docs_locales.py` covers the exact English/`zh-CN`/`ja` page
-sets. Verification commands are `make docs-site`, `make docs-site-build`,
-`make verify-p2-07-public-launch`, and full `make verify` before public candidate approval. The
-rendered browser and asset-budget checks require a local Node and Chromium runtime, and the
-anonymous repository, tagged Release, and Pages smoke steps remain gated by the owner-approved
-public launch.

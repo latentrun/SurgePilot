@@ -468,15 +468,3 @@ Implementation PR backfill:
 
 1. Run Snapshot stores execution-needed secret plaintext until a later Snapshot Security Slice; this is an accepted temporary boundary for P2-03 only and must not be represented as encryption or key governance.
 2. Existing old string-map Env Group variables must be converted by the required one-time migration before typed runtime code is enabled; this SDD forbids ongoing dual-schema runtime compatibility.
-
-## 16. Reconstruction Verification Backfill
-
-R16 reconstruction verification backfill:
-
-1. Session typed-contract coverage is recorded in `apps/api/tests/test_p0_01_env_groups_api.py` (create/get/patch/duplicate masked detail and old string-map rejection) and `apps/api/tests/test_p0_01_env_groups_service.py` (`normalize_variables`, `validate_variables`, `validate_public_variables`, `mask_variables`, and `env_group_has_secret_variables` semantics, including secret-preserve rejection when no stored secret exists).
-2. End-to-end Env Group secret behavior is recorded in `apps/api/tests/test_p2_03_env_group_secret.py`: masked session reads, secret preserve/replace, old string-map rejection, duplicate with server-side secret copy, public secret create/patch/copy rejection through `ENV_GROUP_SECRET_PUBLIC_COPY_DENIED`, validation errors that do not echo secret values, internal Run Snapshot/Execution Bundle materialization, and Test Plan Preview/Run Report/Public Run Report redaction.
-3. Runtime materialization regressions are also covered by the typed variable fixtures in `apps/api/tests/test_p0_05_scenarios_api.py`, `apps/api/tests/test_p0_06_test_plans_api.py`, and `apps/api/tests/test_p1_04_scenario_testplan_polish_api.py`, while the public plain-only contract and secret exclusion are covered in `apps/api/tests/test_p2_02_public_api.py`.
-4. The typed internal contract is asserted in `tests/contract/test_p0_01_env_groups_openapi.py`, and public artifact path/schema/secret exclusion plus byte-identical skill-snapshot alignment are asserted in `tests/contract/test_p2_02_public_api_openapi.py`; the auditable public map remains `tests/contract/public_api_operation_coverage.json`.
-5. Web typed-secret component assertions are recorded in `apps/web/src/features/env-groups/env-groups.test.tsx`, against the reconstruction's custom-routing/props-based Env Group page (no react-router or TanStack Query): masked existing secrets with blank-value preservation, replacement submission, no reveal or plaintext copy path, and no secret plaintext in local storage, URLs, query strings or snapshots.
-6. Verification commands: `make test` (contract tests), `make lint`, `make contracts-stale-check`, and `make verify`.
-7. `ENV_GROUP_SECRET_PUBLIC_COPY_DENIED` is registered in `apps/api/app/main.py` and both generated OpenAPI artifacts, and the bundled `packages/ai-skills/surgepilot-public-api/references/public-api.openapi.json` snapshot stays byte-identical to `packages/contracts/openapi/public-api.openapi.json`.

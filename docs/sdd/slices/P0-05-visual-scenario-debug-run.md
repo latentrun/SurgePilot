@@ -218,7 +218,7 @@ Allowed P0-05 extension points:
 | Variable syntax | `${var}`. Variable names use `[A-Za-z_][A-Za-z0-9_]*`. |
 | Base URL | Scenario-level `baseUrlExpression`, default `${base_url}`. Step path is relative and starts with `/`. |
 | Taurus executor | JMeter requests-scenario generation through Taurus. |
-| Scripts | P0 supports minimal request-level JSR223/Groovy before/after scripts as bounded inline script text stored in the Scenario Step. |
+| Scripts | P0 supports minimal request-level JSR223/Groovy before/after scripts through Dependency File references. |
 | Script scenario mode | Forbidden. JSR223 scripts do not create an independent script Scenario mode. |
 | Generated YAML | Internal execution artifact only; not user-editable and not previewed in P0 UI. |
 | Debug success navigation | API returns `runId`; Web navigates to `/runs/:runId`. Full report is P0-07. |
@@ -240,7 +240,7 @@ P0-05 Taurus/JMeter behavior should align with the Taurus/JMeter documentation. 
 | `docs/reference/taurus/jmeter/body-file.yml` | body-file example used only as a reference; P0 UI does not expose body-file as a separate mode. |
 | `docs/reference/taurus/jmeter/csv-usage.yml` | CSV data source + `${var}` use in requests. |
 | `docs/reference/taurus/jmeter/default-address-trick.yml` | `default-address` + relative request path pattern. |
-| `docs/reference/taurus/jmeter/prmctl.yml` | JSR223 examples; implementation uses Taurus `script-text` for user Scenario scripts. |
+| `docs/reference/taurus/jmeter/prmctl.yml` | JSR223 examples; implementation uses `script-file` for user Scenario scripts. |
 | `docs/reference/taurus/jmeter/simple-assert.yml` | response assertion shape for requests. |
 
 ### 7.2 Mapping Principles
@@ -317,10 +317,10 @@ Rules:
 3. Extractor-produced variables are referenced with the same `${var}` syntax in later requests.
 4. If an Env Group variable name conflicts with an extractor variable name, API rejects the Scenario Debug Run with `VALIDATION_ERROR` to avoid pre-run/runtime ambiguity.
 5. Real Runner execution depends on a preinstalled Apache JMeter binary on the Load Node; Taurus auto-install is not part of P0 execution.
-6. The Load Node's configured Apache JMeter binary path is the deployment source of truth for `modules.jmeter.path`; P0-03 initialization verifies the binary before a node becomes eligible for real Scenario Debug Runs.
+6. After Runtime Bootstrap, P0 JMeter runtime path is derived from the selected Load Node as `<runnerHome>/current/apache-jmeter-5.6.3/bin/jmeter`; `LOAD_NODE_JMETER_PATH` is not a production source of truth.
 7. Scenario Debug Run YAML must include `modules.jmeter.path` from the configured path, `modules.jmeter.version` from the configured version, `modules.jmeter.detect-plugins: false`, and `modules.jmeter.force-ctg: false`.
 8. The configured JMeter path is deployment configuration, not a user input and not a Web-visible field.
-9. No-download correctness depends on the generated `modules.jmeter.path`, the Load Node's verified JMeter installation, and Runner `bzt -n`; `TAURUS_DISABLE_DOWNLOADS` is not an acceptance criterion.
+9. No-download correctness depends on Runtime Bootstrap activation, generated `modules.jmeter.path`, and Runner `bzt -n`; `TAURUS_DISABLE_DOWNLOADS` is not an acceptance criterion.
 10. P0 generated paths are runner-bundle-relative paths under the validated Run workspace directory.
 11. Generated YAML must never include SSH credentials, runner tokens, MinIO object keys, session cookies or CSRF tokens.
 
@@ -600,7 +600,7 @@ P0 supports request-level JSR223/Groovy scripts only.
   "id": "01HZX3Y9M0E9W7Z6M5QK9S8P7N",
   "execute": "before",
   "language": "groovy",
-  "scriptText": "vars.put('token', vars.get('base_token'))",
+  "dependencyFileId": "01HZX3Y9M0E9W7Z6M5QK9S8P7C",
   "enabled": true
 }
 ```
@@ -611,7 +611,7 @@ Taurus mapping:
 jsr223:
 - language: groovy
   execute: before
-  script-text: "vars.put('token', vars.get('base_token'))"
+  script-file: files/01HZX3Y9M0E9W7Z6M5QK9S8P7C/setup.groovy
   compile-cache: true
 ```
 
@@ -619,11 +619,12 @@ Rules:
 
 1. P0 only allows `language='groovy'` in the API, even though Taurus supports more languages.
 2. `execute` values: `before`, `after`.
-3. Enabled scripts must contain non-empty `scriptText`. API rejects empty or over-limit script text with `VALIDATION_ERROR`. Script text is treated as Groovy code and is not scanned for `${var}` references.
-4. Script text is stored in the Scenario Step JSON, is included in immutable Run Snapshots, and does not create `scenario_dependency_file_refs` rows.
-5. UI must show a clear warning that JSR223/Groovy executes on the selected Load Node as part of JMeter.
-6. JSR223 scripts do not create an independent script Scenario mode and must not be represented as a separate Scenario type.
-7. Generated Taurus embeds script text through the official JSR223 `script-text` field with `compile-cache: true`; script text never becomes a bundle file and never enters MinIO object storage.
+3. P0-05 in-dev contract correction: user-configurable scripts no longer accept inline `scriptText`; enabled scripts reference a same-Workspace Dependency File through `dependencyFileId`.
+4. Enabled script references must point to an available `.groovy` Dependency File. Disabled scripts and disabled Steps do not trigger this suffix/existence validation and do not create script refs.
+5. API stores only the Dependency File reference in Scenario content. Groovy bytes stay under the Dependency File lifecycle for upload, delete protection, run bundle staging and audit traceability.
+6. UI must show a clear warning that JSR223/Groovy executes on the selected Load Node as part of JMeter.
+7. JSR223 scripts do not create an independent script Scenario mode and must not be represented as a separate Scenario type.
+8. Generated Taurus uses `script-file` with the same safe bundle path rule as CSV/upload files: `files/{dependencyFileId}/{safeFilename}`.
 
 ---
 
@@ -682,15 +683,15 @@ Purpose: fast Dependency File reference checks and snapshot construction.
 | `workspace_id` | `char(26)` | yes | Same Workspace as Scenario and Dependency File. |
 | `scenario_id` | `char(26)` | yes | FK scenarios. |
 | `dependency_file_id` | `char(26)` | yes | FK dependency_files. |
-| `ref_type` | `text` | yes | `data_source` or `upload_file`. |
-| `step_id` | `char(26)` | no | Step ID for upload file refs; null for scenario data source refs. |
+| `ref_type` | `text` | yes | `data_source`, `upload_file` or `script`. |
+| `step_id` | `char(26)` | no | Step ID for upload file and script refs; null for scenario data source refs. |
 | `created_at` | `timestamptz` | yes | UTC. |
 
 Constraints and indexes:
 
 1. FK `scenario_id -> scenarios.id`.
 2. FK `dependency_file_id -> dependency_files.id`.
-3. `ref_type in ('data_source', 'upload_file')`.
+3. `ref_type in ('data_source', 'upload_file', 'script')`.
 4. Unique `(scenario_id, dependency_file_id, ref_type, step_id)`.
 5. Index `(workspace_id, dependency_file_id)` for delete protection.
 6. Index `(workspace_id, scenario_id)` for snapshot construction.
@@ -698,7 +699,7 @@ Constraints and indexes:
 Rules:
 
 1. Rows are replaced transactionally on Scenario create/update from the validated Scenario JSON.
-2. Disabled data sources and disabled upload file entries do not create reference rows.
+2. Disabled data sources, disabled upload file entries, disabled scripts and scripts under disabled Steps do not create reference rows.
 3. Cross-Workspace Dependency File references are rejected.
 4. Dependency File delete must check this table and return `FILE_IN_USE` or `RESOURCE_IN_USE` according to the owning Slice registry.
 
@@ -1106,7 +1107,7 @@ Rules:
 3. Use existing `RESOURCE_NOT_FOUND` for cross-Workspace Scenario, Env Group, Dependency File and Load Node IDs.
 4. Use existing `RESOURCE_IN_USE` for Scenario deletion protection.
 5. Use existing `LOAD_NODE_BUSY` for non-dedup Run creation against a leased Load Node.
-6. Error messages and details must not include script text, Env Group values, MinIO object keys, server paths, SSH credentials or runner tokens.
+6. Error messages and details must not include Groovy file contents, Env Group values, MinIO object keys, server paths, SSH credentials or runner tokens.
 
 Example revision conflict:
 
@@ -1166,7 +1167,7 @@ The builder or service must reject:
 10. upload file unsafe bundle path;
 11. `PUT` Step with more than one enabled upload file;
 12. request body on `GET` or `HEAD`;
-13. invalid JSR223 script content (empty or over-limit `scriptText`, unsupported `language`, or invalid `execute`);
+13. inline script text submitted by client;
 14. YAML generation that would require unsupported Taurus fields.
 
 ### 11.3 Bundle Contents
@@ -1218,7 +1219,7 @@ Rules:
 5. Scenario Debug Run YAML must set `force-ctg: false` because P0-05 Debug profile does not use Taurus `steps` and must not require Custom Thread Groups plugins.
 6. Worker/Runner must fail the Run with a safe startup failure reason if the configured JMeter binary is missing at execution time.
 7. Taurus auto-install and plugin auto-detection are not valid P0 acceptance paths.
-8. No-download correctness depends on the generated `modules.jmeter.path`, the Load Node's verified JMeter installation, and Runner `bzt -n`; environment guards such as `TAURUS_DISABLE_DOWNLOADS` are not acceptance criteria.
+8. Runtime Bootstrap no-download correctness depends on generated `modules.jmeter.path` and Runner `bzt -n`; environment guards are not acceptance criteria.
 
 ### 11.6 Runner Boundary
 
@@ -1259,7 +1260,7 @@ For Debug Run creation:
 1. initialize `availableVariables` with selected Env Group variable names, or empty set if no Env Group is selected;
 2. add enabled data source variable names when explicitly configured;
 3. scan enabled Steps in order;
-4. for each Step, collect `${var}` references in path, query param values, header values, body values and assertion/extractor fields where runtime variables are supported; JSR223 `scriptText` is treated as Groovy code and is not scanned for `${var}` references;
+4. for each Step, collect `${var}` references in path, query param values, header values, body values and assertion/extractor fields where runtime variables are supported; user script file contents are not stored in Scenario JSON and are not scanned;
 5. any referenced `var` absent from `availableVariables` is a validation error, unless it is a known JMeter built-in expression explicitly allowlisted by implementation;
 6. after validating the Step, add extractor `variableName` values from that Step to `availableVariables` for later Steps;
 7. reject extractor names that conflict with Env Group variable names or earlier extractor names;
@@ -1367,7 +1368,7 @@ Rules:
 
 1. The Step Editor may be implemented with source-owned UI primitives only.
 2. Monaco or heavy code editors are not introduced in P0.
-3. Script editor uses a plain text area for bounded Groovy `before`/`after` script text; no file selector is used for Step scripts in P0.
+3. Script selector uses a Dependency File dropdown filtered or visually constrained to `.groovy` files.
 4. Reorder should preserve Step IDs.
 5. Duplicate Step creates new Step and child IDs.
 6. Field-level validation uses generated contract validation where available and frontend Zod only for UX assistance.
@@ -1437,7 +1438,7 @@ P0 permissions:
 1. JSR223/Groovy scripts execute on the selected Load Node as part of JMeter.
 2. UI must warn users before Debug Run when enabled scripts exist.
 3. API enforces script size limits.
-4. API and worker logs must not include Groovy script text.
+4. API and worker logs must not include Groovy file contents.
 5. Scripts are not scanned for secrets in P0; users must treat Env Group variables as regular P0 variables.
 6. P0 does not provide sandboxing, per-script permissions or script library management.
 
@@ -1456,7 +1457,7 @@ P0-05 uses this execution-control audit event registered in `06`:
 
 | Event | Trigger | Sensitive data rule |
 | --- | --- | --- |
-| `run.debug_requested` | Scenario Debug Run requested | Include run ID, scenario ID, revision, selected node ID and request ID; no Env values, Step body, script text, credentials or storage paths. |
+| `run.debug_requested` | Scenario Debug Run requested | Include run ID, scenario ID, revision, selected node ID and request ID; no Env values, Step body, Groovy file contents, credentials or storage paths. |
 
 Rules:
 
@@ -1551,8 +1552,8 @@ Required:
 5. Scenario validation rejects GET/HEAD body.
 6. Scenario validation rejects PUT with multiple enabled upload files.
 7. Scenario validation rejects invalid variable names.
-8. Scenario validation rejects over-limit raw body and rejects invalid script content such as empty or over-limit `scripts[].scriptText`.
-9. Dependency File reference extraction creates only expected `data_source` and `upload_file` refs; inline JSR223 scripts do not create refs.
+8. Scenario validation rejects over-limit raw body and rejects inline `scripts[].scriptText`; enabled scripts require `.groovy` Dependency File references.
+9. Dependency File reference extraction creates expected `data_source`, `upload_file` and enabled script `script` refs.
 10. Variable resolution accepts Env Group variables and earlier extractor variables.
 11. Variable resolution rejects missing variables.
 12. Variable resolution rejects Env Group/extractor variable name conflicts.
@@ -1721,7 +1722,7 @@ P0-05 is done when:
 - [ ] Does the builder map `followRedirects` to `follow-redirects`, map `variableNames` to `variable-names`, omit `quoted` when null, and use compact Taurus time strings?
 - [ ] Is `default-address` resolved safely from `baseUrlExpression`?
 - [ ] Are unsupported Taurus logic blocks hidden from P0 UI/API?
-- [ ] Are JSR223 scripts limited to Groovy before/after blocks with bounded inline `scriptText`?
+- [ ] Are JSR223 scripts limited to Groovy before/after blocks backed by Dependency Files?
 - [ ] Is generated YAML internal only?
 
 ### 20.4 Run and Node Safety
@@ -1739,7 +1740,7 @@ P0-05 is done when:
 - [ ] Are Dependency File refs current-Workspace only?
 - [ ] Are MinIO object keys never returned to Web?
 - [ ] Are SSH credentials, runner tokens and storage credentials excluded from snapshots and logs?
-- [ ] Are script text and Env values excluded from audit details and general logs?
+- [ ] Are Groovy file contents and Env values excluded from audit details and general logs?
 
 ### 20.6 Frontend
 
@@ -1756,3 +1757,103 @@ P0-05 is done when:
 - [ ] `make verify` passed.
 - [ ] `make verify-e2e` was run when real SSH/Taurus environment was available.
 - [ ] Final response lists changed files, verification commands/results and remaining risks.
+
+---
+
+## 21. Implementation Backfill
+
+After P0-05 implementation, update this section only with engineering facts:
+
+1. actual migration filenames;
+2. actual API schema names if they differ from this draft;
+3. final generated OpenAPI path/operation IDs;
+4. final test files and verification commands;
+5. any implementation difference from the Taurus mapping above;
+6. remaining risks that later P0 slices must know.
+
+Do not use backfill to expand product scope.
+
+### 21.1 Backfill
+
+1. Migration added: `apps/api/migrations/versions/0006_p0_05_visual_scenarios.py`.
+2. API schema names implemented as drafted: `ScenarioCreateRequest`, `ScenarioPatchRequest`, `ScenarioDetail`, `ScenarioSummary`, `ScenarioListResponse`, `ScenarioStep`, and public `RunCreateRequest` / `RunCreateResponse` for Scenario Debug Runs.
+3. Exported OpenAPI remains generated at `packages/contracts/openapi/api.openapi.json`; generated Web client remains under `packages/contracts/generated/web-client`. P0-05 operation IDs are `listScenarios`, `createScenario`, `getScenario`, `patchScenario`, `deleteScenario`, and `createRun`.
+4. Tests added or extended:
+   - `tests/contract/test_p0_05_scenarios_openapi.py`
+   - `apps/api/tests/test_p0_05_scenarios_models.py`
+   - `apps/api/tests/test_p0_05_scenarios_service.py`
+   - `apps/api/tests/test_p0_05_scenarios_api.py`
+   - `apps/web/src/features/scenarios/scenarios.test.tsx`
+   - `tests/e2e/p0_05_scenarios.spec.ts`
+5. Verification commands run during implementation:
+   - `uv run --all-packages pytest apps/api/tests/test_p0_05_scenarios_service.py apps/api/tests/test_p0_05_scenarios_api.py tests/contract/test_p0_05_scenarios_openapi.py -q`
+   - `uv run --all-packages pytest apps/api/tests/test_p0_05_scenarios_service.py apps/api/tests/test_p0_05_scenarios_api.py --cov=app.services.scenarios --cov-report=term-missing -q`
+   - `pnpm --filter @surgepilot/web test -- scenarios.test.tsx --runInBand`
+   - `pnpm --filter @surgepilot/web typecheck`
+   - `pnpm --filter @surgepilot/web lint`
+   - `pnpm e2e -- tests/e2e/p0_05_scenarios.spec.ts`
+6. Taurus mapping implementation differences: none currently known. Generated YAML remains API-internal only and is not rendered or editable in the Web UI.
+7. Remaining risks / later-slice notes:
+   - `/runs/:runId` currently has a minimal handoff view only; full Run Report API/UI remains owned by P0-07.
+   - `POST /api/v1/runs` rejects non-Scenario Debug sources at runtime until P0-06 extends public Run creation.
+   - Real SSH/Taurus end-to-end execution remains gated by `make verify-e2e` / SSH-capable environment availability.
+
+### 21.2 Review Backfill
+
+1. Scenario Dependency File references are now wired into Dependency File delete protection through `DependencyFileReferenceChecker`; active Scenario refs block deletion with `FILE_IN_USE`.
+2. Scenario save now refreshes and locks the current Scenario row before comparing `expectedRevision`, so stale in-memory rows cannot bypass `SCENARIO_REVISION_CONFLICT`.
+3. Scenario validation skips execution-only checks for disabled Steps, allowing users to keep inactive draft content without blocking save or Debug Run when enabled Steps are valid.
+4. Enabled CSV data source `variableNames` now use the same variable identifier validation as extractors.
+5. Debug Run creation now rechecks the short-window dedup key after a `LOAD_NODE_BUSY` race so overlapping identical requests can return the existing Run instead of a spurious 409.
+
+### 21.3 Review Backfill
+
+1. Scenario schema now rejects blank-after-trim names and CSV delimiters other than a single character or `tab`; OpenAPI includes the corresponding string patterns.
+2. Debug variable validation now scans only enabled Step children, so disabled query params, headers, form fields, assertions and scripts do not create `missing_variable` errors.
+3. CSV data sources with empty `variableNames` are treated as header-based sources according to Taurus semantics; unresolved Step references are allowed to be supplied by the CSV first row at runtime.
+4. Regexp extractors are validated before save/debug so enabled regexp extractors must compile, contain at least one capture group and use a template that references an existing group when a template is provided.
+5. The Taurus builder now emits request-level `keepalive` when `steps[].settings.keepAlive` overrides the Scenario default.
+
+### 21.4 Review Backfill
+
+1. Scenario Debug Run remote start now stages an execution bundle for `sourceType='debug_scenario'` before invoking Runner start. The bundle is built from immutable `run_snapshots.snapshot_json`, not from the current editable Scenario row.
+2. The staged bundle contains `surgepilot.yml`, `manifest.json`, and enabled Dependency Files under safe bundle-relative `files/<dependencyFileId>/<safeFilename>` paths. Dependency File bytes are streamed from MinIO through API-owned storage code and uploaded to the Load Node through the existing SSH/SFTP adapter.
+3. Non-fake Runner execution now runs `bzt surgepilot.yml` from the staged bundle directory. The `running` callback is sent only after Taurus is started; `finished` requires Taurus exit code `0`, and non-zero Taurus exit reports `failed` with reason `runner_exit_nonzero`.
+4. Runner uploads available P0 whitelist artifacts through the internal artifact endpoint before sending the terminal callback: `run_log`, `taurus_log`, `jmeter_log`, `final_stats_csv`, and `failed_requests_csv`. Full report parsing remains owned by P0-07.
+5. `protocol_smoke` continues to use `--fake`; Scenario Debug Runs no longer use the fake runner path.
+6. Additional tests cover Debug Scenario bundle SFTP upload, dependency-file path safety in the generated YAML, real managed Runner success/failure/missing-bundle callbacks, artifact callbacks, and shared runner callback schema validation.
+
+### 21.5 Review Backfill
+
+1. Scenario Debug Run creation now locks the Scenario row before comparing `expectedSourceRevision`, and Scenario deletion locks the same row before checking active Debug Runs. This serializes save/debug/delete paths around the Scenario row.
+2. Debug Run snapshots now keep only enabled Scenario Steps and enabled data sources, matching the content used for generated Taurus execution and short-window deduplication.
+3. Scenario validation rejects duplicate Step IDs before persistence to keep editor selection, dependency refs and snapshot diagnostics unambiguous.
+4. Resolved Debug Run base URLs now reject unsafe characters and path traversal segments before bundle generation.
+5. Public P0-05 `RunCreateRequest` contract now only accepts `runType='debug'` with `sourceType='debug_scenario'`; later slices must widen this schema when enabling Test Plan Run creation.
+6. Scenario Debug Run creation writes bounded `run.debug_requested` audit events without Env values, Step bodies, scripts, credentials or storage paths.
+7. Debug Scenario bundle preparation failures before SSH credential resolution or remote upload now fail the Run and release the lease without quarantining the Load Node.
+8. The Scenario Designer now uses an in-app navigation blocker for dirty drafts in addition to browser `beforeunload`; Debug Run success navigation bypasses that blocker after saving.
+
+### 21.6 Review Backfill
+
+1. Scenario list supports the public `tag` query filter and returns `400 INVALID_QUERY_PARAMETER` for unsupported `sort` values while the generated OpenAPI/Web client documents the allowed sort enum.
+2. Enabled assertions now require non-empty `body_contains.contains`, `jsonpath_exists.jsonpath`, `jsonpath_equals.jsonpath`, and `jsonpath_equals.expectedValue` before save/debug.
+3. Scenario routes are feature-owned and lazy-loaded from `apps/web/src/features/scenarios/routes.tsx`.
+4. App navigation separates `Assets` for Env Groups/Dependency Files from `Resources` for Load Nodes.
+5. Scenario Designer metadata editing now includes description and tags.
+6. Scenario Designer can maintain CSV data sources, including Dependency File binding, delimiter, variable names, loop/random/quoted/enabled settings.
+
+### 21.7 P1-05 Backfill
+
+1. P1-05 widened Scenario Step named value limits from 4,096 to 65,536 characters for query params, headers and form fields so browser-sized Cookie headers can be imported, previewed and saved through the existing Scenario `PATCH` flow.
+2. This backfill does not change P0 Env Group variable limits; Env Group values remain capped at 4,096 UTF-8 bytes by the Env Group service.
+3. Scenario storage remains the existing JSONB / SQLite JSON variant columns, so no P0-05 DB migration or historical compatibility layer was required.
+
+
+### 21.8 In-Dev Contract Correction
+
+1. Scenario Step Script was corrected from inline `scriptText` to Dependency File `dependencyFileId`; no historical compatibility layer is required because this is still development-stage P0-05 contract correction.
+2. `scenario_dependency_file_refs.ref_type` now includes `script`; a forward DDL migration updates `ck_scenario_dependency_file_refs_type` instead of editing the already published P0-05 migration.
+3. Enabled scripts under enabled Steps must reference an available same-Workspace `.groovy` Dependency File. Disabled scripts or scripts under disabled Steps do not validate suffix/existence and do not write `script` refs.
+4. Taurus JSR223 generation now emits `script-file` with `bundle_file_path(file)` so Groovy scripts share the same execution bundle path and manifest rules as CSV data sources and upload files.
+5. Debug HTTP Trace remains separate: internal trace injection may still use implementation-owned script text and is not user-configurable Scenario Step Script content.

@@ -54,7 +54,6 @@ Accepted.
 6. Public OpenAPI verification must become a CI/`make verify` gate, not a manual review convention.
 7. SurgePilot maintainers own the source skill package and its contract snapshot; third-party adapters may still consume the public API independently, but they are not the canonical package implementation.
 8. ADR-0016's source download gives users a convenient copy of repository-owned source without creating a release/version/update channel or changing the skill's explicit Workspace, allowlist, confirmation, and fail-closed boundaries.
-9. Verification backfill: session token coverage is in `apps/api/tests/test_p2_02_api_tokens_api.py`; public bearer/scope/Workspace/structured-write/Run/Dependency File coverage is in `apps/api/tests/test_p2_02_public_api.py`; node-facing origin, readiness, and start-blocking coverage is in `apps/api/tests/test_p2_02_load_node_connectivity.py`; public artifact exclusion and byte-identical skill-snapshot alignment are in `tests/contract/test_p2_02_public_api_openapi.py`; internal session-token and connectivity operations are covered in `tests/contract/test_openapi_contract.py`; and Web coverage is in `apps/web/src/features/account/api-keys.test.tsx` and `apps/web/src/features/load-nodes/load-node-connectivity-summary.test.tsx`. Deployment `.env`/bootstrap/Makefile startup governance and the SSH lifecycle verifier belong to the later startup checkpoint.
 
 ## Related ADRs
 
