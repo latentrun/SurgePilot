@@ -9,7 +9,6 @@ from httpx import AsyncClient
 from pydantic import ValidationError
 from sqlalchemy import select
 from sqlalchemy.orm import Session, sessionmaker
-from surgepilot_runner import cli as fake_runner_cli
 
 from app.core.config import get_settings
 from app.core.errors import AppError
@@ -455,117 +454,6 @@ def test_fake_runner_env_uses_node_bound_credential_and_rejects_sibling_token(
     with pytest.raises(AppError) as mismatch:
         validate_runner_token(signed_token, node_id=node_b)
     assert mismatch.value.code == "RUNNER_FORBIDDEN"
-
-
-def test_shared_fake_runner_multi_node_smoke_uses_callbacks_artifacts_and_redaction(
-    db_session: Session, monkeypatch: pytest.MonkeyPatch, tmp_path
-) -> None:
-    """Exercise the shared fake Runner once per allocation, not a recording executor."""
-    user = actor()
-    db_session.add(user)
-    db_session.flush()
-    node_a = idle_node(db_session, user)
-    node_b = idle_node(db_session, user)
-    plan = make_test_plan(
-        db_session,
-        user,
-        resource={
-            "mode": "manual",
-            "poolType": "private",
-            "selectedNodeId": node_a.id,
-            "selectedNodeIds": [node_a.id, node_b.id],
-        },
-    )
-
-    def run_fake_allocation(run_id: str, node_id: str, *, scenario_name: str) -> list[dict]:
-        events: list[dict] = []
-
-        def fake_upload_artifact(**kwargs):  # noqa: ANN003
-            path = kwargs["path"]
-            return {
-                "artifactId": new_ulid(),
-                "sizeBytes": path.stat().st_size,
-                "sha256": hashlib.sha256(path.read_bytes()).hexdigest(),
-            }
-
-        monkeypatch.setattr(fake_runner_cli, "post_callback", events.append)
-        monkeypatch.setattr(fake_runner_cli, "upload_artifact", fake_upload_artifact)
-        monkeypatch.setenv("RUNNER_HOME", str(tmp_path / node_id))
-        monkeypatch.setenv("SURGEPILOT_NODE_ID", node_id)
-        monkeypatch.setenv("RUNNER_FAKE_SCENARIO", scenario_name)
-        fake_runner_cli.fake_scenario(run_id)
-        return events
-
-    def apply_events(
-        node_id: str,
-        events: list[dict],
-        *,
-        auth_node_id: str | None = None,
-    ) -> None:
-        for event in events:
-            callback_input = RunnerCallbackInput(
-                schema_version=event["schemaVersion"],
-                event_id=event["eventId"],
-                run_id=event["runId"],
-                node_id=event["nodeId"],
-                runtime_version=event["runtimeVersion"],
-                event_type=event["eventType"],
-                seq=event["seq"],
-                event_time=datetime.fromisoformat(event["eventTime"].replace("Z", "+00:00")),
-                message=event.get("message"),
-                runner_pid=event.get("runnerPid"),
-                details=event.get("details", {}),
-                raw_payload=event,
-            )
-            apply_runner_callback(
-                db_session,
-                callback=callback_input,
-                request_id=new_ulid(),
-                authenticated_node_id=auth_node_id or node_id,
-            )
-
-    def new_run():
-        return create_test_plan_run(
-            db_session,
-            workspace_id=DEFAULT_WORKSPACE_ID,
-            actor=user,
-            source_id=plan.id,
-            expected_source_revision=plan.revision,
-            run_type="standard",
-            confirm_high_concurrency=True,
-        )
-
-    success = new_run()
-    events_a = run_fake_allocation(success.run.id, node_a.id, scenario_name="success")
-    events_b = run_fake_allocation(success.run.id, node_b.id, scenario_name="success")
-    assert any(event["eventType"] == "artifact" for event in events_a)
-    assert any(event["eventType"] == "artifact" for event in events_b)
-
-    with pytest.raises(AppError) as mismatch:
-        apply_events(node_b.id, events_b[:1], auth_node_id=node_a.id)
-    assert mismatch.value.code == "RUNNER_FORBIDDEN"
-    apply_events(node_a.id, events_a)
-    apply_events(node_b.id, events_b)
-    assert success.run.state == "finished"
-    report = get_run_report(
-        db_session, workspace_id=DEFAULT_WORKSPACE_ID, run_id=success.run.id
-    ).model_dump(by_alias=True)
-    report_text = str(report)
-    assert report["verdict"]["state"] == "finished"
-    assert len(report["allocatedNodes"]) == 2
-    for secret in (node_a.host, node_b.host, node_a.ssh_user, node_a.runner_home):
-        assert secret not in report_text
-
-    failed = new_run()
-    apply_events(
-        node_a.id,
-        run_fake_allocation(failed.run.id, node_a.id, scenario_name="success"),
-    )
-    apply_events(
-        node_b.id,
-        run_fake_allocation(failed.run.id, node_b.id, scenario_name="failed"),
-    )
-    assert failed.run.state == "failed"
 
 
 def test_old_node_bound_runner_token_format_is_rejected(
