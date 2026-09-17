@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 from app.core.errors import AppError
 from app.core.ids import new_ulid
 from app.core.time import as_utc, utc_now
-from app.models.auth import User, Workspace
+from app.models.auth import User
 from app.schemas.auth import (
     AuthSessionResponse,
     CurrentUserResponse,
@@ -36,33 +36,36 @@ def normalize_email(email: str) -> str:
     return email.strip().lower()
 
 
-def _session_context(db: Session, user: User, workspace: Workspace):
-    workspace_data = workspace_summary(workspace)
+def _session_context(db: Session, user: User, workspace):
+    available = available_workspaces(db, user)
+    current = workspace_summary(workspace)
     return {
         "user": user_summary(user),
-        "current_workspace": workspace_data,
-        "available_workspaces": available_workspaces(db, user),
+        "current_workspace": current,
+        "available_workspaces": available,
         "permissions": permissions_for(user),
-        "default_workspace": workspace_data,
+        "default_workspace": current,
     }
 
 
 def auth_response(
-    db: Session, user: User, workspace: Workspace, session: CreatedSession
+    db: Session, user: User, workspace, session: CreatedSession
 ) -> AuthSessionResponse:
     return AuthSessionResponse(
         **_session_context(db, user, workspace), csrf_token=session.csrf_token
     )
 
 
-def current_user_response(db: Session, user: User, workspace: Workspace) -> CurrentUserResponse:
+def current_user_response(db: Session, user: User, workspace) -> CurrentUserResponse:
     return CurrentUserResponse(**_session_context(db, user, workspace))
 
 
 def current_user_response_for_preference(
     db: Session, *, user: User, preferred_workspace_id: str | None
 ) -> CurrentUserResponse:
-    workspace, _ = resolve_current_workspace(db, user=user, preferred_workspace_id=preferred_workspace_id)
+    workspace, _available = resolve_current_workspace(
+        db, user=user, preferred_workspace_id=preferred_workspace_id
+    )
     return current_user_response(db, user, workspace)
 
 
@@ -82,7 +85,7 @@ def register_user(
     display_name: str,
     password: str,
     request: Request,
-) -> tuple[User, Workspace, CreatedSession, bool]:
+) -> tuple[User, object, CreatedSession, bool]:
     normalized_email = normalize_email(email)
     trimmed_display_name = display_name.strip()
     if not trimmed_display_name:
@@ -198,7 +201,7 @@ def login_user(
     email: str,
     password: str,
     request: Request,
-) -> tuple[User, Workspace, CreatedSession]:
+) -> tuple[User, object, CreatedSession]:
     normalized_email = normalize_email(email)
     user = db.scalar(select(User).where(User.email == normalized_email))
     now = utc_now()
@@ -214,14 +217,14 @@ def login_user(
     if not password_matches:
         _record_login_failure(db, user=user, request=request)
         raise AppError("INVALID_CREDENTIALS", "Invalid email or password.", 401)
+    if user.status == "disabled":
+        raise AppError("USER_DISABLED", "User is disabled.", 403)
 
     user.failed_login_count = 0
     user.locked_until = None
     user.last_login_at = now
     user.updated_at = now
-    if user.status == "disabled":
-        raise AppError("USER_DISABLED", "User is disabled.", 403)
-    workspace, _ = resolve_current_workspace(db, user=user, preferred_workspace_id=None)
+    workspace, _available = resolve_current_workspace(db, user=user, preferred_workspace_id=None)
     session = create_session(db, user=user)
     write_audit_event(
         db,

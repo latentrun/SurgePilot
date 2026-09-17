@@ -88,7 +88,7 @@ CsrfDep = Annotated[None, Depends(require_csrf)]
 
 
 def request_id(request: Request) -> str:
-    return getattr(request.state, "request_id", "")
+    return request.state.request_id
 
 
 @dataclass(frozen=True)

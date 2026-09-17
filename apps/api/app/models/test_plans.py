@@ -9,6 +9,7 @@ from app.db.base import Base
 
 TEST_PLAN_RUN_MODES = ("sequential", "parallel")
 TEST_PLAN_POOL_TYPES = ("public", "private")
+TEST_PLAN_RESOURCE_MODES = ("manual", "auto")
 SLA_CONDITIONS = ("gt", "gte", "lt", "lte", "eq")
 SLA_THRESHOLD_UNITS = ("ms", "s", "percent", "count", "b", "kb", "mb")
 SLA_TIMEFRAME_LOGICS = ("for", "within")
@@ -25,6 +26,11 @@ class TestPlan(Base):
             "pool_type is null or pool_type in ('public', 'private')",
             name="ck_test_plans_pool_type",
         ),
+        CheckConstraint(
+            "resource_mode in ('manual', 'auto')",
+            name="ck_test_plans_resource_mode",
+        ),
+        CheckConstraint("node_count is null or node_count > 0", name="ck_test_plans_node_count"),
         CheckConstraint("revision >= 1", name="ck_test_plans_revision"),
         CheckConstraint("length(created_by) = 26", name="ck_test_plans_created_by_len"),
         CheckConstraint("length(updated_by) = 26", name="ck_test_plans_updated_by_len"),
@@ -40,8 +46,6 @@ class TestPlan(Base):
             "selected_node_id is null or length(selected_node_id) = 26",
             name="ck_test_plans_selected_node_id_len",
         ),
-        CheckConstraint("resource_mode in ('manual', 'auto')", name="ck_test_plans_resource_mode"),
-        CheckConstraint("node_count is null or node_count > 0", name="ck_test_plans_node_count"),
     )
 
     id: Mapped[str] = mapped_column(String(26), primary_key=True)

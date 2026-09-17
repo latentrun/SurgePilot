@@ -17,7 +17,7 @@ from app.core.time import utc_now
 from app.models.api_catalog import ApiCatalogSpec
 from app.services.audit import write_audit_event_in_new_transaction
 from app.services.dependency_files import validate_safe_filename_floor
-from app.services.storage import PutResult, StorageClient, StoredObjectStream
+from app.services.storage import PutResult, StorageClient
 
 logger = logging.getLogger(__name__)
 
@@ -302,21 +302,6 @@ def get_api_catalog_spec(db: Session, *, workspace_id: str, spec_id: str) -> Api
     if spec is None:
         raise AppError("RESOURCE_NOT_FOUND", "Resource was not found.", 404)
     return spec
-
-
-def get_api_catalog_spec_content(
-    db: Session,
-    *,
-    workspace_id: str,
-    spec_id: str,
-    storage: StorageClient,
-) -> tuple[ApiCatalogSpec, StoredObjectStream]:
-    spec = get_api_catalog_spec(db, workspace_id=workspace_id, spec_id=spec_id)
-    stored = storage.get_stream(
-        bucket=spec.storage_bucket,
-        object_key=spec.storage_object_key,
-    )
-    return spec, stored
 
 
 def delete_api_catalog_spec_metadata(

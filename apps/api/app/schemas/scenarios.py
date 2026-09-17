@@ -118,7 +118,7 @@ class ScenarioScript(ApiSchema):
     id: str = Field(min_length=26, max_length=26)
     execute: ScriptExecute
     language: ScriptLanguage = "groovy"
-    script_text: str | None = Field(default=None, max_length=262_144)
+    dependency_file_id: str | None = Field(default=None, max_length=26)
     enabled: bool = True
 
 
@@ -317,10 +317,14 @@ class OpenApiGeneratedStepDraft(ApiSchema):
     name: str = Field(min_length=1, max_length=120)
     method: HttpMethod
     path: str = Field(min_length=1, max_length=2048)
-    query_params: list[OpenApiGeneratedNamedValueDraft] = Field(default_factory=list, max_length=200)
+    query_params: list[OpenApiGeneratedNamedValueDraft] = Field(
+        default_factory=list, max_length=200
+    )
     headers: list[OpenApiGeneratedNamedValueDraft] = Field(default_factory=list, max_length=200)
     body: OpenApiGeneratedBodyDraft = Field(default_factory=OpenApiGeneratedBodyDraft)
-    settings: OpenApiGeneratedStepSettingsDraft = Field(default_factory=OpenApiGeneratedStepSettingsDraft)
+    settings: OpenApiGeneratedStepSettingsDraft = Field(
+        default_factory=OpenApiGeneratedStepSettingsDraft
+    )
 
     @field_validator("path")
     @classmethod

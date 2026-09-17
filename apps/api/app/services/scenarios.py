@@ -1,28 +1,3 @@
-"""P0-05 Visual Scenario service and Taurus requests-scenario execution builder.
-
-This module implements the P0 Scenario service contract from
-``docs/sdd/slices/P0-05-visual-scenario-debug-run.md``:
-
-- Pydantic-normalized Scenario create/patch content with structural and
-  semantic validation of the Visual Scenario JSON (headers, body, upload
-  files, extractors, assertions, inline JSR223/Groovy scripts and Step
-  settings).
-- Optimistic Scenario revision handling: PATCH requires ``expectedRevision``
-  and increments ``revision`` on success.
-- Transactional maintenance of ``scenario_dependency_file_refs`` rows derived
-  from enabled CSV data sources and enabled Step upload files, and deletion
-  protection for Dependency Files referenced by live Scenarios.
-- Scenario soft-delete protection while active ``debug_scenario`` Runs exist.
-- The execution builder that maps a saved Visual Scenario plus validated Env
-  Group variables into a canonical Taurus requests-scenario YAML document for
-  JMeter execution (alias ``surgepilot_scenario``).
-
-P0 scripts are request-level inline JSR223/Groovy text stored in the Scenario
-Step JSON and mapped to Taurus ``jsr223`` ``script-text`` entries. The
-``script`` Dependency File reference type and script-file handling are
-introduced by a later migration and are intentionally absent here.
-"""
-
 from __future__ import annotations
 
 from collections.abc import Iterable
@@ -42,19 +17,21 @@ from pydantic import ValidationError
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from app.core.config import get_settings
 from app.core.errors import AppError
 from app.core.ids import new_ulid
 from app.core.time import utc_now
 from app.models.auth import User
 from app.models.dependency_files import DependencyFile
 from app.models.env_groups import EnvGroup
+from app.services.env_groups import env_group_runtime_values
 from app.models.runs import Run
 from app.models.scenarios import RunCreationDedupKey, Scenario, ScenarioDependencyFileRef
 from app.schemas.common import ExecutionPreviewWarning
 from app.schemas.scenarios import ScenarioCreateRequest, ScenarioPatchRequest
 from app.services.audit import write_audit_event
-from app.services.env_groups import env_group_runtime_values
 from app.services.runs import RunExecutionInput, create_run_execution
+from app.services.system_settings import jmeter_memory_xmx
 
 VARIABLE_PATTERN = re.compile(r"\$\{([A-Za-z_][A-Za-z0-9_]*)\}")
 VARIABLE_NAME_PATTERN = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
@@ -69,6 +46,15 @@ PREVIEW_RUNNER_HOME = "/opt/surgepilot/runner"
 PREVIEW_REDACTED_RUNTIME_PATH = "<redacted-runtime-path>"
 PREVIEW_REDACTED_ENV_VALUE = "<redacted-env-value>"
 
+JMETER_PROTOCOL_HANDLERS = {"http": "bzt.jmx.http.HTTPProtocolHandler"}
+TAURUS_MODULE_CLASS_ALIASES = {
+    "local": "bzt.modules.provisioning.Local",
+    "consolidator": "bzt.modules.aggregator.ConsolidatingAggregator",
+    "final-stats": "bzt.modules.reporting.FinalStatus",
+    "console": "bzt.modules.console.ConsoleStatusReporter",
+    "passfail": "bzt.modules.passfail.PassFailStatus",
+}
+
 
 def runtime_jmeter_path(runner_home: str) -> str:
     return (
@@ -77,9 +63,71 @@ def runtime_jmeter_path(runner_home: str) -> str:
     )
 
 
-def request_label(method: str, path: str) -> str:
-    """Build the bounded Taurus request label from Step method and path."""
-    return f"{method} {path}"[:200]
+def request_label(
+    method: str,
+    path: str,
+    step_id: str,
+    *,
+    item_id: str | None = None,
+    scenario_id: str | None = None,
+) -> str:
+    identity = f"step:{step_id}"
+    if item_id:
+        identity += f" item:{item_id}"
+    elif scenario_id:
+        identity += f" scenario:{scenario_id}"
+    suffix = f" [{identity}]"
+    prefix = f"{method} {path}"
+    return f"{prefix[: max(0, 200 - len(suffix))]}{suffix}"
+
+
+def taurus_settings(env: dict[str, str]) -> dict[str, Any]:
+    return {
+        "artifacts-dir": "artifacts",
+        "aggregator": "consolidator",
+        "env": env,
+    }
+
+
+def taurus_modules(
+    *,
+    jmeter_path: str,
+    jmeter_version: str,
+    force_ctg: bool,
+    sequential: bool = False,
+    memory_xmx: str = "4G",
+    include_passfail: bool = False,
+) -> dict[str, Any]:
+    local_module: dict[str, Any] = {"class": TAURUS_MODULE_CLASS_ALIASES["local"]}
+    if sequential:
+        local_module["sequential"] = True
+    modules: dict[str, Any] = {
+        "jmeter": {
+            "class": "bzt.modules.jmeter.JMeterExecutor",
+            "path": jmeter_path,
+            "version": jmeter_version,
+            "detect-plugins": False,
+            "memory-xmx": memory_xmx,
+            "force-ctg": force_ctg,
+            "fix-log4j": False,
+            "fix-jars": False,
+            "protocol-handlers": dict(JMETER_PROTOCOL_HANDLERS),
+        },
+        "local": local_module,
+        "consolidator": {"class": TAURUS_MODULE_CLASS_ALIASES["consolidator"]},
+        "final-stats": {"class": TAURUS_MODULE_CLASS_ALIASES["final-stats"]},
+        "console": {"class": TAURUS_MODULE_CLASS_ALIASES["console"]},
+    }
+    if include_passfail:
+        modules["passfail"] = {"class": TAURUS_MODULE_CLASS_ALIASES["passfail"]}
+    return modules
+
+
+@dataclass(frozen=True)
+class ScenarioRunResult:
+    run: Run
+    deduplicated: bool
+    status_code: int
 
 
 def field_error(field: str, message: str, code: str = "invalid_field") -> dict[str, str]:
@@ -306,15 +354,23 @@ def _validate_dependency_files(
     db: Session, *, workspace_id: str, content: dict[str, Any]
 ) -> dict[str, DependencyFile]:
     ids: set[str] = set()
+    script_refs: list[tuple[int, int, str]] = []
     for data_source in content["dataSources"]:
         if data_source.get("enabled", True):
             ids.add(data_source["dependencyFileId"])
-    for step in content["steps"]:
+    for step_index, step in enumerate(content["steps"]):
         if not step.get("enabled", True):
             continue
         for upload in step.get("uploadFiles", []):
             if upload.get("enabled", True):
                 ids.add(upload["dependencyFileId"])
+        for script_index, script in enumerate(step.get("scripts", [])):
+            if not script.get("enabled", True):
+                continue
+            dependency_file_id = script.get("dependencyFileId")
+            if dependency_file_id:
+                ids.add(dependency_file_id)
+                script_refs.append((step_index, script_index, dependency_file_id))
     if not ids:
         return {}
     files = {
@@ -330,6 +386,22 @@ def _validate_dependency_files(
     missing = sorted(ids - files.keys())
     if missing:
         raise AppError("RESOURCE_NOT_FOUND", "Resource was not found.", 404)
+    details: list[dict[str, str]] = []
+    for step_index, script_index, dependency_file_id in script_refs:
+        file = files[dependency_file_id]
+        if not (
+            file.filename.lower().endswith(".groovy")
+            or _safe_bundle_filename(file.filename).lower().endswith(".groovy")
+        ):
+            details.append(
+                field_error(
+                    f"steps[{step_index}].scripts[{script_index}].dependencyFileId",
+                    "Script Dependency File must be a .groovy file.",
+                    "invalid_script_file",
+                )
+            )
+    if details:
+        raise validation_error(details)
     return files
 
 
@@ -589,12 +661,12 @@ def validate_scenario_content(
         for script_index, script in enumerate(step.get("scripts", [])):
             if not script.get("enabled", True):
                 continue
-            if not (script.get("scriptText") or "").strip():
+            if not script.get("dependencyFileId"):
                 details.append(
                     field_error(
-                        f"{prefix}.scripts[{script_index}].scriptText",
-                        "Script text is required.",
-                        "script_text_required",
+                        f"{prefix}.scripts[{script_index}].dependencyFileId",
+                        "Script Dependency File is required.",
+                        "required_field",
                     )
                 )
     if require_enabled_step and enabled_step_count == 0:
@@ -654,6 +726,27 @@ def _replace_dependency_refs(
                     scenario_id=scenario.id,
                     dependency_file_id=upload["dependencyFileId"],
                     ref_type="upload_file",
+                    step_id=step["id"],
+                    created_at=now,
+                )
+            )
+        for script in step.get("scripts", []):
+            if not script.get("enabled", True):
+                continue
+            dependency_file_id = script.get("dependencyFileId")
+            if not dependency_file_id:
+                continue
+            key = (dependency_file_id, "script", step["id"])
+            if key in seen:
+                continue
+            seen.add(key)
+            refs.append(
+                ScenarioDependencyFileRef(
+                    id=new_ulid(),
+                    workspace_id=scenario.workspace_id,
+                    scenario_id=scenario.id,
+                    dependency_file_id=dependency_file_id,
+                    ref_type="script",
                     step_id=step["id"],
                     created_at=now,
                 )
@@ -885,6 +978,21 @@ def delete_scenario(db: Session, *, scenario: Scenario, actor: User) -> None:
     db.flush()
 
 
+def _enabled_dependency_files(
+    db: Session, *, scenario: Scenario
+) -> list[tuple[ScenarioDependencyFileRef, DependencyFile]]:
+    rows = db.execute(
+        select(ScenarioDependencyFileRef, DependencyFile)
+        .join(DependencyFile, DependencyFile.id == ScenarioDependencyFileRef.dependency_file_id)
+        .where(
+            ScenarioDependencyFileRef.workspace_id == scenario.workspace_id,
+            ScenarioDependencyFileRef.scenario_id == scenario.id,
+            DependencyFile.status == "available",
+        )
+    ).all()
+    return [(row[0], row[1]) for row in rows]
+
+
 def _resolve_expression(expression: str, variables: dict[str, str]) -> str:
     missing = [name for name in VARIABLE_PATTERN.findall(expression) if name not in variables]
     if missing:
@@ -892,7 +1000,7 @@ def _resolve_expression(expression: str, variables: dict[str, str]) -> str:
             [
                 field_error(
                     "baseUrlExpression",
-        "Variable is not provided by Scenario variables or the selected Env Group.",
+                    "Variable is not provided by Scenario variables or the selected Env Group.",
                     "missing_variable",
                 )
                 for _name in missing
@@ -912,10 +1020,7 @@ def _validate_resolved_base_url(value: str) -> None:
             [
                 field_error(
                     "baseUrlExpression",
-                    (
-                        "Resolved Base URL must use http or https without unsafe "
-                        "characters or path traversal."
-                    ),
+                    "Resolved Base URL must use http or https without unsafe characters or path traversal.",
                     "invalid_url",
                 )
             ]
@@ -941,11 +1046,10 @@ def _validate_debug_variables(content: dict[str, Any], env_variables: dict[str, 
         for name in sorted(initial_references - available):
             details.append(
                 field_error(
-                    "baseUrlExpression",
+                    "globalConfiguration",
                     (
                         f"Variable {name} is not provided by Scenario variables, "
-                        "the selected Env Group, "
-                        "CSV variables or earlier extractors."
+                        "the selected Env Group, CSV variables or earlier extractors."
                     ),
                     "missing_variable",
                 )
@@ -959,8 +1063,7 @@ def _validate_debug_variables(content: dict[str, Any], env_variables: dict[str, 
                         f"steps[{step_index}]",
                         (
                             f"Variable {name} is not provided by Scenario variables, "
-                            "the selected Env Group, "
-                            "CSV variables or earlier extractors."
+                            "the selected Env Group, CSV variables or earlier extractors."
                         ),
                         "missing_variable",
                     )
@@ -1083,14 +1186,17 @@ def _request_assertions(step: dict[str, Any]) -> dict[str, Any]:
     return result
 
 
-def _request_scripts(step: dict[str, Any]) -> list[dict[str, Any]]:
+def _request_scripts(
+    step: dict[str, Any], files: dict[str, DependencyFile]
+) -> list[dict[str, Any]]:
     scripts = []
     for script in _active_items(step.get("scripts", [])):
+        file = files[script["dependencyFileId"]]
         scripts.append(
             {
-                "language": script["language"],
+                "language": "groovy",
                 "execute": script["execute"],
-                "script-text": script["scriptText"],
+                "script-file": bundle_file_path(file),
                 "compile-cache": True,
             }
         )
@@ -1117,11 +1223,12 @@ def build_debug_taurus_document_from_content(
     dependency_files: list[DependencyFile],
     jmeter_path: str,
     jmeter_version: str,
+    memory_xmx: str = "4G",
+    test_plan_item_id: str | None = None,
 ) -> dict[str, Any]:
-    """Translate an already-authorized Scenario into a Taurus YAML document."""
     validate_scenario_content(scenario_content, require_enabled_step=True)
-    _validate_debug_variables(scenario_content, env_variables)
     effective_variables = _effective_variables(scenario_content, env_variables)
+    _validate_debug_variables(scenario_content, env_variables)
     default_address = _resolve_expression(
         scenario_content["baseUrlExpression"], effective_variables
     )
@@ -1165,7 +1272,13 @@ def build_debug_taurus_document_from_content(
     requests = []
     for step in _active_items(scenario_content["steps"]):
         request: dict[str, Any] = {
-            "label": request_label(step["method"], step["path"]),
+            "label": request_label(
+                step["method"],
+                step["path"],
+                step["id"],
+                item_id=test_plan_item_id,
+                scenario_id=scenario_content.get("id"),
+            ),
             "url": _request_url(step),
             "method": step["method"],
         }
@@ -1189,23 +1302,27 @@ def build_debug_taurus_document_from_content(
             request["keepalive"] = step_settings["keepAlive"]
         request.update(_request_extractors(step))
         request.update(_request_assertions(step))
-        scripts = _request_scripts(step)
+        scripts = _request_scripts(step, files)
         if scripts:
             request["jsr223"] = scripts
         requests.append(request)
     scenario_doc["requests"] = requests
     return {
-        "settings": {"env": {}},
-        "modules": {
-            "jmeter": {
-                "path": jmeter_path,
-                "version": jmeter_version,
-                "detect-plugins": False,
-                "force-ctg": False,
-            }
-        },
+        "settings": taurus_settings({}),
+        "modules": taurus_modules(
+            jmeter_path=jmeter_path,
+            jmeter_version=jmeter_version,
+            force_ctg=False,
+            sequential=False,
+            memory_xmx=memory_xmx,
+        ),
+        "provisioning": "local",
         "execution": [
             {"executor": "jmeter", "concurrency": 1, "iterations": 1, "scenario": SCENARIO_ALIAS}
+        ],
+        "reporting": [
+            {"module": "final-stats", "dump-csv": "artifacts/finalstats.csv"},
+            "console",
         ],
         "scenarios": {SCENARIO_ALIAS: scenario_doc},
     }
@@ -1218,6 +1335,7 @@ def build_debug_taurus_yaml_from_content(
     dependency_files: list[DependencyFile],
     jmeter_path: str,
     jmeter_version: str,
+    memory_xmx: str = "4G",
 ) -> str:
     document = build_debug_taurus_document_from_content(
         scenario_content=scenario_content,
@@ -1225,6 +1343,7 @@ def build_debug_taurus_yaml_from_content(
         dependency_files=dependency_files,
         jmeter_path=jmeter_path,
         jmeter_version=jmeter_version,
+        memory_xmx=memory_xmx,
     )
     return yaml.safe_dump(document, sort_keys=False, allow_unicode=False)
 
@@ -1236,6 +1355,7 @@ def build_debug_taurus_document(
     dependency_files: list[DependencyFile],
     jmeter_path: str,
     jmeter_version: str,
+    memory_xmx: str = "4G",
 ) -> dict[str, Any]:
     content = {
         "name": scenario.name,
@@ -1252,6 +1372,7 @@ def build_debug_taurus_document(
         dependency_files=dependency_files,
         jmeter_path=jmeter_path,
         jmeter_version=jmeter_version,
+        memory_xmx=memory_xmx,
     )
 
 
@@ -1262,6 +1383,7 @@ def build_debug_taurus_yaml(
     dependency_files: list[DependencyFile],
     jmeter_path: str,
     jmeter_version: str,
+    memory_xmx: str = "4G",
 ) -> str:
     document = build_debug_taurus_document(
         scenario=scenario,
@@ -1269,25 +1391,12 @@ def build_debug_taurus_yaml(
         dependency_files=dependency_files,
         jmeter_path=jmeter_path,
         jmeter_version=jmeter_version,
+        memory_xmx=memory_xmx,
     )
     return yaml.safe_dump(document, sort_keys=False, allow_unicode=False)
 
 
-@dataclass(frozen=True)
-class ScenarioRunResult:
-    """Outcome of a Scenario Debug Run creation request.
-
-    ``deduplicated`` is ``True`` when the request hit the short-window dedup
-    key and the already-created Run is returned with status 200 instead of 201.
-    """
-
-    run: Run
-    deduplicated: bool
-    status_code: int
-
-
 def _scenario_snapshot(scenario: Scenario) -> dict[str, Any]:
-    """Build the safe Scenario portion stored in a Debug Run snapshot."""
     return {
         "id": scenario.id,
         "name": scenario.name,
@@ -1302,8 +1411,9 @@ def _scenario_snapshot(scenario: Scenario) -> dict[str, Any]:
 
 
 def _snapshot_hash(payload: dict[str, Any]) -> str:
-    encoded = json.dumps(payload, sort_keys=True, separators=(",", ":"), default=str).encode()
-    return hashlib.sha256(encoded).hexdigest()
+    return hashlib.sha256(
+        json.dumps(payload, sort_keys=True, separators=(",", ":"), default=str).encode()
+    ).hexdigest()
 
 
 def _run_response_snapshot(
@@ -1312,11 +1422,6 @@ def _run_response_snapshot(
     env_group: EnvGroup | None,
     dependency_rows: list[tuple[ScenarioDependencyFileRef, DependencyFile]],
 ) -> dict[str, Any]:
-    """Build the Debug Run snapshot payload for the current Scenario revision.
-
-    Only enabled Scenario content and available Dependency Files are captured;
-    disabled Steps are excluded so a later edit never leaks into an old Run.
-    """
     dependency_files = [
         {
             "id": file.id,
@@ -1354,29 +1459,13 @@ def _run_response_snapshot(
     }
 
 
-def _enabled_dependency_files(
-    db: Session, *, scenario: Scenario
-) -> list[tuple[ScenarioDependencyFileRef, DependencyFile]]:
-    rows = db.execute(
-        select(ScenarioDependencyFileRef, DependencyFile)
-        .join(DependencyFile, DependencyFile.id == ScenarioDependencyFileRef.dependency_file_id)
-        .where(
-            ScenarioDependencyFileRef.workspace_id == scenario.workspace_id,
-            ScenarioDependencyFileRef.scenario_id == scenario.id,
-            DependencyFile.status == "available",
-        )
-    ).all()
-    return [(row[0], row[1]) for row in rows]
-
-
 def _dedup_hash(payload: dict[str, Any]) -> str:
-    encoded = json.dumps(payload, sort_keys=True, separators=(",", ":"), default=str).encode()
-    return hashlib.sha256(encoded).hexdigest()
+    return hashlib.sha256(
+        json.dumps(payload, sort_keys=True, separators=(",", ":"), default=str).encode()
+    ).hexdigest()
 
 
-def _find_existing_dedup_run(
-    db: Session, *, workspace_id: str, dedup_hash: str, now
-) -> Run | None:
+def _find_existing_dedup_run(db: Session, *, workspace_id: str, dedup_hash: str, now) -> Run | None:
     existing_dedup = db.scalar(
         select(RunCreationDedupKey).where(
             RunCreationDedupKey.workspace_id == workspace_id,
@@ -1403,15 +1492,6 @@ def create_debug_run(
     selected_node_id: str,
     dedup_window_seconds: int = DEFAULT_DEDUP_WINDOW_SECONDS,
 ) -> ScenarioRunResult:
-    """Create a Scenario Debug Run under the P0-05 public Run contract.
-
-    The caller owns the transaction. This function validates the Scenario
-    content for execution (at least one enabled Step, resolved variables and a
-    safe resolved Base URL), builds the Run Snapshot payload, and atomically
-    creates the Run + Snapshot + node lease through ``create_run_execution``.
-    A short-window dedup key collapses repeated user retries onto the same Run;
-    a non-dedup request against a busy Load Node raises ``LOAD_NODE_BUSY``.
-    """
     scenario = db.scalar(
         select(Scenario)
         .where(
@@ -1442,23 +1522,22 @@ def create_debug_run(
             raise AppError("RESOURCE_NOT_FOUND", "Resource was not found.", 404)
         env_variables = env_group_runtime_values(env_group)
     dependency_rows = _enabled_dependency_files(db, scenario=scenario)
-    content = {
-        "name": scenario.name,
-        "baseUrlExpression": scenario.base_url_expression,
-        "defaultSettings": scenario.default_settings_json,
-        "globalHeaders": scenario.global_headers_json,
-        "variables": scenario.variables_json,
-        "dataSources": scenario.data_sources_json,
-        "steps": scenario.steps_json,
-    }
-    validate_scenario_content(content, require_enabled_step=True)
-    _validate_debug_variables(content, env_variables)
-    _validate_resolved_base_url(
-        _resolve_expression(content["baseUrlExpression"], _effective_variables(content, env_variables))
+    dependency_files = [file for _ref, file in dependency_rows]
+    settings = get_settings()
+    # This preflight YAML is only used for Scenario validation before Run creation.
+    # The execution bundle later derives JMeter from the selected Load Node runner_home.
+    build_debug_taurus_document(
+        scenario=scenario,
+        env_variables=env_variables,
+        dependency_files=dependency_files,
+        jmeter_path=runtime_jmeter_path(settings.load_node_default_runner_home),
+        jmeter_version=RUNTIME_JMETER_VERSION,
+        memory_xmx=jmeter_memory_xmx(db),
     )
     snapshot_payload = _run_response_snapshot(
         scenario=scenario, env_group=env_group, dependency_rows=dependency_rows
     )
+    snapshot_payload["jmeterMemoryXmx"] = jmeter_memory_xmx(db)
     snapshot_hash = _snapshot_hash(snapshot_payload)
     dedup_input = {
         "workspaceId": workspace_id,

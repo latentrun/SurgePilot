@@ -7,11 +7,19 @@ from sqlalchemy.orm import Session
 from app.db.session import get_db
 from app.models.auth import User
 from app.schemas.auth import SetupStatusResponse
+from app.services.storage import get_storage_client
 from app.services.system_settings import effective_allow_signup
 from app.services.workspaces import has_default_workspace
 
 router = APIRouter(prefix="/api/v1/setup", tags=["setup"])
 DbDep = Annotated[Session, Depends(get_db)]
+
+
+def storage_is_available() -> bool:
+    try:
+        return get_storage_client().health_check()
+    except Exception:
+        return False
 
 
 @router.get(
@@ -28,4 +36,5 @@ def get_setup_status(db: DbDep) -> SetupStatusResponse:
         needs_bootstrap=needs_bootstrap,
         allow_signup=True if needs_bootstrap else effective_allow_signup(db),
         has_default_workspace=has_default_workspace(db),
+        storage_available=storage_is_available(),
     )

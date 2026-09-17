@@ -7,6 +7,7 @@ import hashlib
 import logging
 
 from minio import Minio
+from minio.commonconfig import CopySource
 from minio.error import MinioException, S3Error
 
 from app.core.config import get_settings
@@ -90,6 +91,9 @@ class StorageClient:
     def delete_object_best_effort(self, *, bucket: str, object_key: str) -> bool:
         raise NotImplementedError
 
+    def copy_object(self, *, bucket: str, source_key: str, destination_key: str) -> None:
+        raise NotImplementedError
+
     def health_check(self) -> bool:
         raise NotImplementedError
 
@@ -154,6 +158,13 @@ class MinioStorageClient(StorageClient):
         except (MinioException, S3Error, OSError) as exc:
             log_storage_unavailable("delete_object_best_effort", exc)
             return False
+
+    def copy_object(self, *, bucket: str, source_key: str, destination_key: str) -> None:
+        try:
+            self._client.copy_object(bucket, destination_key, CopySource(bucket, source_key))
+        except (MinioException, S3Error, OSError) as exc:
+            log_storage_unavailable("copy_object", exc)
+            raise StorageError() from exc
 
     def health_check(self) -> bool:
         settings = get_settings()

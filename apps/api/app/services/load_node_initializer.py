@@ -153,7 +153,7 @@ class RealLoadNodeInitializer(LoadNodeInitializer):
                     "[error] Load Node architecture is not supported by P0 runtime artifacts."
                 )
                 return failed("LOAD_NODE_RUNTIME_ARCH_UNSUPPORTED", log)
-            artifact = self._runtime_artifact(runtime_arch, version=self.runtime_version)
+            artifact = self._runtime_artifact(runtime_arch)
             if artifact is None:
                 log.append("[error] Matching runtime artifact or checksum sidecar is unavailable.")
                 return failed("LOAD_NODE_RUNTIME_ARTIFACT_MISSING", log)
@@ -234,18 +234,12 @@ class RealLoadNodeInitializer(LoadNodeInitializer):
         log.append("[info] SSH connection verified.")
         log.append(f"[info] Runner home prepared at {runner_home}.")
 
-    def _runtime_artifact(
-        self, arch: RuntimeArchitecture, *, version: str | None = None
-    ) -> RuntimeArtifact | None:
-        # A version pinned by the initialization attempt wins over the currently configured one.
-        selected_version = (
-            version if version is not None else self.settings.load_node_runtime_version
-        )
-        selected_version = (selected_version or "").strip()
-        if not selected_version:
+    def _runtime_artifact(self, arch: RuntimeArchitecture) -> RuntimeArtifact | None:
+        version = (self.settings.load_node_runtime_version or "").strip()
+        if not version:
             return None
         root = Path(self.settings.load_node_runtime_artifact_dir)
-        archive = root / f"surgepilot-runtime-{arch.artifact_arch}-{selected_version}.tar.gz"
+        archive = root / f"surgepilot-runtime-{arch.artifact_arch}-{version}.tar.gz"
         sidecar = root / f"{archive.name}.sha256"
         if not archive.is_file() or not sidecar.is_file():
             return None
@@ -258,7 +252,7 @@ class RealLoadNodeInitializer(LoadNodeInitializer):
             sha256=digest,
             artifact_arch=arch.artifact_arch,
             metadata_arch=arch.metadata_arch,
-            version=selected_version,
+            version=version,
         )
 
     def _install_runtime(

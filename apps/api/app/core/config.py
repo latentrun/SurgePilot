@@ -15,34 +15,6 @@ def _jmeter_memory_xmx_from_env() -> str:
     return value
 
 
-def _normalize_database_url(value: str) -> str:
-    if value.startswith("postgresql://"):
-        return value.replace("postgresql://", "postgresql+psycopg://", 1)
-    return value
-
-
-def _bool_from_env(value: str | None, default: bool) -> bool:
-    if value is None:
-        return default
-    return value.strip().lower() in {"1", "true", "yes", "on"}
-
-
-def _session_cookie_secure_from_env(*, app_env: str) -> bool:
-    value = os.environ.get("SESSION_COOKIE_SECURE")
-    if value is None:
-        return app_env == "production"
-    normalized = value.strip().lower()
-    if normalized == "true":
-        return True
-    if normalized == "false":
-        return False
-    raise ValueError("SESSION_COOKIE_SECURE must be true or false.")
-
-
-def _monitoring_token_configured_from_env() -> bool:
-    return _bool_from_env(os.environ.get("SURGEPILOT_MONITORING_INFLUXDB_TOKEN_CONFIGURED"), False)
-
-
 @dataclass(frozen=True)
 class Settings:
     app_env: str
@@ -62,6 +34,7 @@ class Settings:
     dependency_file_allowed_extensions: str
     dependency_file_preview_max_bytes: int
     dependency_file_preview_binary_deny_extensions: str
+    api_catalog_spec_max_bytes: int
     ssh_credential_encryption_key: str | None
     load_node_default_runner_home: str
     load_node_ssh_connect_timeout_seconds: int
@@ -112,6 +85,34 @@ class Settings:
     jmeter_memory_xmx: str
 
 
+def _normalize_database_url(value: str) -> str:
+    if value.startswith("postgresql://"):
+        return value.replace("postgresql://", "postgresql+psycopg://", 1)
+    return value
+
+
+def _bool_from_env(value: str | None, default: bool) -> bool:
+    if value is None:
+        return default
+    return value.strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _session_cookie_secure_from_env(*, app_env: str) -> bool:
+    value = os.environ.get("SESSION_COOKIE_SECURE")
+    if value is None:
+        return app_env == "production"
+    normalized = value.strip().lower()
+    if normalized == "true":
+        return True
+    if normalized == "false":
+        return False
+    raise ValueError("SESSION_COOKIE_SECURE must be true or false.")
+
+
+def _monitoring_token_configured_from_env() -> bool:
+    return _bool_from_env(os.environ.get("SURGEPILOT_MONITORING_INFLUXDB_TOKEN_CONFIGURED"), False)
+
+
 def get_settings() -> Settings:
     app_env = os.environ.get("APP_ENV", "development")
     return Settings(
@@ -140,7 +141,15 @@ def get_settings() -> Settings:
             1, int(os.environ.get("DEPENDENCY_FILE_PREVIEW_MAX_BYTES", str(64 * 1024)))
         ),
         dependency_file_preview_binary_deny_extensions=os.environ.get(
-            "DEPENDENCY_FILE_PREVIEW_BINARY_DENY_EXTENSIONS", ".png,.jpg,.jpeg,.gif,.webp,.bmp,.ico,.svg,.pdf,.zip,.tar,.gz,.tgz,.bz2,.xz,.7z,.rar,.jar,.war,.class,.so,.dll,.dylib,.exe,.bin,.dat,.woff,.woff2,.ttf,.otf,.eot,.mp3,.mp4,.mov,.avi,.mkv,.webm"
+            "DEPENDENCY_FILE_PREVIEW_BINARY_DENY_EXTENSIONS",
+            (
+                ".png,.jpg,.jpeg,.gif,.webp,.bmp,.ico,.svg,.pdf,.zip,.tar,.gz,.tgz,"
+                ".bz2,.xz,.7z,.rar,.jar,.war,.class,.so,.dll,.dylib,.exe,.bin,.dat,"
+                ".woff,.woff2,.ttf,.otf,.eot,.mp3,.mp4,.mov,.avi,.mkv,.webm"
+            ),
+        ),
+        api_catalog_spec_max_bytes=int(
+            os.environ.get("SURGEPILOT_API_CATALOG_SPEC_MAX_BYTES", str(10 * 1024 * 1024))
         ),
         ssh_credential_encryption_key=os.environ.get("SSH_CREDENTIAL_ENCRYPTION_KEY") or None,
         load_node_default_runner_home=os.environ.get(
@@ -172,9 +181,7 @@ def get_settings() -> Settings:
         runner_accepted_timeout_seconds=int(
             os.environ.get("SURGEPILOT_RUN_ACCEPTED_TIMEOUT_SECONDS", "120")
         ),
-        runner_stop_grace_seconds=int(
-            os.environ.get("SURGEPILOT_RUN_STOP_GRACE_SECONDS", "60")
-        ),
+        runner_stop_grace_seconds=int(os.environ.get("SURGEPILOT_RUN_STOP_GRACE_SECONDS", "60")),
         node_cooldown_seconds=int(os.environ.get("SURGEPILOT_NODE_COOLDOWN_SECONDS", "300")),
         runner_callback_retention_days=int(
             os.environ.get("SURGEPILOT_RUNNER_CALLBACK_RETENTION_DAYS", "30")
@@ -189,9 +196,7 @@ def get_settings() -> Settings:
             os.environ.get("SURGEPILOT_RUN_ARTIFACT_MAX_BYTES", str(200 * 1024 * 1024))
         ),
         run_terminal_late_artifact_max_bytes=int(
-            os.environ.get(
-                "SURGEPILOT_RUN_TERMINAL_LATE_ARTIFACT_MAX_BYTES", str(1024 * 1024)
-            )
+            os.environ.get("SURGEPILOT_RUN_TERMINAL_LATE_ARTIFACT_MAX_BYTES", str(1024 * 1024))
         ),
         run_terminal_late_artifact_seconds=int(
             os.environ.get("SURGEPILOT_RUN_TERMINAL_LATE_ARTIFACT_SECONDS", "300")
