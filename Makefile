@@ -1,4 +1,4 @@
-.PHONY: help setup dev dev-web dev-api dev-worker dev-runner dev-compose release-runtime _release-runtime start-preview _start-preview-with-env _start-preview stop-preview start-full-stack _start-full-stack-with-env _start-full-stack restart-full-stack _restart-full-stack-with-env _restart-full-stack stop-full-stack seed-full-ssh-e2e-runtime _seed-full-ssh-e2e-runtime start-full-ssh-e2e _start-full-ssh-e2e start-full-ssh-e2e-build _start-full-ssh-e2e-build restart-full-ssh-e2e _restart-full-ssh-e2e restart-full-ssh-e2e-build _restart-full-ssh-e2e-build stop-full-ssh-e2e infra-up infra-down e2e-clean migrate migration generate-contracts lint test api-coverage ai-skill-tests verifier-tests python-patch-coverage verify-db verify-smoke-compose verify verify-e2e verify-runtime-compat verify-p2-05-release-stack verify-p1-00-monitoring-compose verify-p1-00-monitoring-ssh verify-p1-00-monitoring-remote-node-write verify-p1-08-debug-http-trace-e2e verify-p2-01-openapi-two-node-e2e verify-p2-02-public-api-lifecycle verify-runner-ssh verify-runner-ssh-fast _verify-runner-ssh verify-p0-api-main-flow-e2e verify-p0-api-main-flow-e2e-fast verify-p0-06-runner-ssh verify-p0-06-runner-ssh-fast contracts-stale-check docs-site docs-site-build verify-p2-07-public-launch
+.PHONY: help setup dev dev-web dev-api dev-worker dev-runner dev-compose release-runtime _release-runtime start-preview _start-preview-with-env _start-preview stop-preview start-full-stack _start-full-stack-with-env _start-full-stack restart-full-stack _restart-full-stack-with-env _restart-full-stack stop-full-stack seed-full-ssh-e2e-runtime _seed-full-ssh-e2e-runtime start-full-ssh-e2e _start-full-ssh-e2e start-full-ssh-e2e-build _start-full-ssh-e2e-build restart-full-ssh-e2e _restart-full-ssh-e2e restart-full-ssh-e2e-build _restart-full-ssh-e2e-build stop-full-ssh-e2e infra-up infra-down e2e-clean migrate migration generate-contracts lint test api-coverage ai-skill-tests verifier-tests python-patch-coverage verify-db verify-smoke-compose verify verify-e2e verify-runtime-compat verify-p2-05-release-stack verify-p1-00-monitoring-compose verify-p1-00-monitoring-ssh verify-p1-00-monitoring-remote-node-write verify-p1-08-debug-http-trace-e2e verify-p2-01-openapi-two-node-e2e verify-p2-02-public-api-lifecycle verify-runner-ssh verify-runner-ssh-fast _verify-runner-ssh verify-p0-api-main-flow-e2e verify-p0-api-main-flow-e2e-fast verify-p0-06-runner-ssh verify-p0-06-runner-ssh-fast contracts-stale-check
 
 COMPOSE_BASE=docker compose -f infra/docker/docker-compose.base.yml
 COMPOSE_FULL=docker compose -f infra/docker/docker-compose.yml $(if $(filter false,$(SURGEPILOT_DEMO_LOAD_NODE_ENABLED)),,--profile demo)
@@ -88,9 +88,6 @@ help:
 	@printf "  make verify-p1-00-monitoring-remote-node-write  Run P1 Monitoring remote node write supplemental smoke when environment is ready\n"
 	@printf "  make verify-p2-01-openapi-two-node-e2e  Run OpenAPI Step Generation plus two-node SSH E2E\n"
 	@printf "  make verify-p2-02-public-api-lifecycle  Run P2-02 Public API lifecycle E2E\n"
-	@printf "  make docs-site          Start the VitePress marketing and documentation site\n"
-	@printf "  make docs-site-build    Build the VitePress marketing and documentation site\n"
-	@printf "  make verify-p2-07-public-launch  Run the VitePress site test and P2-07 launch and localized-docs contract checks\n"
 	@printf "  make verify-p1-08-debug-http-trace-e2e  Run P1-08 Debug HTTP Trace browser acceptance\n"
 	@printf "  make verify-runner-ssh  Run near-real SSH/SFTP runner control smoke\n"
 	@printf "  make verify-runner-ssh-fast  Run SSH smoke with existing local image, without rebuilding\n"
@@ -441,16 +438,6 @@ verify-p1-01-runner-ssh-two-node:
 
 verify-p1-01-runner-ssh-two-node-fast:
 	env $${HOST_IP:+SURGEPILOT_E2E_HOST_IP=$${HOST_IP} SURGEPILOT_E2E_API_ORCHESTRATION_URL=$${SURGEPILOT_E2E_API_ORCHESTRATION_URL:-http://$${HOST_IP}:8000} SURGEPILOT_E2E_TARGET_URL=$${SURGEPILOT_E2E_TARGET_URL:-http://$${HOST_IP}:8000/api/healthz} SURGEPILOT_E2E_NODE_1_SSH_HOST=$${HOST_IP} SURGEPILOT_E2E_NODE_1_SSH_PORT=$${SURGEPILOT_SSH_E2E_PORT:-22322} SURGEPILOT_E2E_NODE_2_SSH_HOST=$${HOST_IP} SURGEPILOT_E2E_NODE_2_SSH_PORT=$${SURGEPILOT_SSH_E2E_2_PORT:-22323}} uv run --all-packages python scripts/verify_p1_01_ssh_two_node_smoke.py --build-app
-
-docs-site:
-	$(DEPLOYMENT_ENV_RUN) pnpm --filter @surgepilot/docs dev
-
-docs-site-build:
-	pnpm --filter @surgepilot/docs build
-
-verify-p2-07-public-launch:
-	pnpm --filter @surgepilot/docs test
-	uv run --all-packages pytest tests/contract/test_p2_07_public_launch.py tests/contract/test_user_docs_locales.py -q
 
 _verify-runner-ssh:
 	uv run --all-packages python scripts/run_runtime_builder.py --output-dir "$(RUNNER_SSH_RUNTIME_ARTIFACT_DIR)" --build-dir "$(RUNNER_SSH_RUNTIME_BUILD_DIR)" --cache-dir "$(RUNNER_SSH_RUNTIME_CACHE_DIR)" --env-file "$(RUNNER_SSH_RUNTIME_ENV_FILE)" --fixed-version "$(RUNNER_SSH_RUNTIME_VERSION)"

@@ -4,10 +4,23 @@
   "private": true,
   "packageManager": "pnpm@11.3.0",
   "scripts": {
-    "generate:contracts": "pnpm --filter @surgepilot/contracts generate",
-    "typecheck": "pnpm -r typecheck"
+    "dev:web": "pnpm --filter @surgepilot/web dev",
+    "build:web": "pnpm --filter @surgepilot/web build",
+    "docs:dev": "pnpm --filter @surgepilot/docs dev",
+    "docs:build": "pnpm --filter @surgepilot/docs build",
+    "docs:preview": "pnpm --filter @surgepilot/docs preview",
+    "e2e": "playwright test",
+    "lint": "pnpm -r lint",
+    "test": "pnpm -r test",
+    "typecheck": "pnpm -r typecheck",
+    "generate:contracts": "pnpm --filter @surgepilot/contracts generate"
   },
   "devDependencies": {
-    "typescript": "5.9.3"
+    "@eslint/js": "^9.0.0",
+    "@playwright/test": "^1.60.0",
+    "eslint": "^9.0.0",
+    "prettier": "^3.0.0",
+    "typescript": "^5.0.0",
+    "typescript-eslint": "^8.0.0"
   }
 }
