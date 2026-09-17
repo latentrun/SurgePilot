@@ -1,5 +1,6 @@
 from datetime import UTC, datetime, timedelta
 from io import BytesIO
+from types import SimpleNamespace
 
 import pytest
 from httpx import AsyncClient
@@ -8,10 +9,11 @@ from sqlalchemy.orm import Session
 
 from app.models.auth import AuditEvent, DEFAULT_WORKSPACE_ID, User, Workspace, WorkspaceMember
 from app.models.load_nodes import LoadNode
-from app.models.runs import Run, RunArtifact, RunReportSummary, RunSnapshot
+from app.models.runs import Run, RunArtifact, RunNodeAllocation, RunReportSummary, RunSnapshot
 from app.core.ids import new_ulid
 from app.services.storage import StoredObjectStream
-from app.services.run_reports import get_run_report, list_runs_report
+from app.services.runs import RunnerCallbackInput, apply_runner_callback
+from app.services.run_reports import _snapshot_summary, get_run_report, list_runs_report
 
 OTHER_WORKSPACE_ID = "01HZX3Y9M0E9W7Z6M5QK9S8P7W"
 
@@ -106,6 +108,32 @@ def seed_run(
     db.add(run)
     db.flush()
     db.add(
+        RunNodeAllocation(
+            id=new_ulid(),
+            workspace_id=workspace_id,
+            run_id=run.id,
+            node_id=node.id,
+            node_index=1,
+            total_nodes=1,
+            expected_runtime_version="runtime-test-v1",
+            state=state,
+            accepted_at=run.accepted_at,
+            started_at=run.started_at,
+            ended_at=run.ended_at,
+            last_heartbeat_at=run.last_heartbeat_at,
+            runner_pid=None,
+            terminal_reason=state if state in {"finished", "failed", "aborted"} else None,
+            terminal_message=None,
+            cleanup_status="released" if state in {"finished", "failed", "aborted"} else None,
+            quarantine_reason=None,
+            sla_result=sla_result,
+            sla_result_reason=None,
+            created_at=created_at,
+            updated_at=created_at,
+        )
+    )
+    db.flush()
+    db.add(
         RunSnapshot(
             id=f"{run_id[:-2]}{run_id[-1]}S",
             workspace_id=workspace_id,
@@ -139,6 +167,7 @@ def seed_run(
                     "mode": "manual",
                     "poolType": "workspace",
                     "selectedNodeId": node.id,
+                    "selectedNodeIds": [node.id],
                     "expectedConcurrencyPerNode": 10,
                 },
                 "scenarioItems": [
@@ -184,11 +213,19 @@ def seed_artifact(
     status: str = "available",
 ) -> RunArtifact:
     created_at = datetime(2030, 6, 3, 8, 5, 18, tzinfo=UTC)
+    allocation = db.scalar(
+        select(RunNodeAllocation).where(
+            RunNodeAllocation.run_id == run.id,
+            RunNodeAllocation.node_id == run.selected_node_id,
+        )
+    )
+    assert allocation is not None
     artifact = RunArtifact(
         id=artifact_id,
         workspace_id=run.workspace_id,
         run_id=run.id,
         node_id=run.selected_node_id,
+        allocation_id=allocation.id,
         event_id=f"{artifact_id[:-2]}{artifact_id[-1]}E",
         artifact_type=artifact_type,
         relative_path=relative_path,
@@ -197,7 +234,8 @@ def seed_artifact(
         sha256="a" * 64,
         content_type="application/zip" if artifact_type == "artifacts_zip" else "text/csv",
         storage_key=(
-            f"run-artifacts/{run.workspace_id}/{run.id}/nodes/{run.selected_node_id}/{relative_path}"
+            f"run-artifacts/{run.workspace_id}/{run.id}/nodes/{run.selected_node_id}/"
+            f"allocations/{allocation.id}/{relative_path}"
         ),
         status=status,
         terminal_late=False,
@@ -253,6 +291,44 @@ def seed_summary(db: Session, *, run: Run, artifact: RunArtifact) -> None:
             updated_at=now,
         )
     )
+
+
+def seed_final_stats_artifact_for_allocation(
+    db: Session,
+    *,
+    run: Run,
+    allocation: RunNodeAllocation,
+    artifact_id: str | None = None,
+    created_at: datetime | None = None,
+    node_id: str | None = None,
+    terminal_late: bool = False,
+    relative_path: str = "artifacts/finalstats.csv",
+) -> RunArtifact:
+    artifact_id = artifact_id or new_ulid()
+    created_at = (created_at or datetime(2030, 6, 3, 8, 5, 18, tzinfo=UTC)).replace(tzinfo=None)
+    artifact = RunArtifact(
+        id=artifact_id,
+        workspace_id=run.workspace_id,
+        run_id=run.id,
+        node_id=node_id or allocation.node_id,
+        allocation_id=allocation.id,
+        event_id=new_ulid(),
+        artifact_type="final_stats_csv",
+        relative_path=relative_path,
+        display_filename="finalstats.csv",
+        size_bytes=2048,
+        sha256="b" * 64,
+        content_type="text/csv",
+        storage_key=(
+            f"run-artifacts/{run.workspace_id}/{run.id}/nodes/{allocation.node_id}/"
+            f"allocations/{allocation.id}/{relative_path}"
+        ),
+        status="available",
+        terminal_late=terminal_late,
+        created_at=created_at,
+    )
+    db.add(artifact)
+    return artifact
 
 
 def seed_final_stats_summary(
@@ -322,6 +398,73 @@ def seed_final_stats_summary(
     return summary
 
 
+def add_allocation(
+    db: Session,
+    *,
+    run: Run,
+    node: LoadNode,
+    node_index: int,
+    total_nodes: int,
+    state: str = "finished",
+    quarantine_reason: str | None = None,
+) -> RunNodeAllocation:
+    now = datetime(2030, 6, 3, 8, 0, tzinfo=UTC)
+    allocation = RunNodeAllocation(
+        id=new_ulid(),
+        workspace_id=run.workspace_id,
+        run_id=run.id,
+        node_id=node.id,
+        node_index=node_index,
+        total_nodes=total_nodes,
+        expected_runtime_version=node.runtime_version,
+        state=state,
+        accepted_at=run.accepted_at,
+        started_at=run.started_at,
+        ended_at=run.ended_at if state in {"finished", "failed", "aborted"} else None,
+        last_heartbeat_at=run.last_heartbeat_at,
+        runner_pid=None,
+        terminal_reason=state if state in {"finished", "failed", "aborted"} else None,
+        terminal_message=None,
+        cleanup_status="released" if state in {"finished", "failed", "aborted"} else None,
+        quarantine_reason=quarantine_reason,
+        sla_result=run.sla_result,
+        sla_result_reason=None,
+        created_at=now,
+        updated_at=now,
+    )
+    db.add(allocation)
+    return allocation
+
+
+def convert_seed_run_to_two_allocations(
+    db: Session, *, run: Run, second_node: LoadNode
+) -> tuple[RunNodeAllocation, RunNodeAllocation]:
+    first = db.scalar(
+        select(RunNodeAllocation).where(
+            RunNodeAllocation.run_id == run.id,
+            RunNodeAllocation.node_id == run.selected_node_id,
+        )
+    )
+    assert first is not None
+    first.node_index = 1
+    first.total_nodes = 2
+    second = add_allocation(
+        db,
+        run=run,
+        node=second_node,
+        node_index=2,
+        total_nodes=2,
+        state=first.state,
+    )
+    snapshot = db.scalar(select(RunSnapshot).where(RunSnapshot.run_id == run.id))
+    assert snapshot is not None
+    snapshot.snapshot_json["resourceRequest"]["selectedNodeIds"] = [
+        run.selected_node_id,
+        second_node.id,
+    ]
+    return first, second
+
+
 class FakeStorage:
     def __init__(self) -> None:
         self.objects: dict[str, bytes] = {}
@@ -335,6 +478,935 @@ class FakeStorage:
             len(self.objects[object_key]),
             BytesIO(self.objects[object_key]),
         )
+
+
+def seed_two_allocation_run(
+    db_session: Session, *, email: str
+) -> tuple[Run, RunNodeAllocation, RunNodeAllocation]:
+    user = User(
+        id=new_ulid(),
+        email=email,
+        display_name="Final Stats User",
+        password_hash="hash",
+        role="admin",
+        status="active",
+        failed_login_count=0,
+        created_at=datetime.now(UTC),
+        updated_at=datetime.now(UTC),
+    )
+    db_session.add(user)
+    db_session.flush()
+    first_node = seed_node(
+        db_session, user.id, node_id=new_ulid(), workspace_id=DEFAULT_WORKSPACE_ID
+    )
+    second_node = seed_node(
+        db_session, user.id, node_id=new_ulid(), workspace_id=DEFAULT_WORKSPACE_ID
+    )
+    run = seed_run(db_session, user_id=user.id, run_id=new_ulid(), node=first_node)
+    db_session.flush()
+    allocation_a, allocation_b = convert_seed_run_to_two_allocations(
+        db_session, run=run, second_node=second_node
+    )
+    db_session.flush()
+    return run, allocation_a, allocation_b
+
+
+def test_run_report_aggregates_final_stats_for_all_required_allocations(
+    db_session: Session,
+) -> None:
+    run, allocation_a, allocation_b = seed_two_allocation_run(
+        db_session, email="aggregate-finalstats@example.com"
+    )
+    artifact_a = seed_final_stats_artifact_for_allocation(
+        db_session, run=run, allocation=allocation_a
+    )
+    artifact_b = seed_final_stats_artifact_for_allocation(
+        db_session, run=run, allocation=allocation_b
+    )
+    seed_final_stats_summary(
+        db_session,
+        run=run,
+        artifact=artifact_a,
+        total_requests=100,
+        failed_requests=2,
+        average_response_time_ms=100.0,
+        response_code_counts={"200": 98, "500": 2},
+    )
+    seed_final_stats_summary(
+        db_session,
+        run=run,
+        artifact=artifact_b,
+        total_requests=300,
+        failed_requests=18,
+        average_response_time_ms=200.0,
+        response_code_counts={"200": 282, "500": 18},
+    )
+    db_session.flush()
+
+    report = get_run_report(db_session, workspace_id=DEFAULT_WORKSPACE_ID, run_id=run.id)
+
+    assert report.kpi_summary.status == "parsed"
+    assert report.kpi_summary.source_artifact_id is None
+    assert report.kpi_summary.total_requests == 400
+    assert report.kpi_summary.failed_requests == 20
+    assert report.kpi_summary.error_rate == pytest.approx(0.05)
+    assert report.kpi_summary.average_response_time_ms == pytest.approx(175.0)
+    assert report.kpi_summary.p90_ms is None
+    assert report.kpi_summary.p95_ms is None
+    assert report.kpi_summary.p99_ms is None
+    assert report.kpi_summary.missing_reasons == []
+    assert report.final_stats_preview.status == "parsed"
+    assert len(report.final_stats_preview.rows) == 1
+    aggregate = report.final_stats_preview.rows[0]
+    assert aggregate.label is None
+    assert aggregate.total_requests == 400
+    assert aggregate.failed_requests == 20
+    assert aggregate.success_requests == 380
+    assert aggregate.response_code_counts == {"200": 380, "500": 20}
+    assert aggregate.p95_ms is None
+    assert "percentile_aggregation_unsupported" in report.final_stats_preview.warnings
+    assert "percentile_aggregation_unsupported" not in report.failure_diagnostics.notes
+
+
+def test_run_report_preserves_single_allocation_source_artifact_rows_and_warnings(
+    db_session: Session,
+) -> None:
+    user = User(
+        id=new_ulid(),
+        email="single-finalstats@example.com",
+        display_name="Single User",
+        password_hash="hash",
+        role="admin",
+        status="active",
+        failed_login_count=0,
+        created_at=datetime.now(UTC),
+        updated_at=datetime.now(UTC),
+    )
+    db_session.add(user)
+    db_session.flush()
+    node = seed_node(db_session, user.id, node_id=new_ulid(), workspace_id=DEFAULT_WORKSPACE_ID)
+    run = seed_run(db_session, user_id=user.id, run_id=new_ulid(), node=node)
+    db_session.flush()
+    allocation = db_session.scalar(
+        select(RunNodeAllocation).where(RunNodeAllocation.run_id == run.id)
+    )
+    assert allocation is not None
+    artifact = seed_final_stats_artifact_for_allocation(
+        db_session, run=run, allocation=allocation, terminal_late=True
+    )
+    seed_final_stats_summary(
+        db_session,
+        run=run,
+        artifact=artifact,
+        total_requests=10,
+        failed_requests=1,
+        average_response_time_ms=50.5,
+        response_code_counts={"200": 9, "500": 1},
+        warnings=["average_response_time_invalid"],
+    )
+    db_session.flush()
+
+    report = get_run_report(db_session, workspace_id=DEFAULT_WORKSPACE_ID, run_id=run.id)
+
+    assert report.kpi_summary.status == "parsed"
+    assert report.kpi_summary.source_artifact_id == artifact.id
+    assert report.kpi_summary.total_requests == 10
+    assert report.kpi_summary.average_response_time_ms == 50.5
+    assert "terminal_late_final_stats_used" not in report.kpi_summary.missing_reasons
+    assert "average_response_time_invalid" in report.kpi_summary.missing_reasons
+    assert report.final_stats_preview.status == "parsed"
+    assert len(report.final_stats_preview.rows) == 2
+    assert report.final_stats_preview.rows[0].label is None
+    assert report.final_stats_preview.rows[1].label == "GET /checkout"
+    assert "terminal_late_final_stats_used" in report.final_stats_preview.warnings
+    assert "terminal_late_final_stats_used" not in report.failure_diagnostics.notes
+
+
+def test_run_report_single_allocation_pending_failed_conflict_and_mismatch(
+    db_session: Session,
+) -> None:
+    user = User(
+        id=new_ulid(),
+        email="single-edge-finalstats@example.com",
+        display_name="Single Edge User",
+        password_hash="hash",
+        role="admin",
+        status="active",
+        failed_login_count=0,
+        created_at=datetime.now(UTC),
+        updated_at=datetime.now(UTC),
+    )
+    db_session.add(user)
+    db_session.flush()
+
+    pending_node = seed_node(
+        db_session, user.id, node_id=new_ulid(), workspace_id=DEFAULT_WORKSPACE_ID
+    )
+    pending_run = seed_run(db_session, user_id=user.id, run_id=new_ulid(), node=pending_node)
+    db_session.flush()
+    pending_allocation = db_session.scalar(
+        select(RunNodeAllocation).where(RunNodeAllocation.run_id == pending_run.id)
+    )
+    assert pending_allocation is not None
+    pending_artifact = seed_final_stats_artifact_for_allocation(
+        db_session, run=pending_run, allocation=pending_allocation
+    )
+
+    failed_node = seed_node(
+        db_session, user.id, node_id=new_ulid(), workspace_id=DEFAULT_WORKSPACE_ID
+    )
+    failed_run = seed_run(db_session, user_id=user.id, run_id=new_ulid(), node=failed_node)
+    db_session.flush()
+    failed_allocation = db_session.scalar(
+        select(RunNodeAllocation).where(RunNodeAllocation.run_id == failed_run.id)
+    )
+    assert failed_allocation is not None
+    failed_artifact = seed_final_stats_artifact_for_allocation(
+        db_session, run=failed_run, allocation=failed_allocation
+    )
+    seed_final_stats_summary(
+        db_session,
+        run=failed_run,
+        artifact=failed_artifact,
+        total_requests=10,
+        failed_requests=1,
+        average_response_time_ms=10.0,
+        parse_status="failed",
+    )
+
+    conflict_node = seed_node(
+        db_session, user.id, node_id=new_ulid(), workspace_id=DEFAULT_WORKSPACE_ID
+    )
+    conflict_run = seed_run(db_session, user_id=user.id, run_id=new_ulid(), node=conflict_node)
+    db_session.flush()
+    conflict_allocation = db_session.scalar(
+        select(RunNodeAllocation).where(RunNodeAllocation.run_id == conflict_run.id)
+    )
+    assert conflict_allocation is not None
+    seed_final_stats_artifact_for_allocation(
+        db_session, run=conflict_run, allocation=conflict_allocation
+    )
+    seed_final_stats_artifact_for_allocation(
+        db_session,
+        run=conflict_run,
+        allocation=conflict_allocation,
+        relative_path="artifacts/finalstats-extra.csv",
+    )
+
+    mismatch_node = seed_node(
+        db_session, user.id, node_id=new_ulid(), workspace_id=DEFAULT_WORKSPACE_ID
+    )
+    mismatch_other = seed_node(
+        db_session, user.id, node_id=new_ulid(), workspace_id=DEFAULT_WORKSPACE_ID
+    )
+    mismatch_run = seed_run(db_session, user_id=user.id, run_id=new_ulid(), node=mismatch_node)
+    db_session.flush()
+    mismatch_allocation = db_session.scalar(
+        select(RunNodeAllocation).where(RunNodeAllocation.run_id == mismatch_run.id)
+    )
+    assert mismatch_allocation is not None
+    mismatch_artifact = seed_final_stats_artifact_for_allocation(
+        db_session,
+        run=mismatch_run,
+        allocation=mismatch_allocation,
+        node_id=mismatch_other.id,
+    )
+    seed_final_stats_summary(
+        db_session,
+        run=mismatch_run,
+        artifact=mismatch_artifact,
+        total_requests=10,
+        failed_requests=1,
+        average_response_time_ms=10.0,
+    )
+    db_session.flush()
+
+    pending_report = get_run_report(
+        db_session, workspace_id=DEFAULT_WORKSPACE_ID, run_id=pending_run.id
+    )
+    failed_report = get_run_report(
+        db_session, workspace_id=DEFAULT_WORKSPACE_ID, run_id=failed_run.id
+    )
+    conflict_report = get_run_report(
+        db_session, workspace_id=DEFAULT_WORKSPACE_ID, run_id=conflict_run.id
+    )
+    mismatch_report = get_run_report(
+        db_session, workspace_id=DEFAULT_WORKSPACE_ID, run_id=mismatch_run.id
+    )
+
+    assert pending_report.kpi_summary.status == "pending"
+    assert pending_report.kpi_summary.source_artifact_id == pending_artifact.id
+    assert pending_report.kpi_summary.missing_reasons == ["summary_pending"]
+    assert failed_report.kpi_summary.status == "failed"
+    assert failed_report.kpi_summary.source_artifact_id == failed_artifact.id
+    assert failed_report.kpi_summary.missing_reasons == ["summary_parse_failed"]
+    assert conflict_report.kpi_summary.status == "failed"
+    assert conflict_report.kpi_summary.missing_reasons == ["final_stats_conflict_for_allocations"]
+    assert mismatch_report.kpi_summary.status == "failed"
+    assert mismatch_report.kpi_summary.missing_reasons == ["final_stats_allocation_node_mismatch"]
+
+
+def test_run_report_multi_allocation_pending_summary_fails_closed(
+    db_session: Session,
+) -> None:
+    run, allocation_a, allocation_b = seed_two_allocation_run(
+        db_session, email="multi-summary-pending@example.com"
+    )
+    artifact_a = seed_final_stats_artifact_for_allocation(
+        db_session, run=run, allocation=allocation_a
+    )
+    seed_final_stats_summary(
+        db_session,
+        run=run,
+        artifact=artifact_a,
+        total_requests=100,
+        failed_requests=0,
+        average_response_time_ms=100.0,
+    )
+    seed_final_stats_artifact_for_allocation(db_session, run=run, allocation=allocation_b)
+    db_session.flush()
+
+    report = get_run_report(db_session, workspace_id=DEFAULT_WORKSPACE_ID, run_id=run.id)
+
+    assert report.kpi_summary.status == "pending"
+    assert report.kpi_summary.missing_reasons == ["summary_pending_for_allocations"]
+    assert report.final_stats_preview.warnings == ["summary_pending_for_allocations"]
+
+
+def test_run_report_fails_closed_when_required_allocation_final_stats_is_missing(
+    db_session: Session,
+) -> None:
+    run, allocation_a, _allocation_b = seed_two_allocation_run(
+        db_session, email="missing-finalstats@example.com"
+    )
+    artifact_a = seed_final_stats_artifact_for_allocation(
+        db_session, run=run, allocation=allocation_a
+    )
+    seed_final_stats_summary(
+        db_session,
+        run=run,
+        artifact=artifact_a,
+        total_requests=100,
+        failed_requests=2,
+        average_response_time_ms=100.0,
+    )
+    db_session.flush()
+
+    report = get_run_report(db_session, workspace_id=DEFAULT_WORKSPACE_ID, run_id=run.id)
+
+    assert report.artifacts_summary.has_final_stats_csv is True
+    assert report.kpi_summary.status == "missing"
+    assert report.kpi_summary.source_artifact_id is None
+    assert report.kpi_summary.total_requests is None
+    assert report.kpi_summary.missing_reasons == ["final_stats_missing_for_allocations"]
+    assert report.final_stats_preview.status == "missing"
+    assert report.final_stats_preview.rows == []
+    assert "final_stats_missing_for_allocations" in report.failure_diagnostics.notes
+
+
+def test_run_report_does_not_fallback_to_newer_unallocated_final_stats(
+    db_session: Session,
+) -> None:
+    run, allocation_a, _allocation_b = seed_two_allocation_run(
+        db_session, email="unallocated-finalstats@example.com"
+    )
+    artifact_a = seed_final_stats_artifact_for_allocation(
+        db_session, run=run, allocation=allocation_a
+    )
+    seed_final_stats_summary(
+        db_session,
+        run=run,
+        artifact=artifact_a,
+        total_requests=100,
+        failed_requests=2,
+        average_response_time_ms=100.0,
+    )
+    unallocated_artifact = RunArtifact(
+        id=new_ulid(),
+        workspace_id=run.workspace_id,
+        run_id=run.id,
+        node_id=allocation_a.node_id,
+        allocation_id=None,
+        event_id=new_ulid(),
+        artifact_type="final_stats_csv",
+        relative_path="artifacts/finalstats-unallocated.csv",
+        display_filename="finalstats-unallocated.csv",
+        size_bytes=2048,
+        sha256="c" * 64,
+        content_type="text/csv",
+        storage_key=(
+            f"run-artifacts/{run.workspace_id}/{run.id}/nodes/{allocation_a.node_id}/"
+            "artifacts/finalstats-unallocated.csv"
+        ),
+        status="available",
+        terminal_late=False,
+        created_at=datetime(2030, 6, 3, 8, 6, 0),
+    )
+    db_session.add(unallocated_artifact)
+    seed_final_stats_summary(
+        db_session,
+        run=run,
+        artifact=unallocated_artifact,
+        total_requests=999,
+        failed_requests=0,
+        average_response_time_ms=1.0,
+    )
+    db_session.flush()
+
+    report = get_run_report(db_session, workspace_id=DEFAULT_WORKSPACE_ID, run_id=run.id)
+
+    assert report.artifacts_summary.has_final_stats_csv is True
+    assert report.kpi_summary.status == "missing"
+    assert report.kpi_summary.source_artifact_id is None
+    assert report.kpi_summary.total_requests is None
+    assert report.kpi_summary.missing_reasons == ["final_stats_missing_for_allocations"]
+    assert "final_stats_missing_for_allocations" in report.failure_diagnostics.notes
+
+
+def test_run_report_maps_pending_failed_and_parse_failures_for_required_allocations(
+    db_session: Session,
+) -> None:
+    pending_run, pending_a, _pending_b = seed_two_allocation_run(
+        db_session, email="pending-finalstats@example.com"
+    )
+    pending_artifact = seed_final_stats_artifact_for_allocation(
+        db_session, run=pending_run, allocation=pending_a
+    )
+    seed_final_stats_summary(
+        db_session,
+        run=pending_run,
+        artifact=pending_artifact,
+        total_requests=100,
+        failed_requests=0,
+        average_response_time_ms=100.0,
+    )
+    pending_b = db_session.scalar(
+        select(RunNodeAllocation).where(
+            RunNodeAllocation.run_id == pending_run.id,
+            RunNodeAllocation.id != pending_a.id,
+        )
+    )
+    assert pending_b is not None
+    pending_b.state = "running"
+
+    failed_run, failed_a, _failed_b = seed_two_allocation_run(
+        db_session, email="failed-finalstats@example.com"
+    )
+    failed_artifact = seed_final_stats_artifact_for_allocation(
+        db_session, run=failed_run, allocation=failed_a
+    )
+    seed_final_stats_summary(
+        db_session,
+        run=failed_run,
+        artifact=failed_artifact,
+        total_requests=100,
+        failed_requests=0,
+        average_response_time_ms=100.0,
+    )
+    failed_b = db_session.scalar(
+        select(RunNodeAllocation).where(
+            RunNodeAllocation.run_id == failed_run.id,
+            RunNodeAllocation.id != failed_a.id,
+        )
+    )
+    assert failed_b is not None
+    failed_b.state = "failed"
+    failed_b.quarantine_reason = "runner_start_failed"
+
+    parse_run, parse_a, parse_b = seed_two_allocation_run(
+        db_session, email="parse-finalstats@example.com"
+    )
+    parse_artifact_a = seed_final_stats_artifact_for_allocation(
+        db_session, run=parse_run, allocation=parse_a
+    )
+    parse_artifact_b = seed_final_stats_artifact_for_allocation(
+        db_session, run=parse_run, allocation=parse_b
+    )
+    seed_final_stats_summary(
+        db_session,
+        run=parse_run,
+        artifact=parse_artifact_a,
+        total_requests=100,
+        failed_requests=0,
+        average_response_time_ms=100.0,
+    )
+    seed_final_stats_summary(
+        db_session,
+        run=parse_run,
+        artifact=parse_artifact_b,
+        total_requests=100,
+        failed_requests=0,
+        average_response_time_ms=100.0,
+        parse_status="failed",
+    )
+    db_session.flush()
+
+    pending_report = get_run_report(
+        db_session, workspace_id=DEFAULT_WORKSPACE_ID, run_id=pending_run.id
+    )
+    failed_report = get_run_report(
+        db_session, workspace_id=DEFAULT_WORKSPACE_ID, run_id=failed_run.id
+    )
+    parse_report = get_run_report(
+        db_session, workspace_id=DEFAULT_WORKSPACE_ID, run_id=parse_run.id
+    )
+
+    assert pending_report.kpi_summary.status == "pending"
+    assert pending_report.kpi_summary.missing_reasons == ["allocation_pending_for_final_stats"]
+    assert failed_report.kpi_summary.status == "failed"
+    assert failed_report.kpi_summary.missing_reasons == [
+        "final_stats_missing_for_failed_allocations"
+    ]
+    assert parse_report.kpi_summary.status == "failed"
+    assert parse_report.kpi_summary.missing_reasons == ["summary_parse_failed_for_allocations"]
+
+
+def test_run_report_fails_closed_when_allocation_has_conflicting_final_stats(
+    db_session: Session,
+) -> None:
+    run, allocation_a, allocation_b = seed_two_allocation_run(
+        db_session, email="conflict-finalstats@example.com"
+    )
+    first_artifact = seed_final_stats_artifact_for_allocation(
+        db_session,
+        run=run,
+        allocation=allocation_a,
+        created_at=datetime(2030, 6, 3, 8, 5, 18, tzinfo=UTC),
+    )
+    latest_artifact = seed_final_stats_artifact_for_allocation(
+        db_session,
+        run=run,
+        allocation=allocation_a,
+        created_at=datetime(2030, 6, 3, 8, 5, 30, tzinfo=UTC),
+        relative_path="artifacts/finalstats-late.csv",
+    )
+    artifact_b = seed_final_stats_artifact_for_allocation(
+        db_session, run=run, allocation=allocation_b
+    )
+    for artifact in (first_artifact, latest_artifact, artifact_b):
+        seed_final_stats_summary(
+            db_session,
+            run=run,
+            artifact=artifact,
+            total_requests=100,
+            failed_requests=1,
+            average_response_time_ms=100.0,
+        )
+    db_session.flush()
+
+    report = get_run_report(db_session, workspace_id=DEFAULT_WORKSPACE_ID, run_id=run.id)
+
+    assert report.kpi_summary.status == "failed"
+    assert report.kpi_summary.source_artifact_id is None
+    assert report.kpi_summary.total_requests is None
+    assert report.kpi_summary.missing_reasons == ["final_stats_conflict_for_allocations"]
+    assert report.final_stats_preview.status == "failed"
+    assert "final_stats_conflict_for_allocations" in report.failure_diagnostics.notes
+
+
+def test_run_report_rejects_final_stats_allocation_node_mismatch(
+    db_session: Session,
+) -> None:
+    run, allocation_a, allocation_b = seed_two_allocation_run(
+        db_session, email="mismatch-finalstats@example.com"
+    )
+    mismatched_artifact = seed_final_stats_artifact_for_allocation(
+        db_session, run=run, allocation=allocation_a, node_id=allocation_b.node_id
+    )
+    artifact_b = seed_final_stats_artifact_for_allocation(
+        db_session, run=run, allocation=allocation_b
+    )
+    for artifact in (mismatched_artifact, artifact_b):
+        seed_final_stats_summary(
+            db_session,
+            run=run,
+            artifact=artifact,
+            total_requests=100,
+            failed_requests=1,
+            average_response_time_ms=100.0,
+        )
+    db_session.flush()
+
+    report = get_run_report(db_session, workspace_id=DEFAULT_WORKSPACE_ID, run_id=run.id)
+
+    assert report.kpi_summary.status == "failed"
+    assert report.kpi_summary.missing_reasons == ["final_stats_allocation_node_mismatch"]
+    assert "final_stats_allocation_node_mismatch" in report.failure_diagnostics.notes
+
+
+def test_run_report_uses_lone_terminal_late_final_stats_with_warning(
+    db_session: Session,
+) -> None:
+    run, allocation_a, allocation_b = seed_two_allocation_run(
+        db_session, email="late-finalstats@example.com"
+    )
+    artifact_a = seed_final_stats_artifact_for_allocation(
+        db_session, run=run, allocation=allocation_a, terminal_late=True
+    )
+    artifact_b = seed_final_stats_artifact_for_allocation(
+        db_session, run=run, allocation=allocation_b
+    )
+    for artifact in (artifact_a, artifact_b):
+        seed_final_stats_summary(
+            db_session,
+            run=run,
+            artifact=artifact,
+            total_requests=100,
+            failed_requests=0,
+            average_response_time_ms=100.0,
+        )
+    db_session.flush()
+
+    report = get_run_report(db_session, workspace_id=DEFAULT_WORKSPACE_ID, run_id=run.id)
+
+    assert report.kpi_summary.status == "parsed"
+    assert report.kpi_summary.missing_reasons == []
+    assert "terminal_late_final_stats_used" in report.final_stats_preview.warnings
+    assert "terminal_late_final_stats_used" not in report.failure_diagnostics.notes
+
+
+def test_run_report_marks_aggregate_denominators_unavailable_without_nan(
+    db_session: Session,
+) -> None:
+    run, allocation_a, allocation_b = seed_two_allocation_run(
+        db_session, email="zero-finalstats@example.com"
+    )
+    for allocation in (allocation_a, allocation_b):
+        artifact = seed_final_stats_artifact_for_allocation(
+            db_session, run=run, allocation=allocation
+        )
+        seed_final_stats_summary(
+            db_session,
+            run=run,
+            artifact=artifact,
+            total_requests=0,
+            failed_requests=0,
+            average_response_time_ms=0.0,
+            response_code_counts={},
+        )
+    db_session.flush()
+
+    report = get_run_report(db_session, workspace_id=DEFAULT_WORKSPACE_ID, run_id=run.id)
+
+    assert report.kpi_summary.status == "parsed"
+    assert report.kpi_summary.total_requests == 0
+    assert report.kpi_summary.failed_requests == 0
+    assert report.kpi_summary.error_rate is None
+    assert report.kpi_summary.average_response_time_ms is None
+    assert report.kpi_summary.missing_reasons == []
+    assert report.final_stats_preview.rows[0].error_rate is None
+    assert report.final_stats_preview.rows[0].average_response_time_ms is None
+    assert "aggregate_rate_denominator_unavailable" in report.final_stats_preview.warnings
+    assert "aggregate_average_denominator_unavailable" in report.final_stats_preview.warnings
+    assert "aggregate_rate_denominator_unavailable" not in report.failure_diagnostics.notes
+    assert "aggregate_average_denominator_unavailable" not in report.failure_diagnostics.notes
+
+
+def test_run_report_keeps_parsed_advisory_warnings_out_of_missing_reasons_for_partial_summaries(
+    db_session: Session,
+) -> None:
+    run, allocation_a, allocation_b = seed_two_allocation_run(
+        db_session, email="partial-finalstats@example.com"
+    )
+    artifact_a = seed_final_stats_artifact_for_allocation(
+        db_session, run=run, allocation=allocation_a
+    )
+    artifact_b = seed_final_stats_artifact_for_allocation(
+        db_session, run=run, allocation=allocation_b
+    )
+    summary_a = seed_final_stats_summary(
+        db_session,
+        run=run,
+        artifact=artifact_a,
+        total_requests=100,
+        failed_requests=2,
+        average_response_time_ms=100.0,
+        response_code_counts={"200": 98, "500": 2},
+    )
+    seed_final_stats_summary(
+        db_session,
+        run=run,
+        artifact=artifact_b,
+        total_requests=300,
+        failed_requests=18,
+        average_response_time_ms=200.0,
+        response_code_counts={"200": 282, "500": 18},
+    )
+    assert isinstance(summary_a.summary_json["total"], dict)
+    summary_a.summary_json["total"]["totalRequests"] = "not-a-number"
+    db_session.flush()
+
+    report = get_run_report(db_session, workspace_id=DEFAULT_WORKSPACE_ID, run_id=run.id)
+
+    assert report.kpi_summary.status == "parsed"
+    assert report.kpi_summary.total_requests is None
+    assert report.kpi_summary.failed_requests == 20
+    assert report.kpi_summary.error_rate is None
+    assert report.kpi_summary.average_response_time_ms is None
+    assert report.kpi_summary.missing_reasons == []
+    aggregate = report.final_stats_preview.rows[0]
+    assert aggregate.total_requests is None
+    assert aggregate.failed_requests == 20
+    assert aggregate.error_rate is None
+    assert aggregate.average_response_time_ms is None
+    assert aggregate.response_code_counts == {"200": 380, "500": 20}
+    assert "aggregate_rate_denominator_unavailable" in report.final_stats_preview.warnings
+    assert "aggregate_average_denominator_unavailable" in report.final_stats_preview.warnings
+    assert "aggregate_rate_denominator_unavailable" not in report.failure_diagnostics.notes
+    assert "aggregate_average_denominator_unavailable" not in report.failure_diagnostics.notes
+
+
+def test_run_report_keeps_safe_counts_when_average_is_not_aggregatable(
+    db_session: Session,
+) -> None:
+    run, allocation_a, allocation_b = seed_two_allocation_run(
+        db_session, email="partial-average-finalstats@example.com"
+    )
+    artifact_a = seed_final_stats_artifact_for_allocation(
+        db_session, run=run, allocation=allocation_a
+    )
+    artifact_b = seed_final_stats_artifact_for_allocation(
+        db_session, run=run, allocation=allocation_b
+    )
+    summary_a = seed_final_stats_summary(
+        db_session,
+        run=run,
+        artifact=artifact_a,
+        total_requests=100,
+        failed_requests=2,
+        average_response_time_ms=100.0,
+        response_code_counts={"200": 98, "500": 2},
+    )
+    seed_final_stats_summary(
+        db_session,
+        run=run,
+        artifact=artifact_b,
+        total_requests=300,
+        failed_requests=18,
+        average_response_time_ms=200.0,
+        response_code_counts={"200": 282, "500": 18},
+    )
+    assert isinstance(summary_a.summary_json["total"], dict)
+    summary_a.summary_json["total"]["averageResponseTimeMs"] = "not-a-number"
+    db_session.flush()
+
+    report = get_run_report(db_session, workspace_id=DEFAULT_WORKSPACE_ID, run_id=run.id)
+
+    assert report.kpi_summary.status == "parsed"
+    assert report.kpi_summary.total_requests == 400
+    assert report.kpi_summary.failed_requests == 20
+    assert report.kpi_summary.error_rate == pytest.approx(0.05)
+    assert report.kpi_summary.average_response_time_ms is None
+    assert report.kpi_summary.missing_reasons == []
+    aggregate = report.final_stats_preview.rows[0]
+    assert aggregate.total_requests == 400
+    assert aggregate.failed_requests == 20
+    assert aggregate.error_rate == pytest.approx(0.05)
+    assert aggregate.average_response_time_ms is None
+    assert aggregate.response_code_counts == {"200": 380, "500": 20}
+    assert "aggregate_rate_denominator_unavailable" not in report.final_stats_preview.warnings
+    assert "aggregate_average_denominator_unavailable" in report.final_stats_preview.warnings
+    assert "aggregate_average_denominator_unavailable" not in report.failure_diagnostics.notes
+
+
+def test_run_report_ignores_malformed_response_code_counts_without_failing(
+    db_session: Session,
+) -> None:
+    run, allocation_a, allocation_b = seed_two_allocation_run(
+        db_session, email="malformed-response-code-counts@example.com"
+    )
+    artifact_a = seed_final_stats_artifact_for_allocation(
+        db_session, run=run, allocation=allocation_a
+    )
+    artifact_b = seed_final_stats_artifact_for_allocation(
+        db_session, run=run, allocation=allocation_b
+    )
+    summary_a = seed_final_stats_summary(
+        db_session,
+        run=run,
+        artifact=artifact_a,
+        total_requests=100,
+        failed_requests=2,
+        average_response_time_ms=100.0,
+        response_code_counts={"200": 98, "500": 2},
+    )
+    seed_final_stats_summary(
+        db_session,
+        run=run,
+        artifact=artifact_b,
+        total_requests=300,
+        failed_requests=18,
+        average_response_time_ms=200.0,
+        response_code_counts={"200": 282, "500": 18},
+    )
+    assert isinstance(summary_a.summary_json["total"], dict)
+    summary_a.summary_json["total"]["responseCodeCounts"] = ["not", "a", "mapping"]
+    db_session.flush()
+
+    report = get_run_report(db_session, workspace_id=DEFAULT_WORKSPACE_ID, run_id=run.id)
+
+    assert report.kpi_summary.status == "parsed"
+    assert report.kpi_summary.total_requests == 400
+    assert report.kpi_summary.failed_requests == 20
+    assert report.kpi_summary.error_rate == pytest.approx(0.05)
+    assert report.final_stats_preview.rows[0].response_code_counts == {
+        "200": 282,
+        "500": 18,
+    }
+
+
+def test_run_report_treats_negative_counts_as_unsafe_in_multi_allocation_summary(
+    db_session: Session,
+) -> None:
+    run, allocation_a, allocation_b = seed_two_allocation_run(
+        db_session, email="negative-count-finalstats@example.com"
+    )
+    artifact_a = seed_final_stats_artifact_for_allocation(
+        db_session, run=run, allocation=allocation_a
+    )
+    artifact_b = seed_final_stats_artifact_for_allocation(
+        db_session, run=run, allocation=allocation_b
+    )
+    summary_a = seed_final_stats_summary(
+        db_session,
+        run=run,
+        artifact=artifact_a,
+        total_requests=100,
+        failed_requests=2,
+        average_response_time_ms=100.0,
+        response_code_counts={"200": 98, "500": 2},
+    )
+    seed_final_stats_summary(
+        db_session,
+        run=run,
+        artifact=artifact_b,
+        total_requests=300,
+        failed_requests=18,
+        average_response_time_ms=200.0,
+        response_code_counts={"200": 282, "500": 18},
+    )
+    assert isinstance(summary_a.summary_json["total"], dict)
+    summary_a.summary_json["total"]["failedRequests"] = -2.0
+    summary_a.summary_json["total"]["responseCodeCounts"] = {"200": -98.0, "500": 2}
+    db_session.flush()
+
+    report = get_run_report(db_session, workspace_id=DEFAULT_WORKSPACE_ID, run_id=run.id)
+
+    assert report.kpi_summary.status == "parsed"
+    assert report.kpi_summary.total_requests == 400
+    assert report.kpi_summary.failed_requests is None
+    assert report.kpi_summary.error_rate is None
+    assert report.kpi_summary.average_response_time_ms == pytest.approx(175.0)
+    aggregate = report.final_stats_preview.rows[0]
+    assert aggregate.total_requests == 400
+    assert aggregate.failed_requests is None
+    assert aggregate.error_rate is None
+    assert aggregate.average_response_time_ms == pytest.approx(175.0)
+    assert aggregate.response_code_counts == {"200": 282, "500": 20}
+    assert "aggregate_rate_denominator_unavailable" in report.final_stats_preview.warnings
+
+
+def test_run_report_treats_negative_average_as_unsafe_in_multi_allocation_summary(
+    db_session: Session,
+) -> None:
+    run, allocation_a, allocation_b = seed_two_allocation_run(
+        db_session, email="negative-average-finalstats@example.com"
+    )
+    artifact_a = seed_final_stats_artifact_for_allocation(
+        db_session, run=run, allocation=allocation_a
+    )
+    artifact_b = seed_final_stats_artifact_for_allocation(
+        db_session, run=run, allocation=allocation_b
+    )
+    summary_a = seed_final_stats_summary(
+        db_session,
+        run=run,
+        artifact=artifact_a,
+        total_requests=100,
+        failed_requests=2,
+        average_response_time_ms=100.0,
+        response_code_counts={"200": 98, "500": 2},
+    )
+    seed_final_stats_summary(
+        db_session,
+        run=run,
+        artifact=artifact_b,
+        total_requests=300,
+        failed_requests=18,
+        average_response_time_ms=200.0,
+        response_code_counts={"200": 282, "500": 18},
+    )
+    assert isinstance(summary_a.summary_json["total"], dict)
+    summary_a.summary_json["total"]["averageResponseTimeMs"] = -100.0
+    db_session.flush()
+
+    report = get_run_report(db_session, workspace_id=DEFAULT_WORKSPACE_ID, run_id=run.id)
+
+    assert report.kpi_summary.status == "parsed"
+    assert report.kpi_summary.total_requests == 400
+    assert report.kpi_summary.failed_requests == 20
+    assert report.kpi_summary.error_rate == pytest.approx(0.05)
+    assert report.kpi_summary.average_response_time_ms is None
+    aggregate = report.final_stats_preview.rows[0]
+    assert aggregate.total_requests == 400
+    assert aggregate.failed_requests == 20
+    assert aggregate.error_rate == pytest.approx(0.05)
+    assert aggregate.average_response_time_ms is None
+    assert aggregate.response_code_counts == {"200": 380, "500": 20}
+    assert "aggregate_average_denominator_unavailable" in report.final_stats_preview.warnings
+
+
+def test_snapshot_summary_projects_debug_and_malformed_snapshot_safely() -> None:
+    run = SimpleNamespace(
+        source_type="debug_scenario",
+        selected_node_id="01HZX3Y9M0E9W7Z6M5QK9S8P7N",
+    )
+    summary = _snapshot_summary(
+        {
+            "snapshotVersion": 1,
+            "sourceRevision": 7,
+            "scenario": {"name": "Debug scenario"},
+            "debugProfile": {"concurrency": 1, "iterations": 1},
+            "scenarioItems": [
+                None,
+                {"scenarioName": "Missing settings"},
+                {"loadSettings": {"concurrencyPerNode": 2}},
+            ],
+            "dependencyFiles": [{"displayName": "fixture.csv"}, None, {}],
+            "slaRules": [
+                None,
+                {"metric": "hits", "condition": "gt", "threshold": {"value": 100, "unit": "count"}},
+                {
+                    "metric": "error_rate",
+                    "condition": "lte",
+                    "threshold": {"value": 1, "unit": "percent"},
+                },
+                {"metric": "bytes", "condition": "gt", "threshold": {"value": 512, "unit": "kb"}},
+                {
+                    "metric": "payload",
+                    "condition": "gt",
+                    "threshold": {"value": 1, "unit": "mb"},
+                },
+                {"metric": "missing", "condition": "gt", "threshold": {"unit": "ms"}},
+                {"metric": "invalid", "condition": "gt", "threshold": "bad"},
+            ],
+        },
+        run,  # type: ignore[arg-type]
+    )
+
+    assert summary.scenario_items[0].scenario_name == "Debug scenario"
+    assert summary.scenario_items[0].load_settings.concurrency_per_node == 1
+    assert summary.scenario_items[0].load_settings.iterations == 1
+    assert summary.dependency_file_names == ["fixture.csv"]
+    assert summary.env_group_variable_keys == []
+    assert [rule.threshold_text for rule in summary.sla_rules] == [
+        "100",
+        "1%",
+        "512kB",
+        "1MB",
+        None,
+        None,
+    ]
 
 
 @pytest.mark.anyio
@@ -547,6 +1619,7 @@ def test_run_list_batches_page_supplemental_data(db_session: Session) -> None:
     assert response.items[0].triggered_by.email == user.email
     assert response.items[0].artifact_count == 1
     assert response.items[0].has_artifacts_zip is True
+    assert response.items[0].allocated_node_count == 1
     assert all(
         item.selected_node.id == run.selected_node_id for item, run in zip(response.items, runs)
     )
@@ -730,7 +1803,9 @@ async def test_run_report_detail_artifacts_download_and_validity(
     assert body["failureDiagnostics"]["hasFailedRequestsPreview"] is False
     assert body["snapshot"]["sourceName"] == "Checkout Load Test"
     assert body["snapshot"]["resourceRequest"]["selectedNodeId"] == created_run.selected_node_id
-    assert [node["id"] for node in body["nodes"]] == [created_run.selected_node_id]
+    assert body["snapshot"]["resourceRequest"]["selectedNodeIds"] == [created_run.selected_node_id]
+    assert [node["id"] for node in body["allocatedNodes"]] == [created_run.selected_node_id]
+    assert "nodes" not in body
     assert body["snapshot"]["scenarioItems"] == [
         {
             "scenarioName": "Checkout scenario",
@@ -907,8 +1982,119 @@ async def test_active_run_report_returns_pending_sections_without_mutating_state
     assert report.status_code == 200
     assert report.json()["verdict"]["state"] == "running"
     assert report.json()["kpiSummary"]["status"] == "pending"
-    assert report.json()["kpiSummary"]["missingReasons"] == ["summary_pending"]
+    assert report.json()["kpiSummary"]["missingReasons"] == ["allocation_pending_for_final_stats"]
     assert report.json()["finalStatsPreview"]["status"] == "pending"
     db_session.refresh(active)
     assert active.state == "running"
     assert active.ended_at is None
+
+
+def test_terminal_callback_stores_sla_result_without_mutating_validity(db_session: Session) -> None:
+    actor = User(
+        id="01HZX3Y9M0E9W7Z6M5QK9S8P7A",
+        email="sla-result@example.com",
+        display_name="SLA User",
+        password_hash="hash",
+        role="user",
+        status="active",
+        failed_login_count=0,
+        created_at=datetime.now(UTC),
+        updated_at=datetime.now(UTC),
+    )
+    db_session.add(actor)
+    selected_node = seed_node(
+        db_session,
+        actor.id,
+        node_id="01HZX3Y9M0E9W7Z6M5QK9S8P7N",
+        workspace_id=DEFAULT_WORKSPACE_ID,
+    )
+    created_run = seed_run(
+        db_session,
+        user_id=actor.id,
+        run_id="01HZX3Y9M0E9W7Z6M5QK9S8P7R",
+        node=selected_node,
+        state="running",
+        validity="valid",
+        sla_result="not_evaluated",
+    )
+    db_session.flush()
+
+    result = apply_runner_callback(
+        db_session,
+        callback=RunnerCallbackInput(
+            schema_version="1",
+            event_id="01HZX3Y9M0E9W7Z6M5QK9S8P7C",
+            run_id=created_run.id,
+            node_id=selected_node.id,
+            runtime_version="runtime-test-v1",
+            event_type="finished",
+            seq=7,
+            event_time=datetime(2030, 6, 3, 8, 6, tzinfo=UTC),
+            message="Runner finished callback.",
+            details={"processGroupExited": True, "exitCode": 0, "slaResult": "failed"},
+        ),
+        request_id="req_p0_07_sla",
+        authenticated_node_id=selected_node.id,
+    )
+
+    assert result.state_changed is True
+    db_session.refresh(created_run)
+    assert created_run.state == "finished"
+    assert created_run.sla_result == "failed"
+    assert created_run.validity == "valid"
+
+
+def test_terminal_callback_does_not_store_sla_result_for_debug_run(db_session: Session) -> None:
+    actor = User(
+        id="01HZX3Y9M0E9W7Z6M5QK9S8P7A",
+        email="debug-sla-result@example.com",
+        display_name="Debug SLA User",
+        password_hash="hash",
+        role="user",
+        status="active",
+        failed_login_count=0,
+        created_at=datetime.now(UTC),
+        updated_at=datetime.now(UTC),
+    )
+    db_session.add(actor)
+    selected_node = seed_node(
+        db_session,
+        actor.id,
+        node_id="01HZX3Y9M0E9W7Z6M5QK9S8P7N",
+        workspace_id=DEFAULT_WORKSPACE_ID,
+    )
+    created_run = seed_run(
+        db_session,
+        user_id=actor.id,
+        run_id="01HZX3Y9M0E9W7Z6M5QK9S8P7R",
+        node=selected_node,
+        state="running",
+        validity="invalid",
+        sla_result="not_evaluated",
+        run_type="debug",
+    )
+    db_session.flush()
+
+    result = apply_runner_callback(
+        db_session,
+        callback=RunnerCallbackInput(
+            schema_version="1",
+            event_id="01HZX3Y9M0E9W7Z6M5QK9S8P7C",
+            run_id=created_run.id,
+            node_id=selected_node.id,
+            runtime_version="runtime-test-v1",
+            event_type="finished",
+            seq=7,
+            event_time=datetime(2030, 6, 3, 8, 6, tzinfo=UTC),
+            message="Runner finished callback.",
+            details={"processGroupExited": True, "exitCode": 0, "slaResult": "failed"},
+        ),
+        request_id="req_p0_07_debug_sla",
+        authenticated_node_id=selected_node.id,
+    )
+
+    assert result.state_changed is True
+    db_session.refresh(created_run)
+    assert created_run.state == "finished"
+    assert created_run.run_type == "debug"
+    assert created_run.sla_result == "not_evaluated"

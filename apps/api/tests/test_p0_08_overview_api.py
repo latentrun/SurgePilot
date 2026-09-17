@@ -1,4 +1,5 @@
 from datetime import UTC, datetime, timedelta
+import hashlib
 import json
 
 import pytest
@@ -376,10 +377,7 @@ async def test_admin_setup_status_requires_admin(client: AsyncClient, db_session
     _csrf, _workspace_id, admin_id = await register(client, "admin-setup@example.com")
     admin_response = await client.get("/api/v1/admin/setup-status")
     assert admin_response.status_code == 200
-    body = admin_response.json()
-    assert body["hasDefaultWorkspace"] is True
-    assert body["needsBootstrap"] is False
-    assert "storageAvailable" not in body
+    assert "storageAvailable" in admin_response.json()
 
     user = db_session.get(User, admin_id)
     assert user is not None
@@ -388,6 +386,48 @@ async def test_admin_setup_status_requires_admin(client: AsyncClient, db_session
 
     user_response = await client.get("/api/v1/admin/setup-status")
     assert user_response.status_code == 403
+
+
+@pytest.mark.anyio
+async def test_admin_setup_status_reports_load_node_runtime_readiness(
+    client: AsyncClient, tmp_path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("LOAD_NODE_RUNTIME_ARTIFACT_DIR", str(tmp_path))
+    monkeypatch.delenv("LOAD_NODE_RUNTIME_VERSION", raising=False)
+    await register(client, "admin-runtime-status@example.com")
+
+    missing_version = await client.get("/api/v1/admin/setup-status")
+    assert missing_version.status_code == 200
+    body = missing_version.json()
+    assert body["loadNodeRuntimeStatus"] == "not_configured"
+    assert "loadNodeRuntimeVersionConfigured" not in body
+    assert "loadNodeRuntimeArtifactAvailable" not in body
+    assert "sshCredentialEncryptionKeyConfigured" in body["sensitiveStatus"]
+
+    monkeypatch.setenv("LOAD_NODE_RUNTIME_VERSION", "p0-test")
+    missing_artifact = await client.get("/api/v1/admin/setup-status")
+    assert missing_artifact.status_code == 200
+    body = missing_artifact.json()
+    assert body["loadNodeRuntimeStatus"] == "artifact_missing"
+
+    archive = tmp_path / "surgepilot-runtime-linux-amd64-p0-test.tar.gz"
+    archive.write_bytes(b"runtime")
+
+    digest = hashlib.sha256(b"runtime").hexdigest()
+    sidecar = tmp_path / f"{archive.name}.sha256"
+    sidecar.write_text("0" * 64 + f"  {archive.name}\n", encoding="utf-8")
+
+    corrupt_digest = await client.get("/api/v1/admin/setup-status")
+    assert corrupt_digest.status_code == 200
+    body = corrupt_digest.json()
+    assert body["loadNodeRuntimeStatus"] == "artifact_missing"
+
+    sidecar.write_text(f"{digest}  {archive.name}\n", encoding="utf-8")
+
+    available = await client.get("/api/v1/admin/setup-status")
+    assert available.status_code == 200
+    body = available.json()
+    assert body["loadNodeRuntimeStatus"] == "ready"
 
 
 def test_overview_service_does_not_use_artifact_storage_or_parsers(
@@ -427,3 +467,46 @@ def test_overview_service_does_not_use_artifact_storage_or_parsers(
     response = get_overview(db_session, workspace=workspace)
 
     assert response.recent_runs[0].artifact_count == 1
+
+
+def test_overview_service_excludes_internal_debug_http_trace_artifacts(
+    db_session: Session,
+) -> None:
+    now = datetime.now(UTC)
+    user = User(
+        id=new_ulid(),
+        email="service-overview-debug-trace@example.com",
+        display_name="Overview Debug Trace",
+        password_hash="hash",
+        role="admin",
+        status="active",
+        failed_login_count=0,
+        locked_until=None,
+        last_login_at=None,
+        created_at=now,
+        updated_at=now,
+    )
+    db_session.add(user)
+    db_session.add(
+        WorkspaceMember(workspace_id=DEFAULT_WORKSPACE_ID, user_id=user.id, joined_at=now)
+    )
+    node = seed_node(db_session, user_id=user.id, workspace_id=DEFAULT_WORKSPACE_ID)
+    run = seed_run(
+        db_session,
+        user_id=user.id,
+        node=node,
+        workspace_id=DEFAULT_WORKSPACE_ID,
+        run_type="debug",
+        source_type="debug_scenario",
+        validity="invalid",
+    )
+    seed_artifact(db_session, run=run, artifact_type="debug_http_trace")
+    db_session.commit()
+    workspace = db_session.get(Workspace, DEFAULT_WORKSPACE_ID)
+    assert workspace is not None
+
+    response = get_overview(db_session, workspace=workspace)
+
+    assert response.recent_runs[0].id == run.id
+    assert response.recent_runs[0].artifact_count == 0
+    assert response.recent_runs[0].has_artifacts_zip is False

@@ -10,7 +10,7 @@
 
 Run Report currently has `Failure Diagnostics`, which shows only safe failure summaries. Debug Run users need a different diagnostic surface: for a Scenario debug run and a Test Plan debug-mode run, each HTTP request is executed once and users need the full request/response details to diagnose URL, method, header, body, environment variable, authentication and response failures.
 
-This capability was not part of the original P1 reservation list in `docs/sdd/00-product-scope-and-priority.md` §6. This accepted ADR adds it as a bounded P1 capability; `docs/sdd/slices/P1-README.md` requires the capability to remain governed by the Revision Protocol and its named Slice SDD.
+This capability is not part of the fixed P1 list in `docs/sdd/00-product-scope-and-priority.md` §6. `docs/sdd/slices/P1-README.md` requires new or changed P1 capability to go through the Revision Protocol before implementation.
 
 Runtime bootstrap is already fixed: the Runner executes `${RUNNER_HOME}/current/bin/bzt -n surgepilot.yml`, the P0 runtime tar contents are frozen, and Taurus supports inline JSR223 `script-text` in YAML. Therefore the debug trace script must be injected into the per-run Taurus YAML by the API/worker bundle generation path, not distributed as a runtime file and not installed globally.
 

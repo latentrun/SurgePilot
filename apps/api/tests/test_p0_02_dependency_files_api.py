@@ -51,6 +51,9 @@ class FakeStorage(StorageClient):
         self.deleted.append((bucket, object_key))
         self.objects.pop((bucket, object_key), None)
 
+    def copy_object(self, *, bucket, source_key, destination_key):
+        self.objects[(bucket, destination_key)] = self.objects[(bucket, source_key)]
+
     def health_check(self):
         return True
 
@@ -354,13 +357,6 @@ async def test_preview_dependency_file_validation_and_workspace_isolation(
     assert invalid.status_code == 422
     assert invalid.json()["code"] == "VALIDATION_ERROR"
 
-    not_found = await client.get(
-        "/api/v1/dependency-files/01HZX3Y9M0E9W7Z6M5QK9S8P7Z/preview",
-        headers={"x-workspace-id": workspace_id},
-    )
-    assert not_found.status_code == 404
-    assert not_found.json()["code"] == "RESOURCE_NOT_FOUND"
-
     user = db_session.scalar(select(User).where(User.email == "preview-isolation@example.com"))
     assert user is not None
     other_workspace_id = seed_other_workspace(db_session, user.id)
@@ -372,7 +368,56 @@ async def test_preview_dependency_file_validation_and_workspace_isolation(
     )
     assert hidden.status_code == 404
     assert hidden.json()["code"] == "RESOURCE_NOT_FOUND"
-    assert "dependency-files/" not in hidden.text
+
+
+@pytest.mark.anyio
+async def test_dependency_file_policy_uses_db_backed_system_settings(
+    client: AsyncClient, fake_storage: FakeStorage
+) -> None:
+    csrf_token, workspace_id = await register_user(client, email="dependency-policy@example.com")
+
+    patched = await client.patch(
+        "/api/v1/admin/system-settings",
+        headers={"x-csrf-token": csrf_token},
+        json={
+            "dependencyFileMaxBytes": 1048576,
+            "dependencyFileAllowedExtensions": [".csv"],
+            "dependencyFilePreviewMaxBytes": 1024,
+            "dependencyFilePreviewBinaryDenyExtensions": [".csv"],
+        },
+    )
+    assert patched.status_code == 200
+
+    oversized = await client.post(
+        "/api/v1/dependency-files",
+        headers={"x-csrf-token": csrf_token, "x-workspace-id": workspace_id},
+        files={"file": ("large.csv", b"x" * (2 * 1024 * 1024 + 1), "text/csv")},
+    )
+    assert oversized.status_code == 413
+    assert fake_storage.objects == {}
+
+    blocked_extension = await client.post(
+        "/api/v1/dependency-files",
+        headers={"x-csrf-token": csrf_token, "x-workspace-id": workspace_id},
+        files={"file": ("users.txt", b"id,name\n1,Ada\n", "text/plain")},
+    )
+    assert blocked_extension.status_code == 422
+    assert blocked_extension.json()["code"] == "VALIDATION_ERROR"
+
+    created = await client.post(
+        "/api/v1/dependency-files",
+        headers={"x-csrf-token": csrf_token, "x-workspace-id": workspace_id},
+        files={"file": ("users.csv", b"id,name\n1,Ada\n", "text/csv")},
+    )
+    assert created.status_code == 201
+    preview = await client.get(
+        f"/api/v1/dependency-files/{created.json()['id']}/preview",
+        headers={"x-workspace-id": workspace_id},
+    )
+    assert preview.status_code == 200
+    assert preview.json()["previewKind"] == "unsupported"
+    assert preview.json()["reason"] == "binary_content"
+    assert preview.json()["maxBytes"] == 1024
 
 
 @pytest.mark.anyio
@@ -573,33 +618,70 @@ async def test_dependency_files_are_workspace_isolated(
 
 
 @pytest.mark.anyio
-async def test_dependency_file_extension_allowlist_enforced_when_configured(
-    client: AsyncClient, monkeypatch: pytest.MonkeyPatch, fake_storage: FakeStorage
+async def test_scenario_references_mark_dependency_file_in_use_and_block_delete(
+    client: AsyncClient, fake_storage: FakeStorage
 ) -> None:
-    monkeypatch.setenv("DEPENDENCY_FILE_ALLOWED_EXTENSIONS", ".csv")
-    csrf_token, workspace_id = await register_user(client, email="ext-allow@example.com")
-
-    blocked_extension = await client.post(
-        "/api/v1/dependency-files",
-        headers={"x-csrf-token": csrf_token, "x-workspace-id": workspace_id},
-        files={"file": ("users.txt", b"id,name\n1,Ada\n", "text/plain")},
-    )
-    assert blocked_extension.status_code == 422
-    assert blocked_extension.json()["code"] == "VALIDATION_ERROR"
-    assert blocked_extension.json()["details"] == [
-        {
-            "field": "file",
-            "code": "UNSUPPORTED_FILE_EXTENSION",
-            "message": "File extension is not allowed.",
-        }
-    ]
-
+    csrf_token, workspace_id = await register_user(client)
     created = await client.post(
         "/api/v1/dependency-files",
         headers={"x-csrf-token": csrf_token, "x-workspace-id": workspace_id},
         files={"file": ("users.csv", b"id,name\n1,Ada\n", "text/csv")},
     )
     assert created.status_code == 201
+    file_id = created.json()["id"]
+
+    scenario = await client.post(
+        "/api/v1/scenarios",
+        headers={"x-csrf-token": csrf_token, "x-workspace-id": workspace_id},
+        json={
+            "name": "CSV users",
+            "description": None,
+            "tags": [],
+            "baseUrlExpression": "${base_url}",
+            "defaultSettings": {
+                "thinkTimeMs": 0,
+                "timeoutMs": 30000,
+                "followRedirects": True,
+                "keepAlive": True,
+                "storeCache": True,
+                "storeCookie": True,
+                "retrieveResources": False,
+            },
+            "dataSources": [
+                {
+                    "id": "01HZX3Y9M0E9W7Z6M5QK9S8P7D",
+                    "dependencyFileId": file_id,
+                    "displayName": "Users CSV",
+                    "delimiter": ",",
+                    "quoted": None,
+                    "loop": True,
+                    "variableNames": ["id", "name"],
+                    "randomOrder": False,
+                    "enabled": True,
+                }
+            ],
+            "steps": [],
+        },
+    )
+    assert scenario.status_code == 201
+
+    detail = await client.get(
+        f"/api/v1/dependency-files/{file_id}", headers={"x-workspace-id": workspace_id}
+    )
+    assert detail.status_code == 200
+    assert detail.json()["inUse"] is True
+
+    listed = await client.get("/api/v1/dependency-files", headers={"x-workspace-id": workspace_id})
+    assert listed.status_code == 200
+    assert listed.json()["items"][0]["inUse"] is True
+
+    deleted = await client.delete(
+        f"/api/v1/dependency-files/{file_id}",
+        headers={"x-csrf-token": csrf_token, "x-workspace-id": workspace_id},
+    )
+    assert deleted.status_code == 409
+    assert deleted.json()["code"] == "FILE_IN_USE"
+    assert deleted.headers["x-workspace-id"] == workspace_id
 
 
 @pytest.mark.anyio

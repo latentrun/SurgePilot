@@ -19,19 +19,17 @@ def test_p0_00_auth_operation_ids_and_contract_shape() -> None:
         "/v1/auth/csrf",
     }
     assert paths["/v1/setup/status"]["get"]["operationId"] == "getSetupStatus"
-
     setup_schema = document["components"]["schemas"]["SetupStatusResponse"]
-    assert set(setup_schema["properties"]) == {
-        "needsBootstrap",
-        "allowSignup",
-        "hasDefaultWorkspace",
-    }
-    assert setup_schema["required"] == [
-        "needsBootstrap",
-        "allowSignup",
-        "hasDefaultWorkspace",
+    assert "storageAvailable" in setup_schema["properties"]
+    assert setup_schema["properties"]["storageAvailable"]["type"] == "boolean"
+    runtime_status = setup_schema["properties"]["loadNodeRuntimeStatus"]
+    assert runtime_status["anyOf"][0]["enum"] == [
+        "ready",
+        "not_configured",
+        "artifact_missing",
     ]
-
+    assert "loadNodeRuntimeVersionConfigured" not in setup_schema["properties"]
+    assert "loadNodeRuntimeArtifactAvailable" not in setup_schema["properties"]
     assert paths["/v1/auth/register"]["post"]["operationId"] == "register"
     assert paths["/v1/auth/login"]["post"]["operationId"] == "login"
     assert paths["/v1/auth/logout"]["post"]["operationId"] == "logout"

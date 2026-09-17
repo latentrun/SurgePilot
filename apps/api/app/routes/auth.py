@@ -156,7 +156,9 @@ def get_current_user(
     user: CurrentUserDep,
     preferred_workspace_id: Annotated[str | None, Query(alias="preferredWorkspaceId")] = None,
 ) -> CurrentUserResponse:
-    result = current_user_response_for_preference(db, user=user, preferred_workspace_id=preferred_workspace_id)
+    result = current_user_response_for_preference(
+        db, user=user, preferred_workspace_id=preferred_workspace_id
+    )
     _attach_workspace_header(response, result.current_workspace.id)
     db.commit()
     return result

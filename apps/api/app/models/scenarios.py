@@ -85,7 +85,7 @@ class ScenarioDependencyFileRef(Base):
             name="ck_scenario_dependency_file_refs_dependency_file_id_len",
         ),
         CheckConstraint(
-            "ref_type in ('data_source', 'upload_file')",
+            "ref_type in ('data_source', 'upload_file', 'script')",
             name="ck_scenario_dependency_file_refs_type",
         ),
         CheckConstraint(

@@ -894,8 +894,6 @@ Routing rules:
 5. Logout success redirects to `/login`.
 6. Unknown routing behavior belongs to the routing Foundation doc or later UI slice; do not build a full app shell here.
 
-P0-00 must not pull later shared Web infrastructure into this slice merely to match the eventual application shell. The R00 baseline does not yet contain the shared router, Tailwind styling foundation, or shared logo component used by the later frozen Web implementation. Until those shared dependencies are introduced by their own slices, P0-00 uses dependency-neutral browser-history routing and minimal semantic markup inside the auth components themselves. It must not introduce a one-off auth-only stylesheet or other disposable UI foundation solely for this slice.
-
 ### 11.2 Setup Status Usage
 
 On app load for anonymous auth pages:
@@ -1218,6 +1216,7 @@ P0-00 Web implementation facts:
 3. The placeholder `/overview` shows only current user identity, role, default Workspace name, and logout.
 4. `make verify-e2e` runs the P0-00 Playwright smoke `tests/e2e/p0_00_auth_workspace.spec.ts`.
 5. The Playwright smoke uses a temporary SQLite database initialized by `scripts/setup_e2e_db.py` and does not require PostgreSQL for this slice-level browser check.
+6. P0-01 backfilled the post-login AppShell wrapper around `/overview` to match Stitch screen `3f4fb1f8f42c46bc8ba92e5cafa642d9`; the `/overview` placeholder content and logout behavior remain P0-00 scope.
 
 ---
 

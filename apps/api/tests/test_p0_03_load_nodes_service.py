@@ -279,6 +279,8 @@ def test_status_transitions_patch_credentials_init_and_worker(db_session: Sessio
     )
     assert claimed.status == "succeeded"
     assert node.status == "idle"
+    assert claimed.runtime_version is not None
+    assert node.runtime_version == claimed.runtime_version
 
     with pytest.raises(AppError) as no_force:
         request_initialization(db_session, node=node, actor=actor, force=False, request_id=None)

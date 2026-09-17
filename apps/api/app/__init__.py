@@ -1,1 +1,1 @@
-"""SurgePilot API package."""
+"""SurgePilot API application package."""

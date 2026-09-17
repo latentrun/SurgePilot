@@ -1,4 +1,7 @@
+from datetime import UTC, datetime
 from types import SimpleNamespace
+
+from sqlalchemy.exc import IntegrityError
 
 from app.core.errors import AppError
 from app.services import test_plans as test_plan_services
@@ -344,3 +347,161 @@ def test_builder_preserves_env_group_values_without_download_guard_override() ->
         "APP_MODE": "smoke",
         "base_url": "https://api.example.internal",
     }
+
+
+def test_create_test_plan_run_rolls_back_before_dedup_lookup_after_integrity_error(
+    monkeypatch,
+) -> None:
+    now = datetime(2030, 1, 1, tzinfo=UTC)
+    plan = SimpleNamespace(
+        id="01HZX3Y9M0E9W7Z6M5QK9S8P7A",
+        workspace_id="01HZX3Y9M0E9W7Z6M5QK9S8P7B",
+        revision=7,
+        selected_node_id="01HZX3Y9M0E9W7Z6M5QK9S8P7C",
+    )
+    actor = SimpleNamespace(id="01HZX3Y9M0E9W7Z6M5QK9S8P7D")
+    new_run = SimpleNamespace(
+        id="01HZX3Y9M0E9W7Z6M5QK9S8P7E",
+        validity=None,
+    )
+    existing_run = SimpleNamespace(id="01HZX3Y9M0E9W7Z6M5QK9S8P7F")
+
+    class FakeDeleteQuery:
+        def filter(self, *args):  # noqa: ANN002
+            return self
+
+        def delete(self, *, synchronize_session):  # noqa: ANN001
+            return 0
+
+    class FakeSession:
+        rolled_back = False
+
+        def scalar(self, statement):  # noqa: ANN001
+            return plan
+
+        def query(self, model):  # noqa: ANN001
+            return FakeDeleteQuery()
+
+        def add(self, item):  # noqa: ANN001
+            pass
+
+        def flush(self):
+            raise IntegrityError("insert dedup", {}, Exception("duplicate dedup key"))
+
+        def rollback(self):
+            self.rolled_back = True
+
+    db = FakeSession()
+    lookup_calls = 0
+
+    def fake_find_existing(db_arg, *, workspace_id, dedup_hash, now):  # noqa: ANN001
+        nonlocal lookup_calls
+        lookup_calls += 1
+        if lookup_calls == 1:
+            return None
+        if not db_arg.rolled_back:
+            raise RuntimeError("pending rollback")
+        return existing_run
+
+    monkeypatch.setattr(test_plan_services, "utc_now", lambda: now)
+    monkeypatch.setattr(test_plan_services, "_rows_for_plan", lambda db_arg, *, plan_id: ([], []))
+    monkeypatch.setattr(
+        test_plan_services,
+        "_validate_run_context",
+        lambda *args, **kwargs: SimpleNamespace(expected_concurrency=1),
+    )
+    monkeypatch.setattr(test_plan_services, "_snapshot_payload", lambda *args, **kwargs: {})
+    monkeypatch.setattr(test_plan_services, "_find_existing_dedup_run", fake_find_existing)
+    monkeypatch.setattr(test_plan_services, "create_run_execution", lambda *args, **kwargs: new_run)
+    monkeypatch.setattr(test_plan_services, "write_audit_event", lambda *args, **kwargs: None)
+
+    result = test_plan_services.create_test_plan_run(
+        db,
+        workspace_id=plan.workspace_id,
+        actor=actor,
+        source_id=plan.id,
+        expected_source_revision=plan.revision,
+        run_type="standard",
+        confirm_high_concurrency=True,
+    )
+
+    assert result.run is existing_run
+    assert result.deduplicated is True
+    assert result.status_code == 200
+    assert db.rolled_back is True
+    assert lookup_calls == 2
+
+
+def test_create_test_plan_run_rolls_back_before_dedup_lookup_after_lease_busy(
+    monkeypatch,
+) -> None:
+    now = datetime(2030, 1, 1, tzinfo=UTC)
+    plan = SimpleNamespace(
+        id="01HZX3Y9M0E9W7Z6M5QK9S8P7A",
+        workspace_id="01HZX3Y9M0E9W7Z6M5QK9S8P7B",
+        revision=7,
+        selected_node_id="01HZX3Y9M0E9W7Z6M5QK9S8P7C",
+    )
+    actor = SimpleNamespace(id="01HZX3Y9M0E9W7Z6M5QK9S8P7D")
+    existing_run = SimpleNamespace(id="01HZX3Y9M0E9W7Z6M5QK9S8P7F")
+
+    class FakeDeleteQuery:
+        def filter(self, *args):  # noqa: ANN002
+            return self
+
+        def delete(self, *, synchronize_session):  # noqa: ANN001
+            return 0
+
+    class FakeSession:
+        rolled_back = False
+
+        def scalar(self, statement):  # noqa: ANN001
+            return plan
+
+        def query(self, model):  # noqa: ANN001
+            return FakeDeleteQuery()
+
+        def rollback(self):
+            self.rolled_back = True
+
+    db = FakeSession()
+    lookup_calls = 0
+
+    def fake_find_existing(db_arg, *, workspace_id, dedup_hash, now):  # noqa: ANN001
+        nonlocal lookup_calls
+        lookup_calls += 1
+        if lookup_calls == 1:
+            return None
+        if not db_arg.rolled_back:
+            raise RuntimeError("pending rollback")
+        return existing_run
+
+    def fake_create_run_execution(*args, **kwargs):  # noqa: ANN002, ANN003
+        raise AppError("LOAD_NODE_BUSY", "Load Node is busy.", 409)
+
+    monkeypatch.setattr(test_plan_services, "utc_now", lambda: now)
+    monkeypatch.setattr(test_plan_services, "_rows_for_plan", lambda db_arg, *, plan_id: ([], []))
+    monkeypatch.setattr(
+        test_plan_services,
+        "_validate_run_context",
+        lambda *args, **kwargs: SimpleNamespace(expected_concurrency=1),
+    )
+    monkeypatch.setattr(test_plan_services, "_snapshot_payload", lambda *args, **kwargs: {})
+    monkeypatch.setattr(test_plan_services, "_find_existing_dedup_run", fake_find_existing)
+    monkeypatch.setattr(test_plan_services, "create_run_execution", fake_create_run_execution)
+
+    result = test_plan_services.create_test_plan_run(
+        db,
+        workspace_id=plan.workspace_id,
+        actor=actor,
+        source_id=plan.id,
+        expected_source_revision=plan.revision,
+        run_type="standard",
+        confirm_high_concurrency=True,
+    )
+
+    assert result.run is existing_run
+    assert result.deduplicated is True
+    assert result.status_code == 200
+    assert db.rolled_back is True
+    assert lookup_calls == 2

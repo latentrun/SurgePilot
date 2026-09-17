@@ -1,1 +1,1 @@
-"""Repository-level tooling for SurgePilot."""
+"""SurgePilot repository scripts."""

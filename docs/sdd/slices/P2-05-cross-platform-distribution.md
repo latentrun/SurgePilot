@@ -753,8 +753,8 @@ The P2-05 implementation uses these final repository and release boundaries:
    package bootstrap. It publishes bounded non-release `package-bootstrap` images only to create
    the three GHCR package namespaces; the maintainer then changes each package to Public in GitHub
    Package settings. When the workflow exists on the default branch it may use `workflow_dispatch`.
-   A maintainer may instead push `package-bootstrap-<12-to-40 commit hex>` for a commit already
-   contained in `main`; the workflow performs the same full-history SHA-prefix and `main` ancestry
+   A maintainer may instead push `package-bootstrap-<12-to-40 source identifier>` for a candidate already
+   contained in `main`; the workflow performs the same source-identifier prefix and `main` containment
    checks as release validation. It
    does not create a semantic image tag or GitHub Release.
    `.github/workflows/release.yml` is the tag-only public release workflow. Its jobs are `preflight`, `verify`,
@@ -887,34 +887,33 @@ introduced later, duplicate `make verify` execution may be removed in that separ
 
 ### 19.2 Explicit public GHCR validation path
 
-A maintainer may push an explicit `validation-<commit-prefix>` tag only after the candidate commit
+A maintainer may push an explicit `validation-<source-identifier-prefix>` tag only after the candidate
 is contained in `origin/main`:
 
 ```bash
-tag="validation-$(git rev-parse --short=12 <commit>)"
-git tag "$tag" <commit>
+tag="validation-<source-identifier-prefix>"
 git push origin "$tag"
 ```
 
-The Git validation tag intentionally uses a short-or-full commit prefix, while every GHCR tag below
-uses the fixed full 40-character `GITHUB_SHA`. The workflow rejects Git tags that do not use 12 to
-40 lowercase hexadecimal characters, whose suffix is not a prefix of the tagged `GITHUB_SHA`, or
-whose commit is not an ancestor of `origin/main`. The tag preflight uses `actions/checkout` with
-`fetch-depth: 0` and explicitly fetches `main` into `refs/remotes/origin/main` before running
-`git merge-base --is-ancestor`. Only validation publication jobs receive `packages: write`.
+The validation tag uses a 12-to-40-character source-identifier prefix, while every GHCR tag below
+uses the fixed full source identifier. The workflow rejects tags whose suffix is not a prefix of
+the candidate identifier or whose candidate is not contained in `origin/main`. The tag preflight
+loads the complete candidate context and explicitly fetches `main` into
+`refs/remotes/origin/main` before checking containment. Only validation publication jobs receive
+`packages: write`.
 
 Before the first validation tag, the three package namespaces must be created by the bounded
 Release Package Bootstrap workflow and made Public in GitHub Package settings. A private repository
 whose workflow is not yet present on default `main` uses the explicit trusted
-`package-bootstrap-<commit-prefix>` tag path rather than relying on unavailable `workflow_dispatch`.
+`package-bootstrap-<source-identifier-prefix>` tag path rather than relying on unavailable `workflow_dispatch`.
 
-Validation uses the existing ADR-0017 GHCR repositories and publishes only commit-specific,
+Validation uses the existing ADR-0017 GHCR repositories and publishes only candidate-specific,
 non-semantic tags:
 
 ```text
-validation-<full-commit-sha>-amd64
-validation-<full-commit-sha>-arm64
-validation-<full-commit-sha>
+validation-<full-source-identifier>-amd64
+validation-<full-source-identifier>-arm64
+validation-<full-source-identifier>
 ```
 
 The multi-architecture tag is assembled from the two native manifests. Its immutable digest is
@@ -923,7 +922,7 @@ version `v0.0.0`; the workflow does not create a `v0.0.0` image tag or GitHub Re
 formal release workflow rejects that reserved version.
 
 Validation image tags are deliberately re-runnable rather than create-only. A rerun for the same
-full commit SHA may replace only its derived `validation-<full-sha>[-arch]` tags. The workflow never
+source identifier may replace only its derived `validation-<full-source-identifier>[-arch]` tags. The workflow never
 writes a `v*` tag, `package-bootstrap`, or any operator-supplied package tag. Production semantic
 tags remain create-only under §14.1.
 
@@ -981,7 +980,7 @@ Validation publishes non-semantic development image tags only; it never publishe
 5. Validation package versions are removed manually only when maintenance requires it; automated
    retention remains outside this Slice.
 6. Pull requests never receive package-write permission. A validation tag can write packages only
-   after its commit passes the `main` ancestry check.
+   after its candidate passes the `main` containment check.
 7. Validation never creates or moves semantic image tags and does not change any P2-02 Phase A,
    Workspace, OpenAPI, AI skill, credential, API, database, Runner protocol, or Web boundary.
 

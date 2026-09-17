@@ -150,12 +150,10 @@ def run_once(
             result: InitResult | None = None
             node = None
             credential = None
-            pinned_runtime_version: str | None = None
             with session.begin():
                 # Reload and validate the attempt in a short transaction before setup work.
                 attempt = session.get(type(attempt), attempt_id)
                 if attempt is not None:
-                    pinned_runtime_version = attempt.runtime_version
                     _active_attempt, node = lock_active_running_attempt(
                         session, attempt_id=attempt.id
                     )
@@ -177,8 +175,6 @@ def run_once(
                 continue
             if result is None:
                 try:
-                    # Freeze the Runtime version selected when the attempt was enqueued.
-                    initializer.runtime_version = pinned_runtime_version
                     result = initializer.initialize(node, credential)
                 except AppError as exc:
                     result = _failed_initialization_result(exc.code, exc.message)

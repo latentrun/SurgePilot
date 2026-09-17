@@ -987,7 +987,25 @@ P0-01 is done only when all of the following are true:
 
 ---
 
-## 14. Handoff to Later Slices
+## 14. Implementation Backfill
+
+P0-01 implementation facts:
+
+1. AppShell was backfilled in this slice using Stitch screen `3f4fb1f8f42c46bc8ba92e5cafa642d9`; Env Groups screens render inside that shell, and `/overview` is re-hosted without changing its P0-00 content/behavior.
+2. The backend implements the six public Env Group endpoints under `/api/v1/env-groups`, with OpenAPI paths exported under `/v1/env-groups`.
+3. The `env_groups` table is introduced by `apps/api/migrations/versions/0002_p0_01_env_groups.py` with Workspace ownership, attribution fields, JSONB variables, case-insensitive Workspace/name uniqueness, and Workspace list indexes.
+4. Web consumes Env Groups through generated `@surgepilot/contracts/web-client` types only and uses TanStack Query for list/detail/mutation state.
+5. `ENV_GROUP_NAME_CONFLICT` maps to the name field, and `ENV_GROUP_IN_USE` is handled in the delete confirmation branch.
+6. `tests/e2e/p0_01_env_groups.spec.ts` is wired into `make verify-e2e` with the existing P0-00 smoke.
+7. Review follow-up tightened the generated Env Group variable contract to string values, documented write CSRF headers as required, maps invalid list query values to `400 INVALID_QUERY_PARAMETER`, and adds Web pagination controls.
+8. Review follow-up keeps paginated lists navigable when deleting the last item on a non-first page and expands API integration coverage so every Env Group write endpoint is checked for missing and invalid CSRF tokens.
+9. Review follow-up includes resolved `x-workspace-id` on Workspace-scoped error responses, registers Env Group-specific error codes in the OpenAPI registry tests, and protects duplicate name generation with retry plus savepoint handling for real unique-index races.
+10. `inUse` intentionally remains `false` for P0-01/P0-05 because P0-05 captures Env Group values only in historical Debug Run snapshots; no active persisted Env Group reference exists yet that should block deletion.
+11. Review follow-up keeps variable rows in user insertion order while editing, and `Add variable` inserts a new row at the top without re-sorting rows by key.
+
+---
+
+## 15. Handoff to Later Slices
 
 Later slices must treat P0-01 as the source of truth for Env Group resource shape until they explicitly update it.
 

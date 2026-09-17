@@ -114,6 +114,8 @@ def test_storage_client_base_methods_are_abstract() -> None:
     with pytest.raises(NotImplementedError):
         storage.delete_object_best_effort(bucket="surgepilot", object_key="key")
     with pytest.raises(NotImplementedError):
+        storage.copy_object(bucket="surgepilot", source_key="source", destination_key="dest")
+    with pytest.raises(NotImplementedError):
         storage.health_check()
 
 
@@ -143,6 +145,9 @@ def test_minio_storage_client_uses_safe_logs_and_wraps_failures(
         def remove_object(self, *args, **kwargs):
             raise OSError("raw delete detail")
 
+        def copy_object(self, *args, **kwargs):
+            raise OSError("raw copy detail")
+
         def bucket_exists(self, *args, **kwargs):
             raise OSError("raw health detail")
 
@@ -167,6 +172,12 @@ def test_minio_storage_client_uses_safe_logs_and_wraps_failures(
             )
         with pytest.raises(StorageError):
             client.get_stream(bucket="confidential-bucket", object_key="dependency-files/key")
+        with pytest.raises(StorageError):
+            client.copy_object(
+                bucket="confidential-bucket",
+                source_key="dependency-files/source",
+                destination_key="dependency-files/dest",
+            )
         client.delete_object_best_effort(
             bucket="confidential-bucket", object_key="dependency-files/key"
         )
@@ -178,6 +189,8 @@ def test_minio_storage_client_uses_safe_logs_and_wraps_failures(
     )
     assert "STORAGE_UNAVAILABLE" in warning_text
     assert "dependency-files/key" not in full_log_text
+    assert "dependency-files/source" not in full_log_text
+    assert "dependency-files/dest" not in full_log_text
     assert "confidential-bucket" not in full_log_text
     assert "minio.example.test" not in full_log_text
     assert "secret-key" not in full_log_text
@@ -229,6 +242,11 @@ def test_minio_storage_client_with_fake_minio_round_trips_stream(
                 type(self).probe_deletes += 1
             self.objects.pop((bucket, object_key), None)
 
+        def copy_object(self, bucket, object_key, source):
+            self.objects[(bucket, object_key)] = self.objects[
+                (source.bucket_name, source.object_name)
+            ]
+
         def bucket_exists(self, bucket):
             return bucket == "surgepilot"
 
@@ -251,12 +269,21 @@ def test_minio_storage_client_with_fake_minio_round_trips_stream(
     assert stored.content_type == "text/csv"
     assert stored.size_bytes == 3
     assert stored.stream.read() == b"abc"
+    client.copy_object(
+        bucket="surgepilot",
+        source_key="dependency-files/test/users.csv",
+        destination_key="dependency-files/test/users-copy.csv",
+    )
+    assert FakeMinio.objects[("surgepilot", "dependency-files/test/users-copy.csv")] == b"abc"
     assert client.health_check() is True
     assert any(key[1].startswith("health/") for key in FakeMinio.objects) is False
     assert FakeMinio.probe_deletes == 1
     assert FakeMinio.probe_releases == 1
     client.delete_object_best_effort(
         bucket="surgepilot", object_key="dependency-files/test/users.csv"
+    )
+    client.delete_object_best_effort(
+        bucket="surgepilot", object_key="dependency-files/test/users-copy.csv"
     )
     assert FakeMinio.objects == {}
 
@@ -332,6 +359,9 @@ class PreviewProbeStorage(StorageClient):
         )
 
     def delete_object_best_effort(self, *, bucket, object_key):
+        return None
+
+    def copy_object(self, *, bucket, source_key, destination_key):
         return None
 
     def health_check(self):
@@ -456,7 +486,7 @@ def test_preview_truncates_ascii_and_multibyte_boundaries_without_lossy_replacem
 
     multibyte_preview = preview_dependency_file(
         preview_file("emoji.txt", size_bytes=5),
-        storage=PreviewProbeStorage("ab\u20acz".encode()),
+        storage=PreviewProbeStorage("ab€z".encode()),
         max_bytes=4,
         binary_deny_extensions=denylist,
     )

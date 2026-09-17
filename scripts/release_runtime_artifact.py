@@ -307,21 +307,6 @@ def artifact_is_reusable(
     metadata = _archive_metadata(archive)
     if metadata is None:
         return False
-    manifest_components = manifest.get("components")
-    expected_plugin_artifacts = (
-        manifest_components.get("plugins")
-        if isinstance(manifest_components, dict)
-        else None
-    )
-    if isinstance(expected_plugin_artifacts, list):
-        if metadata.get("pluginArtifacts") != expected_plugin_artifacts:
-            return False
-    if isinstance(expected_plugin_artifacts, list):
-        smoke = metadata.get("smoke")
-        if not isinstance(smoke, dict) or any(
-            smoke.get(name) != "passed" for name in ("taurus", "jmeter", "plugins")
-        ):
-            return False
     return (
         metadata.get("name") == "surgepilot-runtime"
         and metadata.get("version") == version
@@ -681,7 +666,6 @@ def _runtime_component_inputs(*, cache_dir: Path) -> tuple[dict[str, object], di
         "python_version": python_version,
         "jmeter_archive": jmeter_archive,
         "plugin_downloads": plugin_downloads,
-        "plugin_components": plugin_components,
         "taurus_dependencies": taurus_dependencies,
     }
     return components, inputs
@@ -786,9 +770,6 @@ def _prepare_runtime_source(
         'exec "$runtime_root/python/bin/python3" -m surgepilot_runner.jmeter_wrapper "$@"\n',
     )
 
-    plugin_metadata = component_inputs.get("plugin_components")
-    if not isinstance(plugin_metadata, list):
-        raise RuntimeError("runtime component inputs missing plugin metadata")
     metadata = {
         "name": "surgepilot-runtime",
         "version": "__VERSION__",
@@ -798,8 +779,6 @@ def _prepare_runtime_source(
         "taurus": TAURUS_VERSION,
         "jmeter": JMETER_VERSION,
         "plugins": REQUIRED_PLUGINS,
-        "pluginArtifacts": plugin_metadata,
-        "smoke": {"taurus": "passed", "jmeter": "passed", "plugins": "passed"},
         "builder": {"os": platform.platform(), "arch": arch.metadata_arch, "tool": "uv"},
     }
     (source_dir / "metadata.json").write_text(
@@ -845,13 +824,7 @@ def _build_manifest(
 
 
 def _copy_source_with_metadata(
-    *,
-    source_dir: Path,
-    staging_dir: Path,
-    version: str,
-    arch: RuntimeArch,
-    manifest_hash: str,
-    components: dict[str, object] | None = None,
+    *, source_dir: Path, staging_dir: Path, version: str, arch: RuntimeArch, manifest_hash: str
 ) -> None:
     shutil.rmtree(staging_dir, ignore_errors=True)
     shutil.copytree(source_dir, staging_dir)
@@ -867,13 +840,6 @@ def _copy_source_with_metadata(
             "jmeter": JMETER_VERSION,
             "plugins": REQUIRED_PLUGINS,
         }
-    )
-    if components is not None and isinstance(components.get("plugins"), list):
-        metadata["pluginArtifacts"] = components["plugins"]
-    else:
-        metadata.setdefault("pluginArtifacts", [])
-    metadata.setdefault(
-        "smoke", {"taurus": "passed", "jmeter": "passed", "plugins": "passed"}
     )
     metadata.setdefault("builder", {})
     if isinstance(metadata["builder"], dict):
@@ -1004,7 +970,6 @@ def release_runtime(
         version=version,
         arch=arch,
         manifest_hash=manifest_hash,
-        components=components,
     )
     _write_archive(source_dir=staging_dir, archive_path=archive_path)
     digest = sha256_file(archive_path)

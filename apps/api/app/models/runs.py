@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import Any
 
-from sqlalchemy import BigInteger, Boolean, CheckConstraint, ForeignKey, Index, String, Text
+from sqlalchemy import BigInteger, Boolean, CheckConstraint, ForeignKey, Index, String, Text, and_
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.types import JSON
@@ -28,6 +28,7 @@ PUBLIC_RUN_ARTIFACT_TYPES = tuple(
 SLA_RESULTS = ("passed", "failed", "not_evaluated")
 REPORT_SUMMARY_STATUSES = ("pending", "parsed", "failed")
 REPORT_SUMMARY_TYPES = ("final_stats",)
+RUN_NODE_ALLOCATION_STATES = RUN_STATES
 RUN_MONITORING_STATUSES = ("enabled", "config_error")
 
 
@@ -254,7 +255,9 @@ class RunNodeAllocation(Base):
     __tablename__ = "run_node_allocations"
     __table_args__ = (
         CheckConstraint("length(id) = 26", name="ck_run_node_allocations_id_len"),
-        CheckConstraint("length(workspace_id) = 26", name="ck_run_node_allocations_workspace_id_len"),
+        CheckConstraint(
+            "length(workspace_id) = 26", name="ck_run_node_allocations_workspace_id_len"
+        ),
         CheckConstraint("length(run_id) = 26", name="ck_run_node_allocations_run_id_len"),
         CheckConstraint("length(node_id) = 26", name="ck_run_node_allocations_node_id_len"),
         CheckConstraint("node_index >= 1", name="ck_run_node_allocations_node_index"),
@@ -270,9 +273,15 @@ class RunNodeAllocation(Base):
     )
 
     id: Mapped[str] = mapped_column(String(26), primary_key=True)
-    workspace_id: Mapped[str] = mapped_column(String(26), ForeignKey("workspaces.id", ondelete="CASCADE"), nullable=False)
-    run_id: Mapped[str] = mapped_column(String(26), ForeignKey("runs.id", ondelete="CASCADE"), nullable=False)
-    node_id: Mapped[str] = mapped_column(String(26), ForeignKey("load_nodes.id", ondelete="RESTRICT"), nullable=False)
+    workspace_id: Mapped[str] = mapped_column(
+        String(26), ForeignKey("workspaces.id", ondelete="CASCADE"), nullable=False
+    )
+    run_id: Mapped[str] = mapped_column(
+        String(26), ForeignKey("runs.id", ondelete="CASCADE"), nullable=False
+    )
+    node_id: Mapped[str] = mapped_column(
+        String(26), ForeignKey("load_nodes.id", ondelete="RESTRICT"), nullable=False
+    )
     node_index: Mapped[int] = mapped_column(nullable=False)
     total_nodes: Mapped[int] = mapped_column(nullable=False)
     expected_runtime_version: Mapped[str | None] = mapped_column(Text)
@@ -294,9 +303,23 @@ class RunNodeAllocation(Base):
     run: Mapped[Run] = relationship(back_populates="node_allocations")
 
 
-Index("uq_run_node_allocations_run_node", RunNodeAllocation.run_id, RunNodeAllocation.node_id, unique=True)
-Index("uq_run_node_allocations_run_index", RunNodeAllocation.run_id, RunNodeAllocation.node_index, unique=True)
-Index("ix_run_node_allocations_workspace_run", RunNodeAllocation.workspace_id, RunNodeAllocation.run_id)
+Index(
+    "uq_run_node_allocations_run_node",
+    RunNodeAllocation.run_id,
+    RunNodeAllocation.node_id,
+    unique=True,
+)
+Index(
+    "uq_run_node_allocations_run_index",
+    RunNodeAllocation.run_id,
+    RunNodeAllocation.node_index,
+    unique=True,
+)
+Index(
+    "ix_run_node_allocations_workspace_run",
+    RunNodeAllocation.workspace_id,
+    RunNodeAllocation.run_id,
+)
 Index("ix_run_node_allocations_node_state", RunNodeAllocation.node_id, RunNodeAllocation.state)
 
 
@@ -417,8 +440,7 @@ class RunArtifact(Base):
     __table_args__ = (
         CheckConstraint("length(id) = 26", name="ck_run_artifacts_id_len"),
         CheckConstraint(
-            "artifact_type in ('taurus_log', 'jmeter_log', 'final_stats_csv', "
-            "'run_log', 'artifacts_zip', 'debug_http_trace', 'debug_http_body_blob')",
+            "artifact_type in ('taurus_log', 'jmeter_log', 'final_stats_csv', 'run_log', 'artifacts_zip', 'debug_http_trace', 'debug_http_body_blob')",
             name="ck_run_artifacts_artifact_type",
         ),
         CheckConstraint("status in ('available', 'failed')", name="ck_run_artifacts_status"),
@@ -459,8 +481,8 @@ Index(
     RunArtifact.allocation_id,
     RunArtifact.relative_path,
     unique=True,
-    sqlite_where=RunArtifact.status == "available",
-    postgresql_where=RunArtifact.status == "available",
+    sqlite_where=and_(RunArtifact.status == "available"),
+    postgresql_where=and_(RunArtifact.status == "available"),
 )
 Index("ix_run_artifacts_run_allocation", RunArtifact.run_id, RunArtifact.allocation_id)
 Index(

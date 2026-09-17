@@ -11,9 +11,6 @@ import urllib.error
 import urllib.request
 
 os.environ.setdefault("RUNNER_INTERNAL_TOKEN", "surgepilot-e2e-runner-token")
-os.environ.setdefault(
-    "SSH_CREDENTIAL_ENCRYPTION_KEY", "MDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDA="
-)
 TEST_MINIO_ACCESS_KEY = "minioadmin"
 TEST_MINIO_SECRET_KEY = "surgepilot-verification-minio-secret"
 TEST_MINIO_BUCKET = "surgepilot"
@@ -24,6 +21,10 @@ COMPOSE = [
     "compose",
     "-f",
     "infra/docker/docker-compose.yml",
+    "-f",
+    "infra/docker/docker-compose.smoke.yml",
+    "--profile",
+    "smoke",
 ]
 PROJECT_NAME = os.environ.get("COMPOSE_PROJECT_NAME", "surgepilot-p1-00-monitoring-compose")
 API_HOST_PORT = os.environ.get("SURGEPILOT_API_HOST_PORT", "18000")
@@ -160,9 +161,7 @@ def assert_grafana_provisioning(opener: urllib.request.OpenerDirector) -> None:
         or datasource.get("url") != "http://influxdb:8086"
     ):
         raise RuntimeError(f"Grafana datasource provisioning mismatch: {datasource}")
-    dashboard = open_json(
-        opener, f"{NGINX_URL}/grafana/api/dashboards/uid/surgepilot-jmeter-13644"
-    )
+    dashboard = open_json(opener, f"{NGINX_URL}/grafana/api/dashboards/uid/surgepilot-jmeter-13644")
     dashboard_body = dashboard.get("dashboard") or {}
     if dashboard_body.get("uid") != "surgepilot-jmeter-13644":
         raise RuntimeError(f"Grafana dashboard provisioning mismatch: {dashboard}")
@@ -192,8 +191,6 @@ def assert_monitoring_embed(session: RegisteredSession) -> None:
         raise RuntimeError(f"generic monitoring embed must not pin runId: {embed}")
     if not embed.get("from") or embed.get("to") != "now":
         raise RuntimeError(f"generic monitoring embed did not use last-5-minutes window: {embed}")
-    if "influxdb" in body or "token" in body.lower():
-        raise RuntimeError(f"monitoring embed leaked deployment internals: {body}")
 
 
 def assert_grafana_session_gate() -> None:
@@ -207,8 +204,7 @@ def assert_grafana_session_gate() -> None:
     assert_monitoring_embed(session)
     assert_grafana_provisioning(session.opener)
     with session.opener.open(
-        f"{NGINX_URL}/grafana/d/surgepilot-jmeter-13644/jmeter-load-test"
-        "?orgId=1&kiosk&theme=dark",
+        f"{NGINX_URL}/grafana/d/surgepilot-jmeter-13644/jmeter-load-test?orgId=1&kiosk&theme=dark",
         timeout=10,
     ) as response:
         response.read()

@@ -1,12 +1,13 @@
 from typing import Literal
 
-from pydantic import ConfigDict, Field, field_validator
+from pydantic import ConfigDict, Field, field_validator, model_validator
 
 from app.core.ids import is_ulid
 from app.schemas.common import ApiSchema
 
 TestPlanRunMode = Literal["sequential", "parallel"]
 TestPlanPoolType = Literal["public", "private"]
+TestPlanResourceMode = Literal["manual", "auto"]
 SlaCondition = Literal["gt", "gte", "lt", "lte", "eq"]
 SlaThresholdUnit = Literal["ms", "s", "percent", "count", "b", "kb", "mb"]
 SlaTimeframeLogic = Literal["for", "within"]
@@ -20,13 +21,32 @@ def validate_ulid_value(value: str | None) -> str | None:
 
 
 class TestPlanResourceConfig(ApiSchema):
+    mode: TestPlanResourceMode = "manual"
     pool_type: TestPlanPoolType | None = None
     selected_node_id: str | None = Field(default=None, min_length=26, max_length=26)
+    selected_node_ids: list[str] = Field(default_factory=list, max_length=10)
+    node_count: int | None = Field(default=None, ge=1, le=10)
 
     @field_validator("selected_node_id")
     @classmethod
     def validate_selected_node_id(cls, value: str | None) -> str | None:
         return validate_ulid_value(value)
+
+    @field_validator("selected_node_ids")
+    @classmethod
+    def validate_selected_node_ids(cls, value: list[str]) -> list[str]:
+        return [validate_ulid_value(item) or item for item in value]
+
+    @model_validator(mode="after")
+    def validate_mode_fields(self) -> "TestPlanResourceConfig":
+        if self.mode == "manual" and self.node_count is not None:
+            raise ValueError("Manual resource mode must not include nodeCount.")
+        if self.mode == "auto":
+            if self.selected_node_id is not None or self.selected_node_ids:
+                raise ValueError("Auto resource mode must not include selected nodes.")
+            if self.node_count is None:
+                raise ValueError("Auto resource mode requires nodeCount.")
+        return self
 
 
 class TestPlanLoadSettings(ApiSchema):
@@ -132,10 +152,14 @@ class TestPlanEnvGroupRef(ApiSchema):
 
 
 class TestPlanResourceSummary(ApiSchema):
+    mode: TestPlanResourceMode = "manual"
     pool_type: TestPlanPoolType | None = None
     selected_node_id: str | None = None
+    selected_node_ids: list[str] = Field(default_factory=list)
+    node_count: int | None = None
     selected_node_name: str | None = None
     selected_node_status: str | None = None
+    allocated_node_count: int | None = None
 
 
 class TestPlanRunGuard(ApiSchema):

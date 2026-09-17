@@ -8,6 +8,7 @@ from app.schemas.common import ApiSchema
 UserRole = Literal["admin", "user"]
 UserStatus = Literal["active", "disabled"]
 WorkspaceStatus = Literal["active", "archived"]
+LoadNodeRuntimeStatus = Literal["ready", "not_configured", "artifact_missing"]
 
 
 class UserSummary(ApiSchema):
@@ -61,16 +62,33 @@ class CsrfTokenResponse(ApiSchema):
     csrf_token: str
 
 
-class SetupStatusResponse(ApiSchema):
-    needs_bootstrap: bool
-    allow_signup: bool
-    has_default_workspace: bool
-
-
 class SensitiveStatus(ApiSchema):
     runner_internal_token_configured: bool
     ssh_credential_encryption_key_configured: bool
     minio_credentials_configured: bool
+
+
+class SetupStatusResponse(ApiSchema):
+    needs_bootstrap: bool
+    allow_signup: bool
+    has_default_workspace: bool
+    storage_available: bool
+    load_node_runtime_status: LoadNodeRuntimeStatus | None = None
+    active_workspace_count: int | None = None
+    archived_workspace_count: int | None = None
+    active_admin_count: int | None = None
+    sensitive_status: SensitiveStatus | None = None
+
+
+class RegisterRequest(ApiSchema):
+    email: EmailStr
+    display_name: str = Field(min_length=1, max_length=120)
+    password: str
+
+
+class LoginRequest(ApiSchema):
+    email: str | None = None
+    password: str | None = None
 
 
 class WorkspaceSwitchRequest(ApiSchema):
@@ -163,7 +181,9 @@ class SystemSettingsResponse(ApiSchema):
 class SystemSettingsPatchRequest(ApiSchema):
     allow_signup: bool | None = Field(default=None, examples=[False])
     load_soft_limit_warning_concurrency: int | None = Field(default=None, ge=1, examples=[1000])
-    jmeter_memory_xmx: str | None = Field(default=None, pattern=r"^[1-9][0-9]*[KMG]$", examples=["4G"])
+    jmeter_memory_xmx: str | None = Field(
+        default=None, pattern=r"^[1-9][0-9]*[KMG]$", examples=["4G"]
+    )
     max_scenario_items_per_test_plan: int | None = Field(default=None, ge=1, le=100, examples=[20])
     max_sla_rules_per_test_plan: int | None = Field(default=None, ge=0, le=50, examples=[5])
     max_run_duration_seconds: int | None = Field(default=None, ge=60, le=604800, examples=[86400])
@@ -171,24 +191,27 @@ class SystemSettingsPatchRequest(ApiSchema):
     max_delay_seconds: int | None = Field(default=None, ge=0, le=604800, examples=[0])
     max_iterations: int | None = Field(default=None, ge=1, le=10000000, examples=[1000000])
     max_target_rps: int | None = Field(default=None, ge=1, le=1000000, examples=[100000])
-    dependency_file_max_bytes: int | None = Field(default=None, ge=1048576, le=1073741824, examples=[104857600])
-    dependency_file_allowed_extensions: list[str] | str | None = Field(default=None, examples=[[".csv", ".txt"]])
-    dependency_file_preview_max_bytes: int | None = Field(default=None, ge=1024, le=5242880, examples=[65536])
-    dependency_file_preview_binary_deny_extensions: list[str] | str | None = Field(default=None, examples=[[".png", ".zip"]])
+    dependency_file_max_bytes: int | None = Field(
+        default=None, ge=1048576, le=1073741824, examples=[104857600]
+    )
+    dependency_file_allowed_extensions: list[str] | str | None = Field(
+        default=None, examples=[[".csv", ".txt"]]
+    )
+    dependency_file_preview_max_bytes: int | None = Field(
+        default=None, ge=1024, le=5242880, examples=[65536]
+    )
+    dependency_file_preview_binary_deny_extensions: list[str] | str | None = Field(
+        default=None, examples=[[".png", ".zip"]]
+    )
     load_node_api_base_url: str | None = Field(default=None, examples=["http://192.168.1.50:8080"])
 
-    model_config = ApiSchema.model_config | {"extra": "allow", "json_schema_extra": {"additionalProperties": False}}
+    model_config = ApiSchema.model_config | {
+        "extra": "allow",
+        "json_schema_extra": {"additionalProperties": False},
+    }
+
+    def extra_keys(self) -> set[str]:
+        return set(self.__pydantic_extra__ or {})
 
     def extra_values(self) -> dict[str, Any]:
         return dict(self.__pydantic_extra__ or {})
-
-
-class RegisterRequest(ApiSchema):
-    email: EmailStr
-    display_name: str = Field(min_length=1, max_length=120)
-    password: str
-
-
-class LoginRequest(ApiSchema):
-    email: str | None = None
-    password: str | None = None

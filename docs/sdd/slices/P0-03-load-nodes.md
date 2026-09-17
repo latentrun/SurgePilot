@@ -248,7 +248,7 @@ P0-03 may create extension-safe status values and columns needed by later P0 sli
 | Encryption | AES-256-GCM using Python `cryptography`; key from `SSH_CREDENTIAL_ENCRYPTION_KEY`. |
 | Key rotation | Not implemented in P0. |
 | Initialization execution | `api-worker` asynchronous job, coordinated through PostgreSQL. |
-| Initialization depth | SSH/SFTP connect, prepare runner home, verify required dependencies (Python 3, Java, Taurus, JMeter) and Runner, record sanitized logs. No automatic OS package, pip, Taurus, JMeter, plugin, or native-extension installation. |
+| Initialization depth | SSH/SFTP connect, prepare runner home, verify base prerequisites, push and activate the matching self-contained SurgePilot runtime from api-worker local artifacts, probe runtime-contained Taurus/JMeter/plugins and Runner, record sanitized logs. No automatic OS package, pip, Taurus, JMeter, plugin, or native-extension installation. |
 | Runner home | Configurable `runnerHome`, default `/opt/surgepilot/runner`, strict POSIX path validation. |
 | Status enum | `uninitialized`, `initializing`, `idle`, `busy`, `offline`, `quarantined`, `disabled` |
 | Archive behavior | Metadata archive via `archived_at`; list excludes archived by default. |
@@ -517,6 +517,7 @@ All business endpoints require Workspace context. Missing `x-workspace-id` falls
   "lastStatusReason": null,
   "runnerVersion": "0.1.0",
   "bundleVersion": "p0-03",
+  "runtimeVersion": "runtime-test-v1",
   "lastInitializedAt": "2030-05-31T10:00:00Z",
   "lastCheckedAt": "2030-05-31T10:00:00Z",
   "lastHeartbeatAt": null,
@@ -532,6 +533,7 @@ Rules:
 1. `workspaceId` is `null` for Public nodes.
 2. `generatedPublicKey` is populated only for generated-key nodes. It is public key material, not a secret.
 3. Response schemas must not include password, private key, private key passphrase, encrypted blobs, nonce, tag, key ID, or raw SSH command text.
+4. `runtimeVersion` is the activated Runtime metadata version recorded by successful initialization. `null` means the node requires initialization and is not runnable.
 
 #### `LoadNodeDetail`
 
@@ -1030,8 +1032,19 @@ P0-03 adds these error codes:
 | `LOAD_NODE_RUNNER_HOME_UNWRITABLE` | 422 | Initialization attempt could not create or write runner home. Exposed on init attempt. |
 | `LOAD_NODE_PYTHON_MISSING` | 422 | Initialization attempt did not find required Python runtime. Exposed on init attempt. |
 | `LOAD_NODE_JAVA_MISSING` | 422 | Initialization attempt did not find required Java runtime. Exposed on init attempt. |
-| `LOAD_NODE_TAURUS_MISSING` | 422 | Initialization attempt did not find required Taurus (`bzt`) runtime. Exposed on init attempt. |
-| `LOAD_NODE_JMETER_MISSING` | 422 | Initialization attempt did not find required JMeter runtime. Exposed on init attempt. |
+| `LOAD_NODE_TAURUS_MISSING` | 422 | Compatibility code only; if retained after Runtime Bootstrap, it must map to runtime-contained Taurus checks and must not mean missing system `bzt`. Prefer `LOAD_NODE_RUNTIME_BZT_FAILED` for new failures. |
+| `LOAD_NODE_JMETER_MISSING` | 422 | Compatibility code only; if retained after Runtime Bootstrap, it must map to runtime-contained JMeter checks and must not mean missing system JMeter. Prefer `LOAD_NODE_RUNTIME_JMETER_FAILED` for new failures. |
+| `LOAD_NODE_TAR_MISSING` | 422 | Initialization attempt did not find `tar` or equivalent extraction support required for runtime activation. Exposed on init attempt. |
+| `LOAD_NODE_RUNTIME_ARTIFACT_MISSING` | 422 | api-worker cannot find a matching local runtime artifact or sidecar checksum for the target architecture/version. Exposed on init attempt. |
+| `LOAD_NODE_RUNTIME_ARCH_UNSUPPORTED` | 422 | Target `uname -m` does not map to a P0 supported runtime architecture. Exposed on init attempt. |
+| `LOAD_NODE_RUNTIME_UPLOAD_FAILED` | 422 | SFTP upload of the runtime archive failed. Exposed on init attempt. |
+| `LOAD_NODE_RUNTIME_CHECKSUM_FAILED` | 422 | Whole-archive SHA256 verification failed. Exposed on init attempt. |
+| `LOAD_NODE_RUNTIME_EXTRACT_FAILED` | 422 | Archive extraction failed or safe-extract validation rejected the archive. Exposed on init attempt. |
+| `LOAD_NODE_RUNTIME_METADATA_INVALID` | 422 | Runtime metadata is missing or does not match expected version, architecture, or component versions. Exposed on init attempt. |
+| `LOAD_NODE_RUNTIME_BZT_FAILED` | 422 | Runtime-contained `bin/bzt -h` failed. Exposed on init attempt. |
+| `LOAD_NODE_RUNTIME_JMETER_FAILED` | 422 | Runtime-contained JMeter `--version` failed. Exposed on init attempt. |
+| `LOAD_NODE_RUNTIME_PLUGIN_MISSING` | 422 | Required runtime-contained JMeter plugin jar is missing. Exposed on init attempt. |
+| `LOAD_NODE_RUNTIME_ACTIVATION_FAILED` | 422 | Verified runtime could not be moved or activated through the atomic `current` symlink. Exposed on init attempt. |
 | `LOAD_NODE_INIT_FAILED` | 500 | Unexpected initialization worker failure. Normal remote validation failures use the specific attempt error codes above. |
 | `CREDENTIAL_DECRYPT_FAILED` | 500 | Decryption failed due server config or data corruption; no low-level detail returned. |
 
@@ -1054,8 +1067,9 @@ POST /load-nodes/{id}/initialize
   -> api-worker decrypts credential locally
   -> api-worker connects by SSH/SFTP
   -> api-worker prepares runner home
-  -> api-worker checks required dependencies (Python, Java, Taurus, JMeter)
-  -> api-worker verifies Runner
+  -> api-worker verifies base prerequisites and target architecture
+  -> api-worker pushes, verifies, safely extracts, and atomically activates the matching Runtime Bootstrap artifact
+  -> api-worker verifies runtime-contained Taurus/JMeter/plugins and Runner
   -> api-worker writes sanitized logs and terminal attempt status
   -> api-worker marks node idle or offline
 ```
@@ -1071,7 +1085,7 @@ Rules:
 
 ### 10.2 Initialization Steps
 
-P0 initialization verifies the Load Node foundation and required runtime dependencies. A node may become `idle` only after `api-worker` verifies base prerequisites, confirms required dependencies, and verifies the Runner.
+P0 initialization uses Runtime Bootstrap. System Taurus and system JMeter are no longer valid P0 initialization success criteria after Runtime Bootstrap is active. A node may become `idle` only after api-worker verifies base prerequisites, installs or reuses the configured self-contained SurgePilot runtime, verifies runtime-contained Taurus/JMeter/plugins, and verifies the Runner.
 
 P0 initialization sequence:
 
@@ -1083,27 +1097,62 @@ P0 initialization sequence:
    - `runs`
    - `logs`
    - `tmp`
+   - `runtimes`
 5. Write or verify a SurgePilot node marker under `runnerHome`.
 6. Check base prerequisites:
    - POSIX shell basics.
+   - `uname -m`.
    - `python3 --version` for SurgePilot Runner.
-   - `java -version` for JMeter.
-   - Taurus (`bzt --version` or `bzt -h`).
-   - JMeter (`jmeter --version` or configured JMeter path).
-7. Upload or verify the Runner bundle.
-8. Probe Runner version.
-9. Mark attempt `succeeded` and node `idle` only if all checks pass.
-10. Mark attempt `failed` and node `offline` if checks fail.
+   - `java -version` for runtime-contained JMeter.
+   - `tar --version` or equivalent tar availability.
+7. Map target architecture to a supported P0 runtime artifact architecture:
+   - `x86_64` or `amd64` -> `linux-amd64` / metadata `amd64`.
+   - `aarch64` or `arm64` -> `linux-arm64` / metadata `arm64`.
+8. Select `surgepilot-runtime-linux-<arch>-<version>.tar.gz` and `surgepilot-runtime-linux-<arch>-<version>.tar.gz.sha256` from the api-worker local read-only artifact directory.
+9. Fail safely if the matching artifact or sidecar checksum is missing.
+10. Upload the runtime archive to `runnerHome/tmp/` using SFTP `upload_stream`.
+11. Verify whole-archive SHA256 on the uploaded archive.
+12. Safely extract the archive into a temporary directory under `runnerHome`.
+13. Validate `metadata.json`:
+    - `name=surgepilot-runtime`.
+    - configured `version` matches `LOAD_NODE_RUNTIME_VERSION`.
+    - `platform=linux`.
+    - `arch` matches detected Load Node architecture.
+    - Taurus version is `1.16.50`.
+    - JMeter version is `5.6.3`.
+    - required plugins are exactly `jpgc-casutg`, `jpgc-json`, `jpgc-tst`,
+      `bzm-random-csv`, and `jmeter-plugin-influxdb2-listener`.
+14. Check critical files exist:
+    - `<tmp-runtime>/python/`.
+    - `<tmp-runtime>/bin/bzt`.
+    - `<tmp-runtime>/apache-jmeter-5.6.3/bin/jmeter`.
+    - all five required plugin jars under the runtime JMeter tree, with their contract classes.
+15. Run `<tmp-runtime>/bin/bzt -h`.
+16. Run `<tmp-runtime>/apache-jmeter-5.6.3/bin/jmeter --version`.
+17. Move the verified runtime to a unique activation directory `runnerHome/runtimes/<version>-<activation-id>/` without touching the existing active target.
+18. Create a temporary symlink to the verified activation directory and atomically replace `runnerHome/current` with that symlink. Only after the switch succeeds may the previous active runtime directory be removed.
+19. Upload or verify the Runner bundle.
+20. Probe Runner version through the system Python boundary.
+21. Mark attempt `succeeded` and node `idle` only if all checks pass.
+22. Mark attempt `failed` and node `offline` if checks fail.
+
+The sequence may skip upload and install when `runnerHome/current` points to an existing runtime activation directory for `<version>` and the current runtime passes metadata/version/architecture plus runtime readiness checks.
 
 Rules:
 
 1. P0-03 does not install missing OS packages or dependencies automatically.
-2. The default Load Node base prerequisite baseline is Ubuntu >= 24.04 or Debian >= 12, Java >= 11 with Java 17 recommended, system Python >= 3.12 for SurgePilot `runner.py`, Taurus, and JMeter.
-3. P0-03 does not start a Run.
-4. P0-03 does not leave a long-running process on the node.
-5. All remote paths must be under validated `runnerHome`.
-6. SSH host keys must be verified; untrusted or changed host keys are rejected.
-7. SSH commands must avoid shell injection by using safe quoting or library-supported execution patterns.
+2. Runtime Bootstrap removes the need to preinstall Taurus, JMeter, JMeter plugins, `pip`, `gcc`, or `python3-dev` on Load Nodes.
+3. The default Load Node base prerequisite baseline is Ubuntu >= 24.04 or Debian >= 12, `tar`, Java >= 11 with Java 17 recommended, system Python >= 3.12 for SurgePilot `runner.py`, and POSIX shell basics.
+4. Python used by Taurus comes from the runtime artifact; system Python is used only to run SurgePilot `runner.py`.
+5. Initialization must not fall back to system Taurus, system JMeter, or Taurus/JMeter auto-download.
+6. P0-03 does not start a Run.
+7. P0-03 does not leave a long-running process on the node.
+8. All remote paths must be under validated `runnerHome`.
+9. SSH host keys must be verified through system known hosts and optional configured known hosts; unknown hosts are rejected.
+10. SSH commands must avoid shell injection by using safe quoting or library-supported execution patterns.
+11. Runtime artifacts are deployment assets, not Workspace Dependency Files and not Run artifacts. They must be selected by target Load Node architecture, not api-worker architecture.
+12. Initialization must not download a runtime from the Load Node and must not require network access from the Load Node.
+13. Before implementation freeze, the team must record real target Load Node evidence for `uname -m`, `/etc/os-release`, `java -version`, `python3 --version`, and `tar --version`.
 
 ### 10.3 Initialization Failure Mapping
 
@@ -1115,8 +1164,16 @@ Rules:
 | Runner home invalid or not writable | `failed` | `offline` | `LOAD_NODE_RUNNER_HOME_UNWRITABLE` |
 | Missing Python | `failed` | `offline` | `LOAD_NODE_PYTHON_MISSING` |
 | Missing Java | `failed` | `offline` | `LOAD_NODE_JAVA_MISSING` |
-| Missing Taurus | `failed` | `offline` | `LOAD_NODE_TAURUS_MISSING` |
-| Missing JMeter | `failed` | `offline` | `LOAD_NODE_JMETER_MISSING` |
+| Unsupported Load Node architecture | `failed` | `offline` | `LOAD_NODE_RUNTIME_ARCH_UNSUPPORTED` |
+| Missing local runtime artifact or checksum | `failed` | `offline` | `LOAD_NODE_RUNTIME_ARTIFACT_MISSING` |
+| Runtime upload failure | `failed` | `offline` | `LOAD_NODE_RUNTIME_UPLOAD_FAILED` |
+| Runtime checksum failure | `failed` | `offline` | `LOAD_NODE_RUNTIME_CHECKSUM_FAILED` |
+| Runtime safe extraction failure | `failed` | `offline` | `LOAD_NODE_RUNTIME_EXTRACT_FAILED` |
+| Runtime metadata invalid | `failed` | `offline` | `LOAD_NODE_RUNTIME_METADATA_INVALID` |
+| Runtime Taurus probe failure | `failed` | `offline` | `LOAD_NODE_RUNTIME_BZT_FAILED` |
+| Runtime JMeter probe failure | `failed` | `offline` | `LOAD_NODE_RUNTIME_JMETER_FAILED` |
+| Runtime plugin missing | `failed` | `offline` | `LOAD_NODE_RUNTIME_PLUGIN_MISSING` |
+| Runtime atomic activation failure | `failed` | `offline` | `LOAD_NODE_RUNTIME_ACTIVATION_FAILED` |
 | SSH host key untrusted during initialization | `failed` | `uninitialized` | `LOAD_NODE_SSH_HOST_KEY_UNTRUSTED` |
 | SSH host key changed during initialization | `failed` | `uninitialized` | `LOAD_NODE_SSH_HOST_KEY_CHANGED` |
 | Decryption failure | `failed` | unchanged or `offline` | `CREDENTIAL_DECRYPT_FAILED` |
@@ -1124,7 +1181,7 @@ Rules:
 
 Failure messages must be English fallback text and must not include secrets.
 
-### 10.4 Configuration
+### 10.4 Runtime Configuration
 
 P0-03 introduces or uses these API/worker settings:
 
@@ -1132,10 +1189,13 @@ P0-03 introduces or uses these API/worker settings:
 | --- | --- | --- |
 | `SSH_CREDENTIAL_ENCRYPTION_KEY` | none | Base64-encoded 32-byte AES-GCM master key. Required for API/worker readiness when Load Node credentials are enabled. |
 | `LOAD_NODE_DEFAULT_RUNNER_HOME` | `/opt/surgepilot/runner` | Default runner home shown in Web and applied by API. |
-| SSH host key trust | Load Node product data | SSH host keys are scanned and explicitly trusted per Load Node. |
+| SSH host key trust | Load Node product data | SSH host keys are scanned and explicitly trusted per Load Node. System or file `known_hosts` state is not part of the product execution path. |
 | `LOAD_NODE_SSH_CONNECT_TIMEOUT_SECONDS` | `15` | SSH connection timeout. |
 | `LOAD_NODE_INIT_COMMAND_TIMEOUT_SECONDS` | `30` | Per-command timeout for remote initialization probes. |
 | `LOAD_NODE_INIT_TIMEOUT_SECONDS` | `120` | Overall initialization attempt timeout. |
+| `LOAD_NODE_RUNTIME_ARTIFACT_DIR` | `/opt/surgepilot/runtime-artifacts` | Local read-only runtime artifact directory on api-worker. |
+| `LOAD_NODE_RUNTIME_VERSION` | none | Runtime artifact version required for initialization. Official `make start-full-stack` injects the computed `make release-runtime` value; low-level compose/manual deployment must set it explicitly or Setup Status remains not configured. |
+| `LOAD_NODE_RUNTIME_INSTALL_TIMEOUT_SECONDS` | `120` | Timeout for upload, verify, extract, and activation. |
 | `LOAD_NODE_INIT_LOG_TAIL_BYTES` | `65536` | Sanitized log tail persistence limit. |
 | `LOAD_NODE_GENERATED_KEY_TYPE` | `ed25519` | Preferred generated SSH key type. |
 
@@ -1144,6 +1204,109 @@ Rules:
 1. Missing or malformed `SSH_CREDENTIAL_ENCRYPTION_KEY` must make credential-dependent API/worker paths not ready or fail fast according to the app's configuration pattern.
 2. Do not silently store credentials unencrypted.
 3. Do not fall back to a hard-coded encryption key.
+
+4. `LOAD_NODE_JMETER_PATH` and `LOAD_NODE_JMETER_VERSION` are removed from production Runtime Bootstrap configuration; P0 initialization and Run execution derive JMeter from the selected Load Node runtime as `<runnerHome>/current/apache-jmeter-5.6.3/bin/jmeter`.
+5. Version switching or rollback is performed only by external deployment processes that adjust the api-worker local artifact directory or `LOAD_NODE_RUNTIME_VERSION`; it is not Runtime Bootstrap product behavior and not an automatic rollback capability in api-worker or Load Node initialization logic.
+
+### 10.5 Runtime Bootstrap Artifact Contract
+
+Runtime artifacts are read by api-worker from:
+
+```text
+LOAD_NODE_RUNTIME_ARTIFACT_DIR=/opt/surgepilot/runtime-artifacts
+```
+
+The selected runtime version is configured by:
+
+```text
+LOAD_NODE_RUNTIME_VERSION=<version>
+```
+
+Runtime artifacts use this naming convention:
+
+```text
+surgepilot-runtime-linux-<arch>-<version>.tar.gz
+surgepilot-runtime-linux-<arch>-<version>.tar.gz.sha256
+```
+
+Supported P0 architecture mappings:
+
+| `uname -m` | Runtime artifact arch | Metadata arch |
+| --- | --- | --- |
+| `x86_64` | `linux-amd64` | `amd64` |
+| `amd64` | `linux-amd64` | `amd64` |
+| `aarch64` | `linux-arm64` | `arm64` |
+| `arm64` | `linux-arm64` | `arm64` |
+
+The Runtime Bootstrap artifact contains runtime Python for Taurus, Taurus `1.16.50`, Apache JMeter `5.6.3`, the exact plugin set `jpgc-casutg`, `jpgc-json`, `jpgc-tst`, `bzm-random-csv`, and `jmeter-plugin-influxdb2-listener`, `bin/bzt`, `apache-jmeter-5.6.3/bin/surgepilot-jmeter-wrapper`, `metadata.json`, and a whole-archive SHA256 sidecar. The CASUTG jar retains its upstream `jmeter-plugins-casutg-*` filename so Taurus `1.16.50` recognizes CTG support.
+
+### 10.6 Init Hard Rules, Safe Extraction, and Failure Safety
+
+P0 initialization must not run these commands or equivalent actions on the Load Node:
+
+```text
+pip install
+python -m pip install
+apt install
+curl
+wget
+online plugin install
+native extension compile
+```
+
+Allowed runtime readiness checks are whole-archive SHA256, safe extraction, metadata validation, runtime `bzt -h`, runtime `jmeter --version`, required plugin jar/class validation, and atomic symlink activation.
+
+Safe extraction must reject absolute paths, `..` traversal, symlink escape, hardlink escape where supported by tar metadata, writes outside `runnerHome`, and shell interpolation of unquoted runtime paths. Sanitized logs must not expose SSH credentials, private keys, passwords, passphrases, bearer tokens, CSRF tokens, MinIO secrets, runtime artifact credentials, secret environment variables, or full api-worker internal artifact directory details.
+
+Runtime installation is idempotent and failure-safe:
+
+1. If `current` already points to an activation directory whose metadata/version/arch and runtime readiness checks pass, api-worker may skip upload and activation.
+2. Upload, SHA256, extraction, metadata, `bzt`, JMeter, plugin, candidate-move, or temporary-symlink failures must not affect an existing `current` runtime.
+3. Only a fully verified runtime may replace `current`; the new runtime directory is distinct from the active target until the symlink switch succeeds.
+4. `current` is changed by atomic symlink replacement. The previous active runtime directory may be removed only after the switch succeeds, and cleanup failure must not roll back the already-active new runtime.
+5. Runtime Bootstrap, product UI, API, api-worker, and Load Node initialization logic do not automatically switch back to an older version, restore deployment config, perform general old-version garbage collection, or orchestrate gray release/rollback.
+
+### 10.7 Runner and Taurus YAML Handoff
+
+P0 Run execution must use the activated runtime `bzt`:
+
+```bash
+${RUNNER_HOME}/current/bin/bzt -n surgepilot.yml
+```
+
+Rules:
+
+1. `RUNNER_HOME` is injected by api-worker through the Runner execution contract.
+2. Runner does not rely on system `PATH` to locate `bzt`.
+3. Runner does not import api-worker internals.
+4. The system Python boundary remains only for SurgePilot Runner itself.
+5. `-n` skips `/etc/bzt.d` and `~/.bzt-rc` as defense-in-depth.
+6. Generated Taurus YAML must be self-contained for `bzt -n` and declare the Taurus module class aliases, HTTP protocol handler, and `settings.aggregator` that would otherwise come from Taurus global config.
+
+Execution bundle generation must write a Load Node specific JMeter path:
+
+```yaml
+modules:
+  jmeter:
+    path: <runnerHome>/current/apache-jmeter-5.6.3/bin/jmeter
+    version: "5.6.3"
+    detect-plugins: false
+    fix-log4j: false
+    fix-jars: false
+    force-ctg: false
+```
+
+Rules:
+
+1. `jmeter.path` is derived from the selected Load Node `runnerHome`.
+2. P0 must not use one global `settings.load_node_jmeter_path` for all nodes.
+3. No path service is required for P0; passing `runner_home` into bundle building is sufficient.
+4. `TAURUS_DISABLE_DOWNLOADS` is not an acceptance criterion and is not the primary no-download mechanism.
+5. `force-ctg` defaults to `false` and is set to `true` only when steps require Concurrent Thread Group.
+
+### 10.8 Runtime Bootstrap Test Expectations
+
+Worker and initializer tests should cover architecture detection and mapping, unsupported architecture, missing local artifact/checksum, SFTP `upload_stream`, whole-archive SHA256 failure, safe extraction rejection for absolute paths / `..` / symlink escape, metadata version and architecture mismatch, runtime `bzt -h` failure, runtime JMeter version failure, required plugin missing, successful atomic `current` switch, valid-runtime reinstall skip, failed install preserving previous `current`, sanitized logs, and the init hard rules forbidding pip, apt, curl, wget, online plugin install, and native compilation.
 
 ---
 
@@ -1511,7 +1674,7 @@ Cover:
 1. Successful initialization marks attempt `succeeded` and node `idle`.
 2. SSH timeout marks attempt `failed` and node `offline`.
 3. SSH auth failure redacts credential detail.
-4. Missing Python, Java, Taurus, and JMeter failures map to stable error codes.
+4. Missing Python, Java, `tar`, unsupported architecture, missing runtime artifact/checksum, upload, checksum, extraction, metadata, runtime `bzt`, runtime JMeter, plugin, and activation failures map to stable error codes.
 5. Runner home creation failure maps to stable error.
 6. Worker claim prevents duplicate concurrent execution.
 7. Worker crash before completion is recovered by timeout handling: the stale `running` attempt becomes `failed` with `LOAD_NODE_INIT_FAILED`, and the node becomes `offline`.
@@ -1619,3 +1782,219 @@ Before claiming completion, verify:
 - [ ] Web uses generated client/types from `@surgepilot/contracts`.
 - [ ] Web does not connect to SSH, PostgreSQL, MinIO, or Load Nodes directly.
 - [ ] P1/P2 routes and capabilities were not added.
+
+---
+
+## 17. Implementation Backfill
+
+
+
+### 17.1 Actual implementation differences
+
+1. Load Node initialization is executed by the separate `api-worker` process using PostgreSQL row claiming for queued attempts and a PostgreSQL advisory lock around stale running-attempt recovery. The HTTP API only queues attempts.
+2. The production P0 initializer performs real SSH/SFTP setup through `ParamikoSshSftpAdapter`: it verifies host keys, decrypts stored credentials only in worker memory, prepares `runnerHome`, and writes sanitized bounded logs. The original implementation checked system Taurus and a configured JMeter path; Runtime Bootstrap supersedes that readiness rule with base-prerequisite checks, local runtime artifact upload, checksum verification, safe extraction, runtime metadata validation, runtime-contained Taurus/JMeter/plugin probes, atomic `current` activation, Runner bundle upload, and Runner version probe before marking the node `idle`. `DeterministicLoadNodeInitializer` remains available only for deterministic unit tests.
+3. `current_run_id` is present on `load_nodes` without a foreign key, as required for P0-04. `last_init_attempt_id` has a nullable foreign key to `load_node_initialization_attempts`.
+4. Generated-key mode stores the generated private key encrypted and exposes only `generatedPublicKey` plus a non-secret public-key fingerprint in API responses; password and uploaded private-key credentials do not expose fingerprints.
+5. The Playwright Load Node smoke covers explicit SSH host-key scan confirmation, registration, initialization UI convergence, sanitized log display, and archive through a deterministic mocked API boundary. Real SSH host-key verification and initialization remain covered by the dedicated API SSH E2E profiles rather than the default browser fixture.
+6. Active Load Node lookups exclude archived rows; mutating services also reject archived nodes defensively. `enable` is limited to `disabled -> uninitialized`, and `disable`/`archive` reject `initializing` to avoid orphaning active initialization attempts.
+7. `api-worker` executes the remote SSH/SFTP initializer outside the database transaction that claims the attempt; it uses short transactions to claim, decrypt/read inputs, and persist the precomputed result. This avoids holding row locks while remote SSH commands run.
+8. The SSH smoke images provide only base OS prerequisites such as SSH, Java, system Python for `runner.py`, `python3-click`, and `tar`; they must not install Taurus, JMeter, JMeter plugins, pip, or compiler toolchains as a separate runtime source. SSH smoke coverage exercises the runtime artifact activation path instead of relying on system Taurus/JMeter.
+
+### 17.2 Final API contract adjustments
+
+1. Public API paths are implemented under `/api/v1/load-nodes`; exported OpenAPI paths are under `/v1/load-nodes`.
+2. Added schemas for Load Node summaries/details, credential input and replacement, initialize response, initialization-attempt summaries/details, and list envelopes.
+3. List endpoints use offset pagination envelopes with `items`, `limit`, `offset`, and `total`.
+4. Public response schemas include `credentialConfigured`, `credentialFingerprint`, and `generatedPublicKey` when applicable. `credentialFingerprint` is null for password and uploaded private-key credentials, and responses exclude password, private key, passphrase, ciphertext, nonce, tag, and encryption key material.
+5. Write endpoints require `x-csrf-token`; business endpoints document and honor `x-workspace-id` with Default Workspace fallback.
+6. `enableLoadNode` documents `409` responses because only disabled nodes can be enabled and Busy nodes remain protected by P0-04.
+
+### 17.3 Final migration names
+
+1. Added Alembic migration `apps/api/migrations/versions/0004_p0_03_load_nodes.py`.
+2. The migration creates `load_nodes`, `load_node_credentials`, and `load_node_initialization_attempts` with P0 constraints, partial uniqueness, status/filter indexes, credential material checks, and `current_run_id` without a Run FK.
+
+### 17.4 Tests and verification commands
+
+Automated coverage added:
+
+1. API service tests: validators, duplicate active node conflict, archive re-registration, credential encryption/decryption, generated keypair handling, credential redaction, log redaction/truncation, status transition guards, force initialization rules, archived mutation rejection, enable-only-from-disabled behavior, and stale attempt recovery.
+2. API route tests: Public Admin guard, Private creation/listing, default Workspace fallback, cross-Workspace 404, CSRF write guard, credential redaction, initialize/idempotency, disable/enable, Busy and initializing state guards, archived mutation rejection, archive, and init log visibility.
+3. Worker tests: queued attempt processing, stale running attempt recovery, initializer execution outside database transactions, late initializer completion guard, advisory-lock path, default session factory path, and `api-worker` CLI once/loop behavior.
+4. Contract tests: `/v1/load-nodes` operation IDs, enum values, CSRF/Workspace headers, camelCase schemas, and absence of credential secret/ciphertext fields.
+5. Web tests: list/empty/error/filter states, role-aware Public create visibility, credential modes, generated public key success screen, initialization logs, disable/enable, archive, and credential non-reveal behavior.
+6. Playwright smoke: scan and confirm the SSH host key, register a Private Load Node, converge the initialization UI through the mocked browser/API boundary, view sanitized logs, and archive. A companion spec covers actionable `CREDENTIAL_DECRYPT_FAILED` guidance; real API/SSH initialization remains in the dedicated SSH E2E profiles.
+7. Real initializer unit tests: base-prerequisite checks, runtime artifact selection/upload, safe extraction, metadata validation, runtime Taurus/JMeter/plugin probes, atomic activation, runner bundle upload, stable error-code mapping, and secret redaction.
+8. Optional real SSH smoke: Docker-backed SSH Load Node success path for P0-03 initializer plus P0-04 runner SSH control.
+
+Verification commands run successfully:
+
+```bash
+make generate-contracts
+make verify
+uv run --all-packages pytest apps/api/tests/test_p0_03_load_nodes_service.py apps/api/tests/test_p0_03_load_nodes_api.py apps/api/tests/test_p0_03_load_nodes_worker.py tests/contract/test_p0_03_load_nodes_openapi.py --cov=app.routes.load_nodes --cov=app.services.load_nodes --cov=app.worker --cov-branch --cov-report=term-missing --cov-report=annotate:cov_annotate -q
+pnpm exec playwright test tests/e2e/p0_03_load_nodes.spec.ts
+make verify-runner-ssh
+uv run --all-packages pytest apps/api/tests/test_p0_03_load_node_initializer.py apps/api/tests/test_p0_03_initializer_ssh_e2e.py -q
+```
+
+Coverage summary from `make verify`: API total coverage 92.99%; diff coverage 100%; Web Vitest 23 passed; Runner tests 2 passed; Playwright P0-03 smoke 1 passed.
+
+### 17.5 Remaining risks or known gaps
+
+1. The P0-03 initializer verifies setup and the uploaded Runner bootstrap over SSH/SFTP, but it still does not start a Run or execute a Taurus/JMeter load test. Run execution remains owned by later P0 slices.
+2. Load Node `busy`, heartbeat, lease release, quarantine entry/clearance, and Run-driven cleanup are still reserved for P0-04.
+3. The UI shows generated public key material because it is public installation material; no private key, password, passphrase, or ciphertext is displayed.
+
+### 17.6 Preconditions for later P0 slices
+
+1. P0-04 must reuse backend Load Node visibility/authorization, credential decryption, and safe status helpers; it must not import API internals into `apps/runner`.
+2. P0-04 owns adding the `current_run_id` foreign key after the Runs table exists and must preserve the rule that P0-03 does not release `busy` nodes.
+3. P0-06 must select exactly one visible `idle` Load Node and must treat all other statuses as unavailable.
+4. P0-07 may read node identity/version fields for reports, but artifact access remains API-mediated and must not expose MinIO credentials.
+
+Do not use backfill to expand P0 scope.
+
+## 17A. P0-03 Independent Review Report
+
+
+### 17A.1 Coverage review (`pytest-coverage`)
+
+- Ran API coverage through `make verify` and a P0-03 annotated coverage pass.
+- `make verify` result: 116 API/contract tests passed, 3 skipped; total API coverage 92.40%; diff coverage 100%.
+- P0-03 targeted annotated pass result: 22 passed. Reviewed uncovered lines in `routes/load_nodes.py`, `services/load_nodes.py`, and `worker.py`; remaining uncovered branches are negative/defensive branches already covered by repository-level threshold and not P0/P1 blockers.
+- Added worker tests during review to cover advisory lock, default session factory, and CLI once/loop paths.
+
+### 17A.2 React/data-fetching review (`vercel-react-best-practices`)
+
+- React Query is used for Load Node list and log data, with polling only while nodes are `initializing`.
+- Mutations invalidate the Load Node query boundary instead of manually mutating stale local copies.
+- The Web client consumes generated types/functions from `@surgepilot/contracts` and does not use relative imports into generated contract files.
+- Review fix: removed an unnecessary `as never` cast from the init-attempt client wrapper and reset transient credential form state whenever the credential modal opens/closes or succeeds.
+
+### 17A.3 UI/UX consistency review (`ui-ux-pro-max` and `frontend-design`)
+
+- Routes reuse `AppLayout`, existing tokens, dark glass surfaces, rounded cards, shadcn/Radix dialog behavior, and P0-00/P0-01/P0-02 spacing/action hierarchy.
+- Empty, loading, error, filtered-empty, success, log, edit, credential replacement, archive, disabled action, and Busy-protection states are represented.
+- Node statuses are displayed in English as `Uninitialized / Initializing / Idle / Running / Offline / Quarantined / Disabled`.
+- UI copy is English-only and uses standard industry terms where appropriate, including SSH-related labels. Raw sanitized setup output remains available in the log viewer for troubleshooting.
+
+### 17A.4 Playwright review (`playwright-cli`)
+
+- Ran `pnpm e2e -- tests/e2e/p0_03_load_nodes.spec.ts tests/e2e/p0_03_load_node_registration_error.spec.ts`.
+- Result: 2 passed.
+- Covered paths: the mocked browser/API boundary verifies SSH host-key scan and trusted-key propagation, registration, initialization polling from `initializing` to `idle`, sanitized log display, archive, and actionable credential-encryption failure guidance. Real API/SSH host-key verification and initialization remain covered by the dedicated SSH E2E profiles.
+
+### 17A.5 Security review (`fastapi` + manual checklist)
+
+- Credential material is AES-256-GCM encrypted using `SSH_CREDENTIAL_ENCRYPTION_KEY`; plaintext is accepted only on write endpoints and is not returned by API responses.
+- Public Load Node mutations require Admin in backend service checks; Private nodes are filtered by current Workspace.
+- Cross-Workspace Private lookup returns `RESOURCE_NOT_FOUND`, avoiding existence leaks.
+- `host`, `sshUser`, and `runnerHome` validation reject unsafe characters, non-absolute paths, and traversal.
+- Browser writes require CSRF through `x-csrf-token`; business requests carry `x-workspace-id` or fall back to the user's default Workspace.
+- Runner remains independent; no Web or Runner code receives PostgreSQL, MinIO, or credential-secret access.
+
+### 17A.6 Architecture and scope review
+
+- No Redis, Celery, RabbitMQ, Kafka, Kubernetes, scheduler, auto allocation, multi-node execution, Test Plan, Run Now, Run state machine, Runner callback, Stop, heartbeat, artifact, API Catalog, monitoring, or P1/P2 route was introduced.
+- `api-worker` is a separate process and uses PostgreSQL coordination per ADR-0006.
+- `apps/runner` does not import API internals.
+- P0-04/P0-06/P0-07 handoff points remain explicit and non-user-visible beyond the P0-03 Load Node management surface.
+
+### 17A.7 Review conclusion
+
+No P0/P1 blocking issues remain after the review fixes above.
+
+---
+
+## 17B. P0-03 State Guard Follow-up Review Report
+
+
+### 17B.1 Review findings assessed
+
+1. `enable` could previously change `busy` or other non-disabled states to `uninitialized`. This was valid because P0-03 must not clear Busy; P0-04 owns Busy release.
+2. Archived node protection was incomplete for shared lookup paths. This was valid because archived nodes must be excluded from normal active access and must not accept mutations.
+3. `disable` and `archive` could previously act on `initializing` nodes. This was valid because that can leave queued/running initialization attempts to finish or stale-recover after the user-visible state was changed.
+
+### 17B.2 Fix review
+
+1. Active lookup now filters `archived_at is null`; service-layer mutation helpers also reject archived nodes defensively with `RESOURCE_NOT_FOUND`.
+2. `enable` now allows only `disabled -> uninitialized`; `busy` returns `LOAD_NODE_BUSY`, and all other non-disabled states return `LOAD_NODE_ACTION_NOT_ALLOWED`.
+3. `disable` and `archive` now reject `initializing` with `LOAD_NODE_ACTION_NOT_ALLOWED` and continue to reject `busy` with `LOAD_NODE_BUSY`.
+4. The exported OpenAPI contract documents `409` for `enableLoadNode`.
+5. Added service and API regression tests for Busy, initializing, and archived state guards.
+
+### 17B.3 Verification
+
+Commands run successfully:
+
+```bash
+make generate-contracts
+uv run --all-packages pytest apps/api/tests/test_p0_03_load_nodes_service.py apps/api/tests/test_p0_03_load_nodes_api.py tests/contract/test_p0_03_load_nodes_openapi.py -q
+make verify
+pnpm exec playwright test tests/e2e/p0_03_load_nodes.spec.ts
+```
+
+Results:
+
+1. Targeted P0-03 API/service/contract tests: 23 passed.
+2. `make verify`: API/contract 123 passed, 3 skipped; API coverage 92.99%; diff coverage 100%; Web Vitest 23 passed; Runner tests 2 passed.
+3. Playwright P0-03 smoke: 1 passed.
+
+### 17B.4 Follow-up review conclusion
+
+No P0/P1 blocking issues remain after the state guard fixes.
+
+---
+
+## 17C. P0-03 Review Backfill
+
+1. Private key credentials are parsed with `cryptography` before acceptance; checking only for the text `PRIVATE KEY` is no longer sufficient.
+2. Stale initialization recovery is guarded so orphaned or superseded attempts cannot mark a newer healthy node offline.
+3. The API schema default for `runnerHome` now follows `LOAD_NODE_DEFAULT_RUNNER_HOME`; the Web registration form no longer hardcodes a competing default.
+4. Generated public keys returned after credential replacement are displayed once, matching the first-registration copy behavior.
+5. Idle node re-initialization now requires user confirmation in Web.
+6. `LOAD_NODE_JMETER_MISSING` is covered by the OpenAPI error registry contract test.
+
+---
+
+## 17D. Runtime Bootstrap Documentation Backfill
+
+1. Runtime Bootstrap is now merged directly into this existing P0-03 Slice SDD instead of being carried by a separate addendum file.
+2. `docs/sdd/p0-runtime-bootstrap-plan.md` remains the implementation baseline for packaging, deployment artifact publication, version switching, and rollback boundaries.
+3. `docs/sdd/adr/ADR-0007-p0-runtime-bootstrap-packaging.md` remains the single ADR for the runtime packaging decision.
+4. The Runtime execution correctness amendment adds only nullable `runtime_version` persistence and corresponding API/Runner contract fields; it does not add API routes, UI routes, or product runtime-management capability.
+5. Runtime Bootstrap is P0 execution-loop support only; automatic rollback, runtime catalog, runtime upload UI, gray release, old-runtime cleanup, and automatic OS/package installation remain out of scope.
+
+---
+
+## 18. Handoff to Later Slices
+
+Later slices must know:
+
+1. Load Node status and scope enums are contract-owned by P0-03.
+2. `idle` is the only selectable status for P0 manual Run selection, and the persisted `runtimeVersion` must equal the configured `LOAD_NODE_RUNTIME_VERSION`.
+3. `busy` and `quarantined` are defined here but completed by P0-04.
+4. Public nodes have `workspaceId=null`.
+5. Private nodes are filtered by current Workspace.
+6. Credential decryption service is backend-only and is reused by run-start logic.
+7. `runnerHome` path validation must be reused by run bundle upload and cleanup logic.
+8. Initialization does not guarantee a node remains healthy forever; P0-04 heartbeat and cleanup rules still own active Run safety.
+9. Generated public key is public and is shown when `authType='generated_key'`; generated private key is secret and never returned.
+10. Tags remain out of scope until P1.
+11. Later Run slices must execute Taurus through `${RUNNER_HOME}/current/bin/bzt -n surgepilot.yml`, not through system `PATH`.
+12. Later bundle-generation slices must derive the Taurus JMeter path from the selected node `runnerHome` as `<runnerHome>/current/apache-jmeter-5.6.3/bin/surgepilot-jmeter-wrapper`, not from one global preinstalled JMeter setting.
+13. Runtime version switching or rollback is an external deployment operation that changes api-worker local artifacts or `LOAD_NODE_RUNTIME_VERSION`; product code and Load Node initialization logic must not implement automatic rollback orchestration.
+
+---
+
+## 17E. Runtime Bootstrap Implementation Backfill
+
+1. P0-03 initialization now installs or reuses a Runtime Bootstrap artifact from api-worker local read-only storage instead of checking system Taurus or system JMeter.
+2. The initializer selects `surgepilot-runtime-linux-<arch>-<version>.tar.gz` from `LOAD_NODE_RUNTIME_ARTIFACT_DIR` using `uname -m` mapping and `LOAD_NODE_RUNTIME_VERSION`, uploads the archive through SFTP `upload_stream`, validates SHA256, safely extracts under `runnerHome` with symlink/path traversal escape rejection, checks runtime metadata including supported Python version, verifies self-contained runtime files, probes runtime `bin/bzt -h`, probes runtime JMeter `--version`, verifies the required plugin jar as a non-empty zip/jar, and atomically activates `runnerHome/current` with retry-safe stale-target replacement. A damaged active same-version target is repaired by exchanging it with the fully validated staged candidate before deleting the displaced directory. The already-installed skip path performs the same runtime readiness probes before skipping upload.
+3. The implemented settings are `LOAD_NODE_RUNTIME_ARTIFACT_DIR`, `LOAD_NODE_RUNTIME_VERSION`, and `LOAD_NODE_RUNTIME_INSTALL_TIMEOUT_SECONDS`.
+4. Run execution handoff uses `${RUNNER_HOME}/current/bin/bzt -n surgepilot.yml`; generated Taurus YAML points to `<runnerHome>/current/apache-jmeter-5.6.3/bin/surgepilot-jmeter-wrapper`, and the wrapper delegates to adjacent real JMeter. Generated YAML also declares the Taurus module aliases and HTTP protocol handler required by `bzt -n`, and pins JMeter mutation/download-related flags off.
+5. E2E acceptance uses production `scripts/release_runtime_artifact.py --fixed-version p0-e2e` with persistent output/build/cache directories to build or reuse the runtime artifact. The former SSH-image seed helper is removed; production startup, SSH E2E, and compatibility verification now share one runtime source, packaging flow, manifest, SHA256, and reuse invariant. First use may need network access for runtime construction; subsequent runs reuse the production builder cache/output. Production runtime artifacts remain release/deployment assets governed by ADR-0007.
+6. Verification added: initializer unit tests, run-control bundle tests, Runner CLI tests, E2E verifier tests, plus the P0 SSH/API E2E commands listed in the final PR verification.
+7. Successful initialization stores the activated Runtime metadata version on both the attempt and Load Node as `runtimeVersion`. Missing or mismatched Runtime versions make a node non-selectable until reinitialization.
+8. Runtime UI, catalog, user upload, MinIO runtime storage, automatic rollback, old-runtime cleanup, online install, and OS package install remain out of scope.

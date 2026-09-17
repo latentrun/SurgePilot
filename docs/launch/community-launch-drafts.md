@@ -1,42 +1,143 @@
-# Community Launch Drafts
+# SurgePilot Community Launch Drafts
 
-These drafts are publication-ready templates only. Publish a draft after the reviewed launch candidate, repository, release, Pages site, documentation, and any demo link pass anonymous checks. Replace bracketed placeholders with verified links and remove any draft whose target is unavailable.
+- Status: copy drafts only; do not publish until every linked surface is anonymous and verified
+- Primary action: inspect the repository and legitimately Star it if the work is useful
+- Language order: English first; localized adaptations are optional and must preserve the claim
 
-## Short announcement
+## Distribution rules
 
-> Can AI agents build a real distributed system? SurgePilot is an inspectable, self-hosted distributed API load-testing platform built end-to-end by AI agents under human direction.
->
-> Explore the engineering evidence, read the docs, and install the reviewed release:
-> - Repository: https://github.com/latentrun/SurgePilot
-> - Docs: https://latentrun.github.io/SurgePilot/docs/
-> - Site: https://latentrun.github.io/SurgePilot/
-> - Release: https://github.com/latentrun/SurgePilot/releases
+- Do not cross-post every channel at once. Start with one technically relevant community, answer
+  questions, and adapt later posts from real feedback.
+- Do not invent benchmarks, adoption, users, Stars, or production status. Use only current,
+  repository-verifiable facts.
+- Do not ask for a Star in exchange for anything, buy promotion, use fake accounts, or coordinate
+  reciprocal Stars.
+- Identify yourself as the project owner when a community requires disclosure. Follow each
+  community's self-promotion rules and remove a post if moderators request it.
+- Link to the specific evidence readers ask about rather than repeating the headline without proof.
+- Never publish before the repository, site, docs, Release, and any referenced video resolve in a
+  logged-out session.
 
-## Technical announcement
+## English launch core
 
-SurgePilot combines a Web application, API, api-worker, independent Linux Runners, multi-node execution, workspace and credential boundaries, run snapshots, artifacts, reports, public API contracts, and cross-platform release assets.
+### One-sentence positioning
 
-The project story is deliberately specific: humans set intent, discuss requirements, use the product, provide feedback, and accept results; AI agents design and implement the product and engineering process, tests, verification gates, deployment, and release assets.
+> SurgePilot is a self-hosted distributed API load-testing system whose original public baseline
+> was authored end-to-end by AI agents under a precise human-direction and repository-governance
+> boundary.
 
-Read the evidence and user guide at [verified docs link]. Do not treat the Landing dashboard or load-mesh panels as live service, topology, benchmark, or adoption evidence; they are labelled UI demonstrations.
+### Show HN
 
-## Demo announcement
+**Title**
 
-> A short walkthrough of SurgePilot is available here: [verified demo URL]
->
-> The recording shows the reviewed candidate and contains no credentials, private endpoints, personal paths, unsupported metrics, or fabricated status claims.
+```text
+Show HN: SurgePilot – a distributed system whose original baseline was built by AI agents
+```
 
-## Maintainer response templates
+**Body**
 
-**Capability question:** Thanks for checking. The supported behavior is documented at [verified page]. If the question concerns a measurement, please use the project’s documented verification path rather than treating synthetic Landing values as benchmark data.
+```text
+I built SurgePilot as an experiment: can AI agents carry a real distributed system from
+requirements and architecture decisions through contracts, code, tests, and release assets?
 
-**Bug report:** Please include the supported startup mode, relevant redacted logs, reproducible steps, and the release used. Do not include credentials or private endpoints.
+The human role was product intent, requirements discussion, product use, usage feedback, and
+acceptance. AI agents produced and enforced the engineering artifacts and quality gates. The
+claim is bound to an audited immutable baseline; future contributions can be human- or AI-authored.
 
-**Contribution:** Contributions are welcome under `CONTRIBUTING.md`. No AI provenance is required; changes still need the repository’s normal checks and owner acceptance.
+The proof is the repository, not a chat screenshot: independent Load Node Runners, multi-node
+execution, a Run state machine, generated API contracts, security boundaries, verification gates,
+and an installable self-hosted stack.
 
-## Publication rules
+Repository: https://github.com/latentrun/SurgePilot
+Evidence and docs: https://latentrun.github.io/SurgePilot/
 
-- Do not claim a Star count, adoption number, benchmark, production status, or hosted service.
-- Do not publish private logs, credentials, personal data, or unsupported links.
-- Keep the human/AI responsibility boundary intact.
-- Correct misleading wording promptly and transparently.
+I would value skeptical feedback on the evidence boundary and what you would inspect first. If
+the experiment is useful, a Star helps others discover it.
+```
+
+### Reddit
+
+Choose one relevant subreddit only after reading its current rules; do not reuse this draft where
+project links or self-promotion are prohibited.
+
+**Title**
+
+```text
+I used AI agents to build the original baseline of a self-hosted distributed load-testing system
+```
+
+**Body**
+
+```text
+SurgePilot is both a working self-hosted API load-testing platform and a repository-backed
+experiment in agentic software engineering.
+
+The interesting part is not “AI generated a UI.” The repository includes its PRD → SDD → ADR →
+Slice → contract → implementation → test → release trail, plus independent Linux Runners and
+multi-node result aggregation. The human/AI responsibility boundary and the pending/selected
+baseline tag are explicit rather than hidden behind “no human” wording.
+
+Code: https://github.com/latentrun/SurgePilot
+Evidence overview: https://latentrun.github.io/SurgePilot/
+Docs: https://latentrun.github.io/SurgePilot/docs/
+
+I am looking for technical criticism of the governance and evidence model. Please Star it only if
+you want to follow or revisit the experiment.
+```
+
+### X / LinkedIn
+
+```text
+Can AI agents carry a real distributed system from requirements to release?
+
+SurgePilot is a self-hosted API load-testing platform with independent Runners, multi-node
+execution, contracts, state-machine safety, tests, and release assets. Its original public
+baseline is bound to an explicit human/AI responsibility record—not a “no human” claim.
+
+Inspect it: https://github.com/latentrun/SurgePilot
+Evidence + docs: https://latentrun.github.io/SurgePilot/
+
+If the repository is useful, Star it so you can find it again.
+```
+
+For X, shorten without removing the evidence link. For LinkedIn, add one personal paragraph about
+why the owner ran the experiment; do not add unverified reach or performance numbers.
+
+## Optional Chinese adaptation
+
+Publish only after the English source and all links are final.
+
+```text
+AI Agent 能否把一个真实分布式系统从需求一路推进到发布？
+
+SurgePilot 是一个自托管的分布式 API 负载测试平台。它的原始公开基线由 AI Agent 在明确的人类
+指导边界下端到端完成，证据来自仓库中的 PRD、SDD、ADR、契约、代码、测试与发布资产，而不是
+聊天截图。
+
+仓库：https://github.com/latentrun/SurgePilot
+证据与文档：https://latentrun.github.io/SurgePilot/
+
+欢迎从技术角度检查这套证据。如果它值得继续关注，可以给仓库一个 Star。
+```
+
+## Response bank
+
+**“Was there really no human?”**
+
+No. The human set product intent, discussed requirements, used the product, provided feedback, and
+accepted results. The original baseline's first-party engineering artifacts and gates were
+produced by AI agents. The exact boundary is in `AI-AUTHORSHIP.md`.
+
+**“Which model built each line?”**
+
+The launch does not make model-by-model attribution claims. Its primary evidence is the repository,
+governed artifacts, contracts, tests, and the immutable baseline tag.
+
+**“Is this proven in production?”**
+
+No production adoption claim is made. SurgePilot is inspectable, runnable, and backed by explicit
+verification gates; readers should evaluate those artifacts directly.
+
+**“Can I contribute without AI?”**
+
+Yes. Future contributions may be human- or AI-authored, with no prompt or model attestation.

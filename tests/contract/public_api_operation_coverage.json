@@ -101,7 +101,8 @@
         "apps/api/tests/test_p2_02_public_api.py::test_public_config_crud_and_run_create_use_existing_services"
       ],
       "responseAssertions": [
-        "tests/contract/test_p2_02_public_api_openapi.py::test_public_openapi_excludes_token_management_and_secret_material"
+        "tests/contract/test_p1_09_scenario_global_configuration_openapi.py",
+        "apps/api/tests/test_p2_02_public_api.py::test_public_scenario_global_config_accepts_phase_a_and_rejects_forbidden_fields"
       ]
     },
     "publicDeleteScenario": {
@@ -117,7 +118,8 @@
         "apps/api/tests/test_p2_02_public_api.py::test_public_config_crud_and_run_create_use_existing_services"
       ],
       "responseAssertions": [
-        "tests/contract/test_p2_02_public_api_openapi.py::test_public_openapi_excludes_token_management_and_secret_material"
+        "tests/contract/test_p1_09_scenario_global_configuration_openapi.py",
+        "apps/api/tests/test_p2_02_public_api.py::test_public_scenario_global_config_accepts_phase_a_and_rejects_forbidden_fields"
       ]
     },
     "publicPatchScenario": {
@@ -125,7 +127,8 @@
         "apps/api/tests/test_p2_02_public_api.py::test_public_config_crud_and_run_create_use_existing_services"
       ],
       "responseAssertions": [
-        "tests/contract/test_p2_02_public_api_openapi.py::test_public_openapi_excludes_token_management_and_secret_material"
+        "tests/contract/test_p1_09_scenario_global_configuration_openapi.py",
+        "apps/api/tests/test_p2_02_public_api.py::test_public_scenario_global_config_accepts_phase_a_and_rejects_forbidden_fields"
       ]
     },
     "publicListTestPlans": {

@@ -171,7 +171,7 @@ def _manifest(*, run: Run, snapshot_payload: dict, dependency_files: list[Depend
 def build_debug_scenario_execution_bundle(
     db: Session, *, run_id: str, runner_home: str, settings: Settings | None = None
 ) -> list[ExecutionBundleFile]:
-    settings = settings or get_settings()
+    _ = settings
     run, snapshot = _snapshot_for_run(db, run_id=run_id)
     snapshot_payload = snapshot.snapshot_json
     scenario = snapshot_payload.get("scenario")
@@ -231,7 +231,7 @@ def build_debug_scenario_execution_bundle(
 def build_test_plan_execution_bundle(
     db: Session, *, run_id: str, runner_home: str, settings: Settings | None = None
 ) -> list[ExecutionBundleFile]:
-    settings = settings or get_settings()
+    _ = settings
     run, snapshot = _snapshot_for_run(db, run_id=run_id)
     if run.source_type != "test_plan":
         raise AppError("BUNDLE_INVALID", "Execution bundle is invalid.", 500)

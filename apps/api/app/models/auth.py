@@ -55,6 +55,7 @@ class Workspace(Base):
     created_at: Mapped[datetime] = mapped_column(nullable=False)
     updated_at: Mapped[datetime] = mapped_column(nullable=False)
 
+
 Index(
     "uq_workspaces_active_name_ci",
     func.lower(Workspace.name),
@@ -66,7 +67,6 @@ Index(
 
 class WorkspaceMember(Base):
     __tablename__ = "workspace_members"
-    __table_args__ = (Index("ix_workspace_members_user_id", "user_id"),)
 
     workspace_id: Mapped[str] = mapped_column(
         String(26), ForeignKey("workspaces.id", ondelete="CASCADE"), primary_key=True

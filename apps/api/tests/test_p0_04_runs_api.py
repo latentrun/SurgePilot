@@ -169,6 +169,21 @@ async def test_runner_callback_requires_token_and_does_not_use_browser_csrf(
     assert callback.json()["stateChanged"] is True
     assert callback.json()["currentState"] == "running"
 
+    mismatched_payload = {
+        **payload,
+        "eventId": "01HZX3Y9M0E9W7Z6M5QK9S8P7D",
+        "runtimeVersion": "runtime-old",
+        "eventType": "heartbeat",
+        "seq": 2,
+    }
+    mismatched = await client.post(
+        "/api/internal/v1/runner/callbacks",
+        headers={"x-runner-token": node_bound_token("runner-secret", run.selected_node_id)},
+        json=mismatched_payload,
+    )
+    assert mismatched.status_code == 409
+    assert mismatched.json()["code"] == "RUNNER_RUNTIME_MISMATCH"
+
     duplicate = await client.post(
         "/api/internal/v1/runner/callbacks",
         headers={
@@ -361,7 +376,7 @@ async def test_runner_artifact_upload_validates_and_stores_metadata_without_obje
     artifact = db_session.get(RunArtifact, artifact_id)
     assert artifact is not None
     assert artifact.storage_key.startswith(
-        f"run-artifacts/{run.workspace_id}/{run.id}/nodes/{run.selected_node_id}/"
+        f"run-artifacts/{run.workspace_id}/{run.id}/nodes/{run.selected_node_id}/allocations/"
     )
     assert artifact.storage_key.endswith("/logs/runner.log")
     assert artifact.id not in artifact.storage_key

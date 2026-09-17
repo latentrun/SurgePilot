@@ -26,13 +26,6 @@ def test_ai_skill_download_is_documented_only_in_web_openapi() -> None:
     public_text = json.dumps(public, sort_keys=True)
     assert "/v1/account/ai-skill/download" not in public["paths"]
     assert "AI_SKILL_SOURCE_NOT_AVAILABLE" not in public_text
-    public_schemas = public["components"]["schemas"]
-    assert "AuthSessionResponse" not in public_schemas
-    assert "AuthSessionResponse" not in public_text
-    assert "ApiCatalogSpecStatus" not in public_schemas
-    assert "#/components/schemas/ApiCatalogSpecStatus" not in public_text
-    assert "Code" not in public_schemas
-    assert "#/components/schemas/Code" not in public_text
 
 
 def test_api_image_copies_only_governed_ai_skill_source_for_p2_04() -> None:

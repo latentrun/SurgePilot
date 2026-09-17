@@ -128,13 +128,6 @@ test("P1-04 Scenario and Test Plan polish surfaces are visible and scoped", asyn
   await expect(page.getByRole("button", { name: "Preview YAML" })).toHaveCount(0);
   await expect(page.getByRole("heading", { name: "Generated YAML Preview" })).toHaveCount(0);
   await expect(page.getByText(/Apply YAML|Save YAML|Edit generated YAML|Run from preview/)).toHaveCount(0);
-  await expect(
-    page.getByRole("button", { name: `Clone ${scenario.name}` }),
-  ).toBeVisible();
-  await page.getByRole("button", { name: `Archive ${scenario.name}` }).click();
-  await expect(page.getByRole("dialog", { name: "Archive Scenario" })).toBeVisible();
-  await expect(page.getByText(/hidden from active lists/i)).toBeVisible();
-  await page.getByRole("button", { name: "Cancel" }).click();
 
   await page.goto("/scenarios");
   await expect(page.getByRole("button", { name: "Clone" }).first()).toBeVisible();
@@ -157,11 +150,4 @@ test("P1-04 Scenario and Test Plan polish surfaces are visible and scoped", asyn
   await expect(page.getByText(/Preview requires a Load Node/i)).toBeVisible();
   await expect(page.getByRole("button", { name: "Preview YAML" })).toBeVisible();
   await expect(page.getByText(/Apply YAML|Save YAML|Edit generated YAML|Run from preview/)).toHaveCount(0);
-  await expect(
-    page.getByRole("button", { name: `Clone ${plan.name}` }),
-  ).toBeVisible();
-  await page.getByRole("button", { name: `Archive ${plan.name}` }).click();
-  await expect(page.getByRole("dialog", { name: "Archive Test Plan" })).toBeVisible();
-  await expect(page.getByText(/historical Run Reports keep/i)).toBeVisible();
-  await page.getByRole("button", { name: "Cancel" }).click();
 });

@@ -52,6 +52,10 @@ test("Monitoring page embeds the same-origin Grafana dashboard", async ({
   );
 
   await expect(page.getByRole("heading", { name: "Monitoring" })).toBeVisible();
+  await expect(page.getByRole("link", { name: "Monitoring" })).toHaveAttribute(
+    "aria-current",
+    "page",
+  );
   await expect(
     page
       .frameLocator('iframe[title="Grafana monitoring dashboard"]')

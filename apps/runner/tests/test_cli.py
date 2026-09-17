@@ -7,6 +7,7 @@ import subprocess
 import sys
 import time
 import urllib.error
+import zipfile
 
 from click.testing import CliRunner
 from jsonschema import Draft202012Validator
@@ -44,7 +45,19 @@ NODE_ID = "01HZX3Y9M0E9W7Z6M5QK9S8P7B"
 REQUIRES_LINUX_PROC = pytest.mark.skipif(
     not Path("/proc").exists(), reason="requires Linux /proc and real POSIX process groups"
 )
-RUNTIME_VERSION = "0.1.0"
+RUNTIME_VERSION = "runtime-test-v1"
+
+
+def write_runtime_metadata(tmp_path: Path, *, version: str = RUNTIME_VERSION) -> None:
+    current = tmp_path / "current"
+    current.mkdir(parents=True, exist_ok=True)
+    (current / "metadata.json").write_text(json.dumps({"version": version}), encoding="utf-8")
+
+
+@pytest.fixture(autouse=True)
+def configured_runtime_identity(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    monkeypatch.setenv("SURGEPILOT_EXPECTED_RUNTIME_VERSION", RUNTIME_VERSION)
+    write_runtime_metadata(tmp_path)
 
 
 def test_callback_schema_requires_runtime_version() -> None:
@@ -69,7 +82,8 @@ def test_sla_result_maps_only_pinned_taurus_passfail_exit_codes() -> None:
 
 
 def write_fake_bzt(tmp_path: Path, *, exit_code: int = 0, sleep_seconds: float = 0) -> Path:
-    bin_dir = tmp_path / "bin"
+    write_runtime_metadata(tmp_path)
+    bin_dir = tmp_path / "current" / "bin"
     bin_dir.mkdir(parents=True)
     script = bin_dir / "bzt"
     script.write_text(
@@ -86,6 +100,11 @@ def write_fake_bzt(tmp_path: Path, *, exit_code: int = 0, sleep_seconds: float =
                 "artifacts.joinpath('bzt.log').write_text('taurus log\\n')",
                 "artifacts.joinpath('jmeter.log').write_text('jmeter log\\n')",
                 "artifacts.joinpath('final_stats.csv').write_text('label,throughput,succ,fail,avg_rt\\n,1,1,0,0.1\\n')",
+                'artifacts.joinpath("debug-http-trace.jsonl").write_text(\'{"schemaVersion":1}\\n\')',
+                "body_blobs = artifacts / 'debug-http-body-blobs'",
+                "body_blobs.mkdir(exist_ok=True)",
+                "body_blobs.joinpath('1-response.bin').write_bytes(b'raw body')",
+                "artifacts.joinpath('artifacts.zip').write_bytes(b'PK\\x05\\x06' + (b'\\x00' * 18))",
                 "artifacts.joinpath('error.jtl').write_text('timeStamp,elapsed,label,responseCode\\n')",
                 f"raise SystemExit({exit_code})",
             ]
@@ -197,7 +216,7 @@ def test_managed_runner_reports_process_group_not_exited_when_workload_child_sur
 ) -> None:
     events: list[dict] = []
     write_run_bundle(tmp_path, "run_01")
-    bin_dir = tmp_path / "bin"
+    bin_dir = tmp_path / "current" / "bin"
     bin_dir.mkdir(parents=True)
     child_pid_file = tmp_path / "child.pid"
     script = bin_dir / "bzt"
@@ -264,6 +283,30 @@ def test_start_does_not_recreate_supervisor_pidfile_after_child_exits(
     assert result.exit_code != 0
     assert "managed runner failed to start" in result.output
     assert not supervisor_pidfile_path("run_01", base=tmp_path).exists()
+
+
+def test_start_cleans_monitoring_secret_when_child_exits_before_ready(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    class ExitedProcess:
+        pid = 999999
+
+        def poll(self) -> int:
+            return 1
+
+    monitoring_properties = monitoring_properties_path(RUN_ID, base=tmp_path)
+    monitoring_properties.parent.mkdir(parents=True)
+    monitoring_properties.write_text("SURGEPILOT_INFLUXDB_TOKEN=secret\n", encoding="utf-8")
+    monkeypatch.setattr(runner_cli.subprocess, "Popen", lambda *args, **kwargs: ExitedProcess())
+    monkeypatch.setattr(runner_cli, "start_workload_wait_seconds", lambda: 0.01)
+
+    result = CliRunner().invoke(
+        cli, ["start", "--run-id", RUN_ID], env={"RUNNER_HOME": str(tmp_path)}
+    )
+
+    assert result.exit_code != 0
+    assert "managed runner failed to start" in result.output
+    assert not monitoring_properties.exists()
 
 
 def test_start_deletes_stale_workload_pidfile_when_group_is_empty(
@@ -552,6 +595,9 @@ def test_default_stop_supervisor_timeout_covers_supervisor_cleanup_budget(
 def test_kill_deletes_same_run_pidfiles_only_after_success(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
+    monitoring_properties = monitoring_properties_path("run_01", base=tmp_path)
+    monitoring_properties.parent.mkdir(parents=True)
+    monitoring_properties.write_text("SURGEPILOT_INFLUXDB_TOKEN=secret\n", encoding="utf-8")
     write_supervisor_pidfile("run_01", ManagedPid(pid=321, starttime=None), runner_home=tmp_path)
     write_workload_pidfile("run_01", ManagedPid(pid=654, starttime=None), runner_home=tmp_path)
     monkeypatch.setattr(runner_cli, "terminate_group", lambda pgid: True)
@@ -563,11 +609,29 @@ def test_kill_deletes_same_run_pidfiles_only_after_success(
     assert result.exit_code == 0
     assert not supervisor_pidfile_path("run_01", base=tmp_path).exists()
     assert not workload_pidfile_path("run_01", base=tmp_path).exists()
+    assert not monitoring_properties.exists()
+
+
+def test_kill_without_workload_removes_monitoring_properties(tmp_path: Path) -> None:
+    monitoring_properties = monitoring_properties_path("run_01", base=tmp_path)
+    monitoring_properties.parent.mkdir(parents=True)
+    monitoring_properties.write_text("SURGEPILOT_INFLUXDB_TOKEN=secret\n", encoding="utf-8")
+
+    result = CliRunner().invoke(
+        cli, ["kill", "--run-id", "run_01"], env={"RUNNER_HOME": str(tmp_path)}
+    )
+
+    assert result.exit_code == 0
+    assert "no managed process" in result.output
+    assert not monitoring_properties.exists()
 
 
 def test_kill_without_workload_terminates_live_same_run_supervisor(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
+    monitoring_properties = monitoring_properties_path("run_01", base=tmp_path)
+    monitoring_properties.parent.mkdir(parents=True)
+    monitoring_properties.write_text("SURGEPILOT_INFLUXDB_TOKEN=secret\n", encoding="utf-8")
     write_supervisor_pidfile("run_01", ManagedPid(pid=321, starttime=None), runner_home=tmp_path)
     terminated: set[int] = set()
     monkeypatch.setattr(
@@ -582,9 +646,10 @@ def test_kill_without_workload_terminates_live_same_run_supervisor(
     assert result.exit_code == 0
     assert terminated == {321}
     assert not supervisor_pidfile_path("run_01", base=tmp_path).exists()
+    assert not monitoring_properties.exists()
 
 
-def test_kill_waits_for_inflight_start_identity(
+def test_kill_waits_for_inflight_start_identity_without_monitoring_secret(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
     terminated: set[int] = set()
@@ -609,9 +674,37 @@ def test_kill_waits_for_inflight_start_identity(
     assert terminated == {321}
 
 
+def test_kill_fails_when_monitoring_secret_cannot_be_deleted(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    monitoring_properties = monitoring_properties_path("run_01", base=tmp_path)
+    monitoring_properties.parent.mkdir(parents=True)
+    monitoring_properties.write_text("SURGEPILOT_INFLUXDB_TOKEN=secret\n", encoding="utf-8")
+    original_unlink = Path.unlink
+
+    def fail_monitoring_unlink(path: Path, *args, **kwargs) -> None:
+        if path == monitoring_properties:
+            raise OSError("read-only filesystem")
+        original_unlink(path, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "unlink", fail_monitoring_unlink)
+    monkeypatch.setattr(runner_cli, "start_workload_wait_seconds", lambda: 0.0)
+
+    result = CliRunner().invoke(
+        cli, ["kill", "--run-id", "run_01"], env={"RUNNER_HOME": str(tmp_path)}
+    )
+
+    assert result.exit_code != 0
+    assert "Monitoring secret cleanup failed" in result.output
+    assert monitoring_properties.exists()
+
+
 def test_kill_rereads_workload_after_terminating_supervisor(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
+    monitoring_properties = monitoring_properties_path("run_01", base=tmp_path)
+    monitoring_properties.parent.mkdir(parents=True)
+    monitoring_properties.write_text("SURGEPILOT_INFLUXDB_TOKEN=secret\n", encoding="utf-8")
     write_supervisor_pidfile("run_01", ManagedPid(pid=321, starttime=None), runner_home=tmp_path)
     terminated: set[int] = set()
 
@@ -636,11 +729,15 @@ def test_kill_rereads_workload_after_terminating_supervisor(
     assert terminated == {321, 654}
     assert not supervisor_pidfile_path("run_01", base=tmp_path).exists()
     assert not workload_pidfile_path("run_01", base=tmp_path).exists()
+    assert not monitoring_properties.exists()
 
 
-def test_kill_preserves_supervisor_pidfile_when_supervisor_exit_is_unconfirmed(
+def test_kill_preserves_monitoring_secret_when_supervisor_exit_is_unconfirmed(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
+    monitoring_properties = monitoring_properties_path("run_01", base=tmp_path)
+    monitoring_properties.parent.mkdir(parents=True)
+    monitoring_properties.write_text("SURGEPILOT_INFLUXDB_TOKEN=secret\n", encoding="utf-8")
     write_supervisor_pidfile("run_01", ManagedPid(pid=321, starttime=None), runner_home=tmp_path)
     monkeypatch.setattr(runner_cli, "managed_pid_alive", lambda managed, probe=None: True)
     monkeypatch.setattr(runner_cli, "terminate_group", lambda pgid: False)
@@ -650,6 +747,7 @@ def test_kill_preserves_supervisor_pidfile_when_supervisor_exit_is_unconfirmed(
     )
 
     assert result.exit_code != 0
+    assert monitoring_properties.exists()
     assert supervisor_pidfile_path("run_01", base=tmp_path).exists()
 
 
@@ -690,6 +788,9 @@ def test_kill_allows_cleanup_when_workload_leader_is_gone_but_group_member_lives
 def test_kill_preserves_workload_pidfile_after_failure(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
+    monitoring_properties = monitoring_properties_path("run_01", base=tmp_path)
+    monitoring_properties.parent.mkdir(parents=True)
+    monitoring_properties.write_text("SURGEPILOT_INFLUXDB_TOKEN=secret\n", encoding="utf-8")
     write_workload_pidfile("run_01", ManagedPid(pid=654, starttime=None), runner_home=tmp_path)
     monkeypatch.setattr(runner_cli, "terminate_group", lambda pgid: False)
 
@@ -699,6 +800,7 @@ def test_kill_preserves_workload_pidfile_after_failure(
 
     assert result.exit_code != 0
     assert workload_pidfile_path("run_01", base=tmp_path).exists()
+    assert monitoring_properties.exists()
 
 
 def test_cli_help_lists_runner_commands() -> None:
@@ -725,6 +827,7 @@ def test_start_fake_accepts_run_id_and_uses_protocol_words(tmp_path: Path) -> No
         env={
             "RUNNER_HOME": str(tmp_path),
             "RUNNER_FAKE_SCENARIO": "success",
+            "SURGEPILOT_EXPECTED_RUNTIME_VERSION": RUNTIME_VERSION,
         },
     )
 
@@ -855,14 +958,174 @@ def test_managed_runner_executes_bzt_bundle_and_uploads_artifacts(
     assert events[0]["runnerPid"] > 0
     assert events[-1]["details"]["processGroupExited"] is True
     assert {upload["artifact_type"] for upload in uploads} >= {
+        "artifacts_zip",
         "final_stats_csv",
         "taurus_log",
         "jmeter_log",
-        "run_log",
+        "debug_http_trace",
+        "debug_http_body_blob",
     }
     upload_types = [upload["artifact_type"] for upload in uploads]
-    assert "artifacts_zip" not in set(upload_types)
+    assert upload_types.index("debug_http_trace") < upload_types.index("debug_http_body_blob")
+    assert upload_types.index("debug_http_body_blob") < upload_types.index("artifacts_zip")
+    assert upload_types.index("debug_http_trace") < upload_types.index("final_stats_csv")
+    assert any(
+        upload["relative_path"] == "artifacts/debug-http-body-blobs/1-response.bin"
+        for upload in uploads
+    )
     assert "failed_requests_csv" not in set(upload_types)
+
+
+def test_diagnostic_archive_contains_only_safe_allowlisted_members(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    monkeypatch.setenv("RUNNER_HOME", str(tmp_path))
+    root = runner_cli.run_dir("run_01")
+    artifacts_dir = root / "bundle" / "artifacts"
+    body_blobs = artifacts_dir / "debug-http-body-blobs"
+    body_blobs.mkdir(parents=True)
+    (root / "logs").mkdir()
+    (root / "logs" / "runner.log").write_text("runner log\n")
+    (artifacts_dir / "bzt.log").write_text("taurus log\n")
+    (artifacts_dir / "jmeter.log").write_text("jmeter log\n")
+    (artifacts_dir / "final_stats.csv").write_text("label,throughput\n")
+    (artifacts_dir / "finalstats.csv").write_text("label,throughput\n")
+    (artifacts_dir / "debug-http-trace.jsonl").write_text('{"schemaVersion":1}\n')
+    (body_blobs / "1-response.bin").write_bytes(b"body")
+    (artifacts_dir / "errors.jtl").write_text("timeStamp,elapsed\n")
+    (artifacts_dir / ".hidden.jtl").write_text("hidden\n")
+    (artifacts_dir / ".tmp-artifacts.zip").write_bytes(b"tmp")
+    (artifacts_dir / "artifacts.zip").write_bytes(b"old archive")
+    (root / "secrets").mkdir()
+    (root / "secrets" / "runner-token").write_text("secret")
+    try:
+        (artifacts_dir / "linked.jtl").symlink_to(root / "logs" / "runner.log")
+    except OSError:
+        pass
+
+    members = runner_cli.iter_diagnostic_archive_members("run_01")
+
+    assert [relative_path for relative_path, _path in members] == [
+        "logs/runner.log",
+        "artifacts/bzt.log",
+        "artifacts/jmeter.log",
+        "artifacts/final_stats.csv",
+        "artifacts/finalstats.csv",
+        "artifacts/debug-http-trace.jsonl",
+        "artifacts/debug-http-body-blobs/1-response.bin",
+        "artifacts/errors.jtl",
+    ]
+
+    result = runner_cli.build_diagnostic_archive("run_01", max_bytes=1024 * 1024)
+
+    assert result.status == "uploaded"
+    assert result.artifact_type == "artifacts_zip"
+    assert result.relative_path == "artifacts/artifacts.zip"
+    assert result.path == artifacts_dir / "artifacts.zip"
+    with zipfile.ZipFile(result.path) as archive:
+        assert archive.namelist() == [relative_path for relative_path, _path in members]
+        assert "secrets/runner-token" not in archive.namelist()
+        assert "artifacts/.hidden.jtl" not in archive.namelist()
+        assert "artifacts/.tmp-artifacts.zip" not in archive.namelist()
+        assert "artifacts/linked.jtl" not in archive.namelist()
+
+
+def test_diagnostic_archive_oversize_is_skipped_and_temp_file_removed(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    monkeypatch.setenv("RUNNER_HOME", str(tmp_path))
+    root = runner_cli.run_dir("run_01")
+    (root / "logs").mkdir(parents=True)
+    (root / "logs" / "runner.log").write_text("runner log\n")
+    artifacts_dir = root / "bundle" / "artifacts"
+
+    result = runner_cli.build_diagnostic_archive("run_01", max_bytes=1)
+
+    assert result.status == "skipped_oversize"
+    assert result.artifact_type == "artifacts_zip"
+    assert result.relative_path == "artifacts/artifacts.zip"
+    assert not (artifacts_dir / "artifacts.zip").exists()
+    assert list(artifacts_dir.glob(".artifacts.zip.tmp.*")) == []
+
+
+def test_diagnostic_archive_oversize_preflight_does_not_write_zip_member(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    monkeypatch.setenv("RUNNER_HOME", str(tmp_path))
+    root = runner_cli.run_dir("run_01")
+    (root / "logs").mkdir(parents=True)
+    (root / "logs" / "runner.log").write_bytes(b"x" * 32)
+
+    def fail_if_called(self, filename, arcname=None, compress_type=None, compresslevel=None):
+        pytest.fail("oversized archive source should be skipped before writing ZIP members")
+
+    monkeypatch.setattr(zipfile.ZipFile, "write", fail_if_called)
+
+    result = runner_cli.build_diagnostic_archive("run_01", max_bytes=1)
+
+    assert result.status == "skipped_oversize"
+    assert not (root / "bundle" / "artifacts" / "artifacts.zip").exists()
+
+
+def test_managed_runner_uses_runtime_bzt_instead_of_path(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    events: list[dict] = []
+    bundle = write_run_bundle(tmp_path, "run_01")
+    write_fake_bzt(tmp_path)
+    path_bin = tmp_path / "path-bin"
+    path_bin.mkdir()
+    path_bzt = path_bin / "bzt"
+    path_bzt.write_text("#!/bin/sh\necho path bzt must not run >&2\nexit 99\n")
+    path_bzt.chmod(0o755)
+    monkeypatch.setattr(
+        "surgepilot_runner.cli.post_callback", lambda payload: events.append(payload)
+    )
+    monkeypatch.setattr("surgepilot_runner.cli.upload_artifact", lambda **kwargs: None)
+    monkeypatch.setenv("RUNNER_HOME", str(tmp_path))
+    monkeypatch.setenv("SURGEPILOT_NODE_ID", NODE_ID)
+    monkeypatch.setenv("PATH", f"{path_bin}{os.pathsep}{os.environ.get('PATH', '')}")
+
+    runner_cli.managed_run("run_01")
+
+    assert (bundle / "bzt.args").read_text() == "-n surgepilot.yml"
+    assert [event["eventType"] for event in events][-1] == "finished"
+
+
+def test_runner_skips_archive_upload_above_safe_threshold(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    uploads: list[dict] = []
+    bundle = write_run_bundle(tmp_path, "run_01")
+    artifacts_dir = bundle / "artifacts"
+    artifacts_dir.mkdir()
+    (artifacts_dir / "artifacts.zip").write_bytes(b"x" * 11)
+    (artifacts_dir / "final_stats.csv").write_text("label,throughput,succ,fail\n,1,1,0\n")
+    monkeypatch.setenv("RUNNER_HOME", str(tmp_path))
+    monkeypatch.setenv("SURGEPILOT_RUNNER_ARCHIVE_MAX_BYTES", "10")
+    monkeypatch.setattr(
+        "surgepilot_runner.cli.upload_artifact",
+        lambda **kwargs: (
+            uploads.append(kwargs)
+            or {
+                "artifactId": "01HZX3Y9M0E9W7Z6M5QK9S8P7C",
+                "sizeBytes": kwargs["path"].stat().st_size,
+                "sha256": "a" * 64,
+            }
+        ),
+    )
+
+    result = runner_cli.upload_run_artifacts("run_01", NODE_ID, 10, runtime_version=RUNTIME_VERSION)
+
+    assert result.next_seq == 11
+    assert [upload["artifact_type"] for upload in uploads] == ["final_stats_csv"]
+    assert [
+        (artifact.artifact_type, artifact.relative_path, artifact.status)
+        for artifact in result.results
+    ] == [
+        ("artifacts_zip", "artifacts/artifacts.zip", "skipped_oversize"),
+        ("final_stats_csv", "artifacts/final_stats.csv", "uploaded"),
+    ]
 
 
 def test_managed_runner_deletes_run_directory_after_terminal_ack_and_safe_uploads(
@@ -905,10 +1168,10 @@ def test_cleanup_gate_keeps_run_directory_when_terminal_callback_is_not_acked(
         terminal_callback_ack=False,
         artifact_results=[
             runner_cli.ArtifactUploadResult(
-                artifact_type="run_log",
-                relative_path="logs/runner.log",
+                artifact_type="artifacts_zip",
+                relative_path="artifacts/artifacts.zip",
                 status="uploaded",
-                path=root / "logs" / "runner.log",
+                path=root / "bundle" / "artifacts" / "artifacts.zip",
             )
         ],
         supervisor=runner_cli.ManagedPid(pid=os.getpid(), starttime=None),
@@ -931,10 +1194,10 @@ def test_cleanup_gate_keeps_run_directory_when_artifact_upload_failed(
         terminal_callback_ack=True,
         artifact_results=[
             runner_cli.ArtifactUploadResult(
-                artifact_type="final_stats_csv",
-                relative_path="artifacts/final_stats.csv",
+                artifact_type="artifacts_zip",
+                relative_path="artifacts/artifacts.zip",
                 status="uploaded",
-                path=root / "bundle" / "artifacts" / "final_stats.csv",
+                path=root / "bundle" / "artifacts" / "artifacts.zip",
             ),
             runner_cli.ArtifactUploadResult(
                 artifact_type="run_log",
@@ -965,10 +1228,10 @@ def test_cleanup_gate_keeps_run_directory_when_workload_group_is_live(
         terminal_callback_ack=True,
         artifact_results=[
             runner_cli.ArtifactUploadResult(
-                artifact_type="run_log",
-                relative_path="logs/runner.log",
+                artifact_type="artifacts_zip",
+                relative_path="artifacts/artifacts.zip",
                 status="uploaded",
-                path=root / "logs" / "runner.log",
+                path=root / "bundle" / "artifacts" / "artifacts.zip",
             )
         ],
         supervisor=runner_cli.ManagedPid(pid=os.getpid(), starttime=None),
@@ -997,10 +1260,10 @@ def test_cleanup_gate_keeps_run_directory_when_pidfile_is_uncertain(
         terminal_callback_ack=True,
         artifact_results=[
             runner_cli.ArtifactUploadResult(
-                artifact_type="run_log",
-                relative_path="logs/runner.log",
+                artifact_type="artifacts_zip",
+                relative_path="artifacts/artifacts.zip",
                 status="uploaded",
-                path=root / "logs" / "runner.log",
+                path=root / "bundle" / "artifacts" / "artifacts.zip",
             )
         ],
         supervisor=runner_cli.ManagedPid(pid=os.getpid(), starttime=None),
@@ -1133,14 +1396,13 @@ def test_managed_runner_maps_taurus_passfail_exit_to_finished_sla_failure(
 ) -> None:
     events: list[dict] = []
     write_run_bundle(tmp_path, RUN_ID, sla_evaluation_mode="passfail")
-    bin_dir = write_fake_bzt(tmp_path, exit_code=3)
+    write_fake_bzt(tmp_path, exit_code=3)
     monkeypatch.setattr(
         "surgepilot_runner.cli.post_callback", lambda payload: events.append(payload) or True
     )
     monkeypatch.setattr("surgepilot_runner.cli.upload_artifact", lambda **_kwargs: None)
     monkeypatch.setenv("RUNNER_HOME", str(tmp_path))
     monkeypatch.setenv("SURGEPILOT_NODE_ID", NODE_ID)
-    monkeypatch.setenv("PATH", f"{bin_dir}{os.pathsep}{os.environ.get('PATH', '')}")
 
     runner_cli.managed_run(RUN_ID)
 
@@ -1339,6 +1601,7 @@ def test_fake_runner_callbacks_validate_against_shared_schema(
     monkeypatch.setattr(
         "surgepilot_runner.cli.post_callback", lambda payload: events.append(payload)
     )
+    write_runtime_metadata(tmp_path)
 
     result = CliRunner().invoke(
         cli,
@@ -1347,6 +1610,7 @@ def test_fake_runner_callbacks_validate_against_shared_schema(
             "RUNNER_HOME": str(tmp_path),
             "SURGEPILOT_NODE_ID": NODE_ID,
             "RUNNER_FAKE_SCENARIO": "failed",
+            "SURGEPILOT_EXPECTED_RUNTIME_VERSION": RUNTIME_VERSION,
         },
     )
 
@@ -1382,6 +1646,7 @@ def test_fake_success_uploads_artifact_and_emits_artifact_callback(
         }
 
     monkeypatch.setattr("surgepilot_runner.cli.upload_artifact", fake_upload_artifact)
+    write_runtime_metadata(tmp_path)
 
     result = CliRunner().invoke(
         cli,
@@ -1390,6 +1655,7 @@ def test_fake_success_uploads_artifact_and_emits_artifact_callback(
             "RUNNER_HOME": str(tmp_path),
             "SURGEPILOT_NODE_ID": NODE_ID,
             "RUNNER_FAKE_SCENARIO": "success",
+            "SURGEPILOT_EXPECTED_RUNTIME_VERSION": RUNTIME_VERSION,
         },
     )
 
@@ -1428,6 +1694,7 @@ def test_managed_runner_callbacks_validate_against_shared_schema(
     )
     monkeypatch.setenv("RUNNER_HOME", str(tmp_path))
     monkeypatch.setenv("SURGEPILOT_NODE_ID", NODE_ID)
+    monkeypatch.setenv("SURGEPILOT_EXPECTED_RUNTIME_VERSION", RUNTIME_VERSION)
     monkeypatch.setenv("PATH", f"{bin_dir}{os.pathsep}{os.environ.get('PATH', '')}")
 
     runner_cli.managed_run(RUN_ID)
@@ -1470,7 +1737,7 @@ def test_stale_process_failure_callback_validates_against_shared_schema(
         process.wait(timeout=5)
 
 
-def test_runner_callback_schema_accepts_runner_artifact_types_and_sla_result() -> None:
+def test_runner_callback_schema_accepts_artifacts_zip_and_sla_result() -> None:
     artifact_payload = {
         "schemaVersion": "1",
         "eventType": "artifact",
@@ -1482,8 +1749,8 @@ def test_runner_callback_schema_accepts_runner_artifact_types_and_sla_result() -
         "eventTime": "2030-06-01T10:00:00.000Z",
         "details": {
             "artifactId": "01HZX3Y9M0E9W7Z6M5QK9S8P7D",
-            "artifactType": "run_log",
-            "relativePath": "logs/runner.log",
+            "artifactType": "artifacts_zip",
+            "relativePath": "artifacts/artifacts.zip",
             "sizeBytes": 12,
             "sha256": "a" * 64,
         },
@@ -1499,10 +1766,23 @@ def test_runner_callback_schema_accepts_runner_artifact_types_and_sla_result() -
         "eventTime": "2030-06-01T10:00:01.000Z",
         "details": {"processGroupExited": True, "exitCode": 0, "slaResult": "passed"},
     }
-    artifacts_zip_payload = {
+    debug_trace_payload = {
         **artifact_payload,
         "eventId": "01HZX3Y9M0E9W7Z6M5QK9S8P7F",
-        "details": {**artifact_payload["details"], "artifactType": "artifacts_zip"},
+        "details": {
+            **artifact_payload["details"],
+            "artifactType": "debug_http_trace",
+            "relativePath": "artifacts/debug-http-trace.jsonl",
+        },
+    }
+    debug_body_blob_payload = {
+        **artifact_payload,
+        "eventId": "01HZX3Y9M0E9W7Z6M5QK9S8P7H",
+        "details": {
+            **artifact_payload["details"],
+            "artifactType": "debug_http_body_blob",
+            "relativePath": "artifacts/debug-http-body-blobs/1-response.bin",
+        },
     }
     failed_requests_payload = {
         **artifact_payload,
@@ -1510,15 +1790,10 @@ def test_runner_callback_schema_accepts_runner_artifact_types_and_sla_result() -
         "details": {**artifact_payload["details"], "artifactType": "failed_requests_csv"},
     }
 
-    for artifact_type in ["taurus_log", "jmeter_log", "final_stats_csv", "run_log"]:
-        accepted_payload = {
-            **artifact_payload,
-            "details": {**artifact_payload["details"], "artifactType": artifact_type},
-        }
-        CALLBACK_VALIDATOR.validate(accepted_payload)
+    CALLBACK_VALIDATOR.validate(artifact_payload)
+    CALLBACK_VALIDATOR.validate(debug_trace_payload)
+    CALLBACK_VALIDATOR.validate(debug_body_blob_payload)
     CALLBACK_VALIDATOR.validate(finished_payload)
-    with pytest.raises(Exception):
-        CALLBACK_VALIDATOR.validate(artifacts_zip_payload)
     with pytest.raises(Exception):
         CALLBACK_VALIDATOR.validate(failed_requests_payload)
 
@@ -1716,30 +1991,6 @@ def test_monitoring_wrapper_uses_jmx_copy_and_properties_for_enabled_run(tmp_pat
     assert BACKEND_LISTENER_CLASSNAME in injected_path.read_text(encoding="utf-8")
 
 
-def test_start_cleans_monitoring_secret_when_child_exits_before_ready(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
-) -> None:
-    class ExitedProcess:
-        pid = 999999
-
-        def poll(self) -> int:
-            return 1
-
-    monitoring_properties = monitoring_properties_path(RUN_ID, base=tmp_path)
-    monitoring_properties.parent.mkdir(parents=True)
-    monitoring_properties.write_text("SURGEPILOT_INFLUXDB_TOKEN=secret\n", encoding="utf-8")
-    monkeypatch.setattr(runner_cli.subprocess, "Popen", lambda *args, **kwargs: ExitedProcess())
-    monkeypatch.setattr(runner_cli, "start_workload_wait_seconds", lambda: 0.01)
-
-    result = CliRunner().invoke(
-        cli, ["start", "--run-id", RUN_ID], env={"RUNNER_HOME": str(tmp_path)}
-    )
-
-    assert result.exit_code != 0
-    assert "managed runner failed to start" in result.output
-    assert not monitoring_properties.exists()
-
-
 def test_managed_runner_removes_monitoring_properties_when_bundle_is_invalid(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
@@ -1779,59 +2030,20 @@ def test_managed_runner_cleans_monitoring_secret_when_readiness_setup_fails(
     assert not monitoring_properties.exists()
 
 
-def test_kill_without_workload_removes_monitoring_properties(tmp_path: Path) -> None:
-    monitoring_properties = monitoring_properties_path("run_01", base=tmp_path)
+def test_start_removes_monitoring_properties_when_runtime_is_mismatched(tmp_path: Path) -> None:
+    write_runtime_metadata(tmp_path, version="runtime-old")
+    monitoring_properties = monitoring_properties_path(RUN_ID, base=tmp_path)
     monitoring_properties.parent.mkdir(parents=True)
     monitoring_properties.write_text("SURGEPILOT_INFLUXDB_TOKEN=secret\n", encoding="utf-8")
 
     result = CliRunner().invoke(
-        cli, ["kill", "--run-id", "run_01"], env={"RUNNER_HOME": str(tmp_path)}
+        cli,
+        ["start", "--run-id", RUN_ID],
+        env={
+            "RUNNER_HOME": str(tmp_path),
+            "SURGEPILOT_EXPECTED_RUNTIME_VERSION": RUNTIME_VERSION,
+        },
     )
 
-    assert result.exit_code == 0
-    assert "no managed process" in result.output
+    assert result.exit_code != 0
     assert not monitoring_properties.exists()
-
-
-def test_kill_fails_when_monitoring_secret_cannot_be_deleted(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
-) -> None:
-    monitoring_properties = monitoring_properties_path("run_01", base=tmp_path)
-    monitoring_properties.parent.mkdir(parents=True)
-    monitoring_properties.write_text("SURGEPILOT_INFLUXDB_TOKEN=secret\n", encoding="utf-8")
-    original_unlink = Path.unlink
-
-    def fail_monitoring_unlink(path: Path, *args, **kwargs) -> None:
-        if path == monitoring_properties:
-            raise OSError("read-only filesystem")
-        original_unlink(path, *args, **kwargs)
-
-    monkeypatch.setattr(Path, "unlink", fail_monitoring_unlink)
-    monkeypatch.setattr(runner_cli, "start_workload_wait_seconds", lambda: 0.0)
-
-    result = CliRunner().invoke(
-        cli, ["kill", "--run-id", "run_01"], env={"RUNNER_HOME": str(tmp_path)}
-    )
-
-    assert result.exit_code != 0
-    assert "Monitoring secret cleanup failed" in result.output
-    assert monitoring_properties.exists()
-
-
-def test_kill_preserves_monitoring_secret_when_supervisor_exit_is_unconfirmed(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
-) -> None:
-    monitoring_properties = monitoring_properties_path("run_01", base=tmp_path)
-    monitoring_properties.parent.mkdir(parents=True)
-    monitoring_properties.write_text("SURGEPILOT_INFLUXDB_TOKEN=secret\n", encoding="utf-8")
-    write_supervisor_pidfile("run_01", ManagedPid(pid=321, starttime=None), runner_home=tmp_path)
-    monkeypatch.setattr(runner_cli, "managed_pid_alive", lambda managed, probe=None: True)
-    monkeypatch.setattr(runner_cli, "terminate_group", lambda pgid: False)
-
-    result = CliRunner().invoke(
-        cli, ["kill", "--run-id", "run_01"], env={"RUNNER_HOME": str(tmp_path)}
-    )
-
-    assert result.exit_code != 0
-    assert monitoring_properties.exists()
-    assert supervisor_pidfile_path("run_01", base=tmp_path).exists()

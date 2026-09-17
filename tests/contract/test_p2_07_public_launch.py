@@ -215,17 +215,15 @@ def test_repository_has_mit_security_and_open_contribution_policies() -> None:
 def test_demo_recording_guide_is_reproducible_and_does_not_claim_a_video_exists() -> None:
     guide = (LAUNCH_ROOT / "demo-recording-guide.md").read_text(encoding="utf-8")
 
-    assert "60–120 second" in guide
-    assert "clean supported host" in guide
-    assert "documented installation path" in guide
-    assert "web-compatible format" in guide
-    assert "must not be linked until the owner has reviewed" in guide
-    for sensitive_item in ("credential", "token", "email", "private IP", "personal path"):
+    assert "60–120 seconds" in guide
+    assert "make start-full-stack" in guide
+    assert "OBS Studio" in guide
+    assert "ffmpeg" in guide
+    assert "-movflags +faststart" in guide
+    for sensitive_item in (".env", "Personal Access Token", "email", "private IP"):
         assert sensitive_item in guide
-    assert "Do not present synthetic Landing dashboard" in guide
-    assert "required adjacent demonstration labels" in guide
-    assert PUBLIC_REPOSITORY in guide
-    assert "without a Star count" in guide
+    assert "No demo video is included" in guide
+    assert "Do not claim that a recording exists" in guide
 
 
 def test_launch_runbook_keeps_every_public_action_behind_manual_gates() -> None:
@@ -234,33 +232,33 @@ def test_launch_runbook_keeps_every_public_action_behind_manual_gates() -> None:
 
     required_gates = (
         "Freeze private writes",
+        "privacy, license, and repository gate",
         "latentrun/SurgePilot",
-        "ghcr.io/latentrun",
-        "verification",
-        "baseline release identity",
+        "make verify",
+        "immutable baseline tag",
         "anonymous installation",
-        "Pages",
+        "GitHub Pages",
         "public visibility",
         "Rollback",
     )
     for gate in required_gates:
         assert gate in normalized_runbook
     assert (
-        "Do not run any public-activation step without repository-owner approval"
+        "Do not run any public-activation step without the repository owner's approval"
         in normalized_runbook
     )
     assert "AI-AUTHORSHIP.md" in runbook
+    assert "release.yml" in runbook
 
 
 def test_community_drafts_are_english_first_and_forbid_fake_or_mass_distribution() -> None:
     drafts = (LAUNCH_ROOT / "community-launch-drafts.md").read_text(encoding="utf-8")
 
-    for section in ("## Short announcement", "## Technical announcement", "## Demo announcement"):
-        assert section in drafts
-    assert drafts.index("## Short announcement") < drafts.index("## Technical announcement")
-    assert drafts.index("## Technical announcement") < drafts.index("## Demo announcement")
-    assert "Do not claim a Star count, adoption number, benchmark, production status" in drafts
-    assert "No AI provenance is required" in drafts
+    for channel in ("Show HN", "Reddit", "X / LinkedIn"):
+        assert channel in drafts
+    assert drafts.index("## English launch core") < drafts.index("## Optional Chinese adaptation")
+    assert "Do not cross-post every channel at once" in drafts
+    assert "Do not invent benchmarks, adoption, users, Stars, or production status" in drafts
     assert PUBLIC_REPOSITORY in drafts
     assert PUBLIC_SITE in drafts
     assert not re.search(
@@ -281,7 +279,7 @@ def test_repository_metadata_is_ready_for_manual_github_configuration() -> None:
     assert "docs/site/public/surgepilot-architecture.jpg" in metadata
     assert "Website" in metadata
     assert PUBLIC_SITE in metadata
-    assert "Discussions: disabled" in metadata
+    assert "GitHub Discussions: disabled at launch" in metadata
 
 
 def test_private_pages_workflow_builds_without_deployment_authority() -> None:
@@ -309,21 +307,19 @@ def test_private_pages_workflow_builds_without_deployment_authority() -> None:
 def test_public_readiness_audit_records_redacted_results_and_manual_blockers() -> None:
     audit = (LAUNCH_ROOT / "public-readiness-audit.md").read_text(encoding="utf-8")
 
-    assert "Audit status: blocked" in audit
+    assert "Overall status: BLOCKED" in audit
     for category in (
         "Credential filenames and secret material",
         "Private endpoints and IP addresses",
         "Personal filesystem paths",
-        "Email-like strings and author metadata",
+        "Git author emails",
         "Asset and license provenance",
-        "Repository and package namespace",
+        "Repository and package namespace migration",
     ):
         assert category in audit
-    assert "Owner approval required" in audit
-    assert "reviewed classifications" in audit
+    assert "Raw matches are intentionally not copied" in audit
+    assert "owner decision required" in audit.lower()
     assert "latentrun/SurgePilot" in audit
-    assert "ghcr.io/latentrun" in audit
-    assert "Baseline and release readiness" in audit
-    assert "Pending" in audit
+    assert "Baseline tag is still pending" in audit
     for replaced_command in ("git ls-files", "git grep", "git log"):
         assert replaced_command not in audit

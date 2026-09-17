@@ -26,6 +26,7 @@ from app.schemas.runs import (
 from app.schemas.monitoring import RunMonitoringLinkResponse
 from app.services.monitoring import get_run_monitoring_link
 from app.services.run_reports import (
+    get_debug_http_body_blob_download,
     get_run_artifact_download,
     get_run_report,
     list_run_artifacts_report,
@@ -356,6 +357,49 @@ def download_run_artifact(
     validate_run_id(run_id)
     validate_artifact_id(artifact_id)
     download = get_run_artifact_download(
+        db, workspace_id=workspace.id, run_id=run_id, artifact_id=artifact_id
+    )
+    db.commit()
+    return StreamingResponse(
+        stream_iterator(download.stored),
+        media_type="application/octet-stream",
+        headers={
+            "Content-Disposition": f'attachment; filename="{download.artifact.display_filename}"',
+            "Cache-Control": "private, no-store",
+            "x-workspace-id": workspace.id,
+        },
+    )
+
+
+@router.get(
+    "/{runId}/debug-http-body-blobs/{artifactId}/download",
+    operation_id="downloadDebugHttpBodyBlob",
+    response_class=StreamingResponse,
+    responses={
+        200: {
+            "description": "Debug HTTP trace sidecar body bytes.",
+            "content": {
+                "application/octet-stream": {"schema": {"type": "string", "format": "binary"}}
+            },
+        },
+        400: ERROR_RESPONSE,
+        401: ERROR_RESPONSE,
+        403: ERROR_RESPONSE,
+        404: ERROR_RESPONSE,
+        409: ERROR_RESPONSE,
+        422: ERROR_RESPONSE,
+        503: ERROR_RESPONSE,
+    },
+)
+def download_debug_http_body_blob(
+    run_id: RunIdPath,
+    artifact_id: ArtifactIdPath,
+    db: DbDep,
+    workspace: CurrentWorkspaceDep,
+) -> StreamingResponse:
+    validate_run_id(run_id)
+    validate_artifact_id(artifact_id)
+    download = get_debug_http_body_blob_download(
         db, workspace_id=workspace.id, run_id=run_id, artifact_id=artifact_id
     )
     db.commit()

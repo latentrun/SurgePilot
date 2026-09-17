@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 from app.core.time import as_utc, utc_now
 from app.models.auth import Workspace
 from app.models.load_nodes import LOAD_NODE_STATUSES, LoadNode
-from app.models.runs import RUN_ARTIFACT_TYPES, Run, RunArtifact, RunSnapshot
+from app.models.runs import PUBLIC_RUN_ARTIFACT_TYPES, Run, RunArtifact, RunSnapshot
 from app.schemas.overview import (
     OverviewActiveRuns,
     OverviewLoadNodeStatusCounts,
@@ -135,7 +135,7 @@ def _artifact_summary_by_run(db: Session, run_ids: list[str]) -> dict[str, tuple
         .where(
             RunArtifact.run_id.in_(run_ids),
             RunArtifact.status == "available",
-            RunArtifact.artifact_type.in_(RUN_ARTIFACT_TYPES),
+            RunArtifact.artifact_type.in_(PUBLIC_RUN_ARTIFACT_TYPES),
         )
         .group_by(RunArtifact.run_id)
     ).all()

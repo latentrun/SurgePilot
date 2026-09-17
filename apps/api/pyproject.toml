@@ -3,8 +3,26 @@ name = "surgepilot-api"
 version = "0.1.0"
 requires-python = ">=3.12"
 dependencies = [
+  "alembic>=1.16.0,<2.0.0",
+  "argon2-cffi>=25.1.0,<26.0.0",
+  "email-validator>=2.2.0,<3.0.0",
   "fastapi[standard]>=0.115.0,<1.0.0",
+  "pydantic>=2.10.0,<3.0.0",
+  "psycopg[binary]>=3.2.0,<4.0.0",
+  "sqlalchemy>=2.0.0,<3.0.0",
+  "minio>=7.2.0,<8.0.0",
+  "cryptography>=43.0.0,<47.0.0",
+  "paramiko>=3.5.0,<4.0.0",
+  "jsonschema>=4.23.0,<5.0.0",
+  "PyYAML>=6.0.0,<7.0.0",
   "openapi-spec-validator>=0.9.0,<0.10.0",
+]
+
+[dependency-groups]
+dev = [
+  "httpx>=0.27.0",
+  "pytest>=8.3.0",
+  "ruff>=0.8.0",
 ]
 
 [build-system]

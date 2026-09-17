@@ -1,29 +1,42 @@
 from datetime import UTC, datetime
+from io import BytesIO
+import json
+from types import SimpleNamespace
 
 import pytest
-import yaml
 from pydantic import ValidationError
-from sqlalchemy import update
+from sqlalchemy import select, update
 from sqlalchemy.orm import Session
 
 from app.core.errors import AppError
+from app.core.ids import new_ulid
 from app.core.time import utc_now
-from app.models.auth import DEFAULT_WORKSPACE_ID, User, Workspace
+from app.models.auth import DEFAULT_WORKSPACE_ID, AuditEvent, SystemSetting, User
 from app.models.dependency_files import DependencyFile
-from app.models.runs import Run
-from app.models.scenarios import Scenario, ScenarioDependencyFileRef
+from app.models.runs import Run, RunSnapshot
+from app.models.scenarios import RunCreationDedupKey, Scenario, ScenarioDependencyFileRef
 from app.schemas.scenarios import ScenarioCreateRequest
 from app.services import scenarios as scenario_service
+from app.services.execution_bundles import build_debug_scenario_execution_bundle
 from app.services.dependency_files import delete_dependency_file_metadata
 from app.services.scenarios import (
     build_debug_taurus_yaml,
+    create_debug_run,
     create_scenario,
-    delete_scenario,
     patch_scenario,
     request_label,
 )
 
-OTHER_WORKSPACE_ID = "01HZX3Y9M0E9W7Z6M5QK9S8P9W"
+
+def test_request_label_retains_step_and_item_ids_when_path_is_long() -> None:
+    step_id = "01HZX3Y9M0E9W7Z6M5QK9S8P7D"
+    item_id = "01HZX3Y9M0E9W7Z6M5QK9S8P7E"
+
+    label = request_label("GET", "/" + ("long-segment/" * 30), step_id, item_id=item_id)
+
+    assert len(label) <= 200
+    assert f"step:{step_id}" in label
+    assert f"item:{item_id}" in label
 
 
 def minimal_step(step_id: str = "01HZX3Y9M0E9W7Z6M5QK9S8P7D") -> dict:
@@ -126,11 +139,10 @@ def seed_dependency_file(
     file_id: str = "01HZX3Y9M0E9W7Z6M5QK9S8P7C",
     filename: str = "users.csv",
     content_type: str = "text/csv",
-    workspace_id: str = DEFAULT_WORKSPACE_ID,
 ) -> DependencyFile:
     file = DependencyFile(
         id=file_id,
-        workspace_id=workspace_id,
+        workspace_id=DEFAULT_WORKSPACE_ID,
         filename=filename,
         content_type=content_type,
         size_bytes=16,
@@ -144,37 +156,6 @@ def seed_dependency_file(
     db_session.add(file)
     db_session.flush()
     return file
-
-
-def seed_scenario(db_session: Session, user: User, **overrides: object) -> Scenario:
-    return create_scenario(
-        db_session,
-        workspace_id=DEFAULT_WORKSPACE_ID,
-        actor=user,
-        payload=scenario_payload(**overrides),
-    )
-
-
-def env_variables() -> dict[str, str]:
-    return {
-        "base_url": "https://api.example.internal",
-        "token": "regular-token",
-        "page": "first",
-    }
-
-
-def test_request_label_is_bounded_to_documented_length() -> None:
-    label = request_label("GET", "/" + ("long-segment/" * 30))
-    assert len(label) <= 200
-    assert label.startswith("GET /")
-    assert label == ("GET /" + ("long-segment/" * 30))[:200]
-
-
-def test_ms_to_taurus_time_uses_compact_human_readable_units() -> None:
-    assert scenario_service.ms_to_taurus_time(0) == "0ms"
-    assert scenario_service.ms_to_taurus_time(500) == "500ms"
-    assert scenario_service.ms_to_taurus_time(30_000) == "30s"
-    assert scenario_service.ms_to_taurus_time(1_500) == "1s500ms"
 
 
 def test_create_patch_and_dependency_refs_are_transactional(db_session: Session) -> None:
@@ -219,136 +200,6 @@ def test_create_patch_and_dependency_refs_are_transactional(db_session: Session)
     assert (
         db_session.query(ScenarioDependencyFileRef).filter_by(scenario_id=scenario.id).all() == []
     )
-
-
-def test_upload_file_refs_create_upload_file_rows_but_inline_scripts_do_not(
-    db_session: Session,
-) -> None:
-    user = seed_user(db_session)
-    csv_file = seed_dependency_file(db_session, user)
-    upload_file = seed_dependency_file(
-        db_session, user, file_id="01HZX3Y9M0E9W7Z6M5QK9S8P7D", filename="orders.json"
-    )
-    step = minimal_step("01HZX3Y9M0E9W7Z6M5QK9S8P7E")
-    step["method"] = "POST"
-    step["queryParams"] = []
-    step["headers"] = []
-    step["body"] = {"type": "none", "contentType": None, "rawText": None, "formFields": []}
-    step["uploadFiles"] = [
-        {
-            "id": "01HZX3Y9M0E9W7Z6M5QK9S8P7F",
-            "fieldName": "payload",
-            "dependencyFileId": upload_file.id,
-            "mimeType": "application/json",
-            "enabled": True,
-        }
-    ]
-    step["scripts"] = [
-        {
-            "id": "01HZX3Y9M0E9W7Z6M5QK9S8P7G",
-            "execute": "before",
-            "language": "groovy",
-            "scriptText": "vars.put('trace', '1')",
-            "enabled": True,
-        }
-    ]
-    scenario = create_scenario(
-        db_session,
-        workspace_id=DEFAULT_WORKSPACE_ID,
-        actor=user,
-        payload=scenario_payload(
-            dataSources=[
-                {
-                    "id": "01HZX3Y9M0E9W7Z6M5QK9S8P7M",
-                    "dependencyFileId": csv_file.id,
-                    "displayName": csv_file.filename,
-                    "delimiter": ",",
-                    "quoted": None,
-                    "loop": True,
-                    "variableNames": ["page"],
-                    "randomOrder": False,
-                    "enabled": True,
-                }
-            ],
-            steps=[step],
-        ),
-    )
-
-    refs = db_session.query(ScenarioDependencyFileRef).filter_by(scenario_id=scenario.id).all()
-    assert sorted((ref.dependency_file_id, ref.ref_type, ref.step_id) for ref in refs) == [
-        (csv_file.id, "data_source", None),
-        (upload_file.id, "upload_file", step["id"]),
-    ]
-
-
-def test_disabled_dependency_file_entries_are_ignored_for_refs(db_session: Session) -> None:
-    user = seed_user(db_session)
-    file = seed_dependency_file(db_session, user)
-    scenario = create_scenario(
-        db_session,
-        workspace_id=DEFAULT_WORKSPACE_ID,
-        actor=user,
-        payload=scenario_payload(
-            dataSources=[
-                {
-                    "id": "01HZX3Y9M0E9W7Z6M5QK9S8P7M",
-                    "dependencyFileId": "01HZX3Y9M0E9W7Z6M5QK9S8P9Q",
-                    "displayName": "ignored.csv",
-                    "delimiter": ",",
-                    "quoted": None,
-                    "loop": True,
-                    "variableNames": [],
-                    "randomOrder": False,
-                    "enabled": False,
-                }
-            ]
-        ),
-    )
-
-    assert (
-        db_session.query(ScenarioDependencyFileRef).filter_by(scenario_id=scenario.id).all() == []
-    )
-
-
-def test_cross_workspace_dependency_file_is_rejected(db_session: Session) -> None:
-    user = seed_user(db_session)
-    db_session.add(
-        Workspace(
-            id=OTHER_WORKSPACE_ID,
-            name="Other Workspace",
-            status="active",
-            created_at=datetime.now(UTC),
-            updated_at=datetime.now(UTC),
-        )
-    )
-    db_session.flush()
-    other_file = seed_dependency_file(
-        db_session, user, file_id="01HZX3Y9M0E9W7Z6M5QK9S8P9Q", workspace_id=OTHER_WORKSPACE_ID
-    )
-
-    with pytest.raises(AppError) as exc_info:
-        create_scenario(
-            db_session,
-            workspace_id=DEFAULT_WORKSPACE_ID,
-            actor=user,
-            payload=scenario_payload(
-                dataSources=[
-                    {
-                        "id": "01HZX3Y9M0E9W7Z6M5QK9S8P7M",
-                        "dependencyFileId": other_file.id,
-                        "displayName": other_file.filename,
-                        "delimiter": ",",
-                        "quoted": None,
-                        "loop": True,
-                        "variableNames": ["page"],
-                        "randomOrder": False,
-                        "enabled": True,
-                    }
-                ]
-            ),
-        )
-
-    assert exc_info.value.code == "RESOURCE_NOT_FOUND"
 
 
 def test_scenario_validation_rejects_duplicate_headers_and_get_body(db_session: Session) -> None:
@@ -400,43 +251,6 @@ def test_scenario_validation_rejects_duplicate_step_ids(db_session: Session) -> 
 
     assert exc_info.value.code == "VALIDATION_ERROR"
     assert {detail["code"] for detail in exc_info.value.details} == {"duplicate_step_id"}
-
-
-def test_put_with_multiple_enabled_upload_files_is_rejected(db_session: Session) -> None:
-    user = seed_user(db_session)
-    first_file = seed_dependency_file(db_session, user)
-    second_file = seed_dependency_file(
-        db_session, user, file_id="01HZX3Y9M0E9W7Z6M5QK9S8P9R", filename="payload.json"
-    )
-    step = minimal_step()
-    step["method"] = "PUT"
-    step["queryParams"] = []
-    step["headers"] = []
-    step["uploadFiles"] = [
-        {
-            "id": "01HZX3Y9M0E9W7Z6M5QK9S8P9S",
-            "fieldName": "one",
-            "dependencyFileId": first_file.id,
-            "enabled": True,
-        },
-        {
-            "id": "01HZX3Y9M0E9W7Z6M5QK9S8P9T",
-            "fieldName": "two",
-            "dependencyFileId": second_file.id,
-            "enabled": True,
-        },
-    ]
-
-    with pytest.raises(AppError) as exc_info:
-        create_scenario(
-            db_session,
-            workspace_id=DEFAULT_WORKSPACE_ID,
-            actor=user,
-            payload=scenario_payload(steps=[step]),
-        )
-
-    assert exc_info.value.code == "VALIDATION_ERROR"
-    assert {detail["code"] for detail in exc_info.value.details} == {"too_many_upload_files"}
 
 
 def test_scenario_schema_rejects_blank_name_and_invalid_csv_delimiter() -> None:
@@ -539,67 +353,6 @@ def test_scenario_runtime_validation_rejects_empty_enabled_assertion_fields() ->
     assert "steps[0].assertions[3].jsonpath" in fields
 
 
-def test_enabled_script_requires_non_blank_script_text(db_session: Session) -> None:
-    user = seed_user(db_session)
-    step = minimal_step()
-    step["scripts"] = [
-        {
-            "id": "01HZX3Y9M0E9W7Z6M5QK9S8P8V",
-            "execute": "before",
-            "language": "groovy",
-            "scriptText": "   ",
-            "enabled": True,
-        }
-    ]
-
-    with pytest.raises(AppError) as exc_info:
-        create_scenario(
-            db_session,
-            workspace_id=DEFAULT_WORKSPACE_ID,
-            actor=user,
-            payload=scenario_payload(steps=[step]),
-        )
-
-    assert exc_info.value.code == "VALIDATION_ERROR"
-    assert {detail["code"] for detail in exc_info.value.details} == {"script_text_required"}
-
-
-def test_disabled_script_and_disabled_step_skip_script_validation(
-    db_session: Session,
-) -> None:
-    user = seed_user(db_session)
-    disabled_script_step = minimal_step("01HZX3Y9M0E9W7Z6M5QK9S8P8X")
-    disabled_script_step["scripts"] = [
-        {
-            "id": "01HZX3Y9M0E9W7Z6M5QK9S8P8Y",
-            "execute": "before",
-            "language": "groovy",
-            "scriptText": "   ",
-            "enabled": False,
-        }
-    ]
-    disabled_step = minimal_step("01HZX3Y9M0E9W7Z6M5QK9S8P8Z")
-    disabled_step["enabled"] = False
-    disabled_step["scripts"] = [
-        {
-            "id": "01HZX3Y9M0E9W7Z6M5QK9S8P9A",
-            "execute": "after",
-            "language": "groovy",
-            "scriptText": "",
-            "enabled": True,
-        }
-    ]
-
-    scenario = create_scenario(
-        db_session,
-        workspace_id=DEFAULT_WORKSPACE_ID,
-        actor=user,
-        payload=scenario_payload(steps=[disabled_script_step, disabled_step]),
-    )
-
-    assert scenario.id
-
-
 def test_enabled_step_variable_extraction_uses_only_executable_children() -> None:
     raw_step = {
         "path": "/v1/${path_var}",
@@ -619,7 +372,7 @@ def test_enabled_step_variable_extraction_uses_only_executable_children() -> Non
             {
                 "execute": "before",
                 "language": "groovy",
-                "scriptText": "vars.put('x', '${not_a_variable}')",
+                "dependencyFileId": "01HZX3Y9M0E9W7Z6M5QK9S8P8S",
                 "enabled": True,
             }
         ],
@@ -648,8 +401,429 @@ def test_enabled_step_variable_extraction_uses_only_executable_children() -> Non
         "assertion_var",
     }.issubset(raw_refs)
     assert "disabled_query" not in raw_refs
-    assert "not_a_variable" not in raw_refs
     assert form_refs == {"form_var"}
+
+
+def test_enabled_script_dependency_ref_blocks_file_deletion_and_uses_script_file(
+    db_session: Session,
+) -> None:
+    user = seed_user(db_session)
+    script_file = seed_dependency_file(
+        db_session,
+        user,
+        file_id="01HZX3Y9M0E9W7Z6M5QK9S8P8S",
+        filename="setup.groovy",
+        content_type="text/x-groovy",
+    )
+    step = minimal_step()
+    step["queryParams"] = []
+    step["headers"] = []
+    step["scripts"] = [
+        {
+            "id": "01HZX3Y9M0E9W7Z6M5QK9S8P8T",
+            "execute": "before",
+            "language": "groovy",
+            "dependencyFileId": script_file.id,
+            "enabled": True,
+        }
+    ]
+
+    scenario = create_scenario(
+        db_session,
+        workspace_id=DEFAULT_WORKSPACE_ID,
+        actor=user,
+        payload=scenario_payload(steps=[step]),
+    )
+
+    refs = db_session.query(ScenarioDependencyFileRef).filter_by(scenario_id=scenario.id).all()
+    assert [(ref.dependency_file_id, ref.ref_type, ref.step_id) for ref in refs] == [
+        (script_file.id, "script", step["id"])
+    ]
+
+    yaml_text = build_debug_taurus_yaml(
+        scenario=scenario,
+        env_variables={"base_url": "https://api.example.internal"},
+        dependency_files=[script_file],
+        jmeter_path="/opt/surgepilot/apache-jmeter/bin/jmeter",
+        jmeter_version="5.4.2",
+    )
+
+    assert f"script-file: {scenario_service.bundle_file_path(script_file)}" in yaml_text
+    assert "script-text" not in yaml_text
+
+    with pytest.raises(AppError) as exc_info:
+        delete_dependency_file_metadata(db_session, file=script_file, actor_user_id=user.id)
+
+    assert exc_info.value.code == "FILE_IN_USE"
+
+
+def test_enabled_script_requires_groovy_dependency_file(db_session: Session) -> None:
+    user = seed_user(db_session)
+    text_file = seed_dependency_file(
+        db_session,
+        user,
+        file_id="01HZX3Y9M0E9W7Z6M5QK9S8P8U",
+        filename="setup.txt",
+        content_type="text/plain",
+    )
+    step = minimal_step()
+    step["scripts"] = [
+        {
+            "id": "01HZX3Y9M0E9W7Z6M5QK9S8P8V",
+            "execute": "before",
+            "language": "groovy",
+            "dependencyFileId": text_file.id,
+            "enabled": True,
+        }
+    ]
+
+    with pytest.raises(AppError) as exc_info:
+        create_scenario(
+            db_session,
+            workspace_id=DEFAULT_WORKSPACE_ID,
+            actor=user,
+            payload=scenario_payload(steps=[step]),
+        )
+
+    assert exc_info.value.code == "VALIDATION_ERROR"
+    assert exc_info.value.details == [
+        {
+            "field": "steps[0].scripts[0].dependencyFileId",
+            "code": "invalid_script_file",
+            "message": "Script Dependency File must be a .groovy file.",
+        }
+    ]
+
+
+def test_disabled_script_and_disabled_step_do_not_validate_or_write_script_refs(
+    db_session: Session,
+) -> None:
+    user = seed_user(db_session)
+    text_file = seed_dependency_file(
+        db_session,
+        user,
+        file_id="01HZX3Y9M0E9W7Z6M5QK9S8P8W",
+        filename="draft.txt",
+        content_type="text/plain",
+    )
+    disabled_script_step = minimal_step("01HZX3Y9M0E9W7Z6M5QK9S8P8X")
+    disabled_script_step["scripts"] = [
+        {
+            "id": "01HZX3Y9M0E9W7Z6M5QK9S8P8Y",
+            "execute": "before",
+            "language": "groovy",
+            "dependencyFileId": text_file.id,
+            "enabled": False,
+        }
+    ]
+    disabled_step = minimal_step("01HZX3Y9M0E9W7Z6M5QK9S8P8Z")
+    disabled_step["enabled"] = False
+    disabled_step["scripts"] = [
+        {
+            "id": "01HZX3Y9M0E9W7Z6M5QK9S8P9A",
+            "execute": "after",
+            "language": "groovy",
+            "dependencyFileId": text_file.id,
+            "enabled": True,
+        }
+    ]
+
+    scenario = create_scenario(
+        db_session,
+        workspace_id=DEFAULT_WORKSPACE_ID,
+        actor=user,
+        payload=scenario_payload(steps=[disabled_script_step, disabled_step]),
+    )
+
+    refs = db_session.query(ScenarioDependencyFileRef).filter_by(scenario_id=scenario.id).all()
+    assert [ref.ref_type for ref in refs] == []
+
+
+def test_scenario_script_rejects_inline_script_text_schema() -> None:
+    step = minimal_step()
+    step["scripts"] = [
+        {
+            "id": "01HZX3Y9M0E9W7Z6M5QK9S8P9B",
+            "execute": "before",
+            "language": "groovy",
+            "scriptText": "vars.put('x', '1')",
+            "enabled": True,
+        }
+    ]
+
+    with pytest.raises(ValidationError):
+        ScenarioCreateRequest.model_validate(scenario_payload(steps=[step]))
+
+
+def test_regexp_template_helpers_validate_group_references() -> None:
+    assert scenario_service._regexp_group_count("token=(\\w+)") == 1
+    assert scenario_service._regexp_group_count("[") is None
+    assert scenario_service._regexp_template_references_valid_group("1", 1) is True
+    assert scenario_service._regexp_template_references_valid_group("$1$", 1) is True
+    assert scenario_service._regexp_template_references_valid_group("$2$", 1) is False
+    assert scenario_service._regexp_template_references_valid_group("literal", 1) is False
+
+
+def test_disabled_steps_are_not_execution_validated(db_session: Session) -> None:
+    user = seed_user(db_session)
+    disabled_invalid_step = minimal_step("01HZX3Y9M0E9W7Z6M5QK9S8P8D")
+    disabled_invalid_step["enabled"] = False
+    disabled_invalid_step["headers"] = [
+        {"id": "01HZX3Y9M0E9W7Z6M5QK9S8P8F", "name": "Bad Header", "value": "x", "enabled": True}
+    ]
+    disabled_invalid_step["body"] = {
+        "type": "raw",
+        "contentType": "application/json",
+        "rawText": "{}",
+        "formFields": [],
+    }
+    disabled_invalid_step["uploadFiles"] = [
+        {
+            "id": "01HZX3Y9M0E9W7Z6M5QK9S8P8G",
+            "dependencyFileId": "01HZX3Y9M0E9W7Z6M5QK9S8P8H",
+            "fieldName": "file",
+            "enabled": True,
+        }
+    ]
+
+    scenario = create_scenario(
+        db_session,
+        workspace_id=DEFAULT_WORKSPACE_ID,
+        actor=user,
+        payload=scenario_payload(steps=[minimal_step(), disabled_invalid_step]),
+    )
+
+    assert scenario.id
+    assert (
+        db_session.query(ScenarioDependencyFileRef).filter_by(scenario_id=scenario.id).all() == []
+    )
+
+
+def test_disabled_step_children_do_not_contribute_missing_variables(db_session: Session) -> None:
+    user = seed_user(db_session)
+    step = minimal_step()
+    step["method"] = "POST"
+    step["queryParams"] = []
+    step["headers"] = [
+        {
+            "id": "01HZX3Y9M0E9W7Z6M5QK9S8P8F",
+            "name": "X-Draft",
+            "value": "${draft_token}",
+            "enabled": False,
+        }
+    ]
+    step["body"] = {
+        "type": "form",
+        "contentType": None,
+        "rawText": None,
+        "formFields": [
+            {
+                "id": "01HZX3Y9M0E9W7Z6M5QK9S8P8G",
+                "name": "draft",
+                "value": "${draft_form_value}",
+                "enabled": False,
+            }
+        ],
+    }
+    step["scripts"] = [
+        {
+            "id": "01HZX3Y9M0E9W7Z6M5QK9S8P8H",
+            "execute": "before",
+            "language": "groovy",
+            "dependencyFileId": "01HZX3Y9M0E9W7Z6M5QK9S8P8S",
+            "enabled": False,
+        }
+    ]
+    step["assertions"] = [
+        {
+            "id": "01HZX3Y9M0E9W7Z6M5QK9S8P8J",
+            "type": "body_contains",
+            "contains": "${draft_assertion_value}",
+            "regexp": False,
+            "not": False,
+            "enabled": False,
+        }
+    ]
+    step["extractors"] = []
+
+    scenario = create_scenario(
+        db_session,
+        workspace_id=DEFAULT_WORKSPACE_ID,
+        actor=user,
+        payload=scenario_payload(steps=[step]),
+    )
+
+    yaml_text = build_debug_taurus_yaml(
+        scenario=scenario,
+        env_variables={"base_url": "https://api.example.internal"},
+        dependency_files=[],
+        jmeter_path="/opt/surgepilot/apache-jmeter/bin/jmeter",
+        jmeter_version="5.4.2",
+    )
+
+    assert "draft_token" not in yaml_text
+
+
+def test_csv_header_based_data_source_allows_runtime_header_variables(
+    db_session: Session,
+) -> None:
+    user = seed_user(db_session)
+    file = seed_dependency_file(db_session, user)
+    step = minimal_step()
+    step["path"] = "/v1/users/${page}"
+    step["queryParams"] = []
+    step["headers"] = []
+    step["extractors"] = []
+    scenario = create_scenario(
+        db_session,
+        workspace_id=DEFAULT_WORKSPACE_ID,
+        actor=user,
+        payload=scenario_payload(
+            dataSources=[
+                {
+                    "id": "01HZX3Y9M0E9W7Z6M5QK9S8P7M",
+                    "dependencyFileId": file.id,
+                    "displayName": file.filename,
+                    "delimiter": ",",
+                    "quoted": None,
+                    "loop": True,
+                    "variableNames": [],
+                    "randomOrder": False,
+                    "enabled": True,
+                }
+            ],
+            steps=[step],
+        ),
+    )
+
+    yaml_text = build_debug_taurus_yaml(
+        scenario=scenario,
+        env_variables={"base_url": "https://api.example.internal"},
+        dependency_files=[file],
+        jmeter_path="/opt/surgepilot/apache-jmeter/bin/jmeter",
+        jmeter_version="5.4.2",
+    )
+
+    assert "data-sources:" in yaml_text
+    assert "variable-names" not in yaml_text
+    assert "${page}" in yaml_text
+
+
+def test_declared_csv_variable_names_satisfy_debug_variable_validation(
+    db_session: Session,
+) -> None:
+    user = seed_user(db_session)
+    file = seed_dependency_file(db_session, user)
+    step = minimal_step()
+    step["queryParams"] = []
+    step["headers"] = []
+    step["path"] = "/v1/users/${page}"
+    step["extractors"] = []
+    scenario = create_scenario(
+        db_session,
+        workspace_id=DEFAULT_WORKSPACE_ID,
+        actor=user,
+        payload=scenario_payload(
+            dataSources=[
+                {
+                    "id": "01HZX3Y9M0E9W7Z6M5QK9S8P7M",
+                    "dependencyFileId": file.id,
+                    "displayName": file.filename,
+                    "delimiter": ",",
+                    "quoted": None,
+                    "loop": True,
+                    "variableNames": ["page"],
+                    "randomOrder": False,
+                    "enabled": True,
+                }
+            ],
+            steps=[step],
+        ),
+    )
+
+    yaml_text = build_debug_taurus_yaml(
+        scenario=scenario,
+        env_variables={"base_url": "https://api.example.internal"},
+        dependency_files=[file],
+        jmeter_path="/opt/surgepilot/apache-jmeter/bin/jmeter",
+        jmeter_version="5.4.2",
+    )
+
+    assert "variable-names: page" in yaml_text
+
+
+def test_debug_variable_validation_reports_missing_active_reference() -> None:
+    content = scenario_payload(
+        steps=[
+            {
+                **minimal_step(),
+                "queryParams": [],
+                "headers": [],
+                "path": "/v1/users/${missing_page}",
+                "extractors": [],
+            }
+        ]
+    )
+
+    with pytest.raises(AppError) as exc_info:
+        scenario_service._validate_debug_variables(content, {"base_url": "https://api.example"})
+
+    assert exc_info.value.code == "VALIDATION_ERROR"
+    assert {detail["code"] for detail in exc_info.value.details} == {"missing_variable"}
+
+
+def test_debug_taurus_builder_rejects_unsafe_resolved_base_urls() -> None:
+    content = scenario_payload(
+        baseUrlExpression="${base_url}",
+        steps=[{**minimal_step(), "queryParams": [], "headers": [], "extractors": []}],
+    )
+
+    for value in [
+        "https://api.example.internal/../admin",
+        "https://api.example.internal/%2e%2e/admin",
+        "https://api.example.internal/has space",
+        "https://api.example.internal/path\nnext",
+    ]:
+        with pytest.raises(AppError) as exc_info:
+            scenario_service.build_debug_taurus_document_from_content(
+                scenario_content=content,
+                env_variables={"base_url": value},
+                dependency_files=[],
+                jmeter_path="/opt/surgepilot/apache-jmeter/bin/jmeter",
+                jmeter_version="5.4.2",
+            )
+        assert exc_info.value.code == "VALIDATION_ERROR"
+        assert {detail["code"] for detail in exc_info.value.details} == {"invalid_url"}
+
+
+def test_csv_data_source_variable_names_must_be_valid_identifiers(db_session: Session) -> None:
+    user = seed_user(db_session)
+    file = seed_dependency_file(db_session, user)
+
+    with pytest.raises(AppError) as exc_info:
+        create_scenario(
+            db_session,
+            workspace_id=DEFAULT_WORKSPACE_ID,
+            actor=user,
+            payload=scenario_payload(
+                dataSources=[
+                    {
+                        "id": "01HZX3Y9M0E9W7Z6M5QK9S8P7M",
+                        "dependencyFileId": file.id,
+                        "displayName": file.filename,
+                        "delimiter": ",",
+                        "quoted": None,
+                        "loop": True,
+                        "variableNames": ["user-id", ""],
+                        "randomOrder": False,
+                        "enabled": True,
+                    }
+                ]
+            ),
+        )
+
+    assert exc_info.value.code == "VALIDATION_ERROR"
+    assert {detail["code"] for detail in exc_info.value.details} == {"invalid_variable_name"}
 
 
 def test_regexp_extractors_must_have_valid_capture_group(db_session: Session) -> None:
@@ -712,110 +886,31 @@ def test_regexp_extractors_must_have_valid_capture_group(db_session: Session) ->
 def test_scenario_dependency_refs_block_dependency_file_deletion(db_session: Session) -> None:
     user = seed_user(db_session)
     file = seed_dependency_file(db_session, user)
-    seed_scenario(
+    create_scenario(
         db_session,
-        user,
-        dataSources=[
-            {
-                "id": "01HZX3Y9M0E9W7Z6M5QK9S8P7M",
-                "dependencyFileId": file.id,
-                "displayName": file.filename,
-                "delimiter": ",",
-                "quoted": None,
-                "loop": True,
-                "variableNames": ["page"],
-                "randomOrder": False,
-                "enabled": True,
-            }
-        ],
+        workspace_id=DEFAULT_WORKSPACE_ID,
+        actor=user,
+        payload=scenario_payload(
+            dataSources=[
+                {
+                    "id": "01HZX3Y9M0E9W7Z6M5QK9S8P7M",
+                    "dependencyFileId": file.id,
+                    "displayName": file.filename,
+                    "delimiter": ",",
+                    "quoted": None,
+                    "loop": True,
+                    "variableNames": ["page"],
+                    "randomOrder": False,
+                    "enabled": True,
+                }
+            ]
+        ),
     )
 
     with pytest.raises(AppError) as exc_info:
         delete_dependency_file_metadata(db_session, file=file, actor_user_id=user.id)
 
     assert exc_info.value.code == "FILE_IN_USE"
-
-
-def test_soft_deleted_scenario_no_longer_blocks_dependency_file_delete(
-    db_session: Session,
-) -> None:
-    user = seed_user(db_session)
-    file = seed_dependency_file(db_session, user)
-    scenario = seed_scenario(
-        db_session,
-        user,
-        dataSources=[
-            {
-                "id": "01HZX3Y9M0E9W7Z6M5QK9S8P7M",
-                "dependencyFileId": file.id,
-                "displayName": file.filename,
-                "delimiter": ",",
-                "quoted": None,
-                "loop": True,
-                "variableNames": ["page"],
-                "randomOrder": False,
-                "enabled": True,
-            }
-        ],
-    )
-    delete_scenario(db_session, scenario=scenario, actor=user)
-
-    delete_dependency_file_metadata(db_session, file=file, actor_user_id=user.id)
-    assert file.status == "deleted"
-
-
-def test_active_debug_run_blocks_scenario_delete(db_session: Session) -> None:
-    user = seed_user(db_session)
-    scenario = seed_scenario(db_session, user)
-    now = utc_now()
-    db_session.add(
-        Run(
-            id="01HZX3Y9M0E9W7Z6M5QK9S8P7R",
-            workspace_id=DEFAULT_WORKSPACE_ID,
-            run_type="debug",
-            state="running",
-            source_type="debug_scenario",
-            source_id=scenario.id,
-            selected_node_id="01HZX3Y9M0E9W7Z6M5QK9S8P7N",
-            triggered_by_user_id=user.id,
-            forced_convergence=False,
-            remote_start_requested_at=now,
-            created_at=now,
-            updated_at=now,
-        )
-    )
-    db_session.flush()
-
-    with pytest.raises(AppError) as exc_info:
-        delete_scenario(db_session, scenario=scenario, actor=user)
-
-    assert exc_info.value.code == "RESOURCE_IN_USE"
-
-
-def test_finished_run_does_not_block_scenario_soft_delete(db_session: Session) -> None:
-    user = seed_user(db_session)
-    scenario = seed_scenario(db_session, user)
-    now = utc_now()
-    db_session.add(
-        Run(
-            id="01HZX3Y9M0E9W7Z6M5QK9S8P7S",
-            workspace_id=DEFAULT_WORKSPACE_ID,
-            run_type="debug",
-            state="finished",
-            source_type="debug_scenario",
-            source_id=scenario.id,
-            selected_node_id="01HZX3Y9M0E9W7Z6M5QK9S8P7N",
-            triggered_by_user_id=user.id,
-            forced_convergence=False,
-            remote_start_requested_at=now,
-            created_at=now,
-            updated_at=now,
-        )
-    )
-    db_session.flush()
-
-    delete_scenario(db_session, scenario=scenario, actor=user)
-    assert scenario.deleted_at is not None
 
 
 def test_patch_scenario_rechecks_current_revision_before_update(db_session: Session) -> None:
@@ -842,312 +937,337 @@ def test_patch_scenario_rechecks_current_revision_before_update(db_session: Sess
     assert exc_info.value.code == "SCENARIO_REVISION_CONFLICT"
 
 
-def test_debug_variable_validation_reports_missing_active_reference() -> None:
-    content = scenario_payload(
-        steps=[
-            {
-                **minimal_step(),
-                "queryParams": [],
-                "headers": [],
-                "path": "/v1/users/${missing_page}",
-                "extractors": [],
-            }
-        ]
+def test_debug_run_snapshot_filters_disabled_steps_and_records_audit(
+    db_session: Session, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    user = seed_user(db_session)
+    script_file = seed_dependency_file(
+        db_session,
+        user,
+        file_id="01HZX3Y9M0E9W7Z6M5QK9S8P8S",
+        filename="setup.groovy",
+        content_type="text/x-groovy",
     )
-
-    with pytest.raises(AppError) as exc_info:
-        scenario_service._validate_debug_variables(content, {"base_url": "https://api.example"})
-
-    assert exc_info.value.code == "VALIDATION_ERROR"
-    assert {detail["code"] for detail in exc_info.value.details} == {"missing_variable"}
-
-
-def test_debug_variable_validation_accepts_env_and_earlier_extractors() -> None:
-    first_step = {**minimal_step("01HZX3Y9M0E9W7Z6M5QK9S8P8E")}
-    second_step = {
-        **minimal_step("01HZX3Y9M0E9W7Z6M5QK9S8P8F"),
-        "path": "/v1/users/${user_id}",
-        "queryParams": [],
-        "headers": [],
-        "extractors": [],
+    enabled_step = {**minimal_step(), "queryParams": [], "headers": [], "extractors": []}
+    enabled_step["scripts"] = [
+        {
+            "id": "01HZX3Y9M0E9W7Z6M5QK9S8P8T",
+            "execute": "before",
+            "language": "groovy",
+            "dependencyFileId": script_file.id,
+            "enabled": True,
+        }
+    ]
+    disabled_step = {**minimal_step("01HZX3Y9M0E9W7Z6M5QK9S8P8D"), "enabled": False}
+    disabled_step["body"] = {
+        "type": "raw",
+        "contentType": "application/json",
+        "rawText": '{"draft":"should-not-snapshot"}',
+        "formFields": [],
     }
-    content = scenario_payload(steps=[first_step, second_step])
+    scenario = create_scenario(
+        db_session,
+        workspace_id=DEFAULT_WORKSPACE_ID,
+        actor=user,
+        payload=scenario_payload(
+            baseUrlExpression="https://api.example.internal",
+            steps=[enabled_step, disabled_step],
+        ),
+    )
+    db_session.add(
+        SystemSetting(
+            key="jmeterMemoryXmx",
+            value_json="6G",
+            updated_by_user_id=user.id,
+            updated_at=utc_now(),
+        )
+    )
+    db_session.flush()
+    captured: dict[str, object] = {}
 
-    scenario_service._validate_debug_variables(content, env_variables())
+    def fake_create_run_execution(db: Session, execution) -> Run:
+        captured["snapshot"] = execution.snapshot_payload
+        now = utc_now()
+        run = Run(
+            id="01HZX3Y9M0E9W7Z6M5QK9S8P7R",
+            workspace_id=execution.workspace_id,
+            run_type="debug",
+            state="initializing",
+            source_type="debug_scenario",
+            source_id=execution.source_id,
+            selected_node_id=execution.selected_node_id,
+            triggered_by_user_id=user.id,
+            forced_convergence=False,
+            remote_start_requested_at=now,
+            created_at=now,
+            updated_at=now,
+        )
+        db.add(run)
+        db.flush()
+        db.add(
+            RunSnapshot(
+                id="01HZX3Y9M0E9W7Z6M5QK9S8P7Q",
+                run_id=run.id,
+                workspace_id=execution.workspace_id,
+                snapshot_version=1,
+                snapshot_hash=scenario_service._snapshot_hash(execution.snapshot_payload),
+                snapshot_json=execution.snapshot_payload,
+                created_at=now,
+            )
+        )
+        db.flush()
+        return run
 
+    monkeypatch.setattr(scenario_service, "create_run_execution", fake_create_run_execution)
 
-def test_debug_variable_validation_rejects_extractor_conflicts_with_env() -> None:
-    step = minimal_step()
-    step["extractors"][0]["variableName"] = "token"
-    content = scenario_payload(steps=[step])
-
-    with pytest.raises(AppError) as exc_info:
-        scenario_service._validate_debug_variables(content, env_variables())
-
-    assert exc_info.value.code == "VALIDATION_ERROR"
-    assert {detail["code"] for detail in exc_info.value.details} == {"variable_conflict"}
-
-
-def test_taurus_builder_rejects_unsafe_resolved_base_urls() -> None:
-    content = scenario_payload(
-        baseUrlExpression="${base_url}",
-        steps=[{**minimal_step(), "queryParams": [], "headers": [], "extractors": []}],
+    result = create_debug_run(
+        db_session,
+        workspace_id=DEFAULT_WORKSPACE_ID,
+        actor=user,
+        source_id=scenario.id,
+        expected_source_revision=scenario.revision,
+        env_group_id=None,
+        selected_node_id="01HZX3Y9M0E9W7Z6M5QK9S8P7N",
     )
 
-    for value in [
-        "https://api.example.internal/../admin",
-        "https://api.example.internal/%2e%2e/admin",
-        "https://api.example.internal/has space",
-        "https://api.example.internal/path\nnext",
-    ]:
-        with pytest.raises(AppError) as exc_info:
-            scenario_service.build_debug_taurus_document_from_content(
-                scenario_content=content,
-                env_variables={"base_url": value},
-                dependency_files=[],
-                jmeter_path="/opt/surgepilot/apache-jmeter/bin/jmeter",
-                jmeter_version="5.4.2",
+    snapshot = captured["snapshot"]
+    assert isinstance(snapshot, dict)
+    assert [step["id"] for step in snapshot["scenario"]["steps"]] == [enabled_step["id"]]
+    assert snapshot["dependencyFiles"] == [
+        {
+            "id": script_file.id,
+            "filename": script_file.filename,
+            "sizeBytes": script_file.size_bytes,
+            "sha256": script_file.sha256,
+            "refType": "script",
+            "stepId": enabled_step["id"],
+        }
+    ]
+    assert snapshot["jmeterMemoryXmx"] == "6G"
+    assert "should-not-snapshot" not in str(snapshot)
+    db_session.get(SystemSetting, "jmeterMemoryXmx").value_json = "8G"
+    db_session.flush()
+
+    class MemoryStorage:
+        def get_stream(self, *, bucket: str, object_key: str):
+            assert bucket == script_file.storage_bucket
+            assert object_key == script_file.storage_object_key
+            return SimpleNamespace(stream=BytesIO(b"vars.put('trace_id', 'abc')"), size_bytes=25)
+
+    monkeypatch.setattr(
+        "app.services.execution_bundles.get_storage_client", lambda: MemoryStorage()
+    )
+    bundle_files = build_debug_scenario_execution_bundle(
+        db_session,
+        run_id=result.run.id,
+        runner_home="/opt/surgepilot/runner",
+        settings=scenario_service.get_settings(),
+    )
+    bundle_by_path = {item.relative_path: item for item in bundle_files}
+    script_bundle_path = scenario_service.bundle_file_path(script_file)
+    assert script_bundle_path in bundle_by_path
+    generated_yaml = bundle_by_path["surgepilot.yml"].content.decode()
+    assert "memory-xmx: 6G" in generated_yaml
+    assert "memory-xmx: 8G" not in generated_yaml
+    manifest = json.loads(bundle_by_path["manifest.json"].content.decode())
+    assert manifest["dependencyFiles"] == [
+        {
+            "id": script_file.id,
+            "filename": script_file.filename,
+            "sizeBytes": script_file.size_bytes,
+            "sha256": script_file.sha256,
+            "bundlePath": script_bundle_path,
+        }
+    ]
+    yaml_text = bundle_by_path["surgepilot.yml"].content.decode()
+    assert f"script-file: {script_bundle_path}" in yaml_text
+    event = db_session.scalar(
+        select(AuditEvent).where(AuditEvent.event_type == "run.debug_requested")
+    )
+    assert event is not None
+    assert event.target_id == result.run.id
+    assert event.details_json["scenarioId"] == scenario.id
+    assert "steps" not in event.details_json
+
+
+def test_debug_run_rechecks_dedup_after_busy_race(
+    db_session: Session, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    user = seed_user(db_session)
+    scenario = create_scenario(
+        db_session,
+        workspace_id=DEFAULT_WORKSPACE_ID,
+        actor=user,
+        payload=scenario_payload(
+            baseUrlExpression="https://api.example.internal",
+            steps=[{**minimal_step(), "queryParams": [], "headers": [], "extractors": []}],
+        ),
+    )
+
+    def fake_create_run_execution(db: Session, execution) -> Run:
+        now = utc_now()
+        run = Run(
+            id=new_ulid(),
+            workspace_id=execution.workspace_id,
+            run_type="debug",
+            state="initializing",
+            source_type="debug_scenario",
+            source_id=execution.source_id,
+            selected_node_id=execution.selected_node_id,
+            triggered_by_user_id=user.id,
+            forced_convergence=False,
+            remote_start_requested_at=now,
+            created_at=now,
+            updated_at=now,
+        )
+        db.add(run)
+        db.flush()
+        snapshot_hash = scenario_service._snapshot_hash(execution.snapshot_payload)
+        dedup_hash = scenario_service._dedup_hash(
+            {
+                "workspaceId": DEFAULT_WORKSPACE_ID,
+                "triggeredByUserId": user.id,
+                "runType": "debug",
+                "sourceType": "debug_scenario",
+                "sourceId": scenario.id,
+                "scenarioRevision": scenario.revision,
+                "envGroupId": None,
+                "selectedNodeId": execution.selected_node_id,
+                "snapshotHash": snapshot_hash,
+            }
+        )
+        db.add(
+            RunCreationDedupKey(
+                id=new_ulid(),
+                workspace_id=DEFAULT_WORKSPACE_ID,
+                dedup_key_hash=dedup_hash,
+                run_id=run.id,
+                expires_at=now + scenario_service.timedelta(seconds=30),
+                created_at=now,
             )
-        assert exc_info.value.code == "VALIDATION_ERROR"
-        assert {detail["code"] for detail in exc_info.value.details} == {"invalid_url"}
+        )
+        db.flush()
+        raise AppError("LOAD_NODE_BUSY", "Load Node is busy.", 409)
+
+    monkeypatch.setattr(scenario_service, "create_run_execution", fake_create_run_execution)
+
+    result = create_debug_run(
+        db_session,
+        workspace_id=DEFAULT_WORKSPACE_ID,
+        actor=user,
+        source_id=scenario.id,
+        expected_source_revision=scenario.revision,
+        env_group_id=None,
+        selected_node_id="01HZX3Y9M0E9W7Z6M5QK9S8P7N",
+    )
+
+    assert result.deduplicated is True
+    assert result.status_code == 200
+
+
+def test_debug_run_rechecks_current_revision_before_snapshot(db_session: Session) -> None:
+    user = seed_user(db_session)
+    scenario = create_scenario(
+        db_session,
+        workspace_id=DEFAULT_WORKSPACE_ID,
+        actor=user,
+        payload=scenario_payload(
+            baseUrlExpression="https://api.example.internal",
+            steps=[{**minimal_step(), "queryParams": [], "headers": [], "extractors": []}],
+        ),
+    )
+    db_session.execute(
+        update(Scenario)
+        .where(Scenario.id == scenario.id)
+        .values(revision=2)
+        .execution_options(synchronize_session=False)
+    )
+
+    with pytest.raises(AppError) as exc_info:
+        create_debug_run(
+            db_session,
+            workspace_id=DEFAULT_WORKSPACE_ID,
+            actor=user,
+            source_id=scenario.id,
+            expected_source_revision=1,
+            env_group_id=None,
+            selected_node_id="01HZX3Y9M0E9W7Z6M5QK9S8P7N",
+        )
+
+    assert exc_info.value.code == "SCENARIO_REVISION_CONFLICT"
 
 
 def test_taurus_yaml_builder_emits_documented_jmeter_fields(db_session: Session) -> None:
     user = seed_user(db_session)
-    scenario = seed_scenario(db_session, user)
+    scenario = create_scenario(
+        db_session, workspace_id=DEFAULT_WORKSPACE_ID, actor=user, payload=scenario_payload()
+    )
 
     yaml_text = build_debug_taurus_yaml(
         scenario=scenario,
-        env_variables=env_variables(),
+        env_variables={
+            "base_url": "https://api.example.internal",
+            "token": "regular-token",
+            "page": "1",
+        },
         dependency_files=[],
         jmeter_path="/opt/surgepilot/apache-jmeter/bin/jmeter",
         jmeter_version="5.4.2",
     )
-    document = yaml.safe_load(yaml_text)
 
-    assert document["settings"] == {"env": {}}
-    modules = document["modules"]["jmeter"]
-    assert modules["path"] == "/opt/surgepilot/apache-jmeter/bin/jmeter"
-    assert modules["version"] == "5.4.2"
-    assert modules["detect-plugins"] is False
-    assert modules["force-ctg"] is False
-
-    execution = document["execution"]
-    assert execution == [
-        {"executor": "jmeter", "concurrency": 1, "iterations": 1, "scenario": "surgepilot_scenario"}
-    ]
-
-    scenario_doc = document["scenarios"]["surgepilot_scenario"]
-    assert scenario_doc["default-address"] == "https://api.example.internal"
-    assert scenario_doc["store-cache"] is True
-    assert scenario_doc["store-cookie"] is True
-    assert scenario_doc["keepalive"] is True
-    assert scenario_doc["follow-redirects"] is True
-    assert scenario_doc["retrieve-resources"] is False
-    assert scenario_doc["think-time"] == "0ms"
-    assert scenario_doc["timeout"] == "30s"
-    assert scenario_doc["variables"] == env_variables()
-
-    request = scenario_doc["requests"][0]
-    assert request["label"].startswith("GET /v1/users")
-    assert request["url"] == "/v1/users?page=first"
-    assert request["method"] == "GET"
-    assert request["headers"]["Authorization"] == "Bearer ${token}"
-    assert request["extract-jsonpath"]["user_id"] == {
-        "jsonpath": "$.data[0].id",
-        "default": "",
-        "match-no": 1,
-    }
-    assert request["assert"] == [
-        {"contains": ["200"], "subject": "http-code", "regexp": False}
-    ]
-    assert "storeCache" not in yaml_text
-    assert "followRedirects" not in yaml_text
-
-
-def test_taurus_yaml_builder_maps_csv_data_sources(db_session: Session) -> None:
-    user = seed_user(db_session)
-    file = seed_dependency_file(db_session, user)
-    step = minimal_step()
-    step["queryParams"] = []
-    step["headers"] = []
-    step["extractors"] = []
-    scenario = seed_scenario(
-        db_session,
-        user,
-        dataSources=[
-            {
-                "id": "01HZX3Y9M0E9W7Z6M5QK9S8P7M",
-                "dependencyFileId": file.id,
-                "displayName": file.filename,
-                "delimiter": ",",
-                "quoted": None,
-                "loop": True,
-                "variableNames": ["username", "password"],
-                "randomOrder": False,
-                "enabled": True,
-            }
-        ],
-        steps=[step],
-    )
-
-    document = yaml.safe_load(
-        build_debug_taurus_yaml(
-            scenario=scenario,
-            env_variables={"base_url": "https://api.example.internal"},
-            dependency_files=[file],
-            jmeter_path="/opt/surgepilot/apache-jmeter/bin/jmeter",
-            jmeter_version="5.4.2",
-        )
-    )
-    data_source = document["scenarios"]["surgepilot_scenario"]["data-sources"][0]
-    assert data_source["path"] == scenario_service.bundle_file_path(file)
-    assert data_source["delimiter"] == ","
-    assert data_source["variable-names"] == "username,password"
-    assert data_source["loop"] is True
-    assert data_source["random-order"] is False
-    assert "quoted" not in data_source
-
-
-def test_taurus_yaml_builder_emits_quoted_only_when_declared(db_session: Session) -> None:
-    user = seed_user(db_session)
-    file = seed_dependency_file(db_session, user)
-    base_data_source = {
-        "id": "01HZX3Y9M0E9W7Z6M5QK9S8P7M",
-        "dependencyFileId": file.id,
-        "displayName": file.filename,
-        "delimiter": ",",
-        "quoted": True,
-        "loop": True,
-        "variableNames": ["username"],
-        "randomOrder": True,
-        "enabled": True,
-    }
-    scenario = seed_scenario(
-        db_session, user, dataSources=[base_data_source], steps=[minimal_step()]
-    )
-
-    document = yaml.safe_load(
-        build_debug_taurus_yaml(
-            scenario=scenario,
-            env_variables=env_variables(),
-            dependency_files=[file],
-            jmeter_path="/opt/surgepilot/apache-jmeter/bin/jmeter",
-            jmeter_version="5.4.2",
-        )
-    )
-    data_source = document["scenarios"]["surgepilot_scenario"]["data-sources"][0]
-    assert data_source["quoted"] is True
-    assert data_source["random-order"] is True
-
-
-def test_taurus_yaml_builder_maps_upload_files_to_bundle_relative_paths(
-    db_session: Session,
-) -> None:
-    user = seed_user(db_session)
-    file = seed_dependency_file(
-        db_session, user, file_id="01HZX3Y9M0E9W7Z6M5QK9S8P9X", filename="payload.bin"
-    )
-    step = minimal_step()
-    step["method"] = "PUT"
-    step["queryParams"] = []
-    step["headers"] = []
-    step["extractors"] = []
-    step["uploadFiles"] = [
-        {
-            "id": "01HZX3Y9M0E9W7Z6M5QK9S8P9V",
-            "fieldName": "avatar",
-            "dependencyFileId": file.id,
-            "mimeType": "application/octet-stream",
-            "enabled": True,
-        }
-    ]
-    scenario = seed_scenario(db_session, user, steps=[step])
-
-    yaml_text = build_debug_taurus_yaml(
-        scenario=scenario,
-        env_variables={"base_url": "https://api.example.internal"},
-        dependency_files=[file],
-        jmeter_path="/opt/surgepilot/apache-jmeter/bin/jmeter",
-        jmeter_version="5.4.2",
-    )
-    document = yaml.safe_load(yaml_text)
-    request = document["scenarios"]["surgepilot_scenario"]["requests"][0]
-    expected_path = scenario_service.bundle_file_path(file)
-    assert request["upload-files"] == [
-        {"param": "avatar", "path": expected_path, "mime-type": "application/octet-stream"}
-    ]
-    assert expected_path.startswith("files/")
+    assert "executor: jmeter" in yaml_text
+    assert "concurrency: 1" in yaml_text
+    assert "iterations: 1" in yaml_text
+    assert "default-address: https://api.example.internal" in yaml_text
+    assert "follow-redirects: true" in yaml_text
+    assert "keepalive: true" in yaml_text
+    assert "timeout: 30s" in yaml_text
+    assert "extract-jsonpath:" in yaml_text
+    assert "subject: http-code" in yaml_text
+    assert "detect-plugins: false" in yaml_text
+    assert "memory-xmx: 4G" in yaml_text
+    assert "force-ctg: false" in yaml_text
+    assert "fix-log4j: false" in yaml_text
+    assert "fix-jars: false" in yaml_text
+    assert "aggregator: consolidator" in yaml_text
+    assert "class: bzt.modules.jmeter.JMeterExecutor" in yaml_text
+    assert "http: bzt.jmx.http.HTTPProtocolHandler" in yaml_text
+    assert "class: bzt.modules.provisioning.Local" in yaml_text
+    assert "class: bzt.modules.aggregator.ConsolidatingAggregator" in yaml_text
+    assert "class: bzt.modules.reporting.FinalStatus" in yaml_text
+    assert "class: bzt.modules.console.ConsoleStatusReporter" in yaml_text
+    assert "module: final-stats" in yaml_text
+    assert "dump-csv: artifacts/finalstats.csv" in yaml_text
+    assert "storage_object_key" not in yaml_text
     assert "dependency-files/not-returned" not in yaml_text
 
 
-def test_taurus_yaml_builder_applies_step_settings_overrides(db_session: Session) -> None:
+def test_taurus_yaml_builder_emits_step_keepalive_override(db_session: Session) -> None:
     user = seed_user(db_session)
     step = minimal_step()
-    step["method"] = "POST"
     step["settings"] = {
-        "thinkTimeMs": 500,
-        "timeoutMs": 1_500,
-        "followRedirects": False,
+        "thinkTimeMs": None,
+        "timeoutMs": None,
+        "followRedirects": None,
         "keepAlive": False,
     }
-    step["body"] = {
-        "type": "raw",
-        "contentType": "application/json",
-        "rawText": '{"ok": true}',
-        "formFields": [],
-    }
-    scenario = seed_scenario(db_session, user, steps=[step])
-
-    document = yaml.safe_load(
-        build_debug_taurus_yaml(
-            scenario=scenario,
-            env_variables=env_variables(),
-            dependency_files=[],
-            jmeter_path="/opt/surgepilot/apache-jmeter/bin/jmeter",
-            jmeter_version="5.4.2",
-        )
+    scenario = create_scenario(
+        db_session,
+        workspace_id=DEFAULT_WORKSPACE_ID,
+        actor=user,
+        payload=scenario_payload(steps=[step]),
     )
-    request = document["scenarios"]["surgepilot_scenario"]["requests"][0]
-    assert request["think-time"] == "500ms"
-    assert request["timeout"] == "1s500ms"
-    assert request["follow-redirects"] is False
-    assert request["keepalive"] is False
-    assert request["headers"]["Content-Type"] == "application/json"
-    assert request["body"] == '{"ok": true}'
-
-
-def test_taurus_yaml_builder_maps_inline_script_to_jsr223_script_text(
-    db_session: Session,
-) -> None:
-    user = seed_user(db_session)
-    step = minimal_step()
-    step["scripts"] = [
-        {
-            "id": "01HZX3Y9M0E9W7Z6M5QK9S8P8W",
-            "execute": "before",
-            "language": "groovy",
-            "scriptText": "vars.put('trace', 'abc')",
-            "enabled": True,
-        }
-    ]
-    scenario = seed_scenario(db_session, user, steps=[step])
 
     yaml_text = build_debug_taurus_yaml(
         scenario=scenario,
-        env_variables=env_variables(),
+        env_variables={
+            "base_url": "https://api.example.internal",
+            "token": "regular-token",
+            "page": "1",
+        },
         dependency_files=[],
         jmeter_path="/opt/surgepilot/apache-jmeter/bin/jmeter",
         jmeter_version="5.4.2",
     )
-    document = yaml.safe_load(yaml_text)
-    request = document["scenarios"]["surgepilot_scenario"]["requests"][0]
-    assert request["jsr223"] == [
-        {
-            "language": "groovy",
-            "execute": "before",
-            "script-text": "vars.put('trace', 'abc')",
-            "compile-cache": True,
-        }
-    ]
-    assert "script-file" not in yaml_text
+
+    assert "keepalive: false" in yaml_text

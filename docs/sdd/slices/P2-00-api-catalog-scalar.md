@@ -63,6 +63,7 @@ Governance prerequisites:
 7. Scalar hardening: Close request sending, Agent/MCP, hosted proxy, auth persistence, developer tools and non-SurgePilot topic switching entrances.
 8. Contracts: FastAPI/Pydantic schema is the true source of API contract; `@surgepilot/contracts` is generated after OpenAPI export, and the Web does not hand-write the request/response type.
 9. Tests / verification:API route/storage/contract tests, Web route/component tests, Scalar disabled-request assertions, no MinIO direct access assertions.
+10. ADR-0016/P2-04 system bootstrap exception: after first-Admin registration commits, a best-effort helper may reuse the existing service to import SurgePilot's own curated Web/business OpenAPI into Default Workspace once per active SHA-256.
 
 ## 4. Out of Scope
 
@@ -76,7 +77,7 @@ Governance prerequisites:
 8. The second set of UI component system, the second set of theme provider, hard-coded colors, and P0/P1 dark mode implementation.
 9. Runner, api-worker, Run Snapshot, Run state machine, Taurus builder or Load Node behavior changes.
 10. DB table name, column type, index, migration script, complete ORM/Pydantic/TS type handwritten design.
-11. User-provided, externally fetched, scheduled, startup-reconciled, background automatic OpenAPI ingestion, and the P2-04 first-Admin system OpenAPI bootstrap.
+11. User-provided, externally fetched, scheduled, startup-reconciled or background automatic OpenAPI ingestion. P2-04's one system-owned first-Admin bootstrap document is the only automatic import exception.
 
 ## 5. Preconditions
 
@@ -104,6 +105,7 @@ Governance prerequisites:
 | APC-10 | Delete affects only the API Catalog spec asset and stored spec content; it must not cascade into Scenario, Test Plan, Run or Artifact domains. |
 | APC-11 | No DB table/column/index detail is locked in this SDD; implementation must backfill actual storage facts after reading code and migrations. |
 | APC-12 | No independent docs service, queue, microservice, API Gateway, second theme provider or self-built OpenAPI renderer is introduced. |
+| APC-13 | ADR-0016/P2-04 may create one system-owned Default Workspace Catalog asset from the current curated Web/business OpenAPI after first-Admin registration commit; same-Workspace active SHA-256 is the idempotency key. |
 
 ## 7. Architecture
 
@@ -140,6 +142,7 @@ Component boundaries:
 | --- | --- | --- |
 | `apps/api/app/routes/api_catalog.py` or equivalent API Catalog router | Expose upload/list/detail/content/delete, enforce auth, Workspace, CSRF for writes, safe errors and OpenAPI schemas. | Scenario/Test Plan generation, operation import, returning storage internals, stack traces or server paths. |
 | API Catalog service | Validate basic OpenAPI/Swagger asset shape, store spec through existing storage client, resolve metadata in current Workspace. | Full lint platform, diff engine, background importer, generated Step mapping, external API calls. |
+| P2-04 bootstrap helper | Build current curated Web/business OpenAPI bytes, query same-Workspace active SHA-256, and invoke the existing API Catalog service from an independent post-registration transaction. | Reusing the registration session, running under the bootstrap lock, user/external auto-ingestion, retry workers or generation behavior. |
 | Storage service boundary | Continue owning server-side MinIO object writes/reads/deletes or invalidation. | Browser-visible storage access, object-key exposure, presigned URL, new storage backend abstraction. |
 | `@surgepilot/contracts` | Generated Web client/types from FastAPI OpenAPI. | Hand-edited OpenAPI or generated TypeScript as source of truth. |
 | Web API Catalog feature module | Render list/upload/delete/detail states and hand authorized `contentUrl` to Scalar. | Hand-written API types, direct MinIO fetch, hidden generation buttons, custom OpenAPI renderer. |
@@ -454,6 +457,8 @@ Minimum coverage:
 10. Storage unavailable returns `STORAGE_UNAVAILABLE` without bucket/object key/path.
 11. `DELETE /api/v1/api-catalog/specs/{specId}` affects only API Catalog metadata/storage and leaves Scenario/Test Plan/Run/Artifact data unchanged.
 12. Upload does not resolve remote `$ref`, call spec `servers[]`, send network requests or enqueue background jobs.
+13. P2-04 bootstrap uses `workspace_id + sha256 + status != deleted` idempotency, keeps `name` out of the key, and does not create a second active same-SHA asset in Default Workspace during repeated helper invocation.
+14. P2-04 bootstrap failure never changes first-Admin registration success; commit failure after a new MinIO write triggers best-effort object cleanup.
 
 ### 14.2 Contract tests
 
@@ -507,7 +512,7 @@ P2-00 is complete only when:
 8. No API Catalog behavior creates, updates, imports or generates Scenario, Step, Test Plan, Run, Artifact or Taurus YAML.
 9. No independent docs service, queue, microservice, external API Gateway, self-built renderer, second component system or second theme provider is introduced.
 10. API route/service tests, contract tests, Web tests and Scalar hardening tests pass.
-11. P2-04 first-Admin system OpenAPI bootstrap remains outside this Slice and is not available from the P2-00 API Catalog implementation.
+11. ADR-0016's system bootstrap exception remains documentation-only: it creates only the governed Catalog asset and adds no user/external auto-ingestion, update/retry behavior, or Scenario/Test Plan generation.
 12. Repository-level validation target is run before implementation merge:
 
 ```bash
@@ -542,16 +547,8 @@ Implementation must backfill the following after code is written and verified:
 5. Upload limit and supported inputs: `SURGEPILOT_API_CATALOG_SPEC_MAX_BYTES` defaults to `10485760` bytes. Supported extensions are `.json`, `.yaml`, `.yml`; supported content types are JSON/YAML plus empty or `application/octet-stream` browser fallbacks.
 6. Scalar package and import mode: Web uses pinned `@scalar/api-reference-react@0.9.47`, imports the Scalar stylesheet as `?inline`, injects it into a Shadow DOM wrapper, and wraps Scalar in `apps/web/src/features/api-catalog/components/scalar-reference.tsx`.
 7. Scalar hardening: the wrapper sets `hideTestRequestButton: true`, `hideClientButton: true`, `documentDownloadType: "none"`, `darkMode: true`, `hideDarkModeToggle: false`, `persistAuth: false`, `telemetry: false`, `showDeveloperTools: "never"`, and disabled Agent config; it does not set `proxyUrl`, MCP, `hiddenClients: true`, or `forceDarkModeState`. Passive Client Libraries code examples are visible, while real request sending remains disabled. Scalar CSS is scoped in a Shadow DOM wrapper with a default black Scalar reference canvas, host `body` class/style mutations are restored so the AppLayout theme is not changed by the renderer, body-level Scalar teleport nodes receive sanitized temporary Scalar styles, and Scalar `light-mode` / `dark-mode` changes are mirrored only into the isolated Scalar wrapper and teleport nodes.
-8. Web paths and layout: `apps/web/src/features/api-catalog/pages/api-catalog-list-page.tsx`, `apps/web/src/features/api-catalog/pages/api-catalog-detail-page.tsx`, and `apps/web/src/App.tsx` add `/api-catalog` and `/api-catalog/:specId` inside the existing `AppLayout` and Assets navigation. `apps/web/src/app/layouts/app-layout.tsx` classifies API Catalog detail as an embedded-content layout, preserving the app chrome while giving the Scalar reference full-width/full-height content space.
+8. Web paths and layout: `apps/web/src/features/api-catalog/pages/api-catalog-list-page.tsx`, `apps/web/src/features/api-catalog/pages/api-catalog-detail-page.tsx`, and `apps/web/src/features/api-catalog/routes.tsx` add `/api-catalog` and `/api-catalog/:specId` inside the existing `AppLayout` and Assets navigation. `apps/web/src/app/layouts/app-layout.tsx` classifies API Catalog detail as an embedded-content layout, preserving the app chrome while giving the Scalar reference full-width/full-height content space.
 9. Dev routing fact: `apps/web/vite.config.ts` proxies `/api/` rather than `/api` so the `/api-catalog` client route is served by Vite instead of being proxied to FastAPI.
-10. Tests added or extended: `apps/api/tests/test_p2_00_api_catalog_api.py`, `apps/web/src/features/api-catalog/api-catalog.test.tsx`, and `packages/contracts/tests/api-catalog-openapi.test.mjs`; focused coverage verifies API lifecycle and Workspace/storage boundaries, generated operation freshness, same-origin Scalar configuration, disabled request sending, and absence of storage internals or generation surfaces.
-11. Verification status for this reconstruction worker: the focused test files and documentation were statically inspected; test/build runners were not invoked because this atomic explicitly forbids them. The listed tests remain the targeted verification surface for the checkpoint.
+10. Tests added or extended: `apps/api/tests/test_p2_00_api_catalog_api.py`, `apps/web/src/features/api-catalog/api-catalog.test.tsx`, `packages/contracts/tests/api-catalog-openapi.test.mjs`, `tests/e2e/p2_00_api_catalog.spec.ts`; Web tests now cover list/detail/upload/delete flows, Scalar configuration hardening, no API Catalog generation entry points, Scalar local failure containment, host body theme restoration, current Workspace header usage, tag-only sidebar expansion without wrapper scrolling, operation sidebar scrolling inside the Scalar ShadowRoot without global History API interception, initial-fragment top positioning, passive hash synchronization without forced scrolling, the default dark Scalar canvas, local Scalar theme mirroring, sanitized teleport styles, and visible Client Libraries configuration without request sending. Existing Web route non-regression tests were updated to allow the now-active P2 API Catalog nav while still excluding inactive Schedule / Generated YAML / Node Count behavior.
+11. Verification run during implementation: targeted API tests, Web lint/typecheck/tests, contracts tests, `make generate-contracts`, `make verify`, `make verify-e2e`, and the P2-00 Playwright test were run locally with no environment gaps.
 12. Implementation differences from this SDD: none that expand scope. Delete uses soft-deleted metadata plus best-effort object removal; repeated delete returns access-safe `404 RESOURCE_NOT_FOUND`. The detail page intentionally renders Scalar as the primary reference surface rather than duplicating a separate metadata card outside Scalar; this remains documentation-only and does not add generation, Try it, request sending, direct storage access, or Scenario/Test Plan actions.
-
-13. R13 verification backfill: focused API route/service/storage assertions are in
-    `apps/api/tests/test_p2_00_api_catalog_api.py`; generated contract freshness and lifecycle
-    operation assertions are in `packages/contracts/tests/api-catalog-openapi.test.mjs`; Web route
-    and Scalar hardening assertions are in `apps/web/src/features/api-catalog/api-catalog.test.tsx`.
-    These checks assert the same-origin content proxy, Workspace boundary, server-only storage
-    internals, disabled request/external integrations, and absence of later-slice generation
-    surfaces. ADR-0016 remains documentation-only for this reconstruction checkpoint.

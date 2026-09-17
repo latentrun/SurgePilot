@@ -64,7 +64,7 @@ P2-07 must not implement:
    translation, or browser/IP language redirects;
 3. a custom domain for the initial launch;
 4. product UI or API-message localization;
-5. publication of private Codex sessions;
+5. publication of private development records;
 6. mandatory AI-generation proof for future community contributions;
 7. new API routes, contracts, database tables, migrations, services, queues, or storage;
 8. changes to Runner, Run state, Load Node, Runtime, Compose, installer, or release integrity;
@@ -90,7 +90,8 @@ The copy must not imply there was no human participation.
 ### 4.2 Baseline scope
 
 One reviewed semantic tag selected immediately before public launch identifies the original
-AI-authored public baseline. The strong claim applies to that tag and the reviewed baseline record. Later community contributions may be human- or AI-authored.
+AI-authored public baseline. The strong claim applies to that tag and the reviewed baseline
+record. Later community contributions may be human- or AI-authored.
 
 ### 4.3 Evidence map
 
@@ -104,7 +105,7 @@ The marketing site and README must link claims to the smallest useful evidence s
 - verification -> testing strategy and executable gate;
 - distribution -> release workflow, manifests, checksums, and installable Release.
 
-Codex conversation publication is optional and cannot block launch.
+Publication of private development records is optional and cannot block launch.
 
 ## 5. Public Site Architecture
 
@@ -286,8 +287,8 @@ coordinated. Public launch does not change release commands or readiness semanti
 ## 10. Implementation Sequence
 
 At the repository owner's explicit review decision, P2-07 private-stage implementation follows
-separately reviewable changes and checkpoints inside the launch preparation review so the complete preparation can be
-accepted or reverted atomically:
+separately reviewable changes and checkpoints inside the launch preparation review so the
+complete preparation can be accepted or reverted atomically:
 
 1. governance activation;
 2. VitePress route restructure and base validation;
@@ -302,7 +303,8 @@ accepted or reverted atomically:
 
 No checkpoint may bypass an earlier dependency or combine unrelated product behavior. Public
 visibility, organization migration, baseline tagging, Release publication, and Pages deployment
-activation still require the final launch approval and are not performed by the launch preparation review.
+activation still require the final launch approval and are not performed by the launch
+preparation review.
 
 ## 11. Acceptance Criteria
 
@@ -348,7 +350,8 @@ verification set includes:
 
 ## 13. Remaining Risks
 
-1. A repository correction can change source identifiers and requires every evidence link to be regenerated.
+1. A repository correction can change source identifiers and requires every evidence link to be
+   regenerated.
 2. GitHub Pages project-base errors can break all assets even when local root preview passes.
 3. GitHub Pages custom headers are limited, so the self-hosted `noindex` and Pages crawl policy must
    not assume unavailable header configuration.
@@ -358,53 +361,3 @@ verification set includes:
    claims without coupling their runtimes.
 6. GitHub and community launch rules can change; distribution copy and timing require a final
    launch-day review.
-
-## 14. Reconstruction Verification Backfill
-
-The reconstructed P2-07 verification stays inside the `ADR-0013`, `ADR-0025`, and `ADR-0026`
-boundary and adds no API route, contract, database table, migration, service, queue, storage,
-Runtime, installer, Compose, or release-execution change. The authoritative focused coverage is:
-
-1. Production site build: `docs/site/package.json` composes the VitePress build with
-   `docs/site/tests/verify-built-site.mjs`, which inspects the emitted HTML for the marketing
-   homepage and the eighteen documentation pages, unique titles and descriptions, self-canonical
-   URLs, reciprocal `en`/`zh-CN`/`ja`/`x-default` alternates, Open Graph and Twitter metadata,
-   JSON-LD types, the canonical-only sitemap, the Pages-compatible `robots.txt`, the `noindex` 404
-   page, project-base assets, the labelled synthetic Landing dashboard/Run/Distributed mesh
-   demonstrations, and the built-asset budgets.
-2. Rendered browser metadata: `docs/site/tests/verify-browser.mjs` inspects the rendered document
-   head, locale navigation, keyboard/accessibility behavior, and full-motion parity against the
-   built `docs/site/.vitepress/dist` output.
-3. Localized mirrors: `tests/contract/test_user_docs_locales.py` enforces the exact six-page
-   English/`zh-CN`/`ja` page sets, locale-relative Markdown targets, and source/tagged-release
-   `.env.example` Configuration coverage.
-4. Self-hosted indexing isolation: `tests/contract/test_p2_07_public_launch.py` requires the
-   `apps/web` `robots`/`googlebot` `noindex, nofollow, noarchive` directives, the matching Nginx
-   `X-Robots-Tag` header, and the absence of a crawler-blocking `robots.txt`.
-5. Landing markup parity: the same contract test checks the `docs/site` hero-scale and wide-offset
-   rules, and `docs/site/tests/verify-built-site.mjs` checks the public marketing markup against
-   the approved product Landing presentation values and the adjacent synthetic-data disclaimer
-   labels.
-6. Repository metadata and launch material: the contract test checks the README evidence tables,
-   `AI-AUTHORSHIP.md` role boundary and pending baseline tag, License/Security/Contributing/Code of
-   Conduct policies, `docs/launch/repository-metadata.md`, the demo guide, launch runbook, and
-   community drafts.
-7. Private Pages workflow: `tests/contract/test_p2_07_public_launch.py` requires
-   `.github/workflows/pages-build.yml` to hold `contents: read` only and rejects `pages: write`,
-   `id-token: write`, deploy/configure/upload Pages actions, `environment`, tag, or release
-   triggers.
-
-Verification commands are `make docs-site` (local preview), `make docs-site-build` (static build),
-`make verify-p2-07-public-launch` (VitePress build plus rendered/built verification and the focused
-P2-07 launch and localized-docs contract tests), the focused `uv run --all-packages pytest
-tests/contract/test_user_docs_locales.py` selection, and full `make verify` before public candidate
-approval.
-
-Remaining risks: the rendered browser and asset-budget checks require a local Node and Chromium
-runtime plus the emitted `docs/site/.vitepress/dist` artifact, so they are not part of default
-`make verify`; the anonymous repository, tagged Release, and Pages smoke steps depend on the
-owner-gated public launch and cannot run while the repository is private; GitHub Pages header
-configuration remains limited, so the self-hosted `noindex` contract stays a Web and Nginx
-responsibility; and the reconstruction publishes as `latentrun/SurgePilot` on `main` with
-`ghcr.io/latentrun/*` images, so the frozen previous-owner repository, GHCR namespace, and
-non-`main` branch references are deliberately rewritten.

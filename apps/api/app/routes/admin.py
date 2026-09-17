@@ -5,7 +5,8 @@ from sqlalchemy import func, select
 
 from app.api.deps import CsrfDep, CurrentUserDep, DbDep
 from app.core.errors import AppError
-from app.models.auth import User
+from app.models.auth import User, Workspace
+from app.routes.setup import storage_is_available
 from app.schemas.auth import (
     AdminUserCreateRequest,
     AdminUserEnvelope,
@@ -21,6 +22,8 @@ from app.schemas.auth import (
     WorkspaceWriteRequest,
 )
 from app.schemas.common import ErrorResponse
+from app.core.config import get_settings
+from app.services.load_node_initializer import load_node_runtime_status
 from app.services.system_settings import (
     current_settings,
     effective_allow_signup,
@@ -28,6 +31,7 @@ from app.services.system_settings import (
     update_settings,
 )
 from app.services.workspace_admin import (
+    active_admin_count,
     admin_user_summary,
     archive_workspace,
     create_admin_user,
@@ -57,10 +61,23 @@ def get_admin_setup_status(db: DbDep, user: CurrentUserDep) -> SetupStatusRespon
     require_admin(user)
     user_count = db.scalar(select(func.count(User.id))) or 0
     needs_bootstrap = user_count == 0
+    settings = get_settings()
     return SetupStatusResponse(
         needs_bootstrap=needs_bootstrap,
         allow_signup=True if needs_bootstrap else effective_allow_signup(db),
         has_default_workspace=has_default_workspace(db),
+        storage_available=storage_is_available(),
+        load_node_runtime_status=load_node_runtime_status(settings),
+        active_workspace_count=db.scalar(
+            select(func.count(Workspace.id)).where(Workspace.status == "active")
+        )
+        or 0,
+        archived_workspace_count=db.scalar(
+            select(func.count(Workspace.id)).where(Workspace.status == "archived")
+        )
+        or 0,
+        active_admin_count=active_admin_count(db),
+        sensitive_status=sensitive_status(),
     )
 
 
