@@ -49,3 +49,20 @@ Store scanner output under a private temporary directory and report only reviewe
 This audit never authorizes automatic deletion, replacement, or credential-rotation actions. Any
 owner-approved remediation must preserve a private backup, document only reviewed changes, and be
 verified again from a clean clone.
+
+## Final audit backfill
+
+- Final tree path comparison was performed directly against the immutable source snapshot. The
+  candidate had five staging-only paths; all five were removed as obsolete support/test workflow
+  files: `.github/workflows/verify.yml`,
+  `apps/api/tests/test_p0_03_runtime_bootstrap_config.py`,
+  `apps/api/tests/test_p1_00_monitoring_worker.py`,
+  `apps/api/tests/test_p2_01_openapi_step_generation.py`, and
+  `tests/contract/test_p1_03_env_compose_drift.py`. No source path is omitted, and `uv.lock` is
+  retained.
+- No reconstruction support files were added to the product tree. The final tree therefore has no
+  unrecorded support-file exception.
+- Current-tree cleanup scans found no previous-owner namespace, old-branch path, old checkpoint
+  identifier, old history-size count, or repository-agent tooling reference. Existing source
+  content, release contracts, Runtime behavior, and product execution contracts were otherwise
+  left intact.
