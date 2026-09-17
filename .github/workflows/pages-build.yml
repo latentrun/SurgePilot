@@ -20,8 +20,6 @@ on:
       - "pnpm-lock.yaml"
       - "pnpm-workspace.yaml"
 
-# Private stage: this workflow only builds and verifies the public site. It holds no deployment
-# authority, and public deployment stays behind the owner-gated launch.
 permissions:
   contents: read
 
