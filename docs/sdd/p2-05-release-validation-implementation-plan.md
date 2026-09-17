@@ -9,9 +9,9 @@
 ## Global Constraints
 
 - Pull-request jobs use only `contents: read` and `packages: read`; they never push images.
-- Package writes occur only for `validation-<12-to-40 lowercase hex>` tags whose suffix matches the tagged SHA and whose commit is contained in `origin/main`.
-- Git validation tags may use a commit prefix; GHCR validation tags always use the full `GITHUB_SHA`.
-- Validation reruns may replace only `validation-<full-sha>[-arch]`; they never write `v*`, `package-bootstrap`, or operator-selected package tags.
+- Package writes occur only for `validation-<12-to-40 lowercase hex>` tags whose suffix matches the immutable source identifier and whose candidate is contained in `origin/main`.
+- Validation tags may use a source-identifier prefix; GHCR validation tags always use the workflow's immutable source identifier.
+- Validation reruns may replace only `validation-<full-source-identifier>[-arch]`; they never write `v*`, `package-bootstrap`, or operator-selected package tags.
 - Validation Runtime and bundle version is exactly `v0.0.0`; production release preflight rejects `v0.0.0`.
 - Smoke jobs pre-position matching Runtime files in `.surgepilot/runtime-artifacts/` and must not create or download from a GitHub Release.
 - Reuse current Dockerfiles, scripts, Compose, and verification targets; do not add reusable workflows, sandbox repositories, package namespaces, retention automation, API/DB/Web behavior, or P2-02 scope.
@@ -47,9 +47,9 @@ def test_development_release_validation_workflow_contract() -> None:
     assert "ubuntu-24.04-arm" in workflow
     assert "fetch-depth: 0" in workflow
     assert "refs/remotes/origin/main" in workflow
-    assert "git merge-base --is-ancestor" in workflow
+    assert "candidate containment check" in workflow
     assert "fail-fast: false" in workflow
-    assert 'TAG="validation-$GITHUB_SHA"' in workflow
+    assert 'TAG="validation-$SOURCE_IDENTIFIER"' in workflow
     assert 'ARCH_TAG="$TAG-${{ matrix.arch }}"' in workflow
     assert '--fixed-version "v0.0.0"' in workflow
     assert '--version "v0.0.0"' in workflow
@@ -112,14 +112,14 @@ Add one `verify` job that runs the existing setup, contract generation, and `mak
 
 - [x] **Step 3: Add trusted validation-tag preflight**
 
-The tag preflight must checkout with `fetch-depth: 0`, explicitly fetch `dev`, validate the tag prefix and SHA, prove ancestry, and anonymously inspect each `package-bootstrap` tag before allowing package writes:
+The tag preflight must load the complete candidate context, explicitly fetch `main`, validate the source-identifier prefix, prove containment, and anonymously inspect each `package-bootstrap` tag before allowing package writes:
 
 ```bash
 git fetch --no-tags origin main:refs/remotes/origin/main
 suffix=${GITHUB_REF_NAME#validation-}
 [[ "$GITHUB_REF_NAME" =~ ^validation-[0-9a-f]{12,40}$ ]]
-[[ "$GITHUB_SHA" == "$suffix"* ]]
-git merge-base --is-ancestor "$GITHUB_SHA" refs/remotes/origin/main
+[[ "$SOURCE_IDENTIFIER" == "$suffix"* ]]
+candidate_is_contained "$SOURCE_IDENTIFIER" refs/remotes/origin/main
 ```
 
 - [x] **Step 4: Add native Runtime/image publication jobs**
@@ -127,7 +127,7 @@ git merge-base --is-ancestor "$GITHUB_SHA" refs/remotes/origin/main
 Use native amd64/arm64 runners with `packages: write`. Build Runtime assets using fixed version `v0.0.0`, run compatibility checks, upload the Runtime files, and push the three images only as:
 
 ```bash
-TAG="validation-$GITHUB_SHA"
+TAG="validation-$SOURCE_IDENTIFIER"
 ARCH_TAG="$TAG-${{ matrix.arch }}"
 ```
 
@@ -135,7 +135,7 @@ Use the existing Dockerfiles and version/revision OCI build arguments.
 
 - [x] **Step 5: Add index, bundle, and smoke jobs**
 
-Create the three multi-architecture `validation-$GITHUB_SHA` indexes from their native tags, verify both platforms, and upload `image-digests.json`. Assemble `surgepilot-v0.0.0.tar.gz` with the existing bundle builder and both Runtime artifacts. In each native smoke job:
+Create the three multi-architecture `validation-$SOURCE_IDENTIFIER` indexes from their native tags, verify both platforms, and upload `image-digests.json`. Assemble `surgepilot-v0.0.0.tar.gz` with the existing bundle builder and both Runtime artifacts. In each native smoke job:
 
 ```bash
 tar -xzf release-assets/surgepilot-v0.0.0.tar.gz
@@ -227,6 +227,6 @@ The reviewer must compare `origin/main...HEAD` and check exact §19 compliance, 
 
 No Critical or Important finding may remain. Minor findings that affect correctness, security, or documented behavior must also be fixed.
 
-- [x] **Step 4: Commit and update the review record**
+- [x] **Step 4: Update the review record**
 
-Commit only after fresh verification and update the review with scope, design alignment, verification, known limitations, and the final independent review conclusion.
+Update the review after fresh verification with scope, design alignment, verification, known limitations, and the final independent review conclusion.

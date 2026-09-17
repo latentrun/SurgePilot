@@ -214,7 +214,7 @@ content. CI installs the Chromium runtime before running that check.
 
 **Interfaces:**
 - Produce: main-branch build-only validation with read-only repository permissions.
-- Produce: recorded tree/history/privacy/license/author-metadata review and redacted results.
+- Produce: recorded tree/privacy/license/author-metadata review and redacted results.
 
 - [ ] Add failing workflow assertions: no `pages: write`, no `id-token: write`, no
   `actions/deploy-pages`, no public deployment environment, and no tag/release trigger.
