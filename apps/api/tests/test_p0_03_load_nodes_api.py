@@ -112,6 +112,7 @@ async def test_load_node_auth_csrf_create_list_get_and_redaction(
         "AAAAC3NzaC1lZDI1NTE5AAAAIF6W/+2uAKbK71edPOwIYEGmhaggGtRy5wu0lXPVysEC"
     )
     assert body["status"] == "uninitialized"
+    assert body["runtimeVersion"] is None
     assert body["credentialConfigured"] is True
     serialized = str(body)
     assert "submitted-secret" not in serialized
