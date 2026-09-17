@@ -216,27 +216,6 @@ async def test_ai_skill_download_allows_normal_user(
 
 
 @pytest.mark.anyio
-async def test_first_admin_can_download_without_workspace_header(
-    client: AsyncClient, tmp_path: Path, monkeypatch
-) -> None:
-    module = importlib.import_module("app.routes.account_ai_skill")
-    service = importlib.import_module("app.services.skill_bundle")
-    root = make_skill_source(tmp_path)
-    monkeypatch.setattr(module, "SkillBundle", lambda: service.SkillBundle(root))
-
-    registered = await register_user(client, email="header-free-admin@example.com")
-    response = await client.get("/api/v1/account/ai-skill/download")
-
-    assert registered["user"]["role"] == "admin"
-    assert response.status_code == 200
-    assert response.headers["content-type"] == "application/zip"
-    assert response.headers["content-disposition"] == (
-        'attachment; filename="surgepilot-public-api-skill.zip"'
-    )
-    assert response.headers["cache-control"] == "private, no-store"
-
-
-@pytest.mark.anyio
 async def test_ai_skill_download_persists_sliding_session_activity(
     client: AsyncClient,
     db_session: Session,

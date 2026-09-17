@@ -1,7 +1,9 @@
 import os
 from collections.abc import AsyncIterator, Iterator
 from datetime import UTC, datetime
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
+from threading import Thread
 
 import pytest
 from httpx import ASGITransport, AsyncClient
@@ -12,6 +14,35 @@ from app.db.base import Base
 from app.db.session import get_db
 from app.main import app
 from app.models.auth import DEFAULT_WORKSPACE_ID
+
+
+class _HealthHandler(BaseHTTPRequestHandler):
+    def do_GET(self) -> None:  # noqa: N802 - BaseHTTPRequestHandler API.
+        if self.path != "/api/healthz":
+            self.send_error(404)
+            return
+        body = b'{"status":"ok"}'
+        self.send_response(200)
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+
+    def log_message(self, _format: str, *_args: object) -> None:
+        return
+
+
+@pytest.fixture()
+def reachable_node_api_port() -> Iterator[int]:
+    server = ThreadingHTTPServer(("0.0.0.0", 0), _HealthHandler)
+    thread = Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    try:
+        yield server.server_port
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=5)
 
 
 @pytest.fixture()
@@ -66,6 +97,7 @@ def stable_env(monkeypatch: pytest.MonkeyPatch) -> None:
     os.environ.setdefault(
         "SSH_CREDENTIAL_ENCRYPTION_KEY", "MDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDA="
     )
+    monkeypatch.setenv("LOAD_NODE_RUNTIME_VERSION", "runtime-test-v1")
 
     from app.services.ssh_remote import ScannedSshHostKey
 
@@ -80,3 +112,7 @@ def stable_env(monkeypatch: pytest.MonkeyPatch) -> None:
         )
 
     monkeypatch.setattr("app.services.load_nodes.scan_ssh_host_key", fake_scan)
+    monkeypatch.setattr(
+        "app.routes.auth.bootstrap_system_openapi_best_effort",
+        lambda **_kwargs: None,
+    )
