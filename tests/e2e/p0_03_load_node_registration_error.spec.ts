@@ -43,6 +43,17 @@ test("shows actionable guidance when Load Node credential encryption is unavaila
       await route.fulfill({ json: { csrfToken: "csrf-token" } });
       return;
     }
+    if (url.pathname === "/api/v1/load-nodes/connectivity-summary") {
+      await route.fulfill({
+        json: {
+          effectiveUrl: null,
+          source: "missing",
+          readiness: "missing",
+          message: "Load Node API Base URL is not configured.",
+        },
+      });
+      return;
+    }
     if (url.pathname === "/api/v1/load-nodes/ssh-host-key/scan") {
       expect(request.headers()["x-workspace-id"]).toBe(workspaceId);
       expect(request.headers()["x-csrf-token"]).toBe("csrf-token");

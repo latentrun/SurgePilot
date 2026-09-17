@@ -82,6 +82,18 @@ test("registers, initializes, reads logs, and archives a Load Node after host-ke
       await route.fulfill({ json: { csrfToken: "csrf-token" } });
       return;
     }
+    if (url.pathname === "/api/v1/load-nodes/connectivity-summary") {
+      await route.fulfill({
+        json: {
+          effectiveUrl: "http://192.0.2.10:8000",
+          source: "configured",
+          readiness: "ready",
+          message:
+            "Load Node API Base URL is statically valid. It has not been tested from a Load Node.",
+        },
+      });
+      return;
+    }
     if (url.pathname === "/api/v1/load-nodes/ssh-host-key/scan") {
       expect(request.headers()["x-workspace-id"]).toBe(workspaceId);
       expect(request.headers()["x-csrf-token"]).toBe("csrf-token");
@@ -255,15 +267,13 @@ test("registers, initializes, reads logs, and archives a Load Node after host-ke
   expect(initializePayload).toEqual({ force: false });
 
   await page
-    .getByRole("button", {
-      name: /view initialization logs for load-node-smoke/i,
-    })
+    .getByRole("button", { name: /view logs load-node-smoke/i })
     .click();
   await expect(
-    page.getByRole("dialog", { name: "Initialization log" }),
+    page.getByRole("dialog", { name: "Initialization Log" }),
   ).toBeVisible();
   await expect(page.getByText("[info] setup output sanitized")).toBeVisible();
-  await page.getByRole("button", { name: "Close" }).click();
+  await page.keyboard.press("Escape");
 
   await page.getByRole("button", { name: /archive load-node-smoke/i }).click();
   await page.getByRole("button", { name: "Archive", exact: true }).click();

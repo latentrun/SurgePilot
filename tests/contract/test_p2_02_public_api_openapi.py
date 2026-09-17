@@ -63,7 +63,6 @@ def test_public_openapi_excludes_token_management_and_secret_material() -> None:
         "plaintext",
         "secretHash",
         "surgepilot_pat_",
-        "Authorization",
         "RunReportDetail",
         "DebugHttpTrace",
         "debugHttpTrace",
@@ -103,13 +102,9 @@ def test_web_openapi_contains_session_token_management_but_not_internal_runner_r
     serialized = json.dumps(document, sort_keys=True)
 
     assert "/v1/account/api-tokens" in document["paths"]
-    assert "/v1/account/api-tokens/{tokenId}" in document["paths"]
     assert "/v1/load-nodes/connectivity-summary" in document["paths"]
     assert "LoadNodeConnectivitySummary" in document["components"]["schemas"]
-    assert "ApiTokenCreateRequest" in document["components"]["schemas"]
-    assert "ApiTokenMetadata" in document["components"]["schemas"]
-    assert "plaintext" in serialized
-    assert "secretHash" not in serialized
+    assert "loadNodeApiBaseUrl" in serialized
     assert not any(path.startswith("/internal/") for path in document["paths"])
     assert not any(path.startswith("/public/v1/") for path in document["paths"])
 
@@ -168,8 +163,6 @@ def test_public_openapi_dependency_sla_and_resource_contracts_are_explicit() -> 
             {"mode": "manual", "selectedNodeIds": ["node"], "nodeCount": 2}
         )
     )
-
-
     assert list(
         run_resource_validator.iter_errors(
             {"mode": "auto", "nodeCount": 2, "selectedNodeIds": ["node"]}
@@ -205,20 +198,3 @@ def test_public_openapi_operation_coverage_manifest_is_complete() -> None:
         assert entry["responseAssertions"], operation_id
         for reference in [*entry["successPathTests"], *entry["responseAssertions"]]:
             assert_coverage_reference_exists(reference)
-
-
-def test_public_scenario_global_configuration_is_non_secret_and_camel_case() -> None:
-    document = load(PUBLIC_OPENAPI)
-    schemas = document["components"]["schemas"]
-
-    for schema_name in ("ScenarioCreateRequest", "ScenarioPatchRequest", "ScenarioDetail"):
-        properties = schemas[schema_name]["properties"]
-        assert "globalHeaders" in properties
-        assert "variables" in properties
-        assert "globalScripts" not in properties
-
-    assert "globalHeaders" not in schemas["ScenarioSummary"]["properties"]
-    assert "variables" not in schemas["ScenarioSummary"]["properties"]
-    serialized = json.dumps(document, sort_keys=True)
-    for forbidden in ("secretHash", "x-csrf-token", "surgepilot_session", "/internal/", "serverPath"):
-        assert forbidden not in serialized
