@@ -118,7 +118,7 @@ Exact final filenames may follow existing source conventions, but implementation
 | --- | --- | --- | --- |
 | `/help` | Required cookie session | No Help-page data request requires Workspace context | `RequireAuth + AppLayout` |
 
-The AppLayout Help entry becomes clickable only through this Slice. The public Marketing Landing remains unchanged and must not gain active Docs, API Guide, Community, GitHub, or Help links unless separately authorized.
+The AppLayout Help entry becomes clickable only through this Slice. ADR-0013's public Marketing Landing remains unchanged and must not gain active Docs, API Guide, Community, GitHub, or Help links unless separately authorized.
 
 ### 6.2 Tabs
 
@@ -489,7 +489,7 @@ The implementation PR must record:
 The implementation uses these final anchors:
 
 1. Help Web:
-   - the Help pathname switch in `apps/web/src/App.tsx`
+   - `apps/web/src/features/help/routes.tsx`
    - `apps/web/src/features/help/pages/help-page.tsx`
    - `apps/web/src/features/help/copy.ts`
    - `apps/web/src/features/help/help.test.tsx`

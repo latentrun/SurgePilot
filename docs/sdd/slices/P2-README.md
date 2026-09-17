@@ -64,16 +64,3 @@ startup, Runtime, Compose, installer, or integrity contracts.
 This README must not independently enlarge P2 scope. Any new or changed P2 capability must first update the PRD or add a confirmed ADR, then synchronize `docs/sdd/00-product-scope-and-priority.md`, `docs/sdd/02-repo-structure-and-dev-workflow.md`, `AGENTS.md`, and this index where applicable.
 
 Before submitting changes to this README, verify that it still avoids implementation design duplication and does not activate P2 capabilities by itself.
-
-## Verification Backfill
-
-The reconstructed P2-07 verification is recorded in
-`docs/sdd/slices/P2-07-public-launch-github-pages-seo.md` §14. The focused P2-07 commands are
-`make docs-site` and `make docs-site-build` for the VitePress package under `docs/site`, and
-`make verify-p2-07-public-launch` for the built/rendered site verification together with the
-`tests/contract/test_p2_07_public_launch.py` and `tests/contract/test_user_docs_locales.py`
-contracts. The private build-and-verify workflow is `.github/workflows/pages-build.yml`, which
-holds `contents: read` only and no Pages deployment authority. Rendered browser, asset-budget, and
-anonymous repository/Release/Pages smoke steps remain environment- or launch-gated and are not
-part of default `make verify`; the reconstruction publishes as `latentrun/SurgePilot` on `main`
-with `ghcr.io/latentrun/*` images.

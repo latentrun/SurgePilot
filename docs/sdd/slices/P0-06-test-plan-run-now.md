@@ -236,7 +236,7 @@ Allowed P0-06 extension points:
 | Run Mode | Supports `sequential` and `parallel`; default is `sequential`. |
 | Env Group | Stored on Test Plan; optional for draft save; Run validates unresolved variables. |
 | Resource config | Stored on Test Plan as `poolType` and one `selectedNodeId`; Run does not accept resource overrides. |
-| Manual node | P0 requires exactly one visible Idle Load Node whose initialized JMeter runtime satisfies the configured P0 JMeter version at Run creation time. |
+| Manual node | P0 requires exactly one visible Idle Load Node whose persisted Runtime version matches `LOAD_NODE_RUNTIME_VERSION` at Run creation time. |
 | Run Now API | `POST /api/v1/runs` with `runType=standard`, `sourceType=test_plan`. |
 | Test Plan Debug API | `POST /api/v1/runs` with `runType=debug`, `sourceType=test_plan`. |
 | Saved revision | Runs execute latest saved Test Plan revision only; request requires `expectedSourceRevision`. |
@@ -278,7 +278,7 @@ P0-06 Taurus/JMeter behavior should align with the Taurus/JMeter documentation. 
 3. Generated Taurus YAML is an internal execution bundle artifact; it is not a P0 product surface.
 4. P0 uses Taurus `execution` items that reference P0-05-generated requests-scenarios.
 5. P0 uses only local JMeter execution; Taurus cloud provisioning and distributed JMeter are forbidden in P0.
-6. P0 JMeter runtime is inherited from P0-03/P0-05; the selected Load Node's configured Apache JMeter binary path is the deployment source of truth for `modules.jmeter.path`, and P0-03 initialization verifies the binary before a node becomes eligible for real Test Plan execution. The configured distribution is Apache JMeter 5.6.3 and requires Java 8 or later.
+6. After Runtime Bootstrap, P0 JMeter runtime is inherited from P0-03/P0-05 as the selected Load Node path `<runnerHome>/current/apache-jmeter-5.6.3/bin/jmeter`; `LOAD_NODE_JMETER_PATH` is not a production source of truth. The configured distribution is Apache JMeter 5.6.3 and requires Java 8 or later.
 7. P0 generated YAML always disables Taurus plugin auto-detection with `detect-plugins: false`; runtime/plugin prerequisites must be satisfied by Load Node setup, not by network auto-install.
 8. P0 does not use Taurus `capacity` because P0 supports only `sequential` or default parallel behavior.
 9. P0 does not expose per-execution `files`, `locations`, `provisioning`, `capacity`, alternate executors, or Monitoring services.
@@ -1781,3 +1781,72 @@ P0-06 is done when:
 - [ ] `make verify` passed.
 - [ ] `make verify-e2e` was run when real SSH/Taurus environment was available.
 - [ ] Final response lists changed files, verification commands/results and remaining risks.
+
+---
+
+## 21. Implementation Backfill
+
+After P0-06 implementation, update this section only with engineering facts:
+
+1. actual migration filenames;
+2. actual API schema names if they differ from this draft;
+3. final generated OpenAPI path/operation IDs;
+4. final test files and verification commands;
+5. any implementation difference from the Taurus mapping above;
+6. remaining risks that later P0 slices must know.
+
+Do not use backfill to expand product scope.
+
+### 21.1 Implemented Files
+
+- Migration: `apps/api/migrations/versions/0007_p0_06_test_plans.py`.
+- ORM models: `apps/api/app/models/test_plans.py`.
+- API schemas: `apps/api/app/schemas/test_plans.py`; `RunCreateRequest` / `RunCreateResponse` in `apps/api/app/schemas/runs.py` were extended for `sourceType=test_plan`.
+- API routes: `apps/api/app/routes/test_plans.py`; `POST /api/v1/runs` in `apps/api/app/routes/runs.py` dispatches Test Plan Run Now and Test Plan Debug.
+- Services: `apps/api/app/services/test_plans.py`, plus Test Plan-aware reference checks, execution bundle generation, runner start dispatch and snapshot sanitation in existing service modules.
+- Frontend: `apps/web/src/features/test-plans/`, `apps/web/src/app/api-client.ts`, `apps/web/src/app/router.tsx`, and `apps/web/src/app/layouts/app-layout.tsx`.
+- Generated contracts: `packages/contracts/openapi/api.openapi.json`, `packages/contracts/generated/web-client/index.ts`.
+
+### 21.2 Final OpenAPI Operations
+
+- `GET /v1/test-plans` → `listTestPlans`.
+- `POST /v1/test-plans` → `createTestPlan`.
+- `GET /v1/test-plans/{testPlanId}` → `getTestPlan`.
+- `PATCH /v1/test-plans/{testPlanId}` → `patchTestPlan`.
+- `DELETE /v1/test-plans/{testPlanId}` → `deleteTestPlan`.
+- `POST /v1/runs` → `createRun`, with `runType=standard|debug`, `sourceType=debug_scenario|test_plan`, `expectedSourceRevision`, and `confirmHighConcurrency`.
+
+### 21.3 Implemented Tests and Verification
+
+- API integration: `apps/api/tests/test_p0_06_test_plans_api.py`.
+- API service / Taurus builder / dedup rollback regression: `apps/api/tests/test_p0_06_test_plans_service.py`.
+- Execution bundle / runner dispatch coverage: `apps/api/tests/test_p0_04_run_control_executor.py`.
+- Contract: `tests/contract/test_p0_06_test_plans_openapi.py`.
+- Web: `apps/web/src/features/test-plans.test.tsx`.
+- E2E maintenance: `tests/e2e/p0_05_scenarios.spec.ts` locator fixes for strict Playwright matching.
+- Verification commands run during implementation:
+  - `make generate-contracts`
+  - `pnpm --filter @surgepilot/web test -- test-plans`
+  - `pnpm --filter @surgepilot/web typecheck`
+  - `uv run --all-packages pytest apps/api/tests/test_p0_06_test_plans_service.py apps/api/tests/test_p0_06_test_plans_api.py tests/contract/test_p0_06_test_plans_openapi.py -q`
+  - `uv run --all-packages pytest apps/api/tests/test_p0_04_run_control_executor.py -q`
+  - `make verify`
+  - `make verify-e2e`
+
+### 21.4 Implementation Notes
+
+- Test Plan execution bundles write `surgepilot.yml`, `execution/generated.yml`, and `manifest.json`; generated YAML remains internal and is not exposed in the P0 UI.
+- Test Plan Taurus generation reuses the P0-05 Scenario Taurus document embedded in the immutable Test Plan Run Snapshot instead of remapping Visual Scenario steps independently.
+- `sourceType=test_plan` snapshots intentionally omit selected node host, runner home, MinIO object keys, server absolute paths, runner tokens, and SSH credentials.
+- Test Plan Debug forces sequential low-risk settings (`concurrencyPerNode=1`, `iterations=1`) and omits passfail reporting.
+- Quick Run on the list page is disabled when backend guard data says high-concurrency confirmation is required; confirmation is handled in the editor.
+- Independent review fixes applied before PR: Test Plan run requests reject ignored Env Group / Load Node overrides; saved child IDs are ULID-validated; list/detail `runnable` reflects missing Scenario variables; SurgePilot Taurus control env values override Env Group variables; Test Plan list invalid/unknown query parameters return `INVALID_QUERY_PARAMETER`; the Web local item ID generator emits Crockford ULID characters.
+- Follow-up review fixes: Test Plan Run dedup now rolls back after final dedup-key `IntegrityError` before querying the existing Run; Test Plan Debug validates the fixed low-risk debug profile instead of blocking on saved Standard Run concurrency after hard-limit configuration changes.
+- Follow-up review fixes: Test Plan Run lease-race `LOAD_NODE_BUSY` handling rolls back before dedup lookup; Env Group list/detail `inUse` reflects workspace-scoped Test Plan references including soft-deleted Test Plans that still hold FKs; list/detail marks aggregate hard-limit Test Plans as not runnable; dirty editor drafts recompute minimum run enablement locally before Save and Run; saved plans that are blocked only by Standard Run hard-limit remain Debug-runnable because Debug uses the fixed low-risk profile.
+- Follow-up review fixes: newly added SLA Rules default to whole-test Taurus passfail evaluation by omitting `timeframeLogic` and `timeframeSeconds`; list/detail marks Test Plans with more enabled Scenario items than `SURGEPILOT_MAX_SCENARIO_ITEMS_PER_TEST_PLAN` as not runnable; Scenario delete protection includes soft-deleted Test Plans that still hold Scenario item FKs.
+- Follow-up review fixes: Test Plan payload validation checks missing `resource.poolType` before Load Node lookup; Scenario item replacement persists rows by explicit `order`; list/detail and Standard Run validation reapply the enabled SLA Rule count limit while Debug remains allowed because it does not evaluate SLA; the editor shows detail load errors without retry/loading fallback and does not overwrite dirty drafts on background refetch.
+- Follow-up review fixes: P0 Test Plan UI intentionally uses add-means-enabled semantics for Scenario items and SLA Rules, no longer exposes enable/disable checkboxes, migrates loaded disabled rows to enabled on the next save, and normalizes blank response-code SLA patterns to wildcard `rc*`.
+
+### 21.5 Remaining Risks
+
+- None.
