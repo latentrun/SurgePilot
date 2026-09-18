@@ -282,7 +282,7 @@ def test_repository_metadata_is_ready_for_manual_github_configuration() -> None:
     assert "GitHub Discussions: disabled at launch" in metadata
 
 
-def test_private_pages_workflow_builds_without_deployment_authority() -> None:
+def test_pages_workflow_builds_pull_requests_and_deploys_main_only() -> None:
     workflow = (ROOT / ".github" / "workflows" / "pages-build.yml").read_text(encoding="utf-8")
 
     assert "contents: read" in workflow
@@ -291,16 +291,20 @@ def test_private_pages_workflow_builds_without_deployment_authority() -> None:
     assert "pnpm install --frozen-lockfile" in workflow
     assert "pnpm --filter @surgepilot/docs test" in workflow
     assert "docs/site/.vitepress/dist" in workflow
-    for forbidden in (
+    for required in (
         "pages: write",
         "id-token: write",
-        "actions/deploy-pages",
-        "actions/configure-pages",
-        "actions/upload-pages-artifact",
-        "environment:",
-        "tags:",
-        "release:",
+        "actions/deploy-pages@d6db90164ac5ed86f2b6aed7e0febac5b3c0c03e",
+        "actions/configure-pages@983d7736d9b0ae728b81ab479565c72886d7745b",
+        "actions/upload-pages-artifact@7b1f4a764d45c48632c6b24a0339c27f5614fb0b",
+        "name: github-pages",
+        "url: ${{ steps.deployment.outputs.page_url }}",
+        "if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}",
     ):
+        assert required in workflow
+    assert workflow.index("needs: build") < workflow.index("actions/deploy-pages")
+    assert "cancel-in-progress: false" in workflow
+    for forbidden in ("tags:", "release:"):
         assert forbidden not in workflow
 
 
