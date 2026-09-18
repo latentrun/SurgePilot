@@ -11,6 +11,9 @@ ROOT = Path(__file__).resolve().parents[2]
 
 def test_source_full_stack_has_internal_demo_node_without_default_host_ssh_port() -> None:
     compose = yaml.safe_load((ROOT / "infra/docker/docker-compose.yml").read_text(encoding="utf-8"))
+    base_compose = yaml.safe_load(
+        (ROOT / "infra/docker/docker-compose.base.yml").read_text(encoding="utf-8")
+    )
     services = compose["services"]
 
     demo = services["demo-load-node"]
@@ -23,6 +26,13 @@ def test_source_full_stack_has_internal_demo_node_without_default_host_ssh_port(
     assert services["api-worker"]["environment"][
         "SURGEPILOT_MONITORING_INFLUXDB_NODE_WRITE_URL"
     ] == ("${SURGEPILOT_MONITORING_INFLUXDB_NODE_WRITE_URL:-http://influxdb:8086}")
+    for source_services in (services, base_compose["services"]):
+        assert source_services["minio"]["image"] == (
+            "quay.io/minio/minio:RELEASE.2025-04-22T22-12-26Z"
+        )
+        assert source_services["minio-init"]["image"] == (
+            "quay.io/minio/mc:RELEASE.2025-04-16T18-13-26Z"
+        )
 
 
 def test_release_compose_is_digest_pinned_and_contains_no_application_build_contexts() -> None:
@@ -48,6 +58,8 @@ def test_release_compose_is_digest_pinned_and_contains_no_application_build_cont
     assert services["api"]["image"] == "@@API_IMAGE@@"
     assert services["web"]["image"] == "@@WEB_IMAGE@@"
     assert services["demo-load-node"]["image"] == "@@DEMO_NODE_IMAGE@@"
+    assert services["minio"]["image"] == ("quay.io/minio/minio:RELEASE.2025-04-22T22-12-26Z")
+    assert services["minio-init"]["image"] == ("quay.io/minio/mc:RELEASE.2025-04-16T18-13-26Z")
     assert services["nginx"]["ports"] == [
         "${SURGEPILOT_HTTP_PORT:?SURGEPILOT_HTTP_PORT is required}:80"
     ]
