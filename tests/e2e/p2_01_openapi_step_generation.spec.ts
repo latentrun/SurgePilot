@@ -5,7 +5,7 @@ import { join } from "node:path";
 
 import { expect, test } from "@playwright/test";
 
-const minioImage = "minio/minio:RELEASE.2025-04-22T22-12-26Z";
+const minioImage = "quay.io/minio/minio:RELEASE.2025-04-22T22-12-26Z";
 let ownedMinioContainer: string | null = null;
 
 function minioEndpoint() {

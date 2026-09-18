@@ -5,7 +5,7 @@ import { expect, test } from "@playwright/test";
 const runId = "01HZX3Y9M0E9W7Z6M5QK9S8P7R";
 const artifactId = "01HZX3Y9M0E9W7Z6M5QK9S8P7T";
 const bodyBlobArtifactId = "01HZX3Y9M0E9W7Z6M5QK9S8P7B";
-const minioImage = "minio/minio:RELEASE.2025-04-22T22-12-26Z";
+const minioImage = "quay.io/minio/minio:RELEASE.2025-04-22T22-12-26Z";
 let ownedMinioContainer: string | null = null;
 
 function databaseUrl() {
