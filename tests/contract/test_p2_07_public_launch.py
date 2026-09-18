@@ -153,9 +153,8 @@ def test_public_readmes_open_with_accurate_conversion_and_evidence_links() -> No
             assert row in content, path.name
 
 
-def test_ai_authorship_evidence_defines_scope_and_pending_baseline_tag() -> None:
+def test_ai_authorship_evidence_defines_scope_and_v1_baseline_tag() -> None:
     evidence = (ROOT / "AI-AUTHORSHIP.md").read_text(encoding="utf-8")
-    normalized_evidence = " ".join(evidence.split())
 
     for human_responsibility in (
         "product intent",
@@ -173,8 +172,10 @@ def test_ai_authorship_evidence_defines_scope_and_pending_baseline_tag() -> None
     ):
         assert ai_responsibility in evidence
 
-    assert "Baseline tag: not selected" in evidence
-    assert "does not yet identify a released baseline" in normalized_evidence
+    assert "Baseline tag: `v1.0.0`, selected for immutable publication" in evidence
+    assert "releases/tag/v1.0.0" in evidence
+    assert "actions/workflows/release-validation.yml" in evidence
+    assert "actions/workflows/release.yml" in evidence
     for relative_target in (
         "AGENTS.md",
         "docs/prd/PRD.md",
@@ -308,10 +309,33 @@ def test_pages_workflow_builds_pull_requests_and_deploys_main_only() -> None:
         assert forbidden not in workflow
 
 
-def test_public_readiness_audit_records_redacted_results_and_manual_blockers() -> None:
+def test_docs_browser_is_playwright_managed_across_local_and_release_validation() -> None:
+    verifier = (ROOT / "docs" / "site" / "tests" / "verify-browser.mjs").read_text(encoding="utf-8")
+    makefile = (ROOT / "Makefile").read_text(encoding="utf-8")
+    install_command = "pnpm --filter @surgepilot/docs exec playwright install --with-deps chromium"
+
+    assert "chromium.launch(browserLaunchOptions)" in verifier
+    assert "process.env.CHROME_PATH" in verifier
+    assert "chromium.executablePath()" not in verifier
+    assert '"/usr/bin/google-chrome"' not in verifier
+    assert "setup-docs-browser:" in makefile
+    assert "pnpm --filter @surgepilot/docs exec playwright install chromium" in makefile
+
+    for workflow_path in (
+        ROOT / ".github" / "workflows" / "pages-build.yml",
+        ROOT / ".github" / "workflows" / "release-validation.yml",
+        ROOT / ".github" / "workflows" / "release.yml",
+    ):
+        workflow = workflow_path.read_text(encoding="utf-8")
+        assert install_command in workflow
+        if "make verify" in workflow:
+            assert workflow.index(install_command) < workflow.index("make verify")
+
+
+def test_public_readiness_audit_records_approved_v1_release_gates() -> None:
     audit = (LAUNCH_ROOT / "public-readiness-audit.md").read_text(encoding="utf-8")
 
-    assert "Overall status: BLOCKED" in audit
+    assert "Overall status: RELEASE CANDIDATE APPROVED" in audit
     for category in (
         "Credential filenames and secret material",
         "Private endpoints and IP addresses",
@@ -322,8 +346,37 @@ def test_public_readiness_audit_records_redacted_results_and_manual_blockers() -
     ):
         assert category in audit
     assert "Raw matches are intentionally not copied" in audit
-    assert "owner decision required" in audit.lower()
+    assert "owner explicitly accepted public exposure" in audit
     assert "latentrun/SurgePilot" in audit
-    assert "Baseline tag is still pending" in audit
+    assert "`v1.0.0` is the owner-selected original public baseline" in audit
+    assert "Gitleaks 8.28.0" in audit
     for replaced_command in ("git ls-files", "git grep", "git log"):
         assert replaced_command not in audit
+
+
+def test_secret_scan_allowlist_is_exact_and_font_licenses_are_vendored() -> None:
+    allowlist = (ROOT / ".gitleaksignore").read_text(encoding="utf-8")
+    fingerprints = [
+        line.strip()
+        for line in allowlist.splitlines()
+        if line.strip() and not line.lstrip().startswith("#")
+    ]
+
+    assert len(fingerprints) == 36
+    assert len(set(fingerprints)) == 36
+    history_fingerprints = [item for item in fingerprints if len(item.split(":")) == 4]
+    tree_fingerprints = [item for item in fingerprints if len(item.split(":")) == 3]
+    assert len(history_fingerprints) == 18
+    assert len(tree_fingerprints) == 18
+    assert all(
+        len(fingerprint.split(":", maxsplit=1)[0]) == 40 for fingerprint in history_fingerprints
+    )
+
+    font_licenses = (
+        ROOT / "apps" / "web" / "src" / "assets" / "fonts" / "geist" / "OFL.txt",
+        ROOT / "apps" / "web" / "src" / "assets" / "fonts" / "jetbrains-mono" / "OFL.txt",
+    )
+    for license_path in font_licenses:
+        license_text = license_path.read_text(encoding="utf-8")
+        assert "SIL OPEN FONT LICENSE Version 1.1" in license_text
+        assert "Copyright" in license_text

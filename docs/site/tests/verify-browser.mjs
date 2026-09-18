@@ -1,5 +1,4 @@
 import assert from "node:assert/strict";
-import { existsSync } from "node:fs";
 import { spawn } from "node:child_process";
 import { setTimeout as delay } from "node:timers/promises";
 
@@ -9,23 +8,6 @@ const port = Number(process.env.SURGEPILOT_DOCS_PREVIEW_PORT ?? "4178");
 const baseUrl = `http://127.0.0.1:${port}/SurgePilot/`;
 const publicOrigin = "https://latentrun.github.io";
 const publicBase = "/SurgePilot/";
-
-const executableCandidates = [
-  process.env.CHROME_PATH,
-  chromium.executablePath(),
-  "/usr/bin/google-chrome",
-  "/usr/bin/google-chrome-stable",
-  "/usr/bin/chromium",
-  "/usr/bin/chromium-browser",
-].filter(Boolean);
-const executablePath = executableCandidates.find((candidate) =>
-  existsSync(candidate),
-);
-
-assert.ok(
-  executablePath,
-  "A system Chrome/Chromium executable is required for public-site browser verification",
-);
 
 const preview = spawn(
   process.platform === "win32" ? "pnpm.cmd" : "pnpm",
@@ -78,11 +60,14 @@ function absoluteUrl(route) {
 
 await waitForPreview();
 
-const browser = await chromium.launch({
+const browserLaunchOptions = {
   headless: true,
-  executablePath,
   args: ["--no-sandbox"],
-});
+};
+if (process.env.CHROME_PATH) {
+  browserLaunchOptions.executablePath = process.env.CHROME_PATH;
+}
+const browser = await chromium.launch(browserLaunchOptions);
 const page = await browser.newPage();
 const pageErrors = [];
 page.on("pageerror", (error) => pageErrors.push(error));
