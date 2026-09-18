@@ -1,0 +1,46 @@
+# Reviewed synthetic identifiers and fixtures from the pre-v1.0.0 audit.
+# Each finding has one commit-scoped fingerprint for `gitleaks git` and one
+# current-tree fingerprint for `gitleaks dir`. Do not replace them with broad
+# path, rule, or commit allowlists.
+
+# Test and E2E fixtures.
+7bbcaa3f4eeb8010ad808373fd7641f8a4b1f7ff:apps/api/tests/test_p0_03_initializer_ssh_e2e.py:generic-api-key:61
+af38f2238d066dc8e5f99db19f842809e8d19f23:apps/api/tests/test_p0_04_runs_service.py:generic-api-key:1495
+7225fbf6cfce2edd949bb8638a6d5ac8d3fe3085:scripts/verify_p0_api_main_flow_e2e.py:generic-api-key:74
+bee57df4f899d39f7b1efa18c534eef700fd6f79:scripts/verify_p0_06_ssh_taurus_smoke.py:generic-api-key:76
+142eca477d96d6a5416be5a1751be85a8471839a:apps/web/src/features/account/api-keys.test.tsx:generic-api-key:9
+c626940b6ea023054ede5ae29da4046a02c09039:apps/api/tests/test_p0_03_load_node_initializer.py:generic-api-key:41
+c626940b6ea023054ede5ae29da4046a02c09039:apps/api/tests/test_p0_03_load_nodes_service.py:private-key:165
+
+# Documentation diagrams whose API-labelled arrows match the generic-key rule.
+347ed551789b885da2de6cab0974bbdbe1ef07c2:docs/sdd/adr/ADR-0011-p2-openapi-step-generation.md:generic-api-key:13
+347ed551789b885da2de6cab0974bbdbe1ef07c2:docs/sdd/slices/P2-01-openapi-step-generation.md:generic-api-key:37
+347ed551789b885da2de6cab0974bbdbe1ef07c2:docs/sdd/slices/P2-01-openapi-step-generation.md:generic-api-key:80
+81243663672e5f21c3b827a5d86082ca8e7413f9:docs/sdd/slices/P2-02-public-api-substrate.md:generic-api-key:107
+0f9e25682800d51809ac69f2eaef535a981aedce:docs/sdd/slices/P1-05-curl-import.md:generic-api-key:58
+35d313174e76bdaa1be9c76bdd73cb928d0b13d1:docs/sdd/slices/P1-04-scenario-testplan-polish.md:generic-api-key:36
+35d313174e76bdaa1be9c76bdd73cb928d0b13d1:docs/sdd/slices/P1-04-scenario-testplan-polish.md:generic-api-key:61
+ffb0c7b977debdadbe8f35ec56d29d596fbfd4d0:docs/sdd/slices/P2-00-api-catalog-scalar.md:generic-api-key:35
+ffb0c7b977debdadbe8f35ec56d29d596fbfd4d0:docs/sdd/slices/P2-00-api-catalog-scalar.md:generic-api-key:36
+ffb0c7b977debdadbe8f35ec56d29d596fbfd4d0:docs/sdd/slices/P2-00-api-catalog-scalar.md:generic-api-key:53
+ffb0c7b977debdadbe8f35ec56d29d596fbfd4d0:docs/sdd/slices/P2-00-api-catalog-scalar.md:generic-api-key:69
+
+# Exact current-tree counterparts for the same 18 reviewed findings.
+apps/api/tests/test_p0_03_initializer_ssh_e2e.py:generic-api-key:61
+apps/api/tests/test_p0_03_load_node_initializer.py:generic-api-key:52
+apps/api/tests/test_p0_03_load_nodes_service.py:private-key:165
+apps/web/src/features/account/api-keys.test.tsx:generic-api-key:9
+apps/api/tests/test_p0_04_runs_service.py:generic-api-key:1495
+docs/sdd/adr/ADR-0011-p2-openapi-step-generation.md:generic-api-key:13
+docs/sdd/slices/P1-04-scenario-testplan-polish.md:generic-api-key:36
+docs/sdd/slices/P1-04-scenario-testplan-polish.md:generic-api-key:61
+docs/sdd/slices/P2-00-api-catalog-scalar.md:generic-api-key:35
+docs/sdd/slices/P2-00-api-catalog-scalar.md:generic-api-key:36
+docs/sdd/slices/P2-00-api-catalog-scalar.md:generic-api-key:53
+docs/sdd/slices/P2-00-api-catalog-scalar.md:generic-api-key:70
+docs/sdd/slices/P2-02-public-api-substrate.md:generic-api-key:107
+docs/sdd/slices/P1-05-curl-import.md:generic-api-key:58
+docs/sdd/slices/P2-01-openapi-step-generation.md:generic-api-key:37
+docs/sdd/slices/P2-01-openapi-step-generation.md:generic-api-key:80
+scripts/verify_p0_06_ssh_taurus_smoke.py:generic-api-key:76
+scripts/verify_p0_api_main_flow_e2e.py:generic-api-key:74

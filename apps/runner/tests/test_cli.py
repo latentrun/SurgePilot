@@ -318,7 +318,11 @@ def test_start_deletes_stale_workload_pidfile_when_group_is_empty(
         def poll(self) -> int:
             return 1
 
+    proc_root = tmp_path / "proc"
+    proc_root.mkdir()
+    probe = ProcessGroupProbe(proc_root=proc_root, use_killpg_fallback=False)
     write_workload_pidfile("run_01", ManagedPid(pid=777, starttime="1111"), runner_home=tmp_path)
+    monkeypatch.setattr(runner_cli, "ProcessGroupProbe", lambda: probe)
     monkeypatch.setattr(runner_cli.subprocess, "Popen", lambda *args, **kwargs: ExitedProcess())
     monkeypatch.setattr(runner_cli, "start_workload_wait_seconds", lambda: 0.01)
 

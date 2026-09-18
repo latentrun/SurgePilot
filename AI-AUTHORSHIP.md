@@ -18,18 +18,19 @@ feedback, and deciding whether results were acceptable.
 
 ## Baseline status
 
-**Baseline tag: not selected.** This private-stage repository does not yet identify a released
-baseline. Public activation is blocked until the owner selects one immutable semantic-
-version tag, publishes the matching installable Release, and records both here.
+**Baseline tag: `v1.0.0`, selected for immutable publication.** The repository owner selected this
+semantic version as the original public baseline. The tag and linked Release become authoritative
+only after the exact candidate passes Release Validation and the create-only Release workflow
+publishes successfully.
 
 Once recorded, the 100% AI-authored statement applies only to that immutable tag and its preserved
 baseline record. It does not automatically apply to later contributions.
 
 | Record | Value |
 | --- | --- |
-| Immutable baseline tag | Pending public-readiness review |
-| Matching GitHub Release | Pending public-readiness review |
-| Verification record | Pending final candidate verification |
+| Immutable baseline tag | [`v1.0.0`](https://github.com/latentrun/SurgePilot/releases/tag/v1.0.0) |
+| Matching GitHub Release | [SurgePilot v1.0.0](https://github.com/latentrun/SurgePilot/releases/tag/v1.0.0) |
+| Verification record | [Release Validation](https://github.com/latentrun/SurgePilot/actions/workflows/release-validation.yml) followed by the create-only [Release workflow](https://github.com/latentrun/SurgePilot/actions/workflows/release.yml) on the immutable tagged commit |
 
 ## Repository evidence map
 

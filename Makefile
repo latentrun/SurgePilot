@@ -1,4 +1,4 @@
-.PHONY: help setup dev dev-web dev-api dev-worker dev-runner dev-compose release-runtime _release-runtime start-preview _start-preview-with-env _start-preview stop-preview start-full-stack _start-full-stack-with-env _start-full-stack restart-full-stack _restart-full-stack-with-env _restart-full-stack stop-full-stack seed-full-ssh-e2e-runtime _seed-full-ssh-e2e-runtime start-full-ssh-e2e _start-full-ssh-e2e start-full-ssh-e2e-build _start-full-ssh-e2e-build restart-full-ssh-e2e _restart-full-ssh-e2e restart-full-ssh-e2e-build _restart-full-ssh-e2e-build stop-full-ssh-e2e infra-up infra-down e2e-clean migrate migration generate-contracts lint test api-coverage ai-skill-tests verifier-tests python-patch-coverage verify-db verify-smoke-compose verify verify-e2e verify-runtime-compat verify-p2-05-release-stack verify-p1-00-monitoring-compose verify-p1-00-monitoring-ssh verify-p1-00-monitoring-remote-node-write verify-p1-08-debug-http-trace-e2e verify-p2-01-openapi-two-node-e2e verify-p2-02-public-api-lifecycle verify-runner-ssh verify-runner-ssh-fast _verify-runner-ssh verify-p0-api-main-flow-e2e verify-p0-api-main-flow-e2e-fast verify-p0-06-runner-ssh verify-p0-06-runner-ssh-fast contracts-stale-check
+.PHONY: help setup setup-docs-browser dev dev-web dev-api dev-worker dev-runner dev-compose release-runtime _release-runtime start-preview _start-preview-with-env _start-preview stop-preview start-full-stack _start-full-stack-with-env _start-full-stack restart-full-stack _restart-full-stack-with-env _restart-full-stack stop-full-stack seed-full-ssh-e2e-runtime _seed-full-ssh-e2e-runtime start-full-ssh-e2e _start-full-ssh-e2e start-full-ssh-e2e-build _start-full-ssh-e2e-build restart-full-ssh-e2e _restart-full-ssh-e2e restart-full-ssh-e2e-build _restart-full-ssh-e2e-build stop-full-ssh-e2e infra-up infra-down e2e-clean migrate migration generate-contracts lint test api-coverage ai-skill-tests verifier-tests python-patch-coverage verify-db verify-smoke-compose verify verify-e2e verify-runtime-compat verify-p2-05-release-stack verify-p1-00-monitoring-compose verify-p1-00-monitoring-ssh verify-p1-00-monitoring-remote-node-write verify-p1-08-debug-http-trace-e2e verify-p2-01-openapi-two-node-e2e verify-p2-02-public-api-lifecycle verify-runner-ssh verify-runner-ssh-fast _verify-runner-ssh verify-p0-api-main-flow-e2e verify-p0-api-main-flow-e2e-fast verify-p0-06-runner-ssh verify-p0-06-runner-ssh-fast contracts-stale-check
 
 COMPOSE_BASE=docker compose -f infra/docker/docker-compose.base.yml
 COMPOSE_FULL=docker compose -f infra/docker/docker-compose.yml $(if $(filter false,$(SURGEPILOT_DEMO_LOAD_NODE_ENABLED)),,--profile demo)
@@ -51,6 +51,7 @@ export PNPM_STORE_PATH ?= /tmp/surgepilot-pnpm-store
 help:
 	@printf "SurgePilot commands:\n"
 	@printf "  make setup              Install pnpm and uv workspace dependencies\n"
+	@printf "  make setup-docs-browser Install the Playwright-managed Chromium used by docs verification\n"
 	@printf "  make infra-up           Start PostgreSQL and MinIO for local development\n"
 	@printf "  make infra-down         Stop local dependency services without deleting volumes\n"
 	@printf "  make e2e-clean          Stop E2E compose stacks and delete volumes\n"
@@ -100,6 +101,9 @@ help:
 setup:
 	pnpm install
 	uv sync --all-packages --all-groups
+
+setup-docs-browser:
+	pnpm --filter @surgepilot/docs exec playwright install chromium
 
 dev:
 	@printf "Run make infra-up, then use separate terminals for make dev-api, make dev-worker, and make dev-web.\n"

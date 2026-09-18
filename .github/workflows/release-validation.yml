@@ -36,6 +36,8 @@ jobs:
           node-version: "22"
           cache: pnpm
       - run: make setup
+      - name: Install browser runtime for rendered metadata checks
+        run: pnpm --filter @surgepilot/docs exec playwright install --with-deps chromium
       - run: make generate-contracts
       - run: make verify
 
