@@ -169,7 +169,7 @@ Load the smallest context that completely governs the task:
 | Generic source startup/restart | Cross-platform Distribution and LAN-first startup sources; use the official full-stack entry |
 | Preview-only UI/control-plane request | Source Preview amendment and its operating source; use the official preview entry and state its readiness limits |
 | Two-node SSH manual demo | Resource Multi-node and Cross-platform Distribution sources; use the official two-node SSH manual-review entry |
-| Tagged-release install/start/stop/status/logs | User-local installer and LAN-first release sources plus the public runbook |
+| Tagged-release install/start/stop/status/logs | User-local installer and LAN-first release sources plus `docs/site/docs/quickstart.md`, `docs/site/docs/startup-modes.md`, and `docs/site/docs/configuration.md` |
 | Governance/instruction change | This design, repository/workflow SDD, SDD entry/indexes, affected instructions, and governance tests |
 
 Do not load the complete PRD/SDD pack by default. Reading extra documents does not expand task scope.

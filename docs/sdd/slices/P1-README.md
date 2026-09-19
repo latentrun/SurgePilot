@@ -30,7 +30,7 @@ Use only these references for P1 Slice drafting decisions:
 The following files are the current P1 Slice index. Real active Slice SDDs are authoritative only for their own scoped capability.
 
 1. `docs/sdd/slices/P1-00-monitoring.md` -- active Slice SDD for deployment-level P1 Monitoring: JMeter Backend Listener / InfluxDB write config bridge + same-origin Grafana iframe.
-2. `docs/sdd/slices/P1-01-resource-multi-node.md` -- active Slice SDD for P1 Resource Multi-node; design frozen and Accepted for implementation.
+2. `docs/sdd/slices/P1-01-resource-multi-node.md` -- active Slice SDD for P1 Resource Multi-node; Accepted for implementation.
 3. `docs/sdd/slices/P1-03-workspace-admin.md` -- active Slice SDD for P1 Workspace / Admin.
 4. `docs/sdd/slices/P1-04-scenario-testplan-polish.md` -- active Slice SDD for P1 Scenario / Test Plan polish, amended by `ADR-0023` to retain Generated YAML Preview only on Test Plan.
 5. `docs/sdd/slices/P1-05-curl-import.md` -- active Slice SDD for P1 cURL Import.
@@ -44,7 +44,7 @@ The following files are the current P1 Slice index. Real active Slice SDDs are a
 Active P1 Slice SDDs at this revision:
 
 - `P1-00-monitoring.md`, governed by the P1 scope gate and limited to deployment-level config, Standard Run InfluxDB writes, and a read-only Grafana entry.
-- `P1-01-resource-multi-node.md`, governed by `ADR-0009` and the P1 scope gate; frozen as the implementation Slice SDD.
+- `P1-01-resource-multi-node.md`, governed by `ADR-0009` and the P1 scope gate; Accepted as the implementation Slice SDD.
 - `P1-03-workspace-admin.md`, governed by the P1 scope gate.
 - `P1-04-scenario-testplan-polish.md`, governed by the P1 scope gate.
 - `P1-05-curl-import.md`, governed by the P1 scope gate.

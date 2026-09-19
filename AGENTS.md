@@ -85,8 +85,11 @@ that completely governs the task:
   or Run execution readiness. Stop it with `make stop-preview`.
 - **Two-node SSH manual demo:** read the Resource Multi-node and Cross-platform Distribution sources,
   then use `make start-full-ssh-e2e`. Use the build variant only when the SSH image must be rebuilt.
-- **Tagged-release operations:** read the installer, LAN-first Slice, and public runbook. Installed
-  releases use `surgepilot up|down|status|logs`; manually extracted bundles use `./surgepilot`.
+- **Tagged-release operations:** read the installer and LAN-first sources from the P2 index, plus
+  `docs/site/docs/quickstart.md`, `docs/site/docs/startup-modes.md`, and
+  `docs/site/docs/configuration.md`.
+  Installed releases use `surgepilot up|down|status|logs`; manually extracted bundles use
+  `./surgepilot`.
 - **Governance or instruction changes:** read the governance optimization design, this file, the
   repository/workflow SDD, relevant indexes, and governance tests.
 
