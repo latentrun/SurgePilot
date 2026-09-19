@@ -89,15 +89,17 @@ conflict must be resolved explicitly rather than silently treating either side a
 
 Use lifecycle state and release-baseline membership as separate fields:
 
-- **Draft**: under development; it does not authorize implementation unless the user explicitly
-  approves the task as a design change.
+- **Draft**: may be edited and reviewed when explicitly requested, but does not authorize product
+  implementation. Explicit approval may transition it to **Accepted**; changing metadata only
+  records approval that already exists.
 - **Accepted**: approved authority within its stated scope.
 - **Superseded**: replaced; it names the replacement source.
 
-An immutable release tag records a **released baseline**. A live document may say which release and
-which bounded sections it governed, but release membership does not activate future scope contained
-in the same document. Do not use `Frozen` as a substitute for lifecycle state. If the term is used,
-it means only that a named immutable baseline or an accepted decision is change-controlled.
+A **released baseline** is pinned to a verified commit SHA resolved from its named release tag. A
+live document may say which release and which bounded sections it governed, but release membership
+does not activate future scope contained in the same document. Do not use `Frozen` as a substitute
+for lifecycle state. If the term is used, it means only that a commit-pinned baseline or an accepted
+decision is change-controlled.
 
 Editing a status field does not approve a document. Approval comes from an explicit user decision or
 an already accepted governance mechanism such as an ADR. An AI may record that approval after it
@@ -206,7 +208,7 @@ Deleting old assertions without a replacement acceptance check is not a migratio
 
 ## 8. v1.0.0 lifecycle audit
 
-Audit against the immutable `v1.0.0` tag and record:
+Resolve `v1.0.0` during the audit and record:
 
 - the tag commit;
 - which product/Foundation/Slice/ADR sources governed shipped behavior;
@@ -214,8 +216,9 @@ Audit against the immutable `v1.0.0` tag and record:
 - future, inactive, proposal, or known inconsistent content excluded from that baseline;
 - any unresolved mismatch as follow-up rather than silently changing history.
 
-The historical tag remains the immutable frozen snapshot. Live documents use `Draft`, `Accepted`,
-or `Superseded` and may evolve through explicit design changes.
+The audit resolved `v1.0.0` to commit
+`37cc8e4a16590f3c67403312b680a64309e61637`; baseline identity is pinned to that commit SHA. Live
+documents use `Draft`, `Accepted`, or `Superseded` and may evolve through explicit design changes.
 
 ## 9. Acceptance scenarios
 

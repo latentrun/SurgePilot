@@ -88,6 +88,11 @@ def test_accepted_governance_design_is_discoverable_from_sdd_entry() -> None:
     assert "v1.0.0-governing-document-lifecycle-audit.md" in sdd_entry
     for lifecycle_state in ("Draft", "Accepted", "Superseded"):
         assert lifecycle_state in sdd_entry
+    for lifecycle_source in (design, sdd_entry):
+        normalized = _normalized(lifecycle_source)
+        assert "does not authorize product implementation" in normalized
+        assert "transition it to **Accepted**" in normalized
+        assert "metadata only records approval that already exists" in normalized
 
 
 def test_root_is_the_bounded_instruction_authority() -> None:
@@ -192,7 +197,7 @@ def test_v1_release_audit_has_concrete_bounded_source_inventory() -> None:
             "Baseline commit",
             "`37cc8e4",
             "independent",
-            "immutable",
+            "baseline identity is pinned to that commit SHA",
             "grant approval",
         )
     )
