@@ -70,26 +70,35 @@ restores documented behavior does not require unrelated design churn.
 Always read this file and the `AGENTS.md` in every affected subtree. Then load the smallest context
 that completely governs the task:
 
+<!-- governance-route:named-feature -->
 - **Named feature/Slice:** read the named Slice, activating/amending ADRs, and direct Foundation,
   contract, code, and test dependencies.
+<!-- governance-route:feature-without-slice -->
 - **Feature without a named Slice:** read the SDD entry, scope gate, and relevant P1/P2 index.
   Proceed only when an accepted Slice/ADR clearly authorizes it; otherwise stop at the scope gate.
+<!-- governance-route:bug-fix -->
 - **Bug fix:** read the owning Foundation or Slice SDD and every amendment that changes the
   established behavior, followed by relevant code, contracts, and tests.
+<!-- governance-route:cross-subtree -->
 - **Cross-subtree changes:** read each affected nested instruction file and update contract sources
   before consumers.
+<!-- governance-route:source-full-stack -->
 - **Generic source startup or restart:** read the Cross-platform Distribution and LAN-first sources
   listed by the P2 index, then use `make start-full-stack` or `make restart-full-stack`.
+<!-- governance-route:source-preview -->
 - **Preview-only UI or control-plane work:** read the Source Preview amendment listed by the P2
   index, use `make start-preview`, and state that preview does not promise Load Node initialization
   or Run execution readiness. Stop it with `make stop-preview`.
+<!-- governance-route:two-node-ssh -->
 - **Two-node SSH manual demo:** read the Resource Multi-node and Cross-platform Distribution sources,
   then use `make start-full-ssh-e2e`. Use the build variant only when the SSH image must be rebuilt.
+<!-- governance-route:tagged-release -->
 - **Tagged-release operations:** read the installer and LAN-first sources from the P2 index, plus
   `docs/site/docs/quickstart.md`, `docs/site/docs/startup-modes.md`, and
   `docs/site/docs/configuration.md`.
   Installed releases use `surgepilot up|down|status|logs`; manually extracted bundles use
   `./surgepilot`.
+<!-- governance-route:governance-change -->
 - **Governance or instruction changes:** read the governance optimization design, this file, the
   repository/workflow SDD, relevant indexes, and governance tests.
 

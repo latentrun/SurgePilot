@@ -232,6 +232,8 @@ The migration is complete only when these task simulations reach the correct sou
 
 Governance tests should observe these public task-facing outcomes and stable authority relationships,
 not exact paragraphs or incidental document layout.
+Root context routes carry stable `governance-route:*` markers so tests can associate a task trigger
+with its required outcome without depending on Markdown headings, list syntax, or editorial labels.
 
 ## 10. Definition of done
 

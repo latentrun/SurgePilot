@@ -9,7 +9,7 @@ NESTED_INSTRUCTIONS = (
     ROOT / "apps/web/AGENTS.md",
     ROOT / "packages/contracts/AGENTS.md",
 )
-ACTIVE_SLICE_PATHS = (
+V1_SLICE_PATHS = (
     "docs/sdd/slices/P0-00-auth-workspace-admin-setup.md",
     "docs/sdd/slices/P0-01-env-groups.md",
     "docs/sdd/slices/P0-02-dependency-files-minio.md",
@@ -70,6 +70,14 @@ def _normalized(text: str) -> str:
     return " ".join(text.split())
 
 
+def _route(markdown: str, route_id: str) -> str:
+    marker = f"<!-- governance-route:{route_id} -->"
+    start = markdown.index(marker) + len(marker)
+    remainder = markdown[start:]
+    end = remainder.find("<!-- governance-route:")
+    return _normalized(remainder if end == -1 else remainder[:end])
+
+
 def test_accepted_governance_design_is_discoverable_from_sdd_entry() -> None:
     design_path = ROOT / "docs/sdd/ai-development-governance-optimization-design.md"
     design = design_path.read_text(encoding="utf-8")
@@ -97,36 +105,34 @@ def test_root_is_the_bounded_instruction_authority() -> None:
 
 
 def test_instruction_contract_covers_task_outcomes() -> None:
-    agents = _normalized(ROOT_INSTRUCTIONS.read_text(encoding="utf-8"))
+    agents = ROOT_INSTRUCTIONS.read_text(encoding="utf-8")
     task_outcomes = {
-        "unauthorized feature stops at scope gate": (
+        "feature-without-slice": (
             "accepted Slice/ADR",
             "otherwise stop at the scope gate",
         ),
-        "bug fix loads governing behavior and evidence": (
-            "Bug fix",
+        "bug-fix": (
             "every amendment",
             "code, contracts, and tests",
         ),
-        "cross-subtree work respects local rules and contract order": (
-            "Cross-subtree changes",
+        "cross-subtree": (
             "each affected nested instruction",
             "contract sources before consumers",
         ),
-        "source startup uses the full stack": (
+        "source-full-stack": (
             "make start-full-stack",
             "make restart-full-stack",
         ),
-        "preview declares its readiness limit": (
+        "source-preview": (
             "make start-preview",
             "make stop-preview",
             "does not promise Load Node initialization or Run execution readiness",
         ),
-        "two-node review uses the SSH entry": (
+        "two-node-ssh": (
             "Resource Multi-node",
             "make start-full-ssh-e2e",
         ),
-        "release operations use named runbooks": (
+        "tagged-release": (
             "docs/site/docs/quickstart.md",
             "docs/site/docs/startup-modes.md",
             "docs/site/docs/configuration.md",
@@ -134,8 +140,9 @@ def test_instruction_contract_covers_task_outcomes() -> None:
             "./surgepilot",
         ),
     }
-    for outcome, required_terms in task_outcomes.items():
-        assert all(term in agents for term in required_terms), outcome
+    for route_id, required_terms in task_outcomes.items():
+        route = _route(agents, route_id)
+        assert all(term in route for term in required_terms), route_id
 
 
 def test_nested_instructions_are_small_local_deltas() -> None:
@@ -157,7 +164,12 @@ def test_scope_indexes_own_dynamic_slice_discovery() -> None:
 
     assert "docs/sdd/slices/P1-README.md" in root_instructions
     assert "docs/sdd/slices/P2-README.md" in root_instructions
-    for slice_path in ACTIVE_SLICE_PATHS:
+    current_slice_paths = tuple(
+        path.relative_to(ROOT).as_posix()
+        for path in sorted((ROOT / "docs/sdd/slices").glob("P[12]-*.md"))
+        if not path.name.endswith("README.md")
+    )
+    for slice_path in current_slice_paths:
         if "/P1-" in slice_path:
             assert slice_path in p1_index
         elif "/P2-" in slice_path:
@@ -198,7 +210,7 @@ def test_v1_release_audit_has_concrete_bounded_source_inventory() -> None:
         "docs/sdd/08-frontend-routing-and-ui-rules.md",
         "docs/sdd/09-testing-and-acceptance-strategy.md",
     )
-    for source in (*foundation_sources, *ACTIVE_SLICE_PATHS, *V1_ADR_PATHS):
+    for source in (*foundation_sources, *V1_SLICE_PATHS, *V1_ADR_PATHS):
         assert f"`{source}`" in audit, source
 
     assert all(term in audit for term in ("Future or inactive", "Placeholder", "non-goals"))
