@@ -6,6 +6,9 @@ This document is only a P1 Slice writing brief and scope index. It does not repl
 
 P1 governance has started via `docs/sdd/adr/ADR-0022-p1-governance-start.md`, but this README still remains an index. It does not authorize implementation by itself.
 
+Dynamic Slice activation belongs in this index and the owning Slice/ADR, not in root `AGENTS.md`.
+Root instructions provide the stable scope gate and route feature work here for discovery.
+
 Current conflict to avoid: older P1 index wording can become stale when real Slice SDDs are added or renumbered. Downstream P1 Slice authors must follow the authoritative references below instead of copying old candidate names or old P0-only wording from this README.
 
 ## Authoritative References
@@ -63,7 +66,10 @@ P1 capabilities must not become prerequisites for the P0 execution loop.
 
 ## Revision Protocol
 
-This README must not independently enlarge P1 scope. Any new or changed P1 capability must first update the PRD or add a confirmed ADR, then synchronize `docs/sdd/00-product-scope-and-priority.md`, `docs/sdd/02-repo-structure-and-dev-workflow.md`, `AGENTS.md`, and this index where applicable.
+This README must not independently enlarge P1 scope. Any new or changed P1 capability must first
+update the PRD or add an accepted ADR, then synchronize the scope gate, this index, the owning Slice,
+and directly affected Foundation sources. Update root `AGENTS.md` only when a stable
+repository-wide invariant or context-routing branch changes.
 
 The P1 governance start gate is recorded in `docs/sdd/adr/ADR-0022-p1-governance-start.md`. If another document still contains stale P0-only target wording, treat it as requiring sync before using that file as execution input for a P1 task.
 

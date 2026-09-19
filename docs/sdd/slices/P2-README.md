@@ -6,6 +6,9 @@ This document is only a P2 Slice writing brief and scope index. It does not repl
 
 P2 capabilities remain inactive until a named accepted P2 Slice SDD and any required governance decision activate implementation. This index does not authorize implementation by itself. `P2-00-api-catalog-scalar.md` is active through `ADR-0010`; `P2-01-openapi-step-generation.md` is active through `ADR-0011`; `P2-02-public-api-substrate.md` is active through `ADR-0012`; `P2-03-env-group-secret.md` is active through `ADR-0014`; `P2-04-help-ai-agents-system-openapi-bootstrap.md` is active through `ADR-0016`; `P2-05-cross-platform-distribution.md` is active through `ADR-0017`, its source-preview amendment `ADR-0019`, and its user-local platform Release installer amendment `ADR-0024`; `P2-06-lan-first-deployment-usability.md` is active through `ADR-0018`, its new-release Runtime default amendment `ADR-0020`, its release `up` configuration confirmation amendment `ADR-0021`, and its separate installation amendment `ADR-0024` as release-path amendments to P2-05; `P2-07-public-launch-github-pages-seo.md` is active through `ADR-0026`. `ADR-0013` remains limited to the self-hosted static Marketing Landing / Logo only, while ADR-0026 separately governs the public Pages marketing site.
 
+Dynamic Slice activation belongs in this index and the owning Slice/ADR, not in root `AGENTS.md`.
+Root instructions provide the stable scope gate and route feature work here for discovery.
+
 ## Authoritative References
 
 Use only these references for P2 Slice drafting decisions:
@@ -61,6 +64,9 @@ startup, Runtime, Compose, installer, or integrity contracts.
 
 ## Revision Protocol
 
-This README must not independently enlarge P2 scope. Any new or changed P2 capability must first update the PRD or add a confirmed ADR, then synchronize `docs/sdd/00-product-scope-and-priority.md`, `docs/sdd/02-repo-structure-and-dev-workflow.md`, `AGENTS.md`, and this index where applicable.
+This README must not independently enlarge P2 scope. Any new or changed P2 capability must first
+update the PRD or add an accepted ADR, then synchronize the scope gate, this index, the owning Slice,
+and directly affected Foundation sources. Update root `AGENTS.md` only when a stable
+repository-wide invariant or context-routing branch changes.
 
 Before submitting changes to this README, verify that it still avoids implementation design duplication and does not activate P2 capabilities by itself.

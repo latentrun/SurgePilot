@@ -1,12 +1,22 @@
-# API Agent Notes
+# API Agent Instructions
 
-- Follow root `AGENTS.md` and `docs/sdd/02-repo-structure-and-dev-workflow.md`.
-- This file is subordinate to `/AGENTS.md`; when conflicts occur, follow root AGENTS and the referenced SDD.
-- Follow root verification gates and `docs/sdd/09-testing-and-acceptance-strategy.md` for test expectations.
-- API owns auth, authorization, Workspace enforcement, database, MinIO access, and audit-relevant decisions.
-- Keep public business routes under `/api/v1`; keep health endpoints at `/api/healthz` and `/api/readyz`.
-- API JSON fields use `camelCase`; DB columns, ORM fields, and migrations use `snake_case`.
-- External business IDs are ULID strings; store ULID IDs in the DB as `text` or `char(26)`, not PostgreSQL `uuid`.
-- FastAPI/Pydantic routes are the OpenAPI source of truth; run `make generate-contracts` after API schema changes.
-- ADR-0016/P2-04 skill download is a session-authenticated, non-Workspace account read that appears only in `api.openapi.json`; its source-unavailable code stays route-local. The first-Admin system OpenAPI import must run after registration commit in an independent session and must never affect registration success.
-- Do not import Web or Runner internals; add P1 endpoints only when a named accepted P1 Slice SDD is active, and keep them inside that Slice.
+Scope: `apps/api/**`.
+
+Inherits `/AGENTS.md`. This file adds API-specific constraints and review rules.
+
+- API owns authentication, authorization, Workspace enforcement, database and MinIO access, and
+  audit-relevant decisions.
+- FastAPI routes and Pydantic schemas are the source of generated OpenAPI. Run
+  `make generate-contracts` after schema changes.
+- Keep browser-session/business, public PAT, health, and internal Runner surfaces separated by the
+  governing API contract. A route may omit Workspace context only when its accepted design says so.
+- API JSON uses `camelCase`; database, ORM, and migration fields use `snake_case`.
+- External business IDs are ULIDs stored as text/`char(26)`, never PostgreSQL UUIDs.
+- API does not import Web or Runner internals.
+
+## Code Review Rules
+
+- Flag missing backend Workspace/permission enforcement even when the UI already restricts access.
+- Flag secret-bearing, session-only, or internal Runner schemas exposed through public OpenAPI.
+- Flag route behavior or error semantics that lack authority in the owning contract/Slice.
+- Flag schema changes whose generated OpenAPI and clients were not refreshed.

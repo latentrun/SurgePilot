@@ -65,7 +65,10 @@ Ongoing dual-format compatibility would increase implementation and test complex
 4. Web and API code must use the session masked read model only for browser session surfaces; public routes must use plain-only DTOs.
 5. Existing development data with old string-map variables must be converted by the required one-time migration; runtime code must not keep dual-schema compatibility.
 6. Snapshot plaintext remains a known temporary risk until a separate Snapshot Security design adds encryption and key governance.
-7. After this ADR is accepted, governance docs must stay synchronized: `AGENTS.md`, `docs/sdd/00-product-scope-and-priority.md`, `docs/sdd/slices/P2-README.md`, and `docs/sdd/02-repo-structure-and-dev-workflow.md` §12 must reference this Slice and ADR as the Env Group Secret authorization source while preserving ADR-0013 exclusively for static Marketing Landing / Logo.
+7. After this ADR is accepted, the scope gate, P2 index, owning Slice, and directly affected
+   Foundation sources must reference this ADR as the Env Group Secret authorization source while
+   preserving ADR-0013 exclusively for static Marketing Landing / Logo. Root instructions route P2
+   discovery through the index and do not duplicate this activation record.
 
 ## Related ADRs
 

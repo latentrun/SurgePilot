@@ -1,12 +1,22 @@
-# Runner Agent Notes
+# Runner Agent Instructions
 
-- Follow root `AGENTS.md` and `docs/sdd/05-runner-protocol-and-run-state-machine.md`.
-- This file is subordinate to `/AGENTS.md`; when conflicts occur, follow root AGENTS and the referenced SDD.
-- Follow root verification gates and `docs/sdd/09-testing-and-acceptance-strategy.md` for test expectations.
-- Runner is an independent app and must not import `apps/api` internals.
-- Communicate with API only through runner protocol HTTP callbacks and `packages/contracts`.
-- Runner internal API requests use `x-runner-token`.
-- Callback payloads follow `packages/contracts/runner/runner-callback.schema.json`; `eventId` is the idempotency key.
-- Heartbeat, stop, and terminal overwrite behavior follows `docs/sdd/05-runner-protocol-and-run-state-machine.md`.
-- Do not access PostgreSQL or MinIO directly; artifacts go through API in P0.
-- Keep fake-runner behavior inside this app so tests and E2E share runner code paths.
+Scope: `apps/runner/**`.
+
+Inherits `/AGENTS.md`. This file adds Runner-specific constraints and review rules. Consult
+`docs/sdd/05-runner-protocol-and-run-state-machine.md` for protocol or state changes.
+
+- Runner is an independent application and does not import API internals.
+- Communicate with API only through documented HTTP protocol and `packages/contracts`.
+- Internal requests use `x-runner-token`; callback `eventId` is the idempotency key.
+- Runner never owns direct PostgreSQL or MinIO access. Artifacts cross the API boundary defined by
+  the active design.
+- Keep Fake Runner behavior in this application so tests exercise intended shared code paths.
+- State-machine safety, late-callback protection, Stop idempotency, heartbeat behavior, and lease
+  release cannot be weakened for convenience or minimum diff.
+
+## Code Review Rules
+
+- Flag callbacks that can overwrite terminal state or apply the same event twice.
+- Flag failure/cancellation paths that can leave a Load Node permanently Busy.
+- Flag direct database/storage access or imports from API internals.
+- Flag Fake Runner behavior that diverges from the real Runner path without explicit test intent.

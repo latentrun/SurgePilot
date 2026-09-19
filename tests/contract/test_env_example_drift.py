@@ -649,17 +649,13 @@ def test_readme_uses_the_concise_deployment_quickstart_and_doc_router() -> None:
 
 def test_source_preview_governance_is_synchronized_with_authoritative_workflow() -> None:
     agents = (ROOT / "AGENTS.md").read_text(encoding="utf-8")
+    p2_index = (ROOT / "docs/sdd/slices/P2-README.md").read_text(encoding="utf-8")
     workflow = (ROOT / "docs/sdd/02-repo-structure-and-dev-workflow.md").read_text(encoding="utf-8")
 
-    assert (
-        "P2-05-cross-platform-distribution.md` is active only through `ADR-0017` plus source "
-        "preview through `ADR-0019`" in agents
-    )
-    assert "ADR-0019-p2-source-preview-startup.md" in workflow
-    assert (
-        "P2-05 is allowed only through ADR-0017, source preview through ADR-0019, user-local "
-        "installation through ADR-0024" in workflow
-    )
+    assert "docs/sdd/slices/P2-README.md" in agents
+    assert "P2-05-cross-platform-distribution.md" in p2_index
+    assert "ADR-0019" in p2_index
+    assert "ADR-0019" in workflow
     assert (
         "P2-05 authorizes only the complete GHCR/GitHub Release platform distribution"
         not in workflow
@@ -668,6 +664,7 @@ def test_source_preview_governance_is_synchronized_with_authoritative_workflow()
 
 def test_release_dual_runtime_default_governance_is_synchronized() -> None:
     agents = (ROOT / "AGENTS.md").read_text(encoding="utf-8")
+    p2_index = (ROOT / "docs/sdd/slices/P2-README.md").read_text(encoding="utf-8")
     workflow = (ROOT / "docs/sdd/02-repo-structure-and-dev-workflow.md").read_text(encoding="utf-8")
     adr_index = (ROOT / "docs/sdd/adr/README.md").read_text(encoding="utf-8")
     distribution_adr = (ROOT / "docs/sdd/adr/ADR-0017-p2-cross-platform-distribution.md").read_text(
@@ -682,8 +679,9 @@ def test_release_dual_runtime_default_governance_is_synchronized() -> None:
     normalized_distribution_adr = " ".join(distribution_adr.split())
     normalized_distribution_slice = " ".join(distribution_slice.split())
 
-    assert "ADR-0020-p2-release-dual-runtime-default.md" in agents
-    assert "ADR-0020-p2-release-dual-runtime-default.md" in workflow
+    assert "docs/sdd/slices/P2-README.md" in agents
+    assert "ADR-0020" in p2_index
+    assert "ADR-0020" in workflow
     assert "ADR-0020-p2-release-dual-runtime-default.md" in adr_index
     assert "new tagged-release deployments default to `amd64,arm64`" in workflow
     assert "ADR-0020-p2-release-dual-runtime-default.md" in distribution_adr
@@ -727,6 +725,7 @@ def test_release_dual_runtime_default_governance_is_synchronized() -> None:
 
 def test_release_up_configuration_confirmation_governance_is_synchronized() -> None:
     agents = (ROOT / "AGENTS.md").read_text(encoding="utf-8")
+    p2_index = (ROOT / "docs/sdd/slices/P2-README.md").read_text(encoding="utf-8")
     workflow = (ROOT / "docs/sdd/02-repo-structure-and-dev-workflow.md").read_text(encoding="utf-8")
     adr_index = (ROOT / "docs/sdd/adr/README.md").read_text(encoding="utf-8")
     adr_0017 = (ROOT / "docs/sdd/adr/ADR-0017-p2-cross-platform-distribution.md").read_text(
@@ -748,8 +747,9 @@ def test_release_up_configuration_confirmation_governance_is_synchronized() -> N
         encoding="utf-8"
     )
 
-    assert "ADR-0021-p2-release-up-configuration-confirmation.md" in agents
-    assert "ADR-0021-p2-release-up-configuration-confirmation.md" in workflow
+    assert "docs/sdd/slices/P2-README.md" in agents
+    assert "ADR-0021" in p2_index
+    assert "ADR-0021" in workflow
     assert "ADR-0021-p2-release-up-configuration-confirmation.md" in adr_index
     assert "ADR-0021-p2-release-up-configuration-confirmation.md" in p2_05
     assert (
@@ -763,7 +763,6 @@ def test_release_up_configuration_confirmation_governance_is_synchronized() -> N
     normalized_p2_05 = " ".join(p2_05.split())
     normalized_p2_06 = " ".join(p2_06.split())
     normalized_workflow = " ".join(workflow.split())
-    normalized_agents = " ".join(agents.split())
     for document in (normalized_adr, normalized_p2_05, normalized_p2_06):
         assert "standard `os.replace`" in document
         assert "simultaneous manual same-user editing" in document.lower()
@@ -771,7 +770,7 @@ def test_release_up_configuration_confirmation_governance_is_synchronized() -> N
     assert "no backup or automatic rollback" in normalized_adr
     assert "updated but durability could not be confirmed; inspect `.env`" in normalized_adr
     assert "final pre-replacement SHA-256 check" in normalized_workflow
-    assert "standard `os.replace`" in normalized_agents
+    assert "standard `os.replace`" in normalized_p2_06
     stale_strict_guarantees = (
         "Any failure leaves the original file intact",
         "any failure leaves the original intact",

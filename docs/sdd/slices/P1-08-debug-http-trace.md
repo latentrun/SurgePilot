@@ -69,7 +69,8 @@ This Slice must comply with:
 The following preconditions are completed in this Slice and used as implementation input:
 
 1. ADR Revision: `ADR-0008` accepts `debug_http_trace` as P1 additional ability.
-2. Scope Sync: Synchronize `00`, `02`, `AGENTS.md` and `P1-README`.
+2. Scope Sync: Synchronize `00`, the P1 index, this Slice, and directly affected Foundation sources;
+   update root instructions only for a stable repository-wide invariant or routing change.
 3. Foundation Sync: Synchronize the artifact whitelist and terminal-late boundaries of `05`; synchronize the artifact type, preview, and storage boundaries of `07`.
 4. Runtime Boundary: Explicitly do not modify the P0 runtime tar, metadata, sha256 or init process.
 5. Taurus Injection Boundary: Groovy vector is fixed as Taurus YAML inline `jsr223.script-text`.

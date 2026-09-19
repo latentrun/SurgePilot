@@ -61,7 +61,9 @@ Body preview is allowed only for text, JSON, XML and form content. Binary-like c
 
 ## Consequences
 
-- `docs/sdd/00-product-scope-and-priority.md`, `docs/sdd/02-repo-structure-and-dev-workflow.md`, root `AGENTS.md`, `docs/sdd/slices/P1-README.md`, `docs/sdd/05-runner-protocol-and-run-state-machine.md`, and `docs/sdd/07-storage-artifacts-minio.md` must be synchronized before code implementation.
+- The scope gate, P1 index, Runner protocol, storage design, and owning Slice must be synchronized
+  before code implementation. Root instructions route P1 discovery through the index and change
+  only for a stable repository-wide invariant or routing branch.
 - The active Slice SDD must contain verifiable Done When criteria before implementation begins.
 - API contract changes follow FastAPI schema → OpenAPI export → generated client → Web consumption.
 - P0 Stability remains mandatory: terminal protection, idempotent Stop, node lease cleanup, path safety, Workspace enforcement, permission checks and credential safety cannot regress.

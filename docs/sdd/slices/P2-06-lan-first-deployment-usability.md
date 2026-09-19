@@ -986,8 +986,8 @@ explicit four-field loop is sufficient.
    release defaults.
 3. The activation changes synchronize P2-05 and ADR-0017/0018/0020/0021; they do not rewrite the
    publication or artifact design.
-4. `docs/sdd/02-repo-structure-and-dev-workflow.md`, `AGENTS.md`, and the P2 index are synchronized
-   only when the Slice becomes active.
+4. The owning workflow sections, this Slice, and the P2 index are synchronized; root instructions
+   change only for a stable repository-wide invariant or routing branch.
 5. `infra/release/README.md`, release `.env.example`, release Compose, wrapper, bootstrap helper,
    Runtime preflight, and tests change together during implementation.
 6. Source Compose retains internal defaults and receives only regression tests required to prove
