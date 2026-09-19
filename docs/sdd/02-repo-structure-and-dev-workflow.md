@@ -1210,11 +1210,15 @@ Non-MinIO storage implementations must not be introduced in P0.
 
 ---
 
-## 12. AI Coding / AGENTS.md Workflow
+## 12. AI Instruction Architecture
 
-### 12.1 Required AGENTS.md Files
+### 12.1 Authority and files
 
-M0 should create at least:
+`/AGENTS.md` is the repository authority for AI contribution behavior. PRD, Foundation/Slice SDDs,
+and accepted ADRs remain authoritative for product behavior and technical design. This document
+owns repository and development workflow design; it references and does not reproduce `/AGENTS.md`.
+
+The instruction chain contains:
 
 ```text
 AGENTS.md
@@ -1224,148 +1228,47 @@ apps/runner/AGENTS.md
 packages/contracts/AGENTS.md
 ```
 
-### 12.2 Root AGENTS.md Minimum Content
+Root instructions contain stable repository-wide policy and invariants. A nested file declares its
+filesystem scope and adds only stable domain constraints and review rules. A nested rule may
+specialize or tighten root behavior for its subtree, but it cannot weaken repository-wide
+invariants. Resolve an apparent conflict in the governing documents before implementation.
 
-The root directory `AGENTS.md` contains at least; the first paragraph must declare that this article is the authoritative source of AGENTS content to avoid AGENTS and SDD bifurcation:
+The accepted instruction model and lifecycle are defined by
+`docs/sdd/ai-development-governance-optimization-design.md`.
 
-During P1/P2, `AGENTS.md` must also list the current real P1/P2 Slice SDD. Accepted P1 capabilities can only be implemented through the respective real Slice SDD and must not be directly authorized by the P1 README placeholder content; for example, Monitoring can only be implemented through `docs/sdd/slices/P1-00-monitoring.md`, Resource Multi-node can only be implemented through `docs/sdd/slices/P1-01-resource-multi-node.md` and `docs/sdd/adr/ADR-0009-p1-resource-multi-node.md`, and Scenario/TestPlan Polish can only be implemented through `docs/sdd/slices/P1-04-scenario-testplan-polish.md` as amended by `docs/sdd/adr/ADR-0023-remove-scenario-execution-preview.md`, which retains Generated YAML Preview only for Test Plan. cURL Import can only be implemented through `docs/sdd/slices/P1-05-curl-import.md`, Dependency File Preview can only be implemented through `docs/sdd/slices/P1-06-dependency-preview.md`, Debug HTTP Trace can only be implemented through `docs/sdd/slices/P1-08-debug-http-trace.md`, P1-09 Scenario Global Configuration can only be implemented through `docs/sdd/adr/ADR-0015-p1-scenario-global-configuration.md` and `docs/sdd/slices/P1-09-scenario-global-configuration.md`, and is only authorized Scenario-level structured Global Configuration Phase A. P2-00 API Catalog Scalar can only be implemented through `docs/sdd/adr/ADR-0010-p2-api-catalog-scalar.md` and `docs/sdd/slices/P2-00-api-catalog-scalar.md`. P2-01 OpenAPI Step Generation can only be implemented through `docs/sdd/adr/ADR-0011-p2-openapi-step-generation.md` and `docs/sdd/slices/P2-01-openapi-step-generation.md`, and does not authorize API Catalog operation management, Scenario/Test Plan generation links, or other P2 capabilities. P2-02 Public API Substrate can only be implemented through `docs/sdd/adr/ADR-0012-p2-public-api-substrate.md` and `docs/sdd/slices/P2-02-public-api-substrate.md`; it authorizes Account self-service API keys, PAT Bearer public business API, public OpenAPI artifact, structured config writes, Run lifecycle access, the bounded Dependency File list/upload/delete extension, and one repo-maintained Public API AI skill source package verified against the public artifact. The Dependency File extension uses `read` for list and `dependency:write` for upload/delete, reuses existing storage/validation/audit/Workspace/reference-protection rules, and does not authorize public preview/download. P2-03 Env Group Secret can only be implemented through `docs/sdd/adr/ADR-0014-p2-env-group-secret.md` and `docs/sdd/slices/P2-03-env-group-secret.md`; it authorizes only Env Group typed variables, session masked read, plain-only public DTO, required one-time migration, and public API secret exclusion, not Snapshot encryption, key rotation, reveal API, external Secret Manager, or generic redaction. P2-04 Help AI Agents and System OpenAPI Bootstrap can only be implemented through `docs/sdd/adr/ADR-0016-p2-help-ai-agents-system-openapi-bootstrap.md` and `docs/sdd/slices/P2-04-help-ai-agents-system-openapi-bootstrap.md`; it authorizes only authenticated Help, session request-built skill source download, shared runtime/script OpenAPI export, and first-Admin best-effort system curated OpenAPI import. P2-05 Cross-platform Distribution and Full-stack Release Bootstrap can only be implemented through `docs/sdd/adr/ADR-0017-p2-cross-platform-distribution.md`, the source-preview amendment `docs/sdd/adr/ADR-0019-p2-source-preview-startup.md`, the user-local platform Release installer amendment `docs/sdd/adr/ADR-0024-p2-user-local-release-installer.md`, and `docs/sdd/slices/P2-05-cross-platform-distribution.md`; ADR-0017 authorizes the complete GHCR/GitHub Release distribution, Linux Runtime assets, distinct source/release Compose paths, Monitoring, and one real Compose-internal Demo Load Node, ADR-0019 adds only the source control-plane preview and Runtime build observability, and ADR-0024 adds only the version-pinned user-local installer, bundle checksum, launcher, and installer smoke. P2-06 LAN-first Release Bootstrap Usability can only be implemented through `docs/sdd/adr/ADR-0018-p2-lan-first-release-bootstrap.md`, the new-release Runtime default amendment `docs/sdd/adr/ADR-0020-p2-release-dual-runtime-default.md`, the release configuration confirmation amendment `docs/sdd/adr/ADR-0021-p2-release-up-configuration-confirmation.md`, the separate installation amendment `docs/sdd/adr/ADR-0024-p2-user-local-release-installer.md`, and `docs/sdd/slices/P2-06-lan-first-deployment-usability.md`; ADR-0020 changes only a missing-`.env` tagged-release default to `amd64,arm64` without an architecture prompt, ADR-0021 adds bounded pre-Runtime display, read-only default-Yes confirmation, and explicit interactive four-field standard-LAN updates, and ADR-0024 keeps installation separate from the unchanged interactive `up` contract. Non-interactive rewriting, advanced HTTPS quick editing, non-network changes, and source-startup changes remain forbidden. ADR-0013 additionally authorizes only static public `/` Marketing Landing and Logo visual migration; it does not independently authorize Help/Docs/Community/API Guide/GitHub or other P2 capabilities. P2-07 Public Launch, GitHub Pages, and SEO can only be implemented through `docs/sdd/adr/ADR-0026-p2-public-launch-github-pages-seo.md` and `docs/sdd/slices/P2-07-public-launch-github-pages-seo.md`; it authorizes only the unified `latentrun/SurgePilot` VitePress Pages site, exact localized docs below `/docs/`, original AI-authored baseline evidence, publication SEO/social metadata, self-hosted Web `noindex`, the exact product-Landing public Docs/repository targets and truthful presentation-label corrections, demo/social assets, public-readiness review, and gated public activation. It does not change ADR-0013 authentication/routing behavior or P2-05/P2-06 release execution contracts.
+### 12.2 Size and maintenance
 
-```markdown
-# SurgePilot Agent Instructions
+- Root instructions remain below 20 KiB.
+- Each nested instruction file normally remains below 4 KiB.
+- Every root-plus-child chain remains below the Codex default 32 KiB project-instruction budget.
+- Dynamic Slice/ADR activation belongs in the P1/P2 indexes and owning design sources.
+- Detailed startup, release, installer, launch, and E2E procedures remain in focused SDDs, ADRs,
+  and runbooks reached through task-triggered pointers.
+- New scope or ADRs should update their owning index and design sources; root changes only when a
+  stable repository-wide invariant or routing branch changes.
 
-Authoritative source: `docs/sdd/02-repo-structure-and-dev-workflow.md` §12. This file is a synced operational copy. If there is any conflict, follow 02 and update this file.
+### 12.3 Task context
 
-## Current target
-The current delivery target is P2-02 Public API Substrate and governed Public API AI skill source package implementation plus P2-03 Env Group Secret implementation plus P2-04 Help AI Agents and System OpenAPI Bootstrap plus P2-05 Cross-platform Distribution, Full-stack Release Bootstrap, ADR-0019 source preview, and ADR-0024 User-local Release Installer plus P2-06 LAN-first Release Bootstrap Usability, ADR-0020 Release Dual-Architecture Runtime Default, ADR-0021 Release `up` Configuration Confirmation, and ADR-0024 User-local Release Installer plus P2-07 Public Launch, GitHub Pages, and SEO through ADR-0026 plus ADR-0013 static Marketing Landing and Logo plus P1-09 Scenario Global Configuration SDD authorization plus the localized Public User Documentation MVP. P1-09 is an SDD authorization only; Phase A activates only Scenario-level structured Global Configuration Tabs for Settings, Headers, Variables, and Data Sources, and does not replace P1-04 Scenario / TestPlan Polish. P1 implementation still requires a named, accepted P1 Slice SDD; P1-09 remains allowed only through ADR-0015 and its Slice SDD. P2-00 remains allowed only through ADR-0010 and its Slice SDD; P2-01 remains allowed only through ADR-0011 and its Slice SDD; P2-02 is allowed only through ADR-0012 and its Slice SDD; P2-03 is allowed only through ADR-0014 and its Slice SDD; P2-04 is allowed only through ADR-0016 and its Slice SDD; P2-05 is allowed only through ADR-0017, source preview through ADR-0019, user-local installation through ADR-0024, and its Slice SDD. P2-06 is allowed only through ADR-0018, its ADR-0020 new-release Runtime default amendment, ADR-0021 release `up` configuration confirmation amendment, ADR-0024 separate installation amendment, and its Slice SDD. P2-07 is allowed only through ADR-0026 and its Slice SDD; it authorizes only the unified `latentrun/SurgePilot` VitePress Pages site, exact localized docs below `/docs/`, original AI-authored baseline evidence, publication SEO/social metadata, self-hosted Web `noindex`, demo/social assets, public-readiness review, and gated public activation. P2-04 authorizes only authenticated Help, the request-built source zip, shared OpenAPI export, and first-Admin system curated OpenAPI bootstrap. P2-05 authorizes the complete GHCR/GitHub Release platform distribution, bounded source preview, and ADR-0024 user-local platform installer, and does not publish the Public API AI skill as a standalone artifact. ADR-0013 only activates the static public `/` Landing route and Logo migration; none authorizes SDK, MCP server, marketplace, skills runtime, user/external auto-ingestion or any API Catalog to Scenario/Test Plan generation chain. The Public User Documentation MVP remains localized through ADR-0025. ADR-0026/P2-07 moves the same six authoritative English pages and exact `zh-CN` and `ja` mirrors below `/docs/` inside one VitePress Pages site and authorizes only the bounded public URL, project base, online links, static marketing surface, publication metadata, and gated deployment. Native locale navigation, locale page/link checks, source/release `.env.example` reference coverage, and explicit locale selection remain required; a seventh user page, automatic translation or language redirection, product UI localization, custom domains, API/AI Skill reference sections, contributor architecture navigation, and multi-version documentation remain inactive.
+For every task, read root instructions and the instruction file in every affected subtree. Then use
+the root task routes to load the named Slice or discover it from the SDD entry, scope gate, and P1/P2
+index. Load only direct ADR, Foundation, contract, code, and test dependencies. Reading additional
+documents never expands implementation scope.
 
-## Canonical documents
-- Product source: docs/prd/PRD.md
-- SDD entry: docs/sdd/README.md
-- Scope rules: docs/sdd/00-product-scope-and-priority.md
-- Public User Documentation Localization ADR: docs/sdd/adr/ADR-0025-public-user-documentation-localization.md
-- P2 Public Launch, GitHub Pages, and SEO ADR: docs/sdd/adr/ADR-0026-p2-public-launch-github-pages-seo.md
-- P2 Public Launch, GitHub Pages, and SEO Slice: docs/sdd/slices/P2-07-public-launch-github-pages-seo.md
-- Public Launch proposal: docs/sdd/public-launch-github-pages-and-star-growth-plan.md
-- P1 Scenario Global Configuration activation ADR: docs/sdd/adr/ADR-0015-p1-scenario-global-configuration.md
-- Active P1 Scenario Global Configuration Slice: docs/sdd/slices/P1-09-scenario-global-configuration.md
-- Architecture: docs/sdd/01-architecture-overview.md
-- Repo workflow: docs/sdd/02-repo-structure-and-dev-workflow.md
-- Testing strategy: docs/sdd/09-testing-and-acceptance-strategy.md
-- Active P2 API Catalog Slice: docs/sdd/slices/P2-00-api-catalog-scalar.md
-- P2 API Catalog activation ADR: docs/sdd/adr/ADR-0010-p2-api-catalog-scalar.md
-- Active P2 OpenAPI Step Generation Slice: docs/sdd/slices/P2-01-openapi-step-generation.md
-- P2 OpenAPI Step Generation activation ADR: docs/sdd/adr/ADR-0011-p2-openapi-step-generation.md
-- Active P2 Public API Substrate Slice: docs/sdd/slices/P2-02-public-api-substrate.md
-- P2 Public API Substrate activation ADR: docs/sdd/adr/ADR-0012-p2-public-api-substrate.md
-- P2 Env Group Secret activation ADR: docs/sdd/adr/ADR-0014-p2-env-group-secret.md
-- P2 Env Group Secret Slice: docs/sdd/slices/P2-03-env-group-secret.md
-- P2 Help AI Agents and System OpenAPI Bootstrap ADR: docs/sdd/adr/ADR-0016-p2-help-ai-agents-system-openapi-bootstrap.md
-- P2 Help AI Agents and System OpenAPI Bootstrap Slice: docs/sdd/slices/P2-04-help-ai-agents-system-openapi-bootstrap.md
-- P2 Cross-platform Distribution activation ADR: docs/sdd/adr/ADR-0017-p2-cross-platform-distribution.md
-- P2 Source Preview Startup amendment ADR: docs/sdd/adr/ADR-0019-p2-source-preview-startup.md
-- P2 Cross-platform Distribution Slice: docs/sdd/slices/P2-05-cross-platform-distribution.md
-- P2 LAN-first Release Bootstrap activation ADR: docs/sdd/adr/ADR-0018-p2-lan-first-release-bootstrap.md
-- P2 Release Dual-Architecture Runtime Default amendment ADR: docs/sdd/adr/ADR-0020-p2-release-dual-runtime-default.md
-- P2 Release `up` Configuration Confirmation amendment ADR: docs/sdd/adr/ADR-0021-p2-release-up-configuration-confirmation.md
-- P2 User-local Release Installer amendment ADR: docs/sdd/adr/ADR-0024-p2-user-local-release-installer.md
-- P2 LAN-first Release Bootstrap Slice: docs/sdd/slices/P2-06-lan-first-deployment-usability.md
-- P2 static Marketing Landing and Logo ADR: docs/sdd/adr/ADR-0013-p2-static-marketing-landing-logo.md
+Feature work requires an accepted Slice/ADR. A bug fix restores documented established behavior.
+Cross-subtree contract work changes contract sources before consumers. Generic source startup,
+preview-only startup, tagged-release operations, and governance work follow their distinct root
+routing branches.
 
-## Required workflow
-For any feature touching more than one app:
-1. Read the relevant Slice SDD first.
-2. Output an implementation plan before editing code.
-3. Update contracts before consumers.
-4. Keep the change limited to the slice.
-5. Run verification commands before final response.
-6. Update the Slice SDD or ADR only when implementation facts changed.
+### 12.4 Implementation and evidence
 
-## Service startup contract
-When the user asks to start, restart, boot, run, or bring up SurgePilot services from a source checkout without explicitly narrowing the scope, use `make start-full-stack`; for explicit restarts, use `make restart-full-stack`. When the user explicitly asks only to open the login page, inspect UI/pages, or review the control plane without Runtime/Demo readiness, use `make start-preview` and state that Load Node initialization and Run execution readiness are not promised. These entries create secure root deployment configuration only when `.env` is absent and reject unsafe existing private state without repairing it. Full startup builds or reuses the Linux Runtime through the native Docker builder, validates explicit external API/InfluxDB URL pairs, validates full source Compose, and starts P1 Monitoring plus the Compose-internal Demo Load Node; restart preflight completes before the existing stack is stopped. Preview validates the same explicit URL pair rule and source Compose but uses process-local Demo-disabled/Runtime-empty values and never rewrites `.env`. `SURGEPILOT_SKIP_RUNTIME_PREFLIGHT=1 make start-full-stack` remains a manual/debug Runtime opt-out only and does not bypass deployment bootstrap or external-node URL validation. When a user installs a tagged P2-05/P2-06 release through ADR-0024, use `surgepilot up`, `down`, `status`, or `logs`; manually extracted bundles use the `./surgepilot` spelling; a missing `.env` requires interactive host/port confirmation but no Runtime architecture prompt, persists `amd64,arm64`, and validates both Runtime sets before Compose startup. Every valid release `up` prints the bounded non-secret effective configuration before Runtime fetch. Interactive startup uses default-Yes `[Y/n]`: accepting current state is read-only, while No may repeat first-run entry or open a standard-LAN loop that updates only four allowlisted network fields after normalized review and Yes. That update validates a private candidate and final reviewed SHA-256, then uses standard `os.replace`; simultaneous manual same-user editing in the final syscall window is unsupported, with no backup or automatic rollback. A post-replacement directory-fsync failure halts before Runtime/Compose and requires inspection of `.env`. Non-TTY automation must pre-provision complete first-run state; existing non-interactive startup prints the summary but never prompts or rewrites. Advanced HTTPS No requires manual `.env` editing. Demo defaults to disabled, and the wrapper validates required origins/ports before pulling validated Runtime assets and starting immutable digest-pinned images. Explicit `localhost`, `127.0.0.1`, or `::1` selects a warned local-evaluation path for persisted node-facing URLs while published ports remain on host interfaces; non-loopback remains the LAN/external-node path and the required smoke contract. Source full Compose continues to use its internal Demo defaults. Do not substitute smoke, base, SSH E2E, verifier, or test-only compose profiles for a generic user-facing startup request. If the user asks for two SSH Load Nodes and manual review/demo, use `make start-full-ssh-e2e`; this remains the source-checkout acceptance fast path. Use `make start-full-ssh-e2e-build` only when the SSH image must be rebuilt and network-dependent image build steps are acceptable. Use `make verify-runtime-compat` for release/nightly/main-merge Runtime compatibility verification across Ubuntu 24.04 and Debian 12. Use lightweight smoke, SSH E2E, or verifier targets only when the user explicitly asks for automated verification, CI-style smoke, or a narrowed E2E test.
+For multi-application features, provide an implementation plan, update contracts before consumers,
+stay within the active Slice, run applicable verification, and synchronize design documents only
+when implementation facts or approved behavior changed. Simple bug fixes may proceed directly with
+the same scope, contract, safety, and verification gates.
 
-## P0 forbidden work
-Do not implement these unless the issue explicitly says P1/P2:
-- API Catalog outside active P2-00 documentation asset management scope
-- OpenAPI Step Generation outside active P2-01 Scenario editor draft-helper scope
-- cURL import (P1 Import means cURL only; P1 still must not include API Catalog/OpenAPI generation)
-- Monitoring / Grafana / InfluxDB (P1 Monitoring is limited to read-only entry plus JMeter Backend Listener / InfluxDB write config; no Grafana datasource management, Dashboard editing, or InfluxDB management)
-- Product Help page outside active P2-04
-- Public API skill download outside P2-04; P2-05 authorizes platform release bundles, application images, and Linux Runtime assets only, while standalone skill release, signing, skill installer/marketplace/SDK/MCP/skills runtime remain forbidden
-- User/external automatic OpenAPI ingestion or retry/reconciliation beyond P2-04's first-Admin system curated OpenAPI exception
-- Schedule Run (P2)
-- Multi-node execution
-- Resource Auto allocation
-- Workspace switching UI
-- User Management UI
-- System Settings UI
-- Env Group Secret outside active P2-03
-- Scenario Global Configuration outside active P1-09 Phase A
-- P1-09 forbidden expansions: globalScripts, Secret Scenario variables, Test Plan schema redesign, API Catalog generation, Schedule, multi-node, JMeter expert panels, or new runtime dependencies
-- Env Group tags and Dependency File tags (removed from all stages)
-- OIDC / SSO
-- Non-MinIO storage
-- Editable Taurus YAML
-- Generated YAML preview outside the API-generated read-only Test Plan Preview authorized by P1-04 and amended by ADR-0023; Scenario Preview is not authorized
-
-## Architecture constraints
-- apps/runner is an independent application.
-- runner must not import apps/api internal code.
-- API and runner communicate through packages/contracts.
-- Frontend must not invent API shapes outside OpenAPI/contracts.
-- Web must not access PostgreSQL, MinIO, or Load Nodes directly.
-```
-
-### 12.3 AI Task Reading Rule
-
-Each development task reads by default:
-
-1. `docs/sdd/README.md`;
-2. `docs/sdd/00-product-scope-and-priority.md`;
-3. Current Slice SDD;
-4. Related `AGENTS.md`;
-5. Related contracts / OpenAPI.
-
-Read on demand:
-
-1. Relevant chapters of `docs/prd/PRD.md`;
-2. Related Foundation SDD;
-3. Relevant ADR;
-4. Related code and tests.
-
-The full PRD, full SDD Pack, and all Slice SDDs must not be read indiscriminately in each task.
-
-P1-09 Scenario Global Configuration task must read `docs/sdd/slices/P1-09-scenario-global-configuration.md`, `docs/sdd/adr/ADR-0015-p1-scenario-global-configuration.md`, `docs/sdd/slices/P1-04-scenario-testplan-polish.md`, `docs/sdd/00-product-scope-and-priority.md`, `docs/sdd/slices/P1-README.md`, `docs/sdd/04-api-contract-guidelines.md`, `docs/sdd/06-security-permission-workspace.md`, `docs/sdd/08-frontend-routing-and-ui-rules.md`, and `docs/sdd/09-testing-and-acceptance-strategy.md`. Taurus/JMeter references are optional local developer material under ignored `docs/reference/taurus/`; use them only if present, otherwise use upstream Taurus/JMeter documentation. Only read relevant Scenario schema/service, Env Group, Dependency File, contracts, Scenario Designer/Web and test code when actually reaching the implementation.
-
-P2-04 Help AI Agents and System OpenAPI Bootstrap tasks must read `docs/sdd/slices/P2-04-help-ai-agents-system-openapi-bootstrap.md`, `docs/sdd/adr/ADR-0016-p2-help-ai-agents-system-openapi-bootstrap.md`, `docs/sdd/slices/P2-00-api-catalog-scalar.md`, `docs/sdd/adr/ADR-0010-p2-api-catalog-scalar.md`, `docs/sdd/slices/P2-02-public-api-substrate.md`, `docs/sdd/adr/ADR-0012-p2-public-api-substrate.md`, `docs/sdd/00-product-scope-and-priority.md`, `docs/sdd/slices/P2-README.md`, `docs/sdd/04-api-contract-guidelines.md`, `docs/sdd/06-security-permission-workspace.md`, `docs/sdd/08-frontend-routing-and-ui-rules.md`, and `docs/sdd/09-testing-and-acceptance-strategy.md`. Read only relevant Help/AppLayout/tabs, auth registration, OpenAPI export, API Catalog service/model/storage, skill source/Docker, generated contracts and tests while implementing touched areas.
-
-P2-07 Public Launch, GitHub Pages, and SEO tasks must read
-`docs/sdd/slices/P2-07-public-launch-github-pages-seo.md`,
-`docs/sdd/adr/ADR-0026-p2-public-launch-github-pages-seo.md`,
-`docs/sdd/adr/ADR-0025-public-user-documentation-localization.md`,
-`docs/sdd/adr/ADR-0013-p2-static-marketing-landing-logo.md`,
-`docs/sdd/public-launch-github-pages-and-star-growth-plan.md`,
-`docs/sdd/00-product-scope-and-priority.md`, this workflow, the frontend and testing Foundation
-SDDs, and P2-05/P2-06 only for the existing Release links and launch-readiness boundary. Read only
-the touched `docs/site`, README, Web indexing/Marketing visual-reference, GitHub workflow/metadata,
-release-asset, and focused test files for the current P2-07 PR.
-
-### 12.4 AI Implementation Rule
-
-Complex slicing defaults to two stages:
-
-```text
-Output the implementation plan first without changing the code
-  ↓
-Plan will be implemented after confirmation
-  ↓
-Run verification command
-  ↓
-Summarize modified files, test results, and remaining risks
-```
-
-Simple bugfixes can be implemented directly, but must still adhere to scope, contracts, verify, and prohibitions.
-
----
+Completion requires a complete diff review, current generated artifacts, applicable focused and
+repository verification, and explicit `NOT VERIFIED` reporting for required checks that could not
+run.
 
 ## 13. Branch, PR and Review Workflow
 

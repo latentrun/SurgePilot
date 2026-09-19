@@ -382,7 +382,10 @@ Rules:
 
 ## 13. Implementation Sequence
 
-0. Governance Step 0: accept `ADR-0015`; sync `docs/sdd/00-product-scope-and-priority.md`, `docs/sdd/02-repo-structure-and-dev-workflow.md`, `docs/sdd/slices/P1-README.md`, `AGENTS.md`, and this Slice before implementation. If governance is not accepted, implementation must stop.
+0. Governance Step 0: accept `ADR-0015`; sync the scope gate, P1 index, directly affected
+   Foundation sources, and this Slice before implementation. Root `AGENTS.md` routes P1 discovery to
+   the index and changes only when a stable repository-wide invariant or routing branch changes. If
+   governance is not accepted, implementation must stop.
 1. Backend schema/model: add Phase A `globalHeaders` and `variables`; do not add `globalScripts`.
 2. Backend service: add validation, clone materialization, Debug variable available-set handling, Test Plan Preview composition, and Taurus builder mapping.
 3. Dependency refs: keep existing Data Sources Dependency File reference maintenance; do not add script dependency refs.
@@ -443,7 +446,8 @@ Contract tests must cover:
 Done When:
 
 1. `ADR-0015` is accepted and linked from governance docs.
-2. `docs/sdd/slices/P1-09-scenario-global-configuration.md` is active and linked from `P1-README.md` and `AGENTS.md`.
+2. `docs/sdd/slices/P1-09-scenario-global-configuration.md` is active and linked from the P1 index;
+   root instructions route unnamed P1 feature work to that index.
 3. API schemas, services, contracts, and Web generated-client consumers implement `globalHeaders` and Scenario-local `variables` without `globalScripts`.
 4. Taurus builder output contains scenario-level `headers` and merged `variables`, keeps existing `data-sources`, and does not generate scenario-level `jsr223`.
 5. Test Plan Preview and Debug variable validation use the same effective available set as the builder.

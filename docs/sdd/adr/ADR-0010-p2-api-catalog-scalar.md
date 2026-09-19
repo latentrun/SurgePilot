@@ -50,7 +50,9 @@ Out of scope:
 
 ## Consequences
 
-- `docs/sdd/00-product-scope-and-priority.md`, `docs/sdd/slices/P2-README.md`, `docs/sdd/slices/P2-00-api-catalog-scalar.md`, root `AGENTS.md`, and this ADR must remain synchronized before code implementation proceeds.
+- The scope gate, P2 index, owning Slice, and this ADR must remain synchronized before code
+  implementation proceeds. Root instructions route P2 discovery through the index and change only
+  for a stable repository-wide invariant or routing branch.
 - API contracts follow FastAPI/Pydantic schemas → OpenAPI export → generated `@surgepilot/contracts` client/types → Web consumption.
 - The implementation must backfill final API files, migration/model/storage facts, Scalar package/version/import mode, Web module paths, tests, verification commands, and risks in the Slice SDD.
 - Any future change that adds operation import, generation, remote request sending, a different renderer architecture, a new storage backend, or a new UI system requires a new or updated ADR/Scope Gate before implementation.

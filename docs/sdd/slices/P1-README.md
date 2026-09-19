@@ -6,6 +6,9 @@ This document is only a P1 Slice writing brief and scope index. It does not repl
 
 P1 governance has started via `docs/sdd/adr/ADR-0022-p1-governance-start.md`, but this README still remains an index. It does not authorize implementation by itself.
 
+Dynamic Slice activation belongs in this index and the owning Slice/ADR, not in root `AGENTS.md`.
+Root instructions provide the stable scope gate and route feature work here for discovery.
+
 Current conflict to avoid: older P1 index wording can become stale when real Slice SDDs are added or renumbered. Downstream P1 Slice authors must follow the authoritative references below instead of copying old candidate names or old P0-only wording from this README.
 
 ## Authoritative References
@@ -27,7 +30,7 @@ Use only these references for P1 Slice drafting decisions:
 The following files are the current P1 Slice index. Real active Slice SDDs are authoritative only for their own scoped capability.
 
 1. `docs/sdd/slices/P1-00-monitoring.md` -- active Slice SDD for deployment-level P1 Monitoring: JMeter Backend Listener / InfluxDB write config bridge + same-origin Grafana iframe.
-2. `docs/sdd/slices/P1-01-resource-multi-node.md` -- active Slice SDD for P1 Resource Multi-node; design frozen and Accepted for implementation.
+2. `docs/sdd/slices/P1-01-resource-multi-node.md` -- active Slice SDD for P1 Resource Multi-node; Accepted for implementation.
 3. `docs/sdd/slices/P1-03-workspace-admin.md` -- active Slice SDD for P1 Workspace / Admin.
 4. `docs/sdd/slices/P1-04-scenario-testplan-polish.md` -- active Slice SDD for P1 Scenario / Test Plan polish, amended by `ADR-0023` to retain Generated YAML Preview only on Test Plan.
 5. `docs/sdd/slices/P1-05-curl-import.md` -- active Slice SDD for P1 cURL Import.
@@ -41,7 +44,7 @@ The following files are the current P1 Slice index. Real active Slice SDDs are a
 Active P1 Slice SDDs at this revision:
 
 - `P1-00-monitoring.md`, governed by the P1 scope gate and limited to deployment-level config, Standard Run InfluxDB writes, and a read-only Grafana entry.
-- `P1-01-resource-multi-node.md`, governed by `ADR-0009` and the P1 scope gate; frozen as the implementation Slice SDD.
+- `P1-01-resource-multi-node.md`, governed by `ADR-0009` and the P1 scope gate; Accepted as the implementation Slice SDD.
 - `P1-03-workspace-admin.md`, governed by the P1 scope gate.
 - `P1-04-scenario-testplan-polish.md`, governed by the P1 scope gate.
 - `P1-05-curl-import.md`, governed by the P1 scope gate.
@@ -63,7 +66,10 @@ P1 capabilities must not become prerequisites for the P0 execution loop.
 
 ## Revision Protocol
 
-This README must not independently enlarge P1 scope. Any new or changed P1 capability must first update the PRD or add a confirmed ADR, then synchronize `docs/sdd/00-product-scope-and-priority.md`, `docs/sdd/02-repo-structure-and-dev-workflow.md`, `AGENTS.md`, and this index where applicable.
+This README must not independently enlarge P1 scope. Any new or changed P1 capability must first
+update the PRD or add an accepted ADR, then synchronize the scope gate, this index, the owning Slice,
+and directly affected Foundation sources. Update root `AGENTS.md` only when a stable
+repository-wide invariant or context-routing branch changes.
 
 The P1 governance start gate is recorded in `docs/sdd/adr/ADR-0022-p1-governance-start.md`. If another document still contains stale P0-only target wording, treat it as requiring sync before using that file as execution input for a P1 task.
 

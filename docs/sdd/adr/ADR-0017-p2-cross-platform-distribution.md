@@ -93,7 +93,9 @@ These alternatives increase lifecycle, compatibility, and support cost without i
    Nodes/Runtime, all-in-one images, automatic upgrades, Runtime UI/catalog, signing, SBOM
    publication, and standalone AI skill release remain inactive. ADR-0024 authorizes only its
    bounded user-local platform Release installer.
-6. `docs/sdd/00-product-scope-and-priority.md`, `docs/sdd/02-repo-structure-and-dev-workflow.md`, `docs/sdd/slices/P2-README.md`, and `AGENTS.md` are synchronized in the activation PR.
+6. The scope gate, repository workflow, P2 index, owning Slice, and directly affected sources are
+   synchronized in the activation PR. Root instructions route release tasks through those sources
+   and change only for a stable repository-wide invariant or routing branch.
 
 ## References
 

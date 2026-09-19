@@ -51,7 +51,10 @@ This would violate the SurgePilot structured Scenario mental model and would act
 
 ## Consequences
 
-1. Implementation authorization exists only after `ADR-0015`, `docs/sdd/slices/P1-09-scenario-global-configuration.md`, `docs/sdd/00-product-scope-and-priority.md`, `docs/sdd/02-repo-structure-and-dev-workflow.md`, `docs/sdd/slices/P1-README.md`, and `AGENTS.md` are synchronized.
+1. Implementation authorization exists only after `ADR-0015`, the owning Slice, scope gate, P1
+   index, and directly affected Foundation sources are synchronized. Root instructions route P1
+   discovery through the index and change only for a stable repository-wide invariant or routing
+   branch.
 2. Scenario schema, service, Web draft state, generated contracts, and tests must add `globalHeaders` and `variables` without adding `globalScripts`.
 3. Debug Run variable validation and Test Plan Preview through saved Scenario references must include Scenario-local variables in the same available-variable set used by final Taurus mapping.
 4. Current public structured Scenario routes reuse business DTOs for create, patch, and detail; these non-secret fields therefore enter `public-api.openapi.json` for those DTOs. Scenario list routes remain lightweight and this ADR does not require `ScenarioSummary` to return full `globalHeaders` or `variables` arrays.
