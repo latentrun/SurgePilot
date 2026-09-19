@@ -14,6 +14,11 @@ const pageNames = [
   "first-run",
   "faq",
 ];
+const docsNavigation = {
+  en: { homeLabel: "Documentation Home", homeRoute: "/docs/" },
+  "zh-CN": { homeLabel: "文档首页", homeRoute: "/docs/zh-CN/" },
+  ja: { homeLabel: "ドキュメントホーム", homeRoute: "/docs/ja/" },
+};
 const pages = [
   {
     file: "index.html",
@@ -65,6 +70,21 @@ function attributes(tag) {
       match[2],
     ]),
   );
+}
+
+function anchors(html) {
+  return [...html.matchAll(/<a\b[^>]*>[\s\S]*?<\/a>/g)].map((match) => {
+    const tag = match[0];
+    const openingTag = tag.match(/^<a\b[^>]*>/)?.[0] ?? "";
+    return {
+      attributes: attributes(openingTag),
+      text: tag
+        .replace(/<!--[\s\S]*?-->/g, "")
+        .replace(/<[^>]+>/g, "")
+        .replace(/\s+/g, " ")
+        .trim(),
+    };
+  });
 }
 
 function findLink(html, rel, hreflang) {
@@ -186,6 +206,26 @@ for (const page of pages) {
   } else {
     assert.ok(jsonLdTypes.has("TechArticle"));
     assert.ok(jsonLdTypes.has("BreadcrumbList"));
+    const pageAnchors = anchors(html);
+    const brandLink = pageAnchors.find(
+      (anchor) =>
+        anchor.attributes.class === "title" &&
+        anchor.attributes.href === projectBase,
+    );
+    assert.ok(
+      brandLink,
+      `${page.file} must link the SurgePilot brand to the marketing homepage`,
+    );
+
+    const localeNavigation = docsNavigation[page.locale];
+    const docsHomeLink = pageAnchors.find(
+      (anchor) => anchor.text === localeNavigation.homeLabel,
+    );
+    assert.equal(
+      docsHomeLink?.attributes.href,
+      `${projectBase}${localeNavigation.homeRoute.replace(/^\//, "")}`,
+      `${page.file} must link its localized documentation home under the project base`,
+    );
     for (const locale of ["en", "zh-CN", "ja", "x-default"]) {
       const targetLocale = locale === "x-default" ? "en" : locale;
       const expected = canonicalUrl(routeForLocale(targetLocale, page.slug));

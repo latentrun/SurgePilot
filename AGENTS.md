@@ -142,6 +142,19 @@ to their governing contract; do not move Workspace identity into route paths.
 
 ## Development workflow
 
+### Git workspace rule
+
+Before starting a new implementation task:
+
+1. Run `git fetch origin`.
+2. Confirm the task starts from the current `origin/main`.
+3. Create a new task branch and, when practical, a dedicated worktree from `origin/main`.
+4. Do not implement new work directly on `main`.
+5. Do not reuse an unrelated or stale task branch/worktree.
+
+Follow-up fixes for an existing open PR stay on that PR's branch/worktree unless explicitly
+requested otherwise.
+
 For a feature touching more than one application:
 
 1. read the governing Slice and affected nested instructions;

@@ -120,6 +120,22 @@ assert.ok(
   docsSchema["@graph"].some((node) => node["@type"] === "TechArticle"),
 );
 
+const brandLink = page.locator(".VPNavBarTitle a.title");
+assert.equal(await brandLink.getAttribute("href"), publicBase);
+await brandLink.click();
+await page.waitForURL(baseUrl);
+assert.equal(await page.locator("[data-marketing-home]").count(), 1);
+
+await page.setViewportSize({ width: 390, height: 844 });
+await page.goto(`${baseUrl}docs/ja/quickstart`, { waitUntil: "networkidle" });
+await page.locator(".VPNavBarHamburger").click();
+const mobileDocsHome = page.locator(".VPNavScreen a", {
+  hasText: "ドキュメントホーム",
+});
+assert.equal(await mobileDocsHome.getAttribute("href"), `${publicBase}docs/ja/`);
+await mobileDocsHome.click();
+await page.waitForURL(`${baseUrl}docs/ja/`);
+
 assert.deepEqual(pageErrors, [], "public pages must not emit browser page errors");
 await browser.close();
 stopPreview();

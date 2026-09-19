@@ -1274,7 +1274,12 @@ run.
 
 ### 13.1 Branch Model
 
-P0 recommends short branch PR:
+New implementation tasks use a short-lived task branch created from the current `origin/main`
+after `git fetch origin`; they do not start directly on `main` or reuse an unrelated or stale
+branch/worktree. Follow-up fixes for an existing open PR stay on that PR's branch/worktree unless
+explicitly requested otherwise. `/AGENTS.md` defines the required AI workspace procedure.
+
+The branch model is:
 
 ```text
 main

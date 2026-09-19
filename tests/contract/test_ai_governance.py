@@ -109,6 +109,24 @@ def test_root_is_the_bounded_instruction_authority() -> None:
     assert "synced operational copy" not in workflow
 
 
+def test_new_implementation_tasks_start_from_current_origin_main() -> None:
+    agents = ROOT_INSTRUCTIONS.read_text(encoding="utf-8")
+    workflow = (ROOT / "docs/sdd/02-repo-structure-and-dev-workflow.md").read_text(encoding="utf-8")
+
+    normalized_agents = _normalized(agents)
+    assert "git fetch origin" in normalized_agents
+    assert "current `origin/main`" in normalized_agents
+    assert "Do not implement new work directly on `main`" in normalized_agents
+    assert "Do not reuse an unrelated or stale task branch/worktree" in normalized_agents
+    assert "existing open PR" in normalized_agents
+
+    normalized_workflow = _normalized(workflow)
+    assert "current `origin/main`" in normalized_workflow
+    assert "unrelated or stale branch/worktree" in normalized_workflow
+    assert "existing open PR" in normalized_workflow
+    assert "`/AGENTS.md` defines the required AI workspace procedure" in normalized_workflow
+
+
 def test_instruction_contract_covers_task_outcomes() -> None:
     agents = ROOT_INSTRUCTIONS.read_text(encoding="utf-8")
     task_outcomes = {
