@@ -62,18 +62,28 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     permissions:
-      contents: read
       pages: write
       id-token: write
+    outputs:
+      page_url: ${{ steps.deployment.outputs.page_url }}
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@d6db90164ac5ed86f2b6aed7e0febac5b3c0c03e # v4
+
+  smoke:
+    name: Verify deployed public navigation
+    needs: deploy
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
       - name: Verify deployed marketing and documentation navigation
         env:
-          SURGEPILOT_PUBLIC_SITE_URL: ${{ steps.deployment.outputs.page_url }}
+          SURGEPILOT_PUBLIC_SITE_URL: ${{ needs.deploy.outputs.page_url }}
         run: node docs/site/tests/verify-live-site.mjs

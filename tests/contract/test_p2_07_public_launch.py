@@ -321,7 +321,9 @@ def test_pages_workflow_builds_pull_requests_and_deploys_main_only() -> None:
     ):
         assert required in workflow
     assert workflow.index("needs: build") < workflow.index("actions/deploy-pages")
-    assert "SURGEPILOT_PUBLIC_SITE_URL: ${{ steps.deployment.outputs.page_url }}" in workflow
+    assert "page_url: ${{ steps.deployment.outputs.page_url }}" in workflow
+    assert "needs: deploy" in workflow
+    assert "SURGEPILOT_PUBLIC_SITE_URL: ${{ needs.deploy.outputs.page_url }}" in workflow
     assert "node docs/site/tests/verify-live-site.mjs" in workflow
     assert workflow.index("actions/deploy-pages") < workflow.index("verify-live-site.mjs")
     assert "cancel-in-progress: false" in workflow
