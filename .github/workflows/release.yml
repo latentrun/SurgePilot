@@ -216,6 +216,7 @@ jobs:
             test "$actual_revision" = "$GITHUB_SHA"
           done
           docker run --rm \
+            -e SURGEPILOT_EXPECTED_PRODUCT_VERSION="$PRODUCT_VERSION" \
             -v "$PWD/scripts/verify_api_image_product_version.py:/tmp/verify_api_image_product_version.py:ro" \
             "$API_IMAGE:$TAG" /app/.venv/bin/python /tmp/verify_api_image_product_version.py
 
@@ -505,6 +506,8 @@ jobs:
 
           bundle_manifest="$RUNNER_TEMP/release-manifest.json"
           tar -xOf "release-assets/surgepilot-$TAG.tar.gz" surgepilot/release-manifest.json > "$bundle_manifest"
+          test "$(jq -r '.version' "$bundle_manifest")" = "$TAG"
+          test "$(jq -r '.revision' "$bundle_manifest")" = "$GITHUB_SHA"
           for item in "api:$API_IMAGE" "web:$WEB_IMAGE" "demoNode:$DEMO_IMAGE"; do
             key=${item%%:*}
             image=${item#*:}

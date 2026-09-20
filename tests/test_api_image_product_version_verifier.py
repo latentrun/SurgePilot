@@ -8,7 +8,25 @@ import pytest
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-from scripts.verify_api_image_product_version import assert_document_version  # noqa: E402
+from scripts.verify_api_image_product_version import (  # noqa: E402
+    assert_baked_product_version,
+    assert_document_version,
+)
+
+
+def test_assert_baked_product_version_accepts_external_expected_version() -> None:
+    assert_baked_product_version("2.3.4", "2.3.4")
+
+
+@pytest.mark.parametrize(
+    ("baked", "expected"),
+    [(None, "2.3.4"), ("2.3.4", None), ("2.3.4", "2.3.5")],
+)
+def test_assert_baked_product_version_rejects_missing_or_mismatched_identity(
+    baked: str | None, expected: str | None
+) -> None:
+    with pytest.raises(RuntimeError, match="product version"):
+        assert_baked_product_version(baked, expected)
 
 
 def test_assert_document_version_accepts_exact_product_version() -> None:

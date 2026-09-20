@@ -1317,8 +1317,8 @@ def test_resolve_taurus_dependencies_uses_uv_pip_when_current_python_has_no_pip(
 
     assert dependencies == ["bzt==1.16.50", "urllib3==2.7.0"]
     assert commands
-    assert commands[0][:4] == ["uv", "run", "--with", "pip"]
-    assert commands[0][4:7] == ["python", "-m", "pip"]
+    assert commands[0][:5] == ["uv", "run", "--no-project", "--with", "pip"]
+    assert commands[0][5:8] == ["python", "-m", "pip"]
 
 
 def test_safe_extract_tar_rejects_link_members(tmp_path: Path) -> None:

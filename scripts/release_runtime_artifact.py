@@ -484,6 +484,7 @@ def _resolve_taurus_dependencies(cache_dir: Path, *, python_version: str) -> lis
             [
                 "uv",
                 "run",
+                "--no-project",
                 "--with",
                 "pip",
                 "python",

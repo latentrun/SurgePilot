@@ -244,11 +244,15 @@ def test_release_workflows_keep_product_and_artifact_versions_distinct() -> None
     assert 'test "$TAG" = "v$PRODUCT_VERSION"' in formal_preflight
     assert '--build-arg SURGEPILOT_PRODUCT_VERSION="$PRODUCT_VERSION"' in formal
     assert formal.count('--build-arg SURGEPILOT_VERSION="$GITHUB_REF_NAME"') == 3
+    assert 'test "$(jq -r \'.version\' "$bundle_manifest")" = "$TAG"' in formal
+    assert 'test "$(jq -r \'.revision\' "$bundle_manifest")" = "$GITHUB_SHA"' in formal
 
     assert validation.count('--build-arg SURGEPILOT_VERSION="$VALIDATION_VERSION"') == 6
     assert validation.count('--build-arg SURGEPILOT_PRODUCT_VERSION="$PRODUCT_VERSION"') == 2
     assert 'SURGEPILOT_VERSION="validation-$GITHUB_SHA"' not in validation
     assert '--build-arg SURGEPILOT_VERSION="$TAG"' not in validation
+    assert 'test "$(jq -r \'.version\' "$bundle_manifest")" = "$VALIDATION_VERSION"' in validation
+    assert 'test "$(jq -r \'.revision\' "$bundle_manifest")" = "$GITHUB_SHA"' in validation
     expected_env = 'SURGEPILOT_E2E_EXPECTED_PRODUCT_VERSION="$PRODUCT_VERSION"'
     assert expected_env in formal
     assert expected_env in validation
@@ -265,6 +269,9 @@ def test_release_workflows_verify_actual_image_identity() -> None:
 
     assert 'test "$actual_version" = "$GITHUB_REF_NAME"' in formal
     assert 'test "$actual_version" = "$VALIDATION_VERSION"' in validation
+    external_expected = '-e SURGEPILOT_EXPECTED_PRODUCT_VERSION="$PRODUCT_VERSION"'
+    assert external_expected in formal
+    assert validation.count(external_expected) == 2
 
 
 def test_release_workflows_pin_external_actions_to_full_commit_shas() -> None:

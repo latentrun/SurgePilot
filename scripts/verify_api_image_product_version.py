@@ -13,6 +13,18 @@ SKILL_OPENAPI_PATH = Path(
 )
 
 
+def assert_baked_product_version(baked: str | None, expected: str | None) -> str:
+    if not baked:
+        raise RuntimeError("API image product version is missing")
+    if not expected:
+        raise RuntimeError("Expected product version is required")
+    if baked != expected:
+        raise RuntimeError(
+            f"API image product version mismatch: expected {expected}, got {baked!r}"
+        )
+    return expected
+
+
 def assert_document_version(name: str, document: dict[str, Any], expected: str) -> None:
     actual = document.get("info", {}).get("version")
     if actual != expected:
@@ -20,9 +32,10 @@ def assert_document_version(name: str, document: dict[str, Any], expected: str) 
 
 
 def verify_api_image_product_version() -> None:
-    expected = os.environ.get("SURGEPILOT_PRODUCT_VERSION")
-    if not expected:
-        raise RuntimeError("SURGEPILOT_PRODUCT_VERSION is required in the API image")
+    expected = assert_baked_product_version(
+        os.environ.get("SURGEPILOT_PRODUCT_VERSION"),
+        os.environ.get("SURGEPILOT_EXPECTED_PRODUCT_VERSION"),
+    )
 
     from app.main import app
     from app.services.openapi_export import _export_document

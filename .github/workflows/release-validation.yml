@@ -109,6 +109,7 @@ jobs:
             test "$actual_revision" = "$GITHUB_SHA"
           done
           docker run --rm \
+            -e SURGEPILOT_EXPECTED_PRODUCT_VERSION="$PRODUCT_VERSION" \
             -v "$PWD/scripts/verify_api_image_product_version.py:/tmp/verify_api_image_product_version.py:ro" \
             "surgepilot-validation-api:$GITHUB_SHA-$ARCH" \
             /app/.venv/bin/python /tmp/verify_api_image_product_version.py
@@ -260,6 +261,7 @@ jobs:
             test "$actual_revision" = "$GITHUB_SHA"
           done
           docker run --rm \
+            -e SURGEPILOT_EXPECTED_PRODUCT_VERSION="$PRODUCT_VERSION" \
             -v "$PWD/scripts/verify_api_image_product_version.py:/tmp/verify_api_image_product_version.py:ro" \
             "$API_IMAGE:$ARCH_TAG" /app/.venv/bin/python /tmp/verify_api_image_product_version.py
 
@@ -333,6 +335,9 @@ jobs:
           sh -n validation-output/install.sh
           (cd validation-output && sha256sum -c surgepilot-v0.0.0.tar.gz.sha256)
           tar -xzf validation-output/surgepilot-v0.0.0.tar.gz -C validation-output
+          bundle_manifest="validation-output/surgepilot/release-manifest.json"
+          test "$(jq -r '.version' "$bundle_manifest")" = "$VALIDATION_VERSION"
+          test "$(jq -r '.revision' "$bundle_manifest")" = "$GITHUB_SHA"
           sh -n validation-output/surgepilot/surgepilot
           cp validation-output/surgepilot/.env.example validation-output/surgepilot/.env
           RUNNER_INTERNAL_TOKEN=validation-runner-token \
