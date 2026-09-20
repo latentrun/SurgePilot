@@ -1274,10 +1274,8 @@ run.
 
 ### 13.1 Branch Model
 
-New implementation tasks use a short-lived task branch created from the current `origin/main`
-after `git fetch origin`; they do not start directly on `main` or reuse an unrelated or stale
-branch/worktree. Follow-up fixes for an existing open PR stay on that PR's branch/worktree unless
-explicitly requested otherwise. `/AGENTS.md` defines the required AI workspace procedure.
+Before new implementation work or follow-up fixes, AI agents use the root `/AGENTS.md`
+**Git workspace rule** as the sole authority for branch, worktree, and base-ref preparation.
 
 The branch model is:
 

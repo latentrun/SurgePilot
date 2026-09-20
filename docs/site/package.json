@@ -7,7 +7,7 @@
     "dev": "vitepress",
     "build": "vitepress build",
     "preview": "vitepress preview",
-    "test": "vitepress build && node tests/verify-built-site.mjs && node tests/verify-browser.mjs"
+    "test": "vitepress build && node tests/verify-built-site.mjs && node tests/verify-browser.mjs && node --check tests/verify-live-site.mjs"
   },
   "devDependencies": {
     "@playwright/test": "^1.60.0",

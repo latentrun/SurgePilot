@@ -115,16 +115,18 @@ def test_new_implementation_tasks_start_from_current_origin_main() -> None:
 
     normalized_agents = _normalized(agents)
     assert "git fetch origin" in normalized_agents
-    assert "current `origin/main`" in normalized_agents
-    assert "Do not implement new work directly on `main`" in normalized_agents
-    assert "Do not reuse an unrelated or stale task branch/worktree" in normalized_agents
+    assert "1 task = 1 branch + 1 worktree + 1 PR" in normalized_agents
+    assert "Start from the current `origin/main`" in normalized_agents
+    assert "Create a dedicated task branch from `origin/main`" in normalized_agents
+    assert "Create a dedicated worktree for that branch" in normalized_agents
+    assert "Perform all implementation work inside that worktree" in normalized_agents
+    assert "Never implement new work directly on `main`" in normalized_agents
+    assert "Never reuse another task's branch or worktree" in normalized_agents
     assert "existing open PR" in normalized_agents
 
     normalized_workflow = _normalized(workflow)
-    assert "current `origin/main`" in normalized_workflow
-    assert "unrelated or stale branch/worktree" in normalized_workflow
-    assert "existing open PR" in normalized_workflow
-    assert "`/AGENTS.md` defines the required AI workspace procedure" in normalized_workflow
+    assert "root `/AGENTS.md` **Git workspace rule**" in normalized_workflow
+    assert "sole authority for branch, worktree, and base-ref preparation" in normalized_workflow
 
 
 def test_instruction_contract_covers_task_outcomes() -> None:

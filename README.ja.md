@@ -22,9 +22,9 @@ SurgePilot はセルフホスト型の分散 API 負荷テストプラットフ�
 
 ## ハイライト
 
-- ⚡ **1 つのコマンドでフルスタックを起動。** `make start-full-stack` で Web、API、
-  api-worker、PostgreSQL、MinIO、Nginx、Grafana + InfluxDB、そして実際に動作する Demo
-  Load Node が起動します。
+- ⚡ **1 つのコマンドで SurgePilot をセルフホスト。** `surgepilot up` で Web、API、
+  api-worker、PostgreSQL、MinIO、Nginx、Grafana + InfluxDB を起動できます。
+  ソースのチェックアウトは不要です。
 - 🤖 **エンドツーエンドで 100% AI により構築。** PRD → SDD → ADR → Slice →
   Contract → テスト → デプロイというライフサイクル全体が AI によって作成され、すべて
   このリポジトリに保存されています。

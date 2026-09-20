@@ -144,16 +144,24 @@ to their governing contract; do not move Workspace identity into route paths.
 
 ### Git workspace rule
 
+Each new implementation task follows this isolation model:
+
+```text
+1 task = 1 branch + 1 worktree + 1 PR
+```
+
 Before starting a new implementation task:
 
 1. Run `git fetch origin`.
-2. Confirm the task starts from the current `origin/main`.
-3. Create a new task branch and, when practical, a dedicated worktree from `origin/main`.
-4. Do not implement new work directly on `main`.
-5. Do not reuse an unrelated or stale task branch/worktree.
+2. Start from the current `origin/main`.
+3. Create a dedicated task branch from `origin/main`.
+4. Create a dedicated worktree for that branch.
+5. Perform all implementation work inside that worktree.
+6. Never implement new work directly on `main`.
+7. Never reuse another task's branch or worktree.
 
-Follow-up fixes for an existing open PR stay on that PR's branch/worktree unless explicitly
-requested otherwise.
+Follow-up fixes for an existing open PR stay on that PR's branch, worktree, and PR unless
+explicitly requested otherwise.
 
 For a feature touching more than one application:
 
