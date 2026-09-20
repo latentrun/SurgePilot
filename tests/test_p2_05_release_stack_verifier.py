@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 import io
+import json
 from pathlib import Path
 import sys
 import urllib.error
 import urllib.request
+from zipfile import ZIP_DEFLATED, ZipFile
 
 import pytest
 
@@ -12,6 +14,179 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
 from scripts import verify_p2_05_release_stack  # noqa: E402
+
+
+def skill_zip(version: str) -> bytes:
+    stream = io.BytesIO()
+    with ZipFile(stream, "w", ZIP_DEFLATED) as archive:
+        archive.writestr(
+            "surgepilot-public-api/references/public-api.openapi.json",
+            json.dumps({"info": {"version": version}}),
+        )
+    return stream.getvalue()
+
+
+class BytesResponse(io.BytesIO):
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *_args):
+        return None
+
+
+def test_expected_product_version_is_required_and_canonical(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delenv("SURGEPILOT_E2E_EXPECTED_PRODUCT_VERSION", raising=False)
+    with pytest.raises(RuntimeError, match="is required"):
+        verify_p2_05_release_stack.expected_product_version()
+
+    for value in ("v2.3.4", "02.3.4", "0.0.0"):
+        monkeypatch.setenv("SURGEPILOT_E2E_EXPECTED_PRODUCT_VERSION", value)
+        with pytest.raises(RuntimeError, match="canonical X.Y.Z"):
+            verify_p2_05_release_stack.expected_product_version()
+
+
+def test_product_identity_http_reads_use_runtime_api_and_session(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    requests: list[tuple[str, int]] = []
+
+    def urlopen(url: str, timeout: int):
+        requests.append((url, timeout))
+        return BytesResponse(b'{"info":{"version":"2.3.4"}}')
+
+    class Opener:
+        def open(self, request: urllib.request.Request, timeout: int):
+            requests.append((request.full_url, timeout))
+            return BytesResponse(b"skill-zip")
+
+    monkeypatch.setattr(verify_p2_05_release_stack.urllib.request, "urlopen", urlopen)
+
+    assert verify_p2_05_release_stack.fetch_runtime_openapi()["info"]["version"] == "2.3.4"
+    assert (
+        verify_p2_05_release_stack.download_skill_bundle(
+            type("Session", (), {"opener": Opener()})()
+        )
+        == b"skill-zip"
+    )
+    assert requests == [
+        (f"{verify_p2_05_release_stack.API_BASE_URL}/api/openapi.json", 10),
+        (f"{verify_p2_05_release_stack.API_BASE_URL}/api/v1/account/ai-skill/download", 30),
+    ]
+
+
+def test_verify_product_identity_covers_runtime_catalog_skill_and_runner(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("SURGEPILOT_E2E_EXPECTED_PRODUCT_VERSION", "2.3.4")
+    session = object()
+    monkeypatch.setattr(
+        verify_p2_05_release_stack,
+        "fetch_runtime_openapi",
+        lambda: {"info": {"version": "2.3.4"}},
+    )
+    monkeypatch.setattr(
+        verify_p2_05_release_stack,
+        "download_skill_bundle",
+        lambda actual_session: (
+            skill_zip("2.3.4") if actual_session is session else pytest.fail("unexpected session")
+        ),
+    )
+
+    def get_json(actual_session: object, path: str) -> dict:
+        assert actual_session is session
+        if path == "/api/v1/api-catalog/specs?limit=100&offset=0":
+            return {
+                "items": [
+                    {"name": "User API", "documentVersion": "9.9.9"},
+                    {"name": "SurgePilot API", "documentVersion": "2.3.4"},
+                ]
+            }
+        if path == "/api/v1/load-nodes/node-1":
+            return {"runnerVersion": "2.3.4"}
+        return pytest.fail(f"unexpected identity path: {path}")
+
+    monkeypatch.setattr(verify_p2_05_release_stack, "get_json", get_json)
+
+    verify_p2_05_release_stack.verify_product_identity(session, "node-1")
+
+
+@pytest.mark.parametrize(
+    ("runtime_version", "catalog_version", "skill_version", "runner_version", "message"),
+    [
+        ("9.9.9", "2.3.4", "2.3.4", "2.3.4", "runtime OpenAPI"),
+        ("2.3.4", "9.9.9", "2.3.4", "2.3.4", "system Catalog"),
+        ("2.3.4", "2.3.4", "9.9.9", "2.3.4", "AI skill OpenAPI"),
+        ("2.3.4", "2.3.4", "2.3.4", "9.9.9", "Runner"),
+    ],
+)
+def test_verify_product_identity_fails_closed_on_mismatch(
+    monkeypatch: pytest.MonkeyPatch,
+    runtime_version: str,
+    catalog_version: str,
+    skill_version: str,
+    runner_version: str,
+    message: str,
+) -> None:
+    monkeypatch.setenv("SURGEPILOT_E2E_EXPECTED_PRODUCT_VERSION", "2.3.4")
+    monkeypatch.setattr(
+        verify_p2_05_release_stack,
+        "fetch_runtime_openapi",
+        lambda: {"info": {"version": runtime_version}},
+    )
+    monkeypatch.setattr(
+        verify_p2_05_release_stack,
+        "download_skill_bundle",
+        lambda _session: skill_zip(skill_version),
+    )
+    monkeypatch.setattr(
+        verify_p2_05_release_stack,
+        "get_json",
+        lambda _session, path: (
+            {"items": [{"name": "SurgePilot API", "documentVersion": catalog_version}]}
+            if "api-catalog" in path
+            else {"runnerVersion": runner_version}
+        ),
+    )
+
+    with pytest.raises(RuntimeError, match=message):
+        verify_p2_05_release_stack.verify_product_identity(object(), "node-1")
+
+
+def test_verify_product_identity_rejects_missing_catalog_and_invalid_skill(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("SURGEPILOT_E2E_EXPECTED_PRODUCT_VERSION", "2.3.4")
+    monkeypatch.setattr(
+        verify_p2_05_release_stack,
+        "fetch_runtime_openapi",
+        lambda: {"info": {"version": "2.3.4"}},
+    )
+    monkeypatch.setattr(
+        verify_p2_05_release_stack,
+        "get_json",
+        lambda _session, _path: {"items": []},
+    )
+    with pytest.raises(RuntimeError, match="system Catalog entry"):
+        verify_p2_05_release_stack.verify_product_identity(object(), "node-1")
+
+    monkeypatch.setattr(
+        verify_p2_05_release_stack,
+        "get_json",
+        lambda _session, path: (
+            {"items": [{"name": "SurgePilot API", "documentVersion": "2.3.4"}]}
+            if "api-catalog" in path
+            else {"runnerVersion": "2.3.4"}
+        ),
+    )
+    monkeypatch.setattr(
+        verify_p2_05_release_stack,
+        "download_skill_bundle",
+        lambda _session: b"not-a-zip",
+    )
+    with pytest.raises(RuntimeError, match="AI skill OpenAPI is unavailable"):
+        verify_p2_05_release_stack.verify_product_identity(object(), "node-1")
 
 
 def test_release_scenario_is_bounded_to_configured_lan_health_target(
@@ -119,6 +294,15 @@ def test_verify_release_stack_runs_lan_debug_and_standard_monitoring_flow(
     monkeypatch.setattr(verify_p2_05_release_stack, "create_json", create_json)
     monkeypatch.setattr(
         verify_p2_05_release_stack,
+        "verify_product_identity",
+        lambda actual_session, node_id: (
+            calls.append(("identity", node_id))
+            if actual_session is session
+            else pytest.fail("unexpected identity session")
+        ),
+    )
+    monkeypatch.setattr(
+        verify_p2_05_release_stack,
         "initialize_node",
         lambda actual_session, node_id: (
             calls.append(("initialize", node_id))
@@ -169,6 +353,7 @@ def test_verify_release_stack_runs_lan_debug_and_standard_monitoring_flow(
     verify_p2_05_release_stack.verify_release_stack()
 
     assert ("initialize", "node-1") in calls
+    assert ("identity", "node-1") in calls
     assert monitored == ["standard-run-1"]
     assert monitoring_calls == [
         "/api/v1/runs/standard-run-1/monitoring",
@@ -394,6 +579,7 @@ def test_verify_release_stack_reports_acceptance_failures(
         verify_p2_05_release_stack, "create_json", lambda *_args, **_kwargs: next(responses)
     )
     monkeypatch.setattr(verify_p2_05_release_stack, "initialize_node", lambda *_args: None)
+    monkeypatch.setattr(verify_p2_05_release_stack, "verify_product_identity", lambda *_args: None)
     monkeypatch.setattr(verify_p2_05_release_stack, "poll_report_state", lambda *_args: report)
     monkeypatch.setattr(
         verify_p2_05_release_stack, "wait_for_monitoring_points", lambda *_args: None

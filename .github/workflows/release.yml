@@ -41,6 +41,15 @@ jobs:
             exit 1
           }
           [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "Release tag must use exact vX.Y.Z form."; exit 1; }
+          PRODUCT_VERSION=$(tr -d '\n' < VERSION)
+          [[ "$PRODUCT_VERSION" =~ ^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]] || {
+            echo "VERSION must contain canonical X.Y.Z without leading zeroes." >&2
+            exit 1
+          }
+          test "$TAG" = "v$PRODUCT_VERSION" || {
+            echo "Release tag $TAG must match VERSION ($PRODUCT_VERSION)." >&2
+            exit 1
+          }
           test "$TAG" != "v0.0.0" || {
             echo "v0.0.0 is reserved for development validation and cannot be published."
             exit 1
@@ -185,8 +194,10 @@ jobs:
           PLATFORM: ${{ matrix.platform }}
         run: |
           set -euo pipefail
+          PRODUCT_VERSION=$(tr -d '\n' < VERSION)
           docker buildx build --platform "$PLATFORM" --push \
             --build-arg SURGEPILOT_VERSION="$GITHUB_REF_NAME" \
+            --build-arg SURGEPILOT_PRODUCT_VERSION="$PRODUCT_VERSION" \
             --build-arg SURGEPILOT_REVISION="$GITHUB_SHA" \
             --tag "$API_IMAGE:$TAG" --file apps/api/Dockerfile .
           docker buildx build --platform "$PLATFORM" --push \
@@ -197,6 +208,16 @@ jobs:
             --build-arg SURGEPILOT_VERSION="$GITHUB_REF_NAME" \
             --build-arg SURGEPILOT_REVISION="$GITHUB_SHA" \
             --tag "$DEMO_IMAGE:$TAG" --file infra/docker/demo-load-node/Dockerfile .
+          for image in "$API_IMAGE" "$WEB_IMAGE" "$DEMO_IMAGE"; do
+            docker pull "$image:$TAG"
+            actual_version=$(docker image inspect "$image:$TAG" --format '{{ index .Config.Labels "org.opencontainers.image.version" }}')
+            actual_revision=$(docker image inspect "$image:$TAG" --format '{{ index .Config.Labels "org.opencontainers.image.revision" }}')
+            test "$actual_version" = "$GITHUB_REF_NAME"
+            test "$actual_revision" = "$GITHUB_SHA"
+          done
+          docker run --rm \
+            -v "$PWD/scripts/verify_api_image_product_version.py:/tmp/verify_api_image_product_version.py:ro" \
+            "$API_IMAGE:$TAG" /app/.venv/bin/python /tmp/verify_api_image_product_version.py
 
   image-indexes:
     needs: images
@@ -403,7 +424,9 @@ jobs:
           trap cleanup EXIT
           "$SURGEPILOT" up
           uv sync --all-packages --all-groups
+          PRODUCT_VERSION=$(tr -d '\n' < VERSION)
           SURGEPILOT_E2E_API_ORCHESTRATION_URL="http://$smoke_host:8080" \
+          SURGEPILOT_E2E_EXPECTED_PRODUCT_VERSION="$PRODUCT_VERSION" \
           SURGEPILOT_E2E_TARGET_URL="http://$smoke_host:8080/api/healthz" \
           SURGEPILOT_E2E_INFLUXDB_QUERY_URL="http://$smoke_host:8086" \
           SURGEPILOT_E2E_INFLUXDB_TOKEN_FILE="$INSTALL_ROOT/.surgepilot/secrets/influxdb-token.secret" \

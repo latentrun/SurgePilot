@@ -84,19 +84,34 @@ jobs:
           ARCH: ${{ matrix.arch }}
         run: |
           set -euo pipefail
+          PRODUCT_VERSION=$(tr -d '\n' < VERSION)
           docker buildx build --platform "$PLATFORM" --load \
-            --build-arg SURGEPILOT_VERSION="validation-$GITHUB_SHA" \
+            --build-arg SURGEPILOT_VERSION="$VALIDATION_VERSION" \
+            --build-arg SURGEPILOT_PRODUCT_VERSION="$PRODUCT_VERSION" \
             --build-arg SURGEPILOT_REVISION="$GITHUB_SHA" \
             --tag "surgepilot-validation-api:$GITHUB_SHA-$ARCH" --file apps/api/Dockerfile .
           docker buildx build --platform "$PLATFORM" --load \
-            --build-arg SURGEPILOT_VERSION="validation-$GITHUB_SHA" \
+            --build-arg SURGEPILOT_VERSION="$VALIDATION_VERSION" \
             --build-arg SURGEPILOT_REVISION="$GITHUB_SHA" \
             --tag "surgepilot-validation-web:$GITHUB_SHA-$ARCH" --file apps/web/Dockerfile .
           docker buildx build --platform "$PLATFORM" --load \
-            --build-arg SURGEPILOT_VERSION="validation-$GITHUB_SHA" \
+            --build-arg SURGEPILOT_VERSION="$VALIDATION_VERSION" \
             --build-arg SURGEPILOT_REVISION="$GITHUB_SHA" \
             --tag "surgepilot-validation-demo-node:$GITHUB_SHA-$ARCH" \
             --file infra/docker/demo-load-node/Dockerfile .
+          for image in \
+            "surgepilot-validation-api:$GITHUB_SHA-$ARCH" \
+            "surgepilot-validation-web:$GITHUB_SHA-$ARCH" \
+            "surgepilot-validation-demo-node:$GITHUB_SHA-$ARCH"; do
+            actual_version=$(docker image inspect "$image" --format '{{ index .Config.Labels "org.opencontainers.image.version" }}')
+            actual_revision=$(docker image inspect "$image" --format '{{ index .Config.Labels "org.opencontainers.image.revision" }}')
+            test "$actual_version" = "$VALIDATION_VERSION"
+            test "$actual_revision" = "$GITHUB_SHA"
+          done
+          docker run --rm \
+            -v "$PWD/scripts/verify_api_image_product_version.py:/tmp/verify_api_image_product_version.py:ro" \
+            "surgepilot-validation-api:$GITHUB_SHA-$ARCH" \
+            /app/.venv/bin/python /tmp/verify_api_image_product_version.py
 
   pr-installer-smoke:
     if: github.event_name == 'pull_request'
@@ -223,18 +238,30 @@ jobs:
           set -euo pipefail
           TAG="validation-$GITHUB_SHA"
           ARCH_TAG="$TAG-${{ matrix.arch }}"
+          PRODUCT_VERSION=$(tr -d '\n' < VERSION)
           docker buildx build --platform "$PLATFORM" --push \
-            --build-arg SURGEPILOT_VERSION="$TAG" \
+            --build-arg SURGEPILOT_VERSION="$VALIDATION_VERSION" \
+            --build-arg SURGEPILOT_PRODUCT_VERSION="$PRODUCT_VERSION" \
             --build-arg SURGEPILOT_REVISION="$GITHUB_SHA" \
             --tag "$API_IMAGE:$ARCH_TAG" --file apps/api/Dockerfile .
           docker buildx build --platform "$PLATFORM" --push \
-            --build-arg SURGEPILOT_VERSION="$TAG" \
+            --build-arg SURGEPILOT_VERSION="$VALIDATION_VERSION" \
             --build-arg SURGEPILOT_REVISION="$GITHUB_SHA" \
             --tag "$WEB_IMAGE:$ARCH_TAG" --file apps/web/Dockerfile .
           docker buildx build --platform "$PLATFORM" --push \
-            --build-arg SURGEPILOT_VERSION="$TAG" \
+            --build-arg SURGEPILOT_VERSION="$VALIDATION_VERSION" \
             --build-arg SURGEPILOT_REVISION="$GITHUB_SHA" \
             --tag "$DEMO_IMAGE:$ARCH_TAG" --file infra/docker/demo-load-node/Dockerfile .
+          for image in "$API_IMAGE" "$WEB_IMAGE" "$DEMO_IMAGE"; do
+            docker pull "$image:$ARCH_TAG"
+            actual_version=$(docker image inspect "$image:$ARCH_TAG" --format '{{ index .Config.Labels "org.opencontainers.image.version" }}')
+            actual_revision=$(docker image inspect "$image:$ARCH_TAG" --format '{{ index .Config.Labels "org.opencontainers.image.revision" }}')
+            test "$actual_version" = "$VALIDATION_VERSION"
+            test "$actual_revision" = "$GITHUB_SHA"
+          done
+          docker run --rm \
+            -v "$PWD/scripts/verify_api_image_product_version.py:/tmp/verify_api_image_product_version.py:ro" \
+            "$API_IMAGE:$ARCH_TAG" /app/.venv/bin/python /tmp/verify_api_image_product_version.py
 
   tag-indexes:
     if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/validation-')
@@ -454,7 +481,9 @@ jobs:
             "$INSTALL_ROOT/.surgepilot/runtime-artifacts/"
           "$SURGEPILOT" up
           uv sync --all-packages --all-groups
+          PRODUCT_VERSION=$(tr -d '\n' < VERSION)
           SURGEPILOT_E2E_API_ORCHESTRATION_URL="http://$smoke_host:8080" \
+          SURGEPILOT_E2E_EXPECTED_PRODUCT_VERSION="$PRODUCT_VERSION" \
           SURGEPILOT_E2E_TARGET_URL="http://$smoke_host:8080/api/healthz" \
           SURGEPILOT_E2E_INFLUXDB_QUERY_URL="http://$smoke_host:8086" \
           SURGEPILOT_E2E_INFLUXDB_TOKEN_FILE="$INSTALL_ROOT/.surgepilot/secrets/influxdb-token.secret" \

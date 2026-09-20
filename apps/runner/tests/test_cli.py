@@ -821,7 +821,7 @@ def test_version_command_reports_runner_version() -> None:
     result = CliRunner().invoke(cli, ["version"])
 
     assert result.exit_code == 0
-    assert result.output.strip() == "SurgePilot Runner 0.1.0"
+    assert result.output.strip() == "SurgePilot Runner 1.0.0"
 
 
 def test_start_fake_accepts_run_id_and_uses_protocol_words(tmp_path: Path) -> None:

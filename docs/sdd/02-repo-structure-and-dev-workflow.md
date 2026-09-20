@@ -946,6 +946,18 @@ More detailed test matrices are placed in `docs/sdd/09-testing-and-acceptance-st
 
 ## 8. Contracts Workflow
 
+### 8.0 Product Version Workflow
+
+`docs/sdd/adr/ADR-0027-product-version-and-artifact-identity.md` owns the cross-repository decision.
+The root `VERSION` file is the product-version authority. Only the API and Runner Python package
+metadata copy that value because they provide runtime/source fallback. The root virtual Python
+workspace and private npm workspaces do not declare product versions.
+
+Normal changes do not bump `VERSION`. An explicit product-version or release task updates
+`VERSION`, the API/Runner metadata, and generated contracts together. Formal release preflight
+requires the Git tag to equal `v` plus `VERSION`. Product metadata remains separate from validation
+artifact `v0.0.0`, registry tags, revisions, Runtime component versions, and manifest hashes.
+
 ### 8.1 Contract First Rule
 
 Functions involving API, Web, and Runner must comply with:

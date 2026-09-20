@@ -4,7 +4,7 @@
 
 This document is only a P2 Slice writing brief and scope index. It does not replace the PRD, `docs/sdd/00-product-scope-and-priority.md`, `AGENTS.md`, ADRs, or any real Slice SDD.
 
-P2 capabilities remain inactive until a named accepted P2 Slice SDD and any required governance decision activate implementation. This index does not authorize implementation by itself. `P2-00-api-catalog-scalar.md` is active through `ADR-0010`; `P2-01-openapi-step-generation.md` is active through `ADR-0011`; `P2-02-public-api-substrate.md` is active through `ADR-0012`; `P2-03-env-group-secret.md` is active through `ADR-0014`; `P2-04-help-ai-agents-system-openapi-bootstrap.md` is active through `ADR-0016`; `P2-05-cross-platform-distribution.md` is active through `ADR-0017`, its source-preview amendment `ADR-0019`, and its user-local platform Release installer amendment `ADR-0024`; `P2-06-lan-first-deployment-usability.md` is active through `ADR-0018`, its new-release Runtime default amendment `ADR-0020`, its release `up` configuration confirmation amendment `ADR-0021`, and its separate installation amendment `ADR-0024` as release-path amendments to P2-05; `P2-07-public-launch-github-pages-seo.md` is active through `ADR-0026`. `ADR-0013` remains limited to the self-hosted static Marketing Landing / Logo only, while ADR-0026 separately governs the public Pages marketing site.
+P2 capabilities remain inactive until a named accepted P2 Slice SDD and any required governance decision activate implementation. This index does not authorize implementation by itself. `P2-00-api-catalog-scalar.md` is active through `ADR-0010`; `P2-01-openapi-step-generation.md` is active through `ADR-0011`; `P2-02-public-api-substrate.md` is active through `ADR-0012`; `P2-03-env-group-secret.md` is active through `ADR-0014`; `P2-04-help-ai-agents-system-openapi-bootstrap.md` is active through `ADR-0016` and follows the product-version decision in `ADR-0027`; `P2-05-cross-platform-distribution.md` is active through `ADR-0017`, its source-preview amendment `ADR-0019`, its user-local platform Release installer amendment `ADR-0024`, and its product/artifact version amendment `ADR-0027`; `P2-06-lan-first-deployment-usability.md` is active through `ADR-0018`, its new-release Runtime default amendment `ADR-0020`, its release `up` configuration confirmation amendment `ADR-0021`, and its separate installation amendment `ADR-0024` as release-path amendments to P2-05; `P2-07-public-launch-github-pages-seo.md` is active through `ADR-0026`. `ADR-0013` remains limited to the self-hosted static Marketing Landing / Logo only, while ADR-0026 separately governs the public Pages marketing site.
 
 Dynamic Slice activation belongs in this index and the owning Slice/ADR, not in root `AGENTS.md`.
 Root instructions provide the stable scope gate and route feature work here for discovery.
@@ -61,6 +61,10 @@ requires manual editing, all non-network values are preserved, and source startu
 ADR-0026 adds only the public repository/Pages/SEO/authorship-evidence and self-hosted indexing
 boundary defined by P2-07. It consumes P2-05/P2-06 release artifacts without changing release
 startup, Runtime, Compose, installer, or integrity contracts.
+
+ADR-0027 defines one root product-version authority, its bounded API/Runner/OpenAPI/Catalog/skill
+consumers, and the separate source/validation/formal-release artifact identities. It adds no
+component-independent release lifecycle, Runtime version negotiation, or historical migration.
 
 ## Revision Protocol
 

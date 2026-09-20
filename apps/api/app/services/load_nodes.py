@@ -17,6 +17,7 @@ from sqlalchemy.orm import Session
 from app.core.config import decode_ssh_credential_encryption_key, get_settings
 from app.core.errors import AppError
 from app.core.ids import new_ulid
+from app.core.product_version import PRODUCT_VERSION
 from app.core.time import utc_now
 from app.models.auth import User
 from app.models.load_nodes import (
@@ -102,7 +103,7 @@ class DeterministicLoadNodeInitializer(LoadNodeInitializer):
                 "[info] Agent bundle verified.\n"
             ),
             message="Initialization succeeded.",
-            runner_version="0.1.0",
+            runner_version=PRODUCT_VERSION,
             bundle_version="p0-03",
             runtime_version=(get_settings().load_node_runtime_version or "deterministic-runtime"),
         )

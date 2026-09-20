@@ -1,9 +1,3 @@
-[project]
-name = "surgepilot-workspace"
-version = "0.1.0"
-requires-python = ">=3.12"
-dependencies = []
-
 [dependency-groups]
 dev = [
   "diff-cover>=9.7.0",

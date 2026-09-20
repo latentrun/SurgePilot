@@ -4,6 +4,8 @@ from dataclasses import dataclass
 import os
 from pathlib import Path
 
+from app.core.product_version import PRODUCT_VERSION, normalize_product_version
+
 
 @dataclass(frozen=True)
 class RunnerBundleFile:
@@ -13,8 +15,11 @@ class RunnerBundleFile:
 
 
 class RunnerBundle:
-    def __init__(self, bundle_dir: Path | None = None) -> None:
+    def __init__(
+        self, bundle_dir: Path | None = None, *, product_version: str = PRODUCT_VERSION
+    ) -> None:
         self.bundle_dir = bundle_dir or default_runner_bundle_dir()
+        self.product_version = normalize_product_version(product_version)
 
     def files(self) -> list[RunnerBundleFile]:
         root = self.bundle_dir
@@ -31,6 +36,12 @@ class RunnerBundle:
                     mode=0o755 if path.name == "runner.py" else 0o644,
                 )
             )
+        files.append(
+            RunnerBundleFile(
+                relative_path="surgepilot_runner/VERSION",
+                content=f"{self.product_version}\n".encode(),
+            )
+        )
         return files
 
 

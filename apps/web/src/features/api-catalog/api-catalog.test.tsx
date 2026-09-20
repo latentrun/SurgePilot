@@ -201,6 +201,7 @@ describe("P2-00 API Catalog web flow", () => {
     expect(screen.getByLabelText("Global top bar").className).toContain("bg-surface-container-low");
     expect(screen.getByLabelText("Global top bar").className).not.toContain("bg-surface-container-low/");
     expect(await screen.findByText("Orders docs")).toBeInTheDocument();
+    expect(screen.getByText(/orders-openapi\.yaml · Orders API · v1\.0\.0/)).toBeInTheDocument();
     expect(
       screen.getByText(/documentation only and does not create Scenarios or Test Plans/i),
     ).toBeInTheDocument();

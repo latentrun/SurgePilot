@@ -233,6 +233,40 @@ def test_formal_release_rejects_reserved_validation_version() -> None:
     assert "reserved for development validation" in preflight
 
 
+def test_release_workflows_keep_product_and_artifact_versions_distinct() -> None:
+    formal = (ROOT / ".github/workflows/release.yml").read_text(encoding="utf-8")
+    validation = (ROOT / ".github/workflows/release-validation.yml").read_text(encoding="utf-8")
+
+    formal_preflight = formal.split("\n  preflight:\n", maxsplit=1)[1].split(
+        "\n  verify:\n", maxsplit=1
+    )[0]
+    assert "PRODUCT_VERSION=$(tr -d '\\n' < VERSION)" in formal_preflight
+    assert 'test "$TAG" = "v$PRODUCT_VERSION"' in formal_preflight
+    assert '--build-arg SURGEPILOT_PRODUCT_VERSION="$PRODUCT_VERSION"' in formal
+    assert formal.count('--build-arg SURGEPILOT_VERSION="$GITHUB_REF_NAME"') == 3
+
+    assert validation.count('--build-arg SURGEPILOT_VERSION="$VALIDATION_VERSION"') == 6
+    assert validation.count('--build-arg SURGEPILOT_PRODUCT_VERSION="$PRODUCT_VERSION"') == 2
+    assert 'SURGEPILOT_VERSION="validation-$GITHUB_SHA"' not in validation
+    assert '--build-arg SURGEPILOT_VERSION="$TAG"' not in validation
+    expected_env = 'SURGEPILOT_E2E_EXPECTED_PRODUCT_VERSION="$PRODUCT_VERSION"'
+    assert expected_env in formal
+    assert expected_env in validation
+
+
+def test_release_workflows_verify_actual_image_identity() -> None:
+    formal = (ROOT / ".github/workflows/release.yml").read_text(encoding="utf-8")
+    validation = (ROOT / ".github/workflows/release-validation.yml").read_text(encoding="utf-8")
+
+    for workflow in (formal, validation):
+        assert "org.opencontainers.image.version" in workflow
+        assert "org.opencontainers.image.revision" in workflow
+        assert "scripts/verify_api_image_product_version.py" in workflow
+
+    assert 'test "$actual_version" = "$GITHUB_REF_NAME"' in formal
+    assert 'test "$actual_version" = "$VALIDATION_VERSION"' in validation
+
+
 def test_release_workflows_pin_external_actions_to_full_commit_shas() -> None:
     for workflow_name in (
         "release.yml",

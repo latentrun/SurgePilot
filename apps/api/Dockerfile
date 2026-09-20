@@ -3,10 +3,12 @@ FROM python:3.12-slim
 ARG PIP_INDEX_URL=https://pypi.org/simple
 ARG UV_INDEX_URL=https://pypi.org/simple
 ARG SURGEPILOT_VERSION=dev
+ARG SURGEPILOT_PRODUCT_VERSION
 ARG SURGEPILOT_REVISION=unknown
 ARG SURGEPILOT_SOURCE=https://github.com/latentrun/SurgePilot
 ENV PIP_INDEX_URL=${PIP_INDEX_URL}
 ENV UV_INDEX_URL=${UV_INDEX_URL}
+ENV SURGEPILOT_PRODUCT_VERSION=${SURGEPILOT_PRODUCT_VERSION}
 
 LABEL org.opencontainers.image.source=${SURGEPILOT_SOURCE} \
       org.opencontainers.image.revision=${SURGEPILOT_REVISION} \

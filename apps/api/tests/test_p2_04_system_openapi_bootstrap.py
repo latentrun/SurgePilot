@@ -10,6 +10,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session, sessionmaker
 
 from app.main import app
+from app.core.product_version import PRODUCT_VERSION
 from app.models.api_catalog import ApiCatalogSpec
 from app.models.auth import DEFAULT_WORKSPACE_ID, User, Workspace
 from app.services.storage import LimitedHashingReader, PutResult, StorageClient
@@ -106,11 +107,13 @@ def test_bootstrap_import_creates_one_default_workspace_spec(
     assert spec.workspace_id == DEFAULT_WORKSPACE_ID
     assert spec.created_by == admin.id
     assert spec.name == "SurgePilot API"
+    assert spec.document_version == PRODUCT_VERSION
     assert spec.filename == "surgepilot-api.openapi.json"
     assert spec.content_type == "application/json"
     payload, content_type = storage.objects[(spec.storage_bucket, spec.storage_object_key)]
     assert content_type == "application/json"
     assert payload == bootstrap.build_curated_openapi_payload(app)
+    assert json.loads(payload)["info"]["version"] == PRODUCT_VERSION
 
 
 def test_bootstrap_deduplicates_by_workspace_and_sha_not_name(

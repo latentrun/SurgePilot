@@ -4192,7 +4192,7 @@
   },
   "info": {
     "title": "SurgePilot API",
-    "version": "0.1.0",
+    "version": "1.0.0",
     "x-surgepilot-error-codes": [
       "ENV_GROUP_NAME_CONFLICT",
       "ENV_GROUP_IN_USE",

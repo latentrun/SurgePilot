@@ -18,6 +18,8 @@ import zipfile
 
 import click
 
+from surgepilot_runner.product_version import resolve_product_version
+
 SAFE_PATH_SEGMENT = re.compile(r"^[A-Za-z0-9._-]+$")
 MAX_RUN_ID_LENGTH = 64
 MAX_ARTIFACT_UPLOAD_BYTES = 200 * 1024 * 1024
@@ -1392,7 +1394,7 @@ def cli() -> None:
 
 @cli.command()
 def version() -> None:
-    click.echo("SurgePilot Runner 0.1.0")
+    click.echo(f"SurgePilot Runner {resolve_product_version()}")
 
 
 @cli.command()
