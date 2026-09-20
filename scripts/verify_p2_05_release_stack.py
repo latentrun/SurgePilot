@@ -3,19 +3,23 @@
 from __future__ import annotations
 
 import csv
+from io import BytesIO
 import json
 import os
 from pathlib import Path
+import re
 import sys
 import time
 import urllib.error
 import urllib.parse
 import urllib.request
+from zipfile import BadZipFile, ZipFile
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
 from scripts.verify_p0_api_main_flow_e2e import (  # noqa: E402
+    API_BASE_URL,
     create_json,
     get_json,
     initialize_node,
@@ -32,6 +36,8 @@ TARGET_URL = os.environ.get(
 INFLUXDB_ORG = os.environ.get("SURGEPILOT_MONITORING_INFLUXDB_ORG", "surgepilot")
 INFLUXDB_BUCKET = os.environ.get("SURGEPILOT_MONITORING_INFLUXDB_BUCKET", "jmeter")
 REQUIRED_MEASUREMENTS = {"requestsRaw", "virtualUsers", "testStartEnd"}
+PRODUCT_VERSION_PATTERN = re.compile(r"^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$")
+SKILL_OPENAPI_PATH = "surgepilot-public-api/references/public-api.openapi.json"
 
 
 def target_origin() -> str:
@@ -39,6 +45,60 @@ def target_origin() -> str:
     if parsed.scheme not in {"http", "https"} or not parsed.netloc:
         raise RuntimeError("SURGEPILOT_E2E_TARGET_URL must be an absolute HTTP URL")
     return urllib.parse.urlunsplit((parsed.scheme, parsed.netloc, "", "", ""))
+
+
+def expected_product_version() -> str:
+    value = os.environ.get("SURGEPILOT_E2E_EXPECTED_PRODUCT_VERSION")
+    if not value:
+        raise RuntimeError("SURGEPILOT_E2E_EXPECTED_PRODUCT_VERSION is required")
+    if not PRODUCT_VERSION_PATTERN.fullmatch(value) or value == "0.0.0":
+        raise RuntimeError("SURGEPILOT_E2E_EXPECTED_PRODUCT_VERSION must be canonical X.Y.Z")
+    return value
+
+
+def fetch_runtime_openapi() -> dict:
+    with urllib.request.urlopen(f"{API_BASE_URL}/api/openapi.json", timeout=10) as response:
+        return json.loads(response.read().decode("utf-8"))
+
+
+def download_skill_bundle(session) -> bytes:
+    request = urllib.request.Request(
+        f"{API_BASE_URL}/api/v1/account/ai-skill/download",
+        method="GET",
+    )
+    with session.opener.open(request, timeout=30) as response:
+        return response.read()
+
+
+def _assert_version(surface: str, actual: object, expected: str) -> None:
+    if actual != expected:
+        raise RuntimeError(f"{surface} version mismatch: expected {expected}, got {actual!r}")
+
+
+def verify_product_identity(session, node_id: str) -> None:
+    expected = expected_product_version()
+    runtime_openapi = fetch_runtime_openapi()
+    _assert_version("runtime OpenAPI", runtime_openapi.get("info", {}).get("version"), expected)
+
+    catalog = get_json(session, "/api/v1/api-catalog/specs?limit=100&offset=0")
+    system_specs = [
+        item for item in catalog.get("items", []) if item.get("name") == "SurgePilot API"
+    ]
+    if len(system_specs) != 1:
+        raise RuntimeError(
+            f"system Catalog entry mismatch: expected one SurgePilot API entry, got {len(system_specs)}"
+        )
+    _assert_version("system Catalog", system_specs[0].get("documentVersion"), expected)
+
+    try:
+        with ZipFile(BytesIO(download_skill_bundle(session))) as archive:
+            skill_openapi = json.loads(archive.read(SKILL_OPENAPI_PATH))
+    except (BadZipFile, KeyError, OSError, json.JSONDecodeError) as exc:
+        raise RuntimeError("AI skill OpenAPI is unavailable or invalid") from exc
+    _assert_version("AI skill OpenAPI", skill_openapi.get("info", {}).get("version"), expected)
+
+    node = get_json(session, f"/api/v1/load-nodes/{node_id}")
+    _assert_version("Runner", node.get("runnerVersion"), expected)
 
 
 def scenario_payload() -> dict:
@@ -223,6 +283,7 @@ def verify_release_stack() -> None:
         },
     )
     initialize_node(session, node["id"])
+    verify_product_identity(session, node["id"])
     env_group = create_json(
         session,
         "/api/v1/env-groups",

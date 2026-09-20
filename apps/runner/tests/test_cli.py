@@ -817,11 +817,13 @@ def test_cli_help_lists_runner_commands() -> None:
     assert "kill" in result.output
 
 
-def test_version_command_reports_runner_version() -> None:
+def test_version_command_reports_runner_version(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(runner_cli, "resolve_product_version", lambda: "2.3.4")
+
     result = CliRunner().invoke(cli, ["version"])
 
     assert result.exit_code == 0
-    assert result.output.strip() == "SurgePilot Runner 0.1.0"
+    assert result.output.strip() == "SurgePilot Runner 2.3.4"
 
 
 def test_start_fake_accepts_run_id_and_uses_protocol_words(tmp_path: Path) -> None:

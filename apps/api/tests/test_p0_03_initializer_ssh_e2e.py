@@ -6,6 +6,7 @@ import os
 import pytest
 
 from app.core.config import get_settings
+from app.core.product_version import PRODUCT_VERSION
 from app.models.load_nodes import LoadNode
 from app.services.load_node_initializer import RealLoadNodeInitializer
 from app.services.load_nodes import CredentialPlaintext
@@ -77,7 +78,7 @@ def test_real_initializer_success_path_over_ssh() -> None:
     )
 
     assert result.ok is True
-    assert result.runner_version == "0.1.0"
+    assert result.runner_version == PRODUCT_VERSION
     assert result.bundle_version == "p0-03"
     assert "Runner bundle uploaded" in result.log
     marker = adapter.run_command(
@@ -88,4 +89,4 @@ def test_real_initializer_success_path_over_ssh() -> None:
         target(), command=f"python3 {RUNNER_HOME}/runner.py version", timeout_seconds=5
     )
     assert runner_version.ok is True
-    assert "SurgePilot Runner 0.1.0" in runner_version.stdout_preview
+    assert f"SurgePilot Runner {PRODUCT_VERSION}" in runner_version.stdout_preview

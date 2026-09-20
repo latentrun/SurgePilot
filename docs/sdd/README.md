@@ -20,6 +20,8 @@ v1.0.0 lifecycle audit.
   instruction-architecture design for Issues #37-#41.
 - `v1.0.0-governing-document-lifecycle-audit.md` — lifecycle and released-baseline audit anchored
   to the commit SHA resolved from the v1.0.0 tag during the audit.
+- `adr/ADR-0027-product-version-and-artifact-identity.md` — accepted repository-wide product
+  version and release-artifact identity decision for Issue #34 and future release work.
 - `00-product-scope-and-priority.md`
 - `01-architecture-overview.md`
 - `02-repo-structure-and-dev-workflow.md`

@@ -278,7 +278,20 @@ Rules:
 5. It belongs only to `api.openapi.json`; the normalized public export must exclude it.
 6. `AI_SKILL_SOURCE_NOT_AVAILABLE` is documented only in this operation's `503` response and must not be added to `info.x-surgepilot-error-codes` or the public artifact.
 
-### 5.5 Internal Runner Endpoints
+### 5.5 OpenAPI Product Version
+
+`docs/sdd/adr/ADR-0027-product-version-and-artifact-identity.md` owns product-version resolution.
+FastAPI runtime OpenAPI, the curated Web/business export, and the public export use the same
+canonical `X.Y.Z` product version. A formal release tagged `vX.Y.Z` therefore exposes
+`info.version: X.Y.Z`; a first-Admin system Catalog import derives the same value through the
+curated runtime export.
+
+Generated OpenAPI and the Public API AI skill snapshot are refreshed from FastAPI sources through
+`make generate-contracts`. Docker builds do not rewrite or stamp generated contracts. The reserved
+validation artifact version `v0.0.0`, registry tags, revisions, and API route prefix `/v1` are not
+OpenAPI product versions.
+
+### 5.6 Internal Runner Endpoints
 
 Runner callbacks and runner-only endpoints must use internal prefix:
 

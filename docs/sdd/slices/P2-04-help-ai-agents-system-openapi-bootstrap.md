@@ -10,6 +10,7 @@
 - Frontend Boundary: `docs/sdd/08-frontend-routing-and-ui-rules.md`
 - Testing Boundary: `docs/sdd/09-testing-and-acceptance-strategy.md`
 - ADR: `docs/sdd/adr/ADR-0016-p2-help-ai-agents-system-openapi-bootstrap.md`
+- Product Version Decision: `docs/sdd/adr/ADR-0027-product-version-and-artifact-identity.md`
 
 ## 1. Core Decision
 
@@ -330,7 +331,7 @@ The helper synthesizes an existing service input with these fixed properties:
 | `storage` / `bucket` | Existing `get_storage_client()` and configured MinIO bucket |
 | `max_bytes` | Existing `api_catalog_spec_max_bytes` setting |
 
-The filename and content type must satisfy `validate_spec_filename`, `validate_content_type`, and `parse_api_spec`. The document's `info.title`, `info.version`, and OpenAPI version remain derived from the current FastAPI schema.
+The filename and content type must satisfy `validate_spec_filename`, `validate_content_type`, and `parse_api_spec`. The document's `info.title`, `info.version`, and OpenAPI version remain derived from the current FastAPI schema. Under ADR-0027, `info.version` is the canonical product version, so the imported `documentVersion` is `X.Y.Z` for source, validation, and formal-release deployments.
 
 ### 11.2 Same-SHA idempotency
 

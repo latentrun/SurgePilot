@@ -11,7 +11,15 @@ resolution-markers = [
 members = [
     "surgepilot-api",
     "surgepilot-runner",
-    "surgepilot-workspace",
+]
+
+[manifest.dependency-groups]
+dev = [
+    { name = "diff-cover", specifier = ">=9.7.0" },
+    { name = "jsonschema", specifier = ">=4.23.0" },
+    { name = "pytest", specifier = ">=8.3.0" },
+    { name = "pytest-cov", specifier = ">=7.0.0" },
+    { name = "ruff", specifier = ">=0.8.0" },
 ]
 
 [[package]]
@@ -1702,7 +1710,7 @@ wheels = [
 
 [[package]]
 name = "surgepilot-api"
-version = "0.1.0"
+version = "1.0.0"
 source = { editable = "apps/api" }
 dependencies = [
     { name = "alembic" },
@@ -1753,7 +1761,7 @@ dev = [
 
 [[package]]
 name = "surgepilot-runner"
-version = "0.1.0"
+version = "1.0.0"
 source = { editable = "apps/runner" }
 dependencies = [
     { name = "click" },
@@ -1773,31 +1781,6 @@ requires-dist = [{ name = "click", specifier = ">=8.1.0,<9.0.0" }]
 dev = [
     { name = "jsonschema", specifier = ">=4.23.0" },
     { name = "pytest", specifier = ">=8.3.0" },
-    { name = "ruff", specifier = ">=0.8.0" },
-]
-
-[[package]]
-name = "surgepilot-workspace"
-version = "0.1.0"
-source = { virtual = "." }
-
-[package.dev-dependencies]
-dev = [
-    { name = "diff-cover" },
-    { name = "jsonschema" },
-    { name = "pytest" },
-    { name = "pytest-cov" },
-    { name = "ruff" },
-]
-
-[package.metadata]
-
-[package.metadata.requires-dev]
-dev = [
-    { name = "diff-cover", specifier = ">=9.7.0" },
-    { name = "jsonschema", specifier = ">=4.23.0" },
-    { name = "pytest", specifier = ">=8.3.0" },
-    { name = "pytest-cov", specifier = ">=7.0.0" },
     { name = "ruff", specifier = ">=0.8.0" },
 ]
 

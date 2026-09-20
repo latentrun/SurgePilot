@@ -9,6 +9,7 @@ from fastapi.openapi.utils import get_openapi
 from app.core.errors import AppError, app_error_handler, validation_error_handler
 from app.core.config import validate_ssh_credential_encryption_key
 from app.core.middleware import request_context_middleware
+from app.core.product_version import PRODUCT_VERSION
 from app.services.storage import get_storage_client
 from app.routes import (
     account_ai_skill,
@@ -39,7 +40,7 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
 
 app = FastAPI(
     title="SurgePilot API",
-    version="0.1.0",
+    version=PRODUCT_VERSION,
     servers=[{"url": "/api"}],
     openapi_url="/api/openapi.json",
     docs_url="/api/docs",

@@ -515,7 +515,7 @@ All business endpoints require Workspace context. Missing `x-workspace-id` falls
   "remark": "Staging private node",
   "status": "idle",
   "lastStatusReason": null,
-  "runnerVersion": "0.1.0",
+  "runnerVersion": "1.2.3",
   "bundleVersion": "p0-03",
   "runtimeVersion": "runtime-test-v1",
   "lastInitializedAt": "2030-05-31T10:00:00Z",
@@ -626,7 +626,7 @@ Response `200`:
       "remark": "Staging private node",
       "status": "idle",
       "lastStatusReason": null,
-      "runnerVersion": "0.1.0",
+      "runnerVersion": "1.2.3",
       "bundleVersion": "p0-03",
       "lastInitializedAt": "2030-05-31T10:00:00Z",
       "lastCheckedAt": "2030-05-31T10:00:00Z",
@@ -945,7 +945,7 @@ Response `200`:
   "errorCode": null,
   "message": "Initialization succeeded.",
   "sanitizedLogTail": "[info] Connected to host\n[info] Runner home prepared\n[info] Dependency check passed\n",
-  "runnerVersion": "0.1.0",
+  "runnerVersion": "1.2.3",
   "bundleVersion": "p0-03",
   "createdAt": "2030-05-31T09:58:59Z",
   "updatedAt": "2030-05-31T10:00:00Z"
@@ -957,6 +957,8 @@ Rules:
 1. `sanitizedLogTail` must be redacted and bounded.
 2. Secret values must never be returned.
 3. Attempt must belong to the parent node.
+4. `runnerVersion` is the product version carried by the installed Runner bundle. The example value
+   is illustrative and is not a current-version ledger.
 
 ### 9.11 `POST /api/v1/load-nodes/{loadNodeId}/disable`
 

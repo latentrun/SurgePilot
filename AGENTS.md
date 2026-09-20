@@ -140,6 +140,17 @@ API JSON uses `camelCase`; database/ORM/migration fields use `snake_case`; API e
 8601 UTC with `Z`. Use `x-workspace-id`, `x-csrf-token`, `x-runner-token`, and `x-request-id` according
 to their governing contract; do not move Workspace identity into route paths.
 
+## Product and release versions
+
+- The repository-root `VERSION` is the authority for the SurgePilot product version. Product-version
+  and release work follows accepted `ADR-0027`; generated artifacts are regenerated, never hand-edited.
+- Ordinary feature, bug, documentation, test, and refactoring work does not change `VERSION` unless
+  the task explicitly includes a product-version or release change.
+- Keep product version, artifact/release identity, registry tags, and source revision distinct;
+  never use `dev`, validation tags, branch names, or commit SHAs as the product version.
+- Formal release tags are `vX.Y.Z` derived from the product version. Version inputs normalize at
+  most one leading `v`; malformed or duplicated prefixes fail closed.
+
 ## Development workflow
 
 ### Git workspace rule

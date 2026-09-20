@@ -16,19 +16,22 @@ def make_bundle_dir(tmp_path):
     return root
 
 
-def test_runner_bundle_lists_runner_files_with_modes(tmp_path) -> None:
+def test_runner_bundle_lists_runner_files_with_modes_and_product_version(tmp_path) -> None:
     root = make_bundle_dir(tmp_path)
 
-    files = RunnerBundle(root).files()
+    files = RunnerBundle(root, product_version="2.3.4").files()
 
     assert [file.relative_path for file in files] == [
         "runner.py",
         "surgepilot_runner/__init__.py",
         "surgepilot_runner/cli.py",
+        "surgepilot_runner/VERSION",
     ]
     assert files[0].mode == 0o755
     assert files[1].mode == 0o644
     assert files[2].content == b"print('cli')\n"
+    assert files[3].content == b"2.3.4\n"
+    assert files[3].mode == 0o644
 
 
 def test_runner_bundle_rejects_missing_required_files(tmp_path) -> None:

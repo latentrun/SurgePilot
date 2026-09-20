@@ -1,6 +1,6 @@
 # P2-05 Cross-platform Distribution and Full-stack Release Bootstrap
 
-- Document status: Accepted and active through `docs/sdd/adr/ADR-0017-p2-cross-platform-distribution.md`, with source-preview startup amended by `docs/sdd/adr/ADR-0019-p2-source-preview-startup.md`, the new-release Runtime default amended by `docs/sdd/adr/ADR-0020-p2-release-dual-runtime-default.md`, and the user-local platform Release installer amended by `docs/sdd/adr/ADR-0024-p2-user-local-release-installer.md`; implementation backfill is recorded in §17.1.
+- Document status: Accepted and active through `docs/sdd/adr/ADR-0017-p2-cross-platform-distribution.md`, with source-preview startup amended by `docs/sdd/adr/ADR-0019-p2-source-preview-startup.md`, the new-release Runtime default amended by `docs/sdd/adr/ADR-0020-p2-release-dual-runtime-default.md`, the user-local platform Release installer amended by `docs/sdd/adr/ADR-0024-p2-user-local-release-installer.md`, and product/artifact version identity amended by `docs/sdd/adr/ADR-0027-product-version-and-artifact-identity.md`; implementation backfill is recorded in §17.1.
 - Phase: P2
 - Capability: `cross_platform_distribution`
 - Scope Gate: `docs/sdd/00-product-scope-and-priority.md` §7 deployment expansion, plus the open-source deployment success criteria in `docs/prd/PRD.md` §3.3 and §4.2
@@ -251,6 +251,12 @@ All artifacts published as one public release share one `vX.Y.Z` semantic versio
 | Release manifest version | `v0.3.0`                  |
 
 A release bundle must not mix images or Runtime assets from another published version. `release-manifest.json` records the release version, source commit, multi-architecture image index digests, and Runtime asset SHA256 values. Commit-SHA tags may also be published for traceability but do not replace the semantic release tag or digest pins.
+
+ADR-0027 separates this release-artifact identity from product metadata. The root `VERSION`, API
+OpenAPI, Runner, system Catalog, public OpenAPI, and AI skill snapshot use canonical `X.Y.Z` without
+`v`. Formal release images receive `SURGEPILOT_VERSION=vX.Y.Z` for the OCI version label and
+`SURGEPILOT_PRODUCT_VERSION=X.Y.Z` for API runtime metadata. Release preflight requires the tag to
+equal `v` plus root `VERSION`.
 
 This semantic-version contract applies to published release artifacts only. Source and local verification paths preserve the existing Runtime builder semantics:
 
@@ -918,8 +924,12 @@ validation-<full-source-identifier>
 
 The multi-architecture tag is assembled from the two native manifests. Its immutable digest is
 recorded and used by the existing bundle builder. Validation artifacts use reserved internal
-version `v0.0.0`; the workflow does not create a `v0.0.0` image tag or GitHub Release, and the
-formal release workflow rejects that reserved version.
+version `v0.0.0`; validation images use that value for their OCI version label while retaining
+`validation-<full-source-identifier>` registry tags and the full source identifier in the OCI
+revision label. The workflow passes root `VERSION` separately as the API product version, so
+`v0.0.0` never enters OpenAPI, Runner, Catalog, or skill metadata. The workflow does not create a
+`v0.0.0` image tag or GitHub Release, and the formal release workflow rejects that reserved
+version.
 
 Validation image tags are deliberately re-runnable rather than create-only. A rerun for the same
 source identifier may replace only its derived `validation-<full-source-identifier>[-arch]` tags. The workflow never
