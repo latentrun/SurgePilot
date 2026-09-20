@@ -19,8 +19,8 @@ SurgePilot 是一个自托管的分布式 API 负载测试平台，也是一项�
 
 ## 亮点
 
-- ⚡ **一条命令启动完整技术栈。** `make start-full-stack` 会启动 Web、API、
-  api-worker、PostgreSQL、MinIO、Nginx、Grafana + InfluxDB，以及一个可用的 Demo Load Node。
+- ⚡ **一条命令自托管 SurgePilot。** `surgepilot up` 会启动 Web、API、api-worker、
+  PostgreSQL、MinIO、Nginx、Grafana + InfluxDB——无需检出源代码。
 - 🤖 **从头到尾 100% 由 AI 构建。** PRD → SDD → ADR → Slice →
   契约 → 测试 → 部署，完整生命周期均由 AI 编写，所有产物都保存在本仓库中。
 - 🧭 **有章可循，不靠“感觉编程”。** `AGENTS.md`、范围门禁、ADR 和

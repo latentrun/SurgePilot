@@ -52,7 +52,7 @@ function localeTheme(prefix: string, labels: NavigationLabels): DefaultTheme.Con
 }
 
 const englishLabels: NavigationLabels = {
-  home: "Home",
+  home: "Documentation Home",
   quickstart: "Quickstart",
   startupModes: "Startup Modes",
   configuration: "Configuration",
@@ -64,7 +64,7 @@ const englishLabels: NavigationLabels = {
 };
 
 const chineseLabels: NavigationLabels = {
-  home: "首页",
+  home: "文档首页",
   quickstart: "快速开始",
   startupModes: "启动模式",
   configuration: "配置",
@@ -76,7 +76,7 @@ const chineseLabels: NavigationLabels = {
 };
 
 const japaneseLabels: NavigationLabels = {
-  home: "ホーム",
+  home: "ドキュメントホーム",
   quickstart: "クイックスタート",
   startupModes: "起動モード",
   configuration: "設定",
@@ -150,5 +150,6 @@ export default defineConfig({
   },
   themeConfig: {
     logo: "/surgepilot-logo.svg",
+    logoLink: PUBLIC_SITE.base,
   },
 });

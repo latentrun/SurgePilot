@@ -21,9 +21,9 @@ implemented, tested, verified, deployed, and released the product.
 
 ## Highlights
 
-- ⚡ **One command to a full stack.** `make start-full-stack` boots Web, API,
-  api-worker, PostgreSQL, MinIO, Nginx, Grafana + InfluxDB, and a live Demo
-  Load Node.
+- ⚡ **One command to self-host SurgePilot.** `surgepilot up` boots Web, API,
+  api-worker, PostgreSQL, MinIO, Nginx, Grafana + InfluxDB — no source checkout
+  required.
 - 🤖 **100% AI-built, end to end.** A complete PRD → SDD → ADR → Slice →
   contracts → tests → deploy lifecycle, all AI-authored and all in this repo.
 - 🧭 **Governed, not vibe-coded.** `AGENTS.md`, scope gates, ADRs, and

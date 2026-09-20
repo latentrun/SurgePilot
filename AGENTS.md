@@ -142,6 +142,27 @@ to their governing contract; do not move Workspace identity into route paths.
 
 ## Development workflow
 
+### Git workspace rule
+
+Each new implementation task follows this isolation model:
+
+```text
+1 task = 1 branch + 1 worktree + 1 PR
+```
+
+Before starting a new implementation task:
+
+1. Run `git fetch origin`.
+2. Start from the current `origin/main`.
+3. Create a dedicated task branch from `origin/main`.
+4. Create a dedicated worktree for that branch.
+5. Perform all implementation work inside that worktree.
+6. Never implement new work directly on `main`.
+7. Never reuse another task's branch or worktree.
+
+Follow-up fixes for an existing open PR stay on that PR's branch, worktree, and PR unless
+explicitly requested otherwise.
+
 For a feature touching more than one application:
 
 1. read the governing Slice and affected nested instructions;

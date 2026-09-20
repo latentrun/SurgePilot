@@ -131,6 +131,22 @@ def test_public_readmes_open_with_accurate_conversion_and_evidence_links() -> No
             "| 6. リリース | 起動、デプロイ、リリース資産 | GPT |",
         ),
     }
+    self_hosted_highlights = {
+        "README.md": (
+            "**One command to self-host SurgePilot.** `surgepilot up` boots Web, API,\n"
+            "  api-worker, PostgreSQL, MinIO, Nginx, Grafana + InfluxDB — no source checkout\n"
+            "  required."
+        ),
+        "README.zh-CN.md": (
+            "**一条命令自托管 SurgePilot。** `surgepilot up` 会启动 Web、API、api-worker、\n  "
+            "PostgreSQL、MinIO、Nginx、Grafana + InfluxDB——无需检出源代码。"
+        ),
+        "README.ja.md": (
+            "**1 つのコマンドで SurgePilot をセルフホスト。** `surgepilot up` で Web、API、\n  "
+            "api-worker、PostgreSQL、MinIO、Nginx、Grafana + InfluxDB を起動できます。\n  "
+            "ソースのチェックアウトは不要です。"
+        ),
+    }
 
     for path in README_PATHS:
         content = path.read_text(encoding="utf-8")
@@ -148,6 +164,7 @@ def test_public_readmes_open_with_accurate_conversion_and_evidence_links() -> No
         )
         assert PREVIOUS_OWNER_NAMESPACE not in content, path.name
         assert not unsupported_positioning.search(content), path.name
+        assert self_hosted_highlights[path.name] in content, path.name
         assert ai_tool_evidence_headers[path.name] in content, path.name
         for row in ai_tool_evidence_rows[path.name]:
             assert row in content, path.name
@@ -304,6 +321,11 @@ def test_pages_workflow_builds_pull_requests_and_deploys_main_only() -> None:
     ):
         assert required in workflow
     assert workflow.index("needs: build") < workflow.index("actions/deploy-pages")
+    assert "page_url: ${{ steps.deployment.outputs.page_url }}" in workflow
+    assert "needs: deploy" in workflow
+    assert "SURGEPILOT_PUBLIC_SITE_URL: ${{ needs.deploy.outputs.page_url }}" in workflow
+    assert "node docs/site/tests/verify-live-site.mjs" in workflow
+    assert workflow.index("actions/deploy-pages") < workflow.index("verify-live-site.mjs")
     assert "cancel-in-progress: false" in workflow
     for forbidden in ("tags:", "release:"):
         assert forbidden not in workflow
