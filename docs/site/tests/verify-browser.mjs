@@ -124,6 +124,7 @@ const brandLink = page.locator(".VPNavBarTitle a.title");
 assert.equal(await brandLink.getAttribute("href"), publicBase);
 await brandLink.click();
 await page.waitForURL(baseUrl);
+await page.locator("[data-marketing-home]").waitFor({ state: "visible" });
 assert.equal(await page.locator("[data-marketing-home]").count(), 1);
 
 await page.setViewportSize({ width: 390, height: 844 });
