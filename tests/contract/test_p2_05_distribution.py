@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 import re
+import subprocess
 
 import yaml
 
@@ -198,7 +199,7 @@ def test_release_workflow_requires_and_publishes_versioned_release_notes() -> No
 
     notes_path = 'release_notes="docs/releases/$TAG.md"'
     file_guard = 'test -f "$release_notes"'
-    content_guard = "grep -q '[^[:space:]]' \"$release_notes\""
+    content_guard = 'python3 scripts/validate_release_notes.py --tag "$TAG" --path "$release_notes"'
 
     for section in (preflight, publish):
         assert notes_path in section
@@ -215,16 +216,20 @@ def test_release_workflow_requires_and_publishes_versioned_release_notes() -> No
 
 def test_existing_release_notes_follow_the_documented_user_facing_format() -> None:
     for tag in ("v1.0.0", "v1.1.0"):
-        notes = (ROOT / "docs" / "releases" / f"{tag}.md").read_text(encoding="utf-8")
-        assert notes.startswith(f"# SurgePilot {tag}\n")
-        for heading in (
-            "## Highlights",
-            "## Install",
-            "## Upgrade",
-            "## Compatibility and breaking changes",
-            "## Full changelog",
-        ):
-            assert heading in notes
+        result = subprocess.run(
+            [
+                "python3",
+                str(ROOT / "scripts" / "validate_release_notes.py"),
+                "--tag",
+                tag,
+                "--path",
+                str(ROOT / "docs" / "releases" / f"{tag}.md"),
+            ],
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+        assert result.returncode == 0, result.stderr
 
 
 def test_release_package_bootstrap_is_manual_bounded_and_non_semantic() -> None:

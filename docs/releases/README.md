@@ -44,9 +44,10 @@ version-transition changes. The release tag is created only after that review an
 checks pass.
 
 The release workflow checks the exact versioned file during preflight and again immediately before
-staging the draft. A missing or whitespace-only file blocks publication before the GitHub Release
-or semantic image tags are created. The draft is created with `--notes-file`, so the reviewed file
-is the published body.
+staging the draft. `scripts/validate_release_notes.py` requires the exact tag-matched title, the five
+headings above in order, and substantive non-comment content in every section. A missing or invalid
+file blocks publication before the GitHub Release or semantic image tags are created. The draft is
+created with `--notes-file`, so the reviewed file is the published body.
 
 ## Historical metadata correction
 

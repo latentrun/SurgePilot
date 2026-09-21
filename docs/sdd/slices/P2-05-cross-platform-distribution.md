@@ -601,8 +601,9 @@ The exact safe publish ordering must prevent a release page or semantic tag from
 
 Every formal release has one reviewed user-facing notes source at
 `docs/releases/vX.Y.Z.md`, matching the exact tag. The workflow validates that the file exists and
-contains non-whitespace content before publication work, revalidates it before draft creation, and
-passes it to `gh release create --notes-file`. The format and author/review procedure are defined in
+has the exact tag-matched title, required ordered sections, and substantive content before
+publication work; it revalidates the file before draft creation and passes it to
+`gh release create --notes-file`. The format and author/review procedure are defined in
 `docs/releases/README.md`; installation, upgrade, compatibility, and breaking-change guidance are
 explicit rather than inferred from commits.
 
