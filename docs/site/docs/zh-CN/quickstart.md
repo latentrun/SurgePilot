@@ -75,7 +75,8 @@ surgepilot down
 ## 从源码启动
 
 源码启动需要 Git、GNU Make 或兼容实现、POSIX Shell、`curl`、`tar`/gzip、
-SHA-256 校验工具、Docker 和 Docker Compose。在仓库根目录运行：
+SHA-256 校验工具、宿主文件锁工具（macOS 使用 `lockf`，Linux 使用 `flock`）、Docker
+和 Docker Compose。在仓库根目录运行：
 
 ```sh
 make setup

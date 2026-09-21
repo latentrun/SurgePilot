@@ -18,9 +18,10 @@ requests without an accepted scope source may be closed even when the implementa
 
 ## Development and verification
 
-Source contributors need Git, GNU or compatible Make, a POSIX shell, `curl`, `tar`/gzip, and a
-SHA-256 utility. Docker and Docker Compose v2 are additionally required for full-stack and E2E
-work. Python, Node.js, pnpm, uv, and mise do not need to be installed globally.
+Source contributors need Git, GNU or compatible Make, a POSIX shell, `curl`, `tar`/gzip, a
+SHA-256 utility, and the host file-lock utility (`lockf` on macOS or `flock` on Linux). Docker and
+Docker Compose v2 are additionally required for full-stack and E2E work. Python, Node.js, pnpm,
+uv, and mise do not need to be installed globally.
 
 Set up the repository from its root with:
 

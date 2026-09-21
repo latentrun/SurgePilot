@@ -11,7 +11,6 @@ STAGE_DIR=
 LOCK_HELD=0
 LOCK_PATH=
 LOCK_CANDIDATE=
-LOCK_TOKEN=
 MISE_BIN=
 
 fail() {
@@ -186,47 +185,46 @@ cleanup() {
     if [ -n "$LOCK_CANDIDATE" ]; then
         rm -f "$LOCK_CANDIDATE"
     fi
-    if [ "$LOCK_HELD" -eq 1 ] && [ -f "$LOCK_PATH" ] \
-        && [ "$(cat "$LOCK_PATH")" = "$LOCK_TOKEN" ]; then
-        rm -f "$LOCK_PATH"
+    if [ "$LOCK_HELD" -eq 1 ]; then
+        exec 9>&-
+        LOCK_HELD=0
     fi
 }
 
 acquire_lock() {
     LOCK_PATH=$SURGEPILOT_TOOLCHAIN_STATE_ROOT/mutation.lock
-    host=$(hostname 2>/dev/null || printf unknown)
-    LOCK_TOKEN=$$@$host
-    LOCK_CANDIDATE=$SURGEPILOT_TOOLCHAIN_STATE_ROOT/.mutation-lock.$$
-    printf '%s\n' "$LOCK_TOKEN" > "$LOCK_CANDIDATE"
+    [ ! -L "$LOCK_PATH" ] || fail "toolchain mutation lock must not be a symlink"
+    LOCK_CANDIDATE=$(mktemp "$SURGEPILOT_TOOLCHAIN_STATE_ROOT/.mutation-lock-file.XXXXXX")
     chmod 600 "$LOCK_CANDIDATE"
-    attempts=0
-    while ! ln "$LOCK_CANDIDATE" "$LOCK_PATH" 2>/dev/null; do
-        [ ! -L "$LOCK_PATH" ] || fail "toolchain mutation lock must not be a symlink"
-        if [ -f "$LOCK_PATH" ]; then
-            current_token=$(cat "$LOCK_PATH" 2>/dev/null || true)
-            current_pid=${current_token%%@*}
-            current_host=${current_token#*@}
-            if [ "$current_host" = "$host" ] && [ -n "$current_pid" ] \
-                && ! kill -0 "$current_pid" 2>/dev/null; then
-                rm -f "$LOCK_PATH"
-                continue
-            fi
-        fi
-        attempts=$((attempts + 1))
-        [ "$attempts" -lt 120 ] || fail "timed out waiting for the toolchain mutation lock"
-        sleep 1
-    done
+    ln "$LOCK_CANDIDATE" "$LOCK_PATH" 2>/dev/null || true
     rm -f "$LOCK_CANDIDATE"
     LOCK_CANDIDATE=
+    validate_private_file "$LOCK_PATH"
+    exec 9<> "$LOCK_PATH"
+    if command -v flock >/dev/null 2>&1; then
+        if ! flock -w 120 9; then
+            exec 9>&-
+            fail "timed out waiting for the toolchain mutation lock"
+        fi
+    elif command -v lockf >/dev/null 2>&1; then
+        if ! lockf -s -t 120 9; then
+            exec 9>&-
+            fail "timed out waiting for the toolchain mutation lock"
+        fi
+    else
+        exec 9>&-
+        fail "managed mode requires flock or lockf for cross-worktree serialization"
+    fi
     LOCK_HELD=1
+    host=$(hostname 2>/dev/null || printf unknown)
+    printf '%s@%s\n' "$$" "$host" > "$LOCK_PATH"
+    chmod 600 "$LOCK_PATH"
+    validate_private_file "$LOCK_PATH"
 }
 
 release_lock() {
     [ "$LOCK_HELD" -eq 1 ] || return 0
-    [ -f "$LOCK_PATH" ] || fail "toolchain mutation lock ownership was lost"
-    [ "$(cat "$LOCK_PATH")" = "$LOCK_TOKEN" ] \
-        || fail "toolchain mutation lock ownership changed"
-    rm -f "$LOCK_PATH"
+    exec 9>&-
     LOCK_HELD=0
 }
 
@@ -449,12 +447,24 @@ prepare_existing_managed_environment() {
     configure_managed_environment
     platform=$(host_platform)
     MISE_BIN=$SURGEPILOT_TOOLCHAIN_DATA_ROOT/bootstrap/mise/v$MISE_VERSION/$platform/mise
-    for required in \
+    for required_directory in \
         "$MISE_DATA_DIR" "$MISE_CACHE_DIR" "$MISE_STATE_DIR" "$MISE_CONFIG_DIR" \
         "$MISE_SYSTEM_DATA_DIR" "$MISE_SYSTEM_CONFIG_DIR" \
-        "$MISE_GLOBAL_CONFIG_FILE" "$MISE_SYSTEM_CONFIG_FILE"
+        "$SURGEPILOT_TOOLCHAIN_DATA_ROOT/bootstrap" \
+        "$SURGEPILOT_TOOLCHAIN_DATA_ROOT/bootstrap/mise" \
+        "$SURGEPILOT_TOOLCHAIN_DATA_ROOT/bootstrap/mise/v$MISE_VERSION" \
+        "$SURGEPILOT_TOOLCHAIN_DATA_ROOT/bootstrap/mise/v$MISE_VERSION/$platform"
     do
-        [ -e "$required" ] || fail "managed state is incomplete; run: make toolchain-install"
+        [ -d "$required_directory" ] \
+            || fail "managed state is incomplete; run: make toolchain-install"
+        validate_root "$required_directory"
+    done
+    for required_file in \
+        "$MISE_GLOBAL_CONFIG_FILE" "$MISE_SYSTEM_CONFIG_FILE" "$MISE_BIN"
+    do
+        [ -f "$required_file" ] \
+            || fail "managed state is incomplete; run: make toolchain-install"
+        validate_private_file "$required_file"
     done
 }
 
@@ -561,7 +571,10 @@ usage() {
     exit 2
 }
 
-trap cleanup EXIT HUP INT TERM
+trap cleanup EXIT
+trap 'exit 129' HUP
+trap 'exit 130' INT
+trap 'exit 143' TERM
 
 [ "$#" -ge 1 ] || usage
 command_name=$1

@@ -197,6 +197,7 @@ GNU or compatible Make
 curl
 tar/gzip
 SHA-256 verification utility
+OS file-lock utility (`lockf` on macOS or `flock` on Linux)
 ```
 
 Full source startup additionally requires Docker and Docker Compose v2. Contributors do not need
@@ -383,8 +384,10 @@ Required behavior:
 12. a later pinned version is published separately and cannot destroy the previous version;
 13. a stale or interrupted mutation is recoverable by a later invocation.
 
-The implementation may use a portable lock directory, a file lock, or an equivalent mechanism as
-long as these observable semantics hold on macOS and supported Linux hosts.
+The implementation uses an operating-system advisory file lock: `lockf` on macOS or `flock` on
+Linux. The persistent lock file is not ownership evidence by itself; the kernel-held lock is the
+authority and is released automatically when the wrapper exits. These observable semantics must
+hold on macOS and supported Linux hosts.
 
 Normal command execution does not retain the mutation lock and cannot trigger mise auto-install.
 
@@ -712,5 +715,4 @@ three-locale documentation drift
 - [mise system-wide tool installs](https://mise.jdx.dev/dev-tools/)
 - [mise lockfiles](https://mise.jdx.dev/dev-tools/mise-lock.html)
 - [uv Python version management](https://docs.astral.sh/uv/concepts/python-versions/)
-
 

@@ -203,20 +203,38 @@ def workflow_jobs(path: Path) -> dict[str, object]:
     return workflow["jobs"]
 
 
-def test_ci_external_make_jobs_declare_validated_tools_and_pin_uv() -> None:
+def test_ci_setup_actions_match_repository_tool_versions() -> None:
+    expected_setups = {
+        "actions/setup-python@": ("python-version", "3.12"),
+        "actions/setup-node@": ("node-version", "22"),
+        "pnpm/action-setup@": ("version", "11.3.0"),
+        "astral-sh/setup-uv@": ("version", "0.12.17"),
+    }
+    setup_counts = dict.fromkeys(expected_setups, 0)
+
+    for path in sorted((ROOT / ".github/workflows").glob("*.yml")):
+        for job_name, job_value in workflow_jobs(path).items():
+            for step in dict(job_value).get("steps", []):
+                action = str(step.get("uses", ""))
+                for prefix, (field, expected) in expected_setups.items():
+                    if not action.startswith(prefix):
+                        continue
+                    setup_counts[prefix] += 1
+                    actual = str(step.get("with", {}).get(field, ""))
+                    assert actual == expected, (
+                        f"{path.name}:{job_name} must configure {prefix} {field}={expected}"
+                    )
+
+    assert all(count > 0 for count in setup_counts.values())
+
+
+def test_ci_external_make_jobs_declare_validated_tools() -> None:
     workflow_paths = sorted((ROOT / ".github/workflows").glob("*.yml"))
     make_jobs = 0
-    setup_uv_steps = 0
     for path in workflow_paths:
         for job_name, job_value in workflow_jobs(path).items():
             job = dict(job_value)
             steps = job.get("steps", [])
-            for step in steps:
-                if str(step.get("uses", "")).startswith("astral-sh/setup-uv@"):
-                    setup_uv_steps += 1
-                    assert step.get("with", {}).get("version") == "0.12.17", (
-                        f"{path.name}:{job_name} must pin setup-uv to the repository uv version"
-                    )
             if not any(
                 re.search(r"\bmake [A-Za-z0-9_-]+", str(step.get("run", ""))) for step in steps
             ):
@@ -231,7 +249,6 @@ def test_ci_external_make_jobs_declare_validated_tools_and_pin_uv() -> None:
             assert len(declared) == len(set(declared))
 
     assert make_jobs > 0
-    assert setup_uv_steps > 0
 
 
 def test_release_validation_has_native_managed_fresh_clone_smoke() -> None:

@@ -126,10 +126,30 @@ printf '%s|%s|%s|%s|%s|%s|%s\\n' \
   "$MISE_OVERRIDE_TOOL_VERSIONS_FILENAMES" "$MISE_ENABLE_TOOLS" \
   >> "$TOOLCHAIN_TEST_MISE_LOG"
 case "${1-}" in
-  --version) printf '2026.9.11 linux-x64 (test)\\n' ;;
+  --version)
+    case "$0" in
+      */bootstrap/mise/v2026.9.11/*/mise)
+        if [ -n "${TOOLCHAIN_TEST_SIGNAL_AFTER_PUBLISH-}" ] \
+          && [ ! -e "$TOOLCHAIN_TEST_SIGNAL_AFTER_PUBLISH" ]; then
+          : > "$TOOLCHAIN_TEST_SIGNAL_AFTER_PUBLISH"
+          wrapper_token=$(/bin/cat "$SURGEPILOT_TOOLCHAIN_STATE_ROOT/mutation.lock")
+          kill -TERM "${wrapper_token%%@*}"
+        fi
+        ;;
+    esac
+    printf '2026.9.11 linux-x64 (test)\\n'
+    ;;
   install)
     if [ -n "${TOOLCHAIN_TEST_INSTALL_LOG-}" ]; then
       printf 'install\\n' >> "$TOOLCHAIN_TEST_INSTALL_LOG"
+    fi
+    if [ -n "${TOOLCHAIN_TEST_OVERLAP_ROOT-}" ]; then
+      if mkdir "$TOOLCHAIN_TEST_OVERLAP_ROOT/active" 2>/dev/null; then
+        sleep 1
+        rmdir "$TOOLCHAIN_TEST_OVERLAP_ROOT/active"
+      else
+        : > "$TOOLCHAIN_TEST_OVERLAP_ROOT/overlap"
+      fi
     fi
     for spec in python/3.12.11 node/22.18.0 pnpm/11.3.0 uv/0.12.17; do
       tool=${spec%%/*}
@@ -251,7 +271,9 @@ def test_install_selects_pinned_artifact_and_rejects_corrupt_download(
     assert url_log.read_text(encoding="utf-8").strip().endswith(f"/v2026.9.11/{artifact}")
     assert not list((tmp_path / "data").glob("bootstrap/mise/v2026.9.11/*/mise"))
     assert not list((tmp_path / "data/bootstrap").glob(".mise-stage.*"))
-    assert not (tmp_path / "state/mutation.lock").exists()
+    lock = tmp_path / "state/mutation.lock"
+    assert lock.is_file()
+    assert stat.S_IMODE(lock.stat().st_mode) == 0o600
 
 
 def test_install_rejects_musl_linux_before_download(tmp_path: Path) -> None:
@@ -461,10 +483,67 @@ def configured_fake_install(tmp_path: Path) -> tuple[Path, Path, dict[str, str]]
     return repository, script, environment
 
 
-def test_concurrent_installs_publish_one_verified_bootstrap(tmp_path: Path) -> None:
+@pytest.mark.parametrize("command", ["install", "check"])
+def test_managed_commands_reject_wrong_owner_before_invoking_mise(
+    tmp_path: Path, command: str
+) -> None:
+    repository, script, environment = configured_fake_install(tmp_path)
+    mise_log = tmp_path / "mise.log"
+    if command == "check":
+        installed = subprocess.run(
+            ["sh", str(script), "install"],
+            cwd=repository,
+            env=environment,
+            text=True,
+            capture_output=True,
+            timeout=30,
+            check=False,
+        )
+        assert installed.returncode == 0, installed.stderr
+    before = mise_log.read_bytes() if mise_log.exists() else b""
+    write_executable(
+        tmp_path / "commands/id",
+        "#!/bin/sh\n"
+        'if [ "${1-}" = -u ]; then\n'
+        "  printf '999999\\n'\n"
+        "  exit 0\n"
+        "fi\n"
+        'exec /usr/bin/id "$@"\n',
+    )
+
+    result = subprocess.run(
+        ["sh", str(script), command],
+        cwd=repository,
+        env=environment,
+        text=True,
+        capture_output=True,
+        timeout=30,
+        check=False,
+    )
+
+    assert result.returncode != 0
+    assert "wrong owner" in result.stderr
+    assert (mise_log.read_bytes() if mise_log.exists() else b"") == before
+
+
+def test_concurrent_installers_ignore_stale_lock_file_without_overlapping(
+    tmp_path: Path,
+) -> None:
     repository, script, environment = configured_fake_install(tmp_path)
     install_log = tmp_path / "installs.log"
-    environment["TOOLCHAIN_TEST_INSTALL_LOG"] = str(install_log)
+    overlap_root = tmp_path / "overlap"
+    overlap_root.mkdir()
+    environment.update(
+        {
+            "TOOLCHAIN_TEST_INSTALL_LOG": str(install_log),
+            "TOOLCHAIN_TEST_OVERLAP_ROOT": str(overlap_root),
+        }
+    )
+    for name in ("data", "cache", "state", "config"):
+        (tmp_path / name).mkdir(mode=0o700)
+    lock = tmp_path / "state/mutation.lock"
+    lock.write_text(f"999999@{socket.gethostname()}\n", encoding="utf-8")
+    lock.chmod(0o600)
 
     processes = [
         subprocess.Popen(
@@ -482,6 +561,9 @@ def test_concurrent_installs_publish_one_verified_bootstrap(tmp_path: Path) -> N
     assert all(returncode == 0 for _, _, returncode in results), results
     assert (tmp_path / "urls.log").read_text(encoding="utf-8").count("\n") == 1
     assert install_log.read_text(encoding="utf-8").splitlines() == ["install"]
+    assert not (overlap_root / "overlap").exists()
+    assert lock.is_file()
+    assert stat.S_IMODE(lock.stat().st_mode) == 0o600
     final_mise = tmp_path / "data/bootstrap/mise/v2026.9.11/macos-arm64/mise"
     assert final_mise.is_file()
     assert not list((tmp_path / "data/bootstrap").glob(".mise-stage.*"))
@@ -522,7 +604,7 @@ def test_interrupted_bootstrap_cleans_own_stage_and_later_install_recovers(
 
     assert process.returncode != 0, interrupted_stderr
     assert not list((tmp_path / "data/bootstrap").glob(".mise-stage.*"))
-    assert not (tmp_path / "state/mutation.lock").exists()
+    assert (tmp_path / "state/mutation.lock").is_file()
     assert not (tmp_path / "data/bootstrap/mise/v2026.9.11/macos-arm64").exists()
 
     write_executable(curl, original_curl)
@@ -539,6 +621,47 @@ def test_interrupted_bootstrap_cleans_own_stage_and_later_install_recovers(
     assert recovered.returncode == 0, recovered.stderr
     assert (tmp_path / "data/bootstrap/mise/v2026.9.11/macos-arm64/mise").is_file()
     assert not list((tmp_path / "data/bootstrap").glob(".mise-stage.*"))
+
+
+def test_signal_to_wrapper_exits_before_mutation_continues(tmp_path: Path) -> None:
+    repository, script, environment = configured_fake_install(tmp_path)
+    signal_marker = tmp_path / "signal-after-publish"
+    install_log = tmp_path / "installs.log"
+    environment.update(
+        {
+            "TOOLCHAIN_TEST_SIGNAL_AFTER_PUBLISH": str(signal_marker),
+            "TOOLCHAIN_TEST_INSTALL_LOG": str(install_log),
+        }
+    )
+
+    interrupted = subprocess.run(
+        ["sh", str(script), "install"],
+        cwd=repository,
+        env=environment,
+        text=True,
+        capture_output=True,
+        timeout=30,
+        check=False,
+    )
+
+    assert interrupted.returncode == 143, interrupted.stderr
+    assert signal_marker.is_file()
+    assert not install_log.exists()
+    assert not list((tmp_path / "data/bootstrap").glob(".mise-stage.*"))
+
+    environment.pop("TOOLCHAIN_TEST_SIGNAL_AFTER_PUBLISH")
+    recovered = subprocess.run(
+        ["sh", str(script), "install"],
+        cwd=repository,
+        env=environment,
+        text=True,
+        capture_output=True,
+        timeout=30,
+        check=False,
+    )
+
+    assert recovered.returncode == 0, recovered.stderr
+    assert install_log.read_text(encoding="utf-8").splitlines() == ["install"]
 
 
 @pytest.mark.parametrize("source", ["parent", "global", "local"])
@@ -618,7 +741,54 @@ def test_check_rejects_executable_from_host_system_mise_data(tmp_path: Path) -> 
     assert host_python.read_text(encoding="utf-8") == "host sentinel\n"
 
 
-def test_install_recovers_lock_from_dead_local_owner(tmp_path: Path) -> None:
+@pytest.mark.parametrize(
+    "relative_path",
+    [
+        "cache/mise",
+        "state/mise",
+        "data/mise-system",
+        "config/mise/config.toml",
+        "data/bootstrap",
+    ],
+)
+def test_check_rejects_nested_managed_state_symlinks_before_invoking_mise(
+    tmp_path: Path, relative_path: str
+) -> None:
+    repository, script, environment = configured_fake_install(tmp_path)
+    installed = subprocess.run(
+        ["sh", str(script), "install"],
+        cwd=repository,
+        env=environment,
+        text=True,
+        capture_output=True,
+        timeout=30,
+        check=False,
+    )
+    assert installed.returncode == 0, installed.stderr
+
+    mise_log = tmp_path / "mise.log"
+    before = mise_log.read_bytes()
+    original = tmp_path / relative_path
+    relocated = tmp_path / f"relocated-{relative_path.replace('/', '-')}"
+    original.rename(relocated)
+    original.symlink_to(relocated, target_is_directory=relocated.is_dir())
+
+    result = subprocess.run(
+        ["sh", str(script), "check"],
+        cwd=repository,
+        env=environment,
+        text=True,
+        capture_output=True,
+        timeout=30,
+        check=False,
+    )
+
+    assert result.returncode != 0
+    assert "symlink" in result.stderr
+    assert mise_log.read_bytes() == before
+
+
+def test_install_reuses_preexisting_unlocked_lock_file(tmp_path: Path) -> None:
     repository, script, environment = configured_fake_install(tmp_path)
     for name in ("data", "cache", "state", "config"):
         (tmp_path / name).mkdir(mode=0o700)
@@ -636,7 +806,9 @@ def test_install_recovers_lock_from_dead_local_owner(tmp_path: Path) -> None:
     )
 
     assert result.returncode == 0, result.stderr
-    assert not lock.exists()
+    assert lock.is_file()
+    assert stat.S_IMODE(lock.stat().st_mode) == 0o600
+    assert lock.read_text(encoding="utf-8").strip() != f"999999@{socket.gethostname()}"
     assert not list((tmp_path / "state").glob(".mutation-lock.*"))
 
 
