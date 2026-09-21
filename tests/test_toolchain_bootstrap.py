@@ -663,8 +663,7 @@ def test_first_lock_creation_is_atomic_for_concurrent_installers(tmp_path: Path)
     first_creator_release.touch()
 
     results = [
-        process.communicate(timeout=30) + (process.returncode,)
-        for process in (first, second)
+        process.communicate(timeout=30) + (process.returncode,) for process in (first, second)
     ]
 
     assert all(returncode == 0 for _, _, returncode in results), results
