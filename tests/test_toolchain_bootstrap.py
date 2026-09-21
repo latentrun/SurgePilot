@@ -597,9 +597,81 @@ def test_concurrent_installers_converge_without_overlapping(
     lock = tmp_path / "state/mutation.lock"
     assert lock.is_file()
     assert stat.S_IMODE(lock.stat().st_mode) == 0o600
+    assert lock.stat().st_nlink == 1
     final_mise = tmp_path / "data/bootstrap/mise/v2026.9.11/macos-arm64/mise"
     assert final_mise.is_file()
     assert not list((tmp_path / "data/bootstrap").glob(".mise-stage.*"))
+
+
+def test_first_lock_creation_is_atomic_for_concurrent_installers(tmp_path: Path) -> None:
+    repository, script, environment = configured_fake_install(tmp_path)
+    install_log = tmp_path / "installs.log"
+    overlap_root = tmp_path / "overlap"
+    overlap_root.mkdir()
+    first_creator_ready = tmp_path / "first-creator-ready"
+    first_creator_release = tmp_path / "first-creator-release"
+    environment.update(
+        {
+            "TOOLCHAIN_TEST_INSTALL_LOG": str(install_log),
+            "TOOLCHAIN_TEST_OVERLAP_ROOT": str(overlap_root),
+            "TOOLCHAIN_TEST_FIRST_CREATOR_READY": str(first_creator_ready),
+            "TOOLCHAIN_TEST_FIRST_CREATOR_RELEASE": str(first_creator_release),
+        }
+    )
+    curl = tmp_path / "commands/curl"
+    original_curl = curl.read_text(encoding="utf-8")
+    write_executable(
+        curl,
+        original_curl.replace(
+            'cp "$TOOLCHAIN_TEST_DOWNLOAD" "$output"\n',
+            ': > "$TOOLCHAIN_TEST_FIRST_CREATOR_READY"\n'
+            'while [ ! -e "$TOOLCHAIN_TEST_FIRST_CREATOR_RELEASE" ]; do sleep 0.05; done\n'
+            'cp "$TOOLCHAIN_TEST_DOWNLOAD" "$output"\n',
+        ),
+    )
+
+    first = subprocess.Popen(
+        ["sh", str(script), "install"],
+        cwd=repository,
+        env=environment,
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+    )
+    deadline = time.monotonic() + 5
+    while not first_creator_ready.exists() and time.monotonic() < deadline:
+        time.sleep(0.01)
+    if not first_creator_ready.exists():
+        first.terminate()
+        _, stderr = first.communicate(timeout=10)
+        pytest.fail(f"first installer did not reach the creation barrier: {stderr}")
+
+    lock = tmp_path / "state/mutation.lock"
+    assert lock.is_file()
+    assert stat.S_IMODE(lock.stat().st_mode) == 0o600
+    assert lock.stat().st_nlink == 1
+    second = subprocess.Popen(
+        ["sh", str(script), "install"],
+        cwd=repository,
+        env=environment,
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+    )
+    time.sleep(0.1)
+    assert second.poll() is None
+    first_creator_release.touch()
+
+    results = [
+        process.communicate(timeout=30) + (process.returncode,)
+        for process in (first, second)
+    ]
+
+    assert all(returncode == 0 for _, _, returncode in results), results
+    assert (tmp_path / "urls.log").read_text(encoding="utf-8").count("\n") == 1
+    assert install_log.read_text(encoding="utf-8").splitlines() == ["install"]
+    assert not (overlap_root / "overlap").exists()
+    assert lock.stat().st_nlink == 1
 
 
 @pytest.mark.parametrize("signal_scope", ["group", "wrapper"])

@@ -2,20 +2,20 @@
 use strict;
 use warnings;
 
-use Errno qw(EINTR);
-use Fcntl qw(F_GETFD F_SETFD LOCK_EX LOCK_NB O_CREAT O_NOFOLLOW O_RDWR SEEK_SET);
+use Errno qw(EEXIST EINTR ELOOP);
+use Fcntl qw(F_GETFD F_SETFD LOCK_EX LOCK_NB O_CREAT O_EXCL O_NOFOLLOW O_RDWR SEEK_SET);
 use POSIX qw(SIG_BLOCK SIG_SETMASK SIGHUP SIGINT SIGTERM setsid sigprocmask);
 
 sub validate_lock {
     my ($lock, $lock_path) = @_;
     my @opened = stat($lock);
     my @path = lstat($lock_path);
-    die "mutation lock must be a private regular file\n"
-        unless @opened
-        && @path
-        && ($opened[2] & 0170000) == 0100000
-        && $opened[4] == $<
-        && ($opened[2] & 0777) == 0600;
+    die "mutation lock must be a regular file\n"
+        unless @opened && @path && ($opened[2] & 0170000) == 0100000;
+    die "mutation lock has the wrong owner\n" unless $opened[4] == $<;
+    die "mutation lock must not be group- or other-writable\n"
+        if ($opened[2] & 0022) != 0;
+    die "mutation lock must have mode 0600\n" unless ($opened[2] & 0777) == 0600;
     die "mutation lock must not have hard links\n" unless $opened[3] == 1;
     die "mutation lock path changed while opening\n"
         unless $opened[0] == $path[0] && $opened[1] == $path[1];
@@ -38,8 +38,19 @@ die "usage: toolchain-lock LOCK_PATH TIMEOUT COMMAND...\n"
     unless defined $lock_path && defined $timeout && @command;
 die "invalid lock timeout\n" unless $timeout =~ /\A[1-9][0-9]*\z/;
 
-sysopen(my $lock, $lock_path, O_RDWR | O_CREAT | O_NOFOLLOW, 0600)
-    or die "cannot open mutation lock: $!\n";
+my $lock;
+if (!sysopen($lock, $lock_path, O_RDWR | O_CREAT | O_EXCL | O_NOFOLLOW, 0600)) {
+    if ($! == EEXIST) {
+        sysopen($lock, $lock_path, O_RDWR | O_NOFOLLOW)
+            or die $! == ELOOP
+            ? "mutation lock must not be a symlink\n"
+            : "cannot open existing mutation lock: $!\n";
+    } else {
+        die $! == ELOOP
+            ? "mutation lock must not be a symlink\n"
+            : "cannot create mutation lock: $!\n";
+    }
+}
 validate_lock($lock, $lock_path);
 
 local $SIG{ALRM} = sub { die "timed out waiting for the toolchain mutation lock\n" };

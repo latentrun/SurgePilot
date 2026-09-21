@@ -9,7 +9,6 @@ REPOSITORY_ROOT=$(CDPATH='' cd -- "$SCRIPT_DIR/.." && pwd -P)
 CHECKSUM_FILE=$SCRIPT_DIR/toolchain-mise.sha256
 STAGE_DIR=
 LOCK_PATH=
-LOCK_CANDIDATE=
 MISE_BIN=
 
 fail() {
@@ -181,24 +180,10 @@ cleanup() {
     if [ -n "$STAGE_DIR" ] && [ -d "$STAGE_DIR" ]; then
         rm -rf "$STAGE_DIR"
     fi
-    if [ -n "$LOCK_CANDIDATE" ]; then
-        rm -f "$LOCK_CANDIDATE"
-    fi
-}
-
-prepare_lock_file() {
-    LOCK_PATH=$SURGEPILOT_TOOLCHAIN_STATE_ROOT/mutation.lock
-    [ ! -L "$LOCK_PATH" ] || fail "toolchain mutation lock must not be a symlink"
-    LOCK_CANDIDATE=$(mktemp "$SURGEPILOT_TOOLCHAIN_STATE_ROOT/.mutation-lock-file.XXXXXX")
-    chmod 600 "$LOCK_CANDIDATE"
-    ln "$LOCK_CANDIDATE" "$LOCK_PATH" 2>/dev/null || true
-    rm -f "$LOCK_CANDIDATE"
-    LOCK_CANDIDATE=
-    validate_private_file "$LOCK_PATH"
 }
 
 run_locked_install() {
-    prepare_lock_file
+    LOCK_PATH=$SURGEPILOT_TOOLCHAIN_STATE_ROOT/mutation.lock
     command -v perl >/dev/null 2>&1 \
         || fail "Perl is required for toolchain mutation locking"
     perl "$SCRIPT_DIR/toolchain-lock" "$LOCK_PATH" 120 \
