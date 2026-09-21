@@ -232,6 +232,7 @@ release_lock() {
 
 mise_binary_is_valid() {
     candidate=$1
+    [ ! -L "$candidate" ] || return 1
     [ -x "$candidate" ] || return 1
     version=$($candidate --version 2>/dev/null | awk 'NR == 1 {print $1}') || return 1
     [ "$version" = "$MISE_VERSION" ]
@@ -245,12 +246,20 @@ bootstrap_mise() {
     final_dir=$final_parent/$platform
     MISE_BIN=$final_dir/mise
 
+    ensure_private_directory "$SURGEPILOT_TOOLCHAIN_DATA_ROOT/bootstrap/mise"
+    ensure_private_directory "$SURGEPILOT_TOOLCHAIN_DATA_ROOT/bootstrap/mise/v$MISE_VERSION"
+    [ ! -L "$final_dir" ] || fail "pinned mise directory must not be a symlink: $final_dir"
+    if [ -e "$final_dir" ]; then
+        validate_root "$final_dir"
+        if [ -e "$MISE_BIN" ] || [ -L "$MISE_BIN" ]; then
+            validate_private_file "$MISE_BIN"
+        fi
+    fi
+
     if mise_binary_is_valid "$MISE_BIN"; then
         return 0
     fi
 
-    ensure_private_directory "$SURGEPILOT_TOOLCHAIN_DATA_ROOT/bootstrap/mise"
-    ensure_private_directory "$SURGEPILOT_TOOLCHAIN_DATA_ROOT/bootstrap/mise/v$MISE_VERSION"
     STAGE_DIR=$(mktemp -d "$SURGEPILOT_TOOLCHAIN_DATA_ROOT/bootstrap/.mise-stage.XXXXXX")
     archive=$STAGE_DIR/$artifact
     curl --fail --location --silent --show-error \
@@ -263,6 +272,7 @@ bootstrap_mise() {
     mise_binary_is_valid "$candidate" || fail "verified archive does not contain mise $MISE_VERSION"
     publish=$STAGE_DIR/publish
     mkdir "$publish"
+    chmod 700 "$publish"
     cp "$candidate" "$publish/mise"
     chmod 700 "$publish/mise"
 
@@ -349,6 +359,19 @@ validate_repository_policy() {
     fi
 }
 
+validate_tool_version() {
+    context=$1
+    tool=$2
+    version=$3
+    case "$tool:$version" in
+        python:Python\ 3.12.*) ;;
+        node:v22.*) ;;
+        pnpm:11.3.0) ;;
+        uv:uv\ 0.12.17 | uv:uv\ 0.12.17\ *) ;;
+        *) fail "$context $tool version does not satisfy repository policy: $version" ;;
+    esac
+}
+
 validate_managed_tool() {
     tool=$1
     executable=$("$MISE_BIN" which "$tool" 2>/dev/null) \
@@ -374,13 +397,7 @@ validate_managed_tool() {
     esac
     version=$("$MISE_BIN" exec -- "$tool" --version 2>&1) \
         || fail "managed $tool is unavailable; run: make toolchain-install"
-    case "$tool:$version" in
-        python:Python\ 3.12.*) ;;
-        node:v22.*) ;;
-        pnpm:11.3.0) ;;
-        uv:uv\ 0.12.17 | uv:uv\ 0.12.17\ *) ;;
-        *) fail "managed $tool version does not satisfy repository policy: $version" ;;
-    esac
+    validate_tool_version managed "$tool" "$version"
 }
 
 validate_managed_installation() {
@@ -415,6 +432,10 @@ install_managed() {
     configure_managed_environment
     create_mise_directories
     bootstrap_mise
+    if (validate_managed_installation >/dev/null 2>&1); then
+        release_lock
+        return 0
+    fi
     (
         cd "$REPOSITORY_ROOT"
         "$MISE_BIN" install --yes
@@ -462,13 +483,7 @@ validate_external_tool() {
     tool=$1
     command -v "$tool" >/dev/null 2>&1 || fail "external tool is unavailable: $tool"
     version=$($tool --version 2>&1) || fail "external tool version check failed: $tool"
-    case "$tool:$version" in
-        python:Python\ 3.12.*) ;;
-        node:v22.*) ;;
-        pnpm:11.3.0) ;;
-        uv:uv\ 0.12.17 | uv:uv\ 0.12.17\ *) ;;
-        *) fail "external $tool version does not satisfy repository policy: $version" ;;
-    esac
+    validate_tool_version external "$tool" "$version"
 }
 
 validate_external_tools() {
