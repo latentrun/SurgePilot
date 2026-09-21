@@ -67,6 +67,26 @@ def test_public_quickstarts_use_the_public_release_installer_target() -> None:
         assert public_installer in content, page.relative_to(ROOT)
 
 
+def test_source_quickstarts_describe_make_managed_toolchain() -> None:
+    required_markers = {
+        "en": ("make toolchain-check", "make toolchain-install", "SHA-256 utility"),
+        "zh-CN": ("make toolchain-check", "make toolchain-install", "SHA-256 校验工具"),
+        "ja": ("make toolchain-check", "make toolchain-install", "SHA-256 検証ツール"),
+    }
+    obsolete_prerequisites = {
+        "en": "requires Node.js 22, Python 3.12, pnpm, uv",
+        "zh-CN": "源码启动需要 Node.js 22、Python 3.12、pnpm、uv",
+        "ja": "ソースコードからの起動には Node.js 22、Python 3.12、pnpm、uv",
+    }
+
+    for locale in ("en", *LOCALE_DIRS):
+        page = DOCS_ROOT / (locale if locale != "en" else "") / "quickstart.md"
+        content = page.read_text(encoding="utf-8")
+        for marker in required_markers[locale]:
+            assert marker in content, page.relative_to(ROOT)
+        assert obsolete_prerequisites[locale] not in content, page.relative_to(ROOT)
+
+
 def test_public_docs_home_explains_core_workflow_without_inactive_skill_reference() -> None:
     workflow_markers = {
         "en": (

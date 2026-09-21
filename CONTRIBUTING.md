@@ -18,10 +18,23 @@ requests without an accepted scope source may be closed even when the implementa
 
 ## Development and verification
 
-Set up the repository with:
+Source contributors need Git, GNU or compatible Make, a POSIX shell, `curl`, `tar`/gzip, and a
+SHA-256 utility. Docker and Docker Compose v2 are additionally required for full-stack and E2E
+work. Python, Node.js, pnpm, uv, and mise do not need to be installed globally.
+
+Set up the repository from its root with:
 
 ```bash
 make setup
+```
+
+Make bootstraps the pinned, repository-managed contributor toolchain into an isolated user-owned
+namespace. It does not change shell startup files or global runtime defaults. To install or repair
+that state explicitly, or to diagnose it offline without mutation, use:
+
+```bash
+make toolchain-install
+make toolchain-check
 ```
 
 Run the smallest relevant tests while developing. Before requesting review, run:

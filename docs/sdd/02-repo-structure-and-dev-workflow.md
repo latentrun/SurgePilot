@@ -839,12 +839,22 @@ The exact deployment inventory and examples live in `.env.example`; this SDD def
 
 The root directory `Makefile` is the unified development entrance.
 
+Accepted `ADR-0028` defines the source-contributor toolchain contract. Make captures the original
+XDG roots before applying runtime defaults and dispatches toolchain-required goals once through the
+isolated repository-managed mise environment. Recovery goals remain toolchain-free. The explicit
+`toolchain-install` mutation path and the offline, non-mutating `toolchain-check` path must be
+requested alone. CI jobs using setup actions declare external mode and the exact validated tool
+subset; native Linux and macOS fresh-clone jobs exercise managed mode.
+
 ### 7.1 Required Commands
 
 The repository root `Makefile` must define the following commands; both the early bootstrap subset and subsequent P1/P2 entries are exposed through the same help surface to avoid humans and AI choosing unofficial entries.
 
 ```bash
 make help
+make toolchain-install
+make toolchain-check
+make toolchain-tests
 make setup
 make dev
 make dev-web
@@ -880,6 +890,9 @@ make verify-e2e
 | Command | Meaning |
 | --- | --- |
 | `make help` | Output all root commands and one sentence description for newcomers and AI to quickly find the entrance |
+| `make toolchain-install` | Install or repair the pinned isolated mise bootstrap and repository-selected contributor tools under the serialized mutation lock |
+| `make toolchain-check` | Validate the managed toolchain, isolation, versions, and executable provenance offline without installing, repairing, or mutating state |
+| `make toolchain-tests` | Run focused contributor-toolchain bootstrap and governance tests through the managed environment |
 | `make setup` | Install pnpm/uv dependencies and prepare local development environment |
 | `make dev` | Start the default local development combination, which can prompt you to run web/api/worker separately |
 | `make dev-web` | Start the Vite dev server, which is equivalent to running the pnpm dev command under `apps/web` |
@@ -910,6 +923,11 @@ make verify-e2e
 | `make verify-e2e` | E2E/smoke validation entry before nightly, release or trunk merge |
 
 ### 7.3 Bootstrap Rule
+
+Source contributors require only the host prerequisites listed by `ADR-0028`; Python, Node.js,
+pnpm, uv, and mise are repository-managed and are not global prerequisites. All toolchain-required
+commands fail closed rather than using host PATH or system-wide mise installations. The managed uv
+process cannot download Python.
 
 M0 stage `make verify` can start with a smaller set, but must contain the following; `make help` must always be available:
 
