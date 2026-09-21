@@ -610,13 +610,30 @@ def test_first_lock_creation_is_atomic_for_concurrent_installers(tmp_path: Path)
     overlap_root.mkdir()
     first_creator_ready = tmp_path / "first-creator-ready"
     first_creator_release = tmp_path / "first-creator-release"
+    legacy_publish_ready = tmp_path / "legacy-publish-ready"
+    legacy_waiter_attempted = tmp_path / "legacy-waiter-attempted"
     environment.update(
         {
             "TOOLCHAIN_TEST_INSTALL_LOG": str(install_log),
             "TOOLCHAIN_TEST_OVERLAP_ROOT": str(overlap_root),
             "TOOLCHAIN_TEST_FIRST_CREATOR_READY": str(first_creator_ready),
             "TOOLCHAIN_TEST_FIRST_CREATOR_RELEASE": str(first_creator_release),
+            "TOOLCHAIN_TEST_LEGACY_PUBLISH_READY": str(legacy_publish_ready),
+            "TOOLCHAIN_TEST_LEGACY_WAITER_ATTEMPTED": str(legacy_waiter_attempted),
+            "TOOLCHAIN_TEST_REAL_LN": shutil.which("ln") or "ln",
         }
+    )
+    write_executable(
+        tmp_path / "commands/ln",
+        "#!/bin/sh\n"
+        "set -eu\n"
+        'if "$TOOLCHAIN_TEST_REAL_LN" "$@"; then\n'
+        '  : > "$TOOLCHAIN_TEST_LEGACY_PUBLISH_READY"\n'
+        '  while [ ! -e "$TOOLCHAIN_TEST_FIRST_CREATOR_RELEASE" ]; do sleep 0.05; done\n'
+        "  exit 0\n"
+        "fi\n"
+        ': > "$TOOLCHAIN_TEST_LEGACY_WAITER_ATTEMPTED"\n'
+        "exit 1\n",
     )
     curl = tmp_path / "commands/curl"
     original_curl = curl.read_text(encoding="utf-8")
@@ -639,9 +656,13 @@ def test_first_lock_creation_is_atomic_for_concurrent_installers(tmp_path: Path)
         stderr=subprocess.PIPE,
     )
     deadline = time.monotonic() + 5
-    while not first_creator_ready.exists() and time.monotonic() < deadline:
+    while (
+        not first_creator_ready.exists()
+        and not legacy_publish_ready.exists()
+        and time.monotonic() < deadline
+    ):
         time.sleep(0.01)
-    if not first_creator_ready.exists():
+    if not first_creator_ready.exists() and not legacy_publish_ready.exists():
         first.terminate()
         _, stderr = first.communicate(timeout=10)
         pytest.fail(f"first installer did not reach the creation barrier: {stderr}")
@@ -649,7 +670,8 @@ def test_first_lock_creation_is_atomic_for_concurrent_installers(tmp_path: Path)
     lock = tmp_path / "state/mutation.lock"
     assert lock.is_file()
     assert stat.S_IMODE(lock.stat().st_mode) == 0o600
-    assert lock.stat().st_nlink == 1
+    legacy_publish_window = legacy_publish_ready.exists()
+    assert lock.stat().st_nlink == (2 if legacy_publish_window else 1)
     second = subprocess.Popen(
         ["sh", str(script), "install"],
         cwd=repository,
@@ -658,8 +680,18 @@ def test_first_lock_creation_is_atomic_for_concurrent_installers(tmp_path: Path)
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
     )
-    time.sleep(0.1)
-    assert second.poll() is None
+    if legacy_publish_window:
+        deadline = time.monotonic() + 5
+        while not legacy_waiter_attempted.exists() and time.monotonic() < deadline:
+            time.sleep(0.01)
+        assert legacy_waiter_attempted.exists()
+        deadline = time.monotonic() + 5
+        while second.poll() is None and time.monotonic() < deadline:
+            time.sleep(0.01)
+        assert second.poll() is not None
+    else:
+        time.sleep(0.1)
+        assert second.poll() is None
     first_creator_release.touch()
 
     results = [
@@ -670,6 +702,26 @@ def test_first_lock_creation_is_atomic_for_concurrent_installers(tmp_path: Path)
     assert (tmp_path / "urls.log").read_text(encoding="utf-8").count("\n") == 1
     assert install_log.read_text(encoding="utf-8").splitlines() == ["install"]
     assert not (overlap_root / "overlap").exists()
+    assert lock.stat().st_nlink == 1
+
+
+def test_first_lock_creation_normalizes_restrictive_umask(tmp_path: Path) -> None:
+    repository, script, environment = configured_fake_install(tmp_path)
+
+    result = subprocess.run(
+        ["sh", "-c", 'umask 777; exec sh "$1" install', "sh", str(script)],
+        cwd=repository,
+        env=environment,
+        text=True,
+        capture_output=True,
+        timeout=30,
+        check=False,
+    )
+
+    assert result.returncode == 0, result.stderr
+    lock = tmp_path / "state/mutation.lock"
+    assert lock.is_file()
+    assert stat.S_IMODE(lock.stat().st_mode) == 0o600
     assert lock.stat().st_nlink == 1
 
 

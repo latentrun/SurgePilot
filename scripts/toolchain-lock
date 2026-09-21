@@ -38,8 +38,10 @@ die "usage: toolchain-lock LOCK_PATH TIMEOUT COMMAND...\n"
     unless defined $lock_path && defined $timeout && @command;
 die "invalid lock timeout\n" unless $timeout =~ /\A[1-9][0-9]*\z/;
 
+umask 0077;
 my $lock;
-if (!sysopen($lock, $lock_path, O_RDWR | O_CREAT | O_EXCL | O_NOFOLLOW, 0600)) {
+my $created = sysopen($lock, $lock_path, O_RDWR | O_CREAT | O_EXCL | O_NOFOLLOW, 0600);
+if (!$created) {
     if ($! == EEXIST) {
         sysopen($lock, $lock_path, O_RDWR | O_NOFOLLOW)
             or die $! == ELOOP
@@ -51,6 +53,7 @@ if (!sysopen($lock, $lock_path, O_RDWR | O_CREAT | O_EXCL | O_NOFOLLOW, 0600)) {
             : "cannot create mutation lock: $!\n";
     }
 }
+chmod(0600, $lock) == 1 or die "cannot secure new mutation lock: $!\n" if $created;
 validate_lock($lock, $lock_path);
 
 local $SIG{ALRM} = sub { die "timed out waiting for the toolchain mutation lock\n" };
