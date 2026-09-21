@@ -599,11 +599,20 @@ verify source and generated contracts
 
 The exact safe publish ordering must prevent a release page or semantic tag from appearing complete when required artifacts failed. A draft GitHub Release or equivalent staged publication is used until all required artifacts and digest checks are ready.
 
+Every formal release has one reviewed user-facing notes source at
+`docs/releases/vX.Y.Z.md`, matching the exact tag. The workflow validates that the file exists and
+contains non-whitespace content before publication work, revalidates it before draft creation, and
+passes it to `gh release create --notes-file`. The format and author/review procedure are defined in
+`docs/releases/README.md`; installation, upgrade, compatibility, and breaking-change guidance are
+explicit rather than inferred from commits.
+
 Release publication is create-only for a semantic version:
 
 1. the release tag must resolve to the intended source commit;
 2. before staging begins, any existing GitHub Release, semantic GHCR tag, or same-named release asset for the version causes publication to fail;
-3. existing tags, Release metadata, and assets are never replaced or reconciled in place;
+3. existing tags, assets, and release identity are never replaced or reconciled in place; an
+   exceptional metadata-only body correction may publish the matching checked-in notes file after
+   recording and then rechecking the unchanged tag target and complete asset inventory;
 4. after partial publication or a failed publication attempt, the operator uses an explicit manual recovery process and publishes a new semantic version;
 5. resumable draft publication may be considered later but is not required by P2-05.
 
@@ -643,9 +652,11 @@ Implementation must cover:
 7. repeated `up`, `down` without volume deletion, `down`/`up`, and manual same-root version transition without loss of PostgreSQL, MinIO, Monitoring, Admin, secret, or Demo identity state;
 8. source/release effective Compose separation, absence of application build contexts from release Compose, release digest pinning, service topology, secret mounts, port exposure, health dependencies, and Demo-node enable/disable behavior;
 9. GHCR multi-architecture index requirements for amd64 and arm64, equality with the digest recorded in `release-manifest.json`, Runtime archive/sidecar equality with the release-manifest digest, and create-only rejection when the semantic version already exists;
-10. absence of application source, credentials, `.env`, Runtime files, SSH host private keys, and local state from the release bundle and image layers;
-11. two independent installations producing different Demo passwords/fingerprints while one installation preserves its fingerprint across container recreation;
-12. preservation of P2-02/P2-04 AI skill release prohibitions.
+10. exact-tag release-note source existence, non-empty workflow gating, and publication through the
+    reviewed notes file;
+11. absence of application source, credentials, `.env`, Runtime files, SSH host private keys, and local state from the release bundle and image layers;
+12. two independent installations producing different Demo passwords/fingerprints while one installation preserves its fingerprint across container recreation;
+13. preservation of P2-02/P2-04 AI skill release prohibitions.
 
 ### 15.2 Platform acceptance matrix
 

@@ -55,6 +55,15 @@ jobs:
             exit 1
           }
           test "$(git rev-list -n 1 "$TAG")" = "$GITHUB_SHA"
+          release_notes="docs/releases/$TAG.md"
+          test -f "$release_notes" || {
+            echo "Release notes are required at $release_notes." >&2
+            exit 1
+          }
+          grep -q '[^[:space:]]' "$release_notes" || {
+            echo "Release notes at $release_notes must not be empty." >&2
+            exit 1
+          }
 
           release_probe=$(gh api --include "repos/$GITHUB_REPOSITORY/releases/tags/$TAG" 2>&1) && {
             echo "GitHub Release $TAG already exists; publish a new semantic version."
@@ -487,6 +496,15 @@ jobs:
           TAG: ${{ github.ref_name }}
         run: |
           set -euo pipefail
+          release_notes="docs/releases/$TAG.md"
+          test -f "$release_notes" || {
+            echo "Release notes are required at $release_notes." >&2
+            exit 1
+          }
+          grep -q '[^[:space:]]' "$release_notes" || {
+            echo "Release notes at $release_notes must not be empty." >&2
+            exit 1
+          }
           assert_release_tag_unchanged() {
             git fetch --no-tags --force origin "refs/tags/$TAG:refs/tags/$TAG"
             test "$(git rev-parse "$TAG^{commit}")" = "$GITHUB_SHA" || {
@@ -541,7 +559,7 @@ jobs:
           done
 
           assert_release_tag_unchanged
-          gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --verify-tag --draft --title "SurgePilot $TAG" release-assets/*
+          gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --verify-tag --draft --title "SurgePilot $TAG" --notes-file "$release_notes" release-assets/*
           anonymous_config=$(mktemp -d)
           trap 'rm -rf "$anonymous_config"' EXIT
           printf '{"auths":{}}\n' > "$anonymous_config/config.json"

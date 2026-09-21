@@ -189,6 +189,44 @@ def test_release_workflow_is_tag_only_native_runtime_and_create_only() -> None:
     )
 
 
+def test_release_workflow_requires_and_publishes_versioned_release_notes() -> None:
+    workflow = (ROOT / ".github/workflows/release.yml").read_text(encoding="utf-8")
+    preflight = workflow.split("\n  preflight:\n", maxsplit=1)[1].split(
+        "\n  verify:\n", maxsplit=1
+    )[0]
+    publish = workflow.split("\n  publish:\n", maxsplit=1)[1]
+
+    notes_path = 'release_notes="docs/releases/$TAG.md"'
+    file_guard = 'test -f "$release_notes"'
+    content_guard = "grep -q '[^[:space:]]' \"$release_notes\""
+
+    for section in (preflight, publish):
+        assert notes_path in section
+        assert file_guard in section
+        assert content_guard in section
+
+    create_release = (
+        'gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --verify-tag --draft '
+        '--title "SurgePilot $TAG" --notes-file "$release_notes" release-assets/*'
+    )
+    assert create_release in publish
+    assert publish.index(content_guard) < publish.index(create_release)
+
+
+def test_existing_release_notes_follow_the_documented_user_facing_format() -> None:
+    for tag in ("v1.0.0", "v1.1.0"):
+        notes = (ROOT / "docs" / "releases" / f"{tag}.md").read_text(encoding="utf-8")
+        assert notes.startswith(f"# SurgePilot {tag}\n")
+        for heading in (
+            "## Highlights",
+            "## Install",
+            "## Upgrade",
+            "## Compatibility and breaking changes",
+            "## Full changelog",
+        ):
+            assert heading in notes
+
+
 def test_release_package_bootstrap_is_manual_bounded_and_non_semantic() -> None:
     workflow_path = ROOT / ".github/workflows/release-package-bootstrap.yml"
     workflow = workflow_path.read_text(encoding="utf-8")
