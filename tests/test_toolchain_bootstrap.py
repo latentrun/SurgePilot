@@ -58,6 +58,7 @@ def copied_toolchain(tmp_path: Path) -> tuple[Path, Path]:
     scripts.mkdir(parents=True)
     script = scripts / "toolchain"
     shutil.copy2(TOOLCHAIN, script)
+    shutil.copy2(ROOT / "scripts/toolchain-lock", scripts / "toolchain-lock")
     shutil.copy2(ROOT / "scripts/toolchain-mise.sha256", scripts / "toolchain-mise.sha256")
     (repository / "mise.toml").write_text(
         '[tools]\npython = "3.12"\nnode = "22"\npnpm = "11.3.0"\nuv = "0.12.17"\n',
@@ -133,7 +134,7 @@ case "${1-}" in
           && [ ! -e "$TOOLCHAIN_TEST_SIGNAL_AFTER_PUBLISH" ]; then
           : > "$TOOLCHAIN_TEST_SIGNAL_AFTER_PUBLISH"
           wrapper_token=$(/bin/cat "$SURGEPILOT_TOOLCHAIN_STATE_ROOT/mutation.lock")
-          kill -TERM "${wrapper_token%%@*}"
+          kill -TERM "${wrapper_token#supervisor=}"
         fi
         ;;
     esac
@@ -175,6 +176,10 @@ case "${1-}" in
     ;;
   exec)
     [ "$2" = -- ] || exit 2
+    if [ "$3" = sh ]; then
+      shift 2
+      exec "$@"
+    fi
     case "$3" in
       python) version=3.12.11; output='Python 3.12.11' ;;
       node) version=22.18.0; output='v22.18.0' ;;
@@ -458,6 +463,31 @@ def test_install_rejects_unsafe_toolchain_roots_without_repair(
         assert "symlink" in result.stderr
 
 
+@pytest.mark.parametrize("unsafe_kind", ["hardlink", "symlink", "writable"])
+def test_install_rejects_unsafe_mutation_lock(tmp_path: Path, unsafe_kind: str) -> None:
+    environment = toolchain_environment(tmp_path)
+    for name in ("data", "cache", "state", "config"):
+        (tmp_path / name).mkdir(mode=0o700)
+    lock = tmp_path / "state/mutation.lock"
+    target = tmp_path / "lock-target"
+    target.write_text("sentinel\n", encoding="utf-8")
+    target.chmod(0o600)
+    if unsafe_kind == "hardlink":
+        os.link(target, lock)
+    elif unsafe_kind == "symlink":
+        lock.symlink_to(target)
+    else:
+        lock.write_text("sentinel\n", encoding="utf-8")
+        lock.chmod(0o666)
+
+    result = run_toolchain(tmp_path, "install", environment=environment)
+
+    assert result.returncode != 0
+    expected_error = "hard link" if unsafe_kind == "hardlink" else unsafe_kind
+    assert expected_error in result.stderr
+    assert target.read_text(encoding="utf-8") == "sentinel\n"
+
+
 def configured_fake_install(tmp_path: Path) -> tuple[Path, Path, dict[str, str]]:
     repository, script = copied_toolchain(tmp_path)
     archive = tmp_path / "mise.tar.gz"
@@ -526,8 +556,9 @@ def test_managed_commands_reject_wrong_owner_before_invoking_mise(
     assert (mise_log.read_bytes() if mise_log.exists() else b"") == before
 
 
-def test_concurrent_installers_ignore_stale_lock_file_without_overlapping(
-    tmp_path: Path,
+@pytest.mark.parametrize("preexisting_lock", [False, True])
+def test_concurrent_installers_converge_without_overlapping(
+    tmp_path: Path, preexisting_lock: bool
 ) -> None:
     repository, script, environment = configured_fake_install(tmp_path)
     install_log = tmp_path / "installs.log"
@@ -539,11 +570,12 @@ def test_concurrent_installers_ignore_stale_lock_file_without_overlapping(
             "TOOLCHAIN_TEST_OVERLAP_ROOT": str(overlap_root),
         }
     )
-    for name in ("data", "cache", "state", "config"):
-        (tmp_path / name).mkdir(mode=0o700)
-    lock = tmp_path / "state/mutation.lock"
-    lock.write_text(f"999999@{socket.gethostname()}\n", encoding="utf-8")
-    lock.chmod(0o600)
+    if preexisting_lock:
+        for name in ("data", "cache", "state", "config"):
+            (tmp_path / name).mkdir(mode=0o700)
+        lock = tmp_path / "state/mutation.lock"
+        lock.write_text(f"999999@{socket.gethostname()}\n", encoding="utf-8")
+        lock.chmod(0o600)
 
     processes = [
         subprocess.Popen(
@@ -562,6 +594,7 @@ def test_concurrent_installers_ignore_stale_lock_file_without_overlapping(
     assert (tmp_path / "urls.log").read_text(encoding="utf-8").count("\n") == 1
     assert install_log.read_text(encoding="utf-8").splitlines() == ["install"]
     assert not (overlap_root / "overlap").exists()
+    lock = tmp_path / "state/mutation.lock"
     assert lock.is_file()
     assert stat.S_IMODE(lock.stat().st_mode) == 0o600
     final_mise = tmp_path / "data/bootstrap/mise/v2026.9.11/macos-arm64/mise"
@@ -569,8 +602,9 @@ def test_concurrent_installers_ignore_stale_lock_file_without_overlapping(
     assert not list((tmp_path / "data/bootstrap").glob(".mise-stage.*"))
 
 
+@pytest.mark.parametrize("signal_scope", ["group", "wrapper"])
 def test_interrupted_bootstrap_cleans_own_stage_and_later_install_recovers(
-    tmp_path: Path,
+    tmp_path: Path, signal_scope: str
 ) -> None:
     repository, script, environment = configured_fake_install(tmp_path)
     curl = tmp_path / "commands/curl"
@@ -599,7 +633,10 @@ def test_interrupted_bootstrap_cleans_own_stage_and_later_install_recovers(
     while not started.exists() and time.monotonic() < deadline:
         time.sleep(0.01)
     assert started.exists()
-    os.killpg(process.pid, signal.SIGTERM)
+    if signal_scope == "group":
+        os.killpg(process.pid, signal.SIGTERM)
+    else:
+        os.kill(process.pid, signal.SIGTERM)
     _, interrupted_stderr = process.communicate(timeout=10)
 
     assert process.returncode != 0, interrupted_stderr
@@ -662,6 +699,52 @@ def test_signal_to_wrapper_exits_before_mutation_continues(tmp_path: Path) -> No
 
     assert recovered.returncode == 0, recovered.stderr
     assert install_log.read_text(encoding="utf-8").splitlines() == ["install"]
+
+
+def test_supervisor_death_keeps_descendant_mutation_serialized(tmp_path: Path) -> None:
+    repository, script, environment = configured_fake_install(tmp_path)
+    install_log = tmp_path / "installs.log"
+    overlap_root = tmp_path / "overlap"
+    overlap_root.mkdir()
+    environment.update(
+        {
+            "TOOLCHAIN_TEST_INSTALL_LOG": str(install_log),
+            "TOOLCHAIN_TEST_OVERLAP_ROOT": str(overlap_root),
+        }
+    )
+
+    first = subprocess.Popen(
+        ["sh", str(script), "install"],
+        cwd=repository,
+        env=environment,
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+    )
+    deadline = time.monotonic() + 10
+    active = overlap_root / "active"
+    while not active.exists() and time.monotonic() < deadline:
+        time.sleep(0.01)
+    assert active.exists()
+    lock = tmp_path / "state/mutation.lock"
+    supervisor = int(lock.read_text(encoding="utf-8").strip().removeprefix("supervisor="))
+    os.kill(supervisor, signal.SIGKILL)
+
+    second = subprocess.Popen(
+        ["sh", str(script), "install"],
+        cwd=repository,
+        env=environment,
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+    )
+    first_result = first.communicate(timeout=30) + (first.returncode,)
+    second_result = second.communicate(timeout=30) + (second.returncode,)
+
+    assert first_result[2] != 0
+    assert second_result[2] == 0, second_result
+    assert install_log.read_text(encoding="utf-8").splitlines() == ["install"]
+    assert not (overlap_root / "overlap").exists()
 
 
 @pytest.mark.parametrize("source", ["parent", "global", "local"])
@@ -794,6 +877,7 @@ def test_install_reuses_preexisting_unlocked_lock_file(tmp_path: Path) -> None:
         (tmp_path / name).mkdir(mode=0o700)
     lock = tmp_path / "state/mutation.lock"
     lock.write_text(f"999999@{socket.gethostname()}\n", encoding="utf-8")
+    lock.chmod(0o600)
 
     result = subprocess.run(
         ["sh", str(script), "install"],
@@ -808,8 +892,60 @@ def test_install_reuses_preexisting_unlocked_lock_file(tmp_path: Path) -> None:
     assert result.returncode == 0, result.stderr
     assert lock.is_file()
     assert stat.S_IMODE(lock.stat().st_mode) == 0o600
-    assert lock.read_text(encoding="utf-8").strip() != f"999999@{socket.gethostname()}"
+    assert lock.read_text(encoding="utf-8").startswith("supervisor=")
     assert not list((tmp_path / "state").glob(".mutation-lock.*"))
+
+
+def test_install_locked_rejects_forged_environment_sentinel(tmp_path: Path) -> None:
+    repository, script = copied_toolchain(tmp_path)
+    environment = toolchain_environment(tmp_path)
+    environment["SURGEPILOT_TOOLCHAIN_LOCKED"] = "1"
+    for name in ("data", "cache", "state", "config"):
+        (tmp_path / name).mkdir(mode=0o700)
+    lock = tmp_path / "state/mutation.lock"
+    lock.write_text("unlocked\n", encoding="utf-8")
+    lock.chmod(0o600)
+
+    result = subprocess.run(
+        ["sh", str(script), "install-locked"],
+        cwd=repository,
+        env=environment,
+        text=True,
+        capture_output=True,
+        timeout=30,
+        check=False,
+    )
+
+    assert result.returncode != 0
+    assert "requires the mutation lock" in result.stderr
+
+
+def test_managed_exec_runs_requested_command_after_fresh_install(tmp_path: Path) -> None:
+    repository, script, environment = configured_fake_install(tmp_path)
+    marker = tmp_path / "managed-command-ran"
+    environment["TOOLCHAIN_TEST_COMMAND_MARKER"] = str(marker)
+
+    result = subprocess.run(
+        [
+            "sh",
+            str(script),
+            "exec",
+            "--",
+            "sh",
+            "-c",
+            ': > "$TOOLCHAIN_TEST_COMMAND_MARKER"',
+        ],
+        cwd=repository,
+        env=environment,
+        text=True,
+        capture_output=True,
+        timeout=30,
+        check=False,
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert marker.is_file()
+    assert (tmp_path / "data/mise/installs/python/3.12.11/bin/python").is_file()
 
 
 def fake_external_tools(tmp_path: Path) -> Path:

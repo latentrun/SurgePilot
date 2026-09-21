@@ -77,9 +77,8 @@ surgepilot down
 
 ## Start from source
 
-The source path requires Git, GNU or compatible Make, a POSIX shell, `curl`,
-`tar`/gzip, a SHA-256 utility, the host file-lock utility (`lockf` on macOS or
-`flock` on Linux), Docker, and Docker Compose. From the repository root:
+The source path requires Git, GNU or compatible Make, a POSIX shell, Perl, `curl`,
+`tar`/gzip, a SHA-256 utility, Docker, and Docker Compose. From the repository root:
 
 ```sh
 make setup

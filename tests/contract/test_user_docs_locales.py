@@ -69,9 +69,9 @@ def test_public_quickstarts_use_the_public_release_installer_target() -> None:
 
 def test_source_quickstarts_describe_make_managed_toolchain() -> None:
     required_markers = {
-        "en": ("make toolchain-check", "make toolchain-install", "SHA-256 utility"),
-        "zh-CN": ("make toolchain-check", "make toolchain-install", "SHA-256 校验工具"),
-        "ja": ("make toolchain-check", "make toolchain-install", "SHA-256 検証ツール"),
+        "en": ("make toolchain-check", "make toolchain-install", "SHA-256 utility", "Perl"),
+        "zh-CN": ("make toolchain-check", "make toolchain-install", "SHA-256 校验工具", "Perl"),
+        "ja": ("make toolchain-check", "make toolchain-install", "SHA-256 検証ツール", "Perl"),
     }
     obsolete_prerequisites = {
         "en": "requires Node.js 22, Python 3.12, pnpm, uv",

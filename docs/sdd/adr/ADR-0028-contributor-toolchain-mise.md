@@ -192,12 +192,12 @@ Source contributors still require:
 
 ```text
 POSIX shell
+Perl
 Git
 GNU or compatible Make
 curl
 tar/gzip
 SHA-256 verification utility
-OS file-lock utility (`lockf` on macOS or `flock` on Linux)
 ```
 
 Full source startup additionally requires Docker and Docker Compose v2. Contributors do not need
@@ -384,10 +384,13 @@ Required behavior:
 12. a later pinned version is published separately and cannot destroy the previous version;
 13. a stale or interrupted mutation is recoverable by a later invocation.
 
-The implementation uses an operating-system advisory file lock: `lockf` on macOS or `flock` on
-Linux. The persistent lock file is not ownership evidence by itself; the kernel-held lock is the
-authority and is released automatically when the wrapper exits. These observable semantics must
-hold on macOS and supported Linux hosts.
+The implementation uses Perl's cross-platform `flock` system call on a persistent private lock
+file. The supervisor keeps the advisory lock descriptor open while the mutation process group
+runs, forwards interruption signals to that process group, and the descriptor is inherited by
+descendants so abrupt supervisor termination cannot release the lock while mutation continues.
+The operating system releases the lock after the last holder exits, so stale file contents are not
+ownership evidence and require no unlink-based recovery. These semantics are the same on macOS
+and supported Linux hosts without a platform-specific lock command.
 
 Normal command execution does not retain the mutation lock and cannot trigger mise auto-install.
 
@@ -541,6 +544,7 @@ Implementation adds:
 ```text
 mise.toml
 scripts/toolchain
+scripts/toolchain-lock
 scripts/toolchain-mise.sha256
 tests/contract/test_toolchain_governance.py
 tests/test_toolchain_bootstrap.py
@@ -715,4 +719,3 @@ three-locale documentation drift
 - [mise system-wide tool installs](https://mise.jdx.dev/dev-tools/)
 - [mise lockfiles](https://mise.jdx.dev/dev-tools/mise-lock.html)
 - [uv Python version management](https://docs.astral.sh/uv/concepts/python-versions/)
-

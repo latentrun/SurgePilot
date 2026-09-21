@@ -199,15 +199,23 @@ prepare_lock_file() {
 
 run_locked_install() {
     prepare_lock_file
-    if command -v flock >/dev/null 2>&1; then
-        flock -w 120 "$LOCK_PATH" \
-            env SURGEPILOT_TOOLCHAIN_LOCKED=1 "$SCRIPT_DIR/toolchain" install-locked
-    elif command -v lockf >/dev/null 2>&1; then
-        lockf -k -s -t 120 "$LOCK_PATH" \
-            env SURGEPILOT_TOOLCHAIN_LOCKED=1 "$SCRIPT_DIR/toolchain" install-locked
+    command -v perl >/dev/null 2>&1 \
+        || fail "Perl is required for toolchain mutation locking"
+    perl "$SCRIPT_DIR/toolchain-lock" "$LOCK_PATH" 120 \
+        "$SCRIPT_DIR/toolchain" install-locked &
+    lock_supervisor=$!
+    trap 'kill -HUP "$lock_supervisor" 2>/dev/null || true; wait "$lock_supervisor" 2>/dev/null || true; exit 129' HUP
+    trap 'kill -INT "$lock_supervisor" 2>/dev/null || true; wait "$lock_supervisor" 2>/dev/null || true; exit 130' INT
+    trap 'kill -TERM "$lock_supervisor" 2>/dev/null || true; wait "$lock_supervisor" 2>/dev/null || true; exit 143' TERM
+    if wait "$lock_supervisor"; then
+        lock_status=0
     else
-        fail "managed mode requires flock or lockf for cross-worktree serialization"
+        lock_status=$?
     fi
+    trap 'exit 129' HUP
+    trap 'exit 130' INT
+    trap 'exit 143' TERM
+    return "$lock_status"
 }
 
 mise_binary_is_valid() {
@@ -407,15 +415,15 @@ validate_managed_installation() {
 }
 
 install_managed_locked() {
-    [ "${SURGEPILOT_TOOLCHAIN_LOCKED-}" = 1 ] \
-        || fail "locked install entry point requires the mutation lock"
     check_existing_roots
     LOCK_PATH=$SURGEPILOT_TOOLCHAIN_STATE_ROOT/mutation.lock
     validate_private_file "$LOCK_PATH"
-    host=$(hostname 2>/dev/null || printf unknown)
-    printf '%s@%s\n' "$$" "$host" > "$LOCK_PATH"
-    chmod 600 "$LOCK_PATH"
-    validate_private_file "$LOCK_PATH"
+    case "${SURGEPILOT_TOOLCHAIN_LOCK_FD-}" in
+        '' | *[!0-9]*) fail "locked install entry point requires the mutation lock" ;;
+    esac
+    perl "$SCRIPT_DIR/toolchain-lock" --verify \
+        "$SURGEPILOT_TOOLCHAIN_LOCK_FD" "$LOCK_PATH" \
+        || fail "locked install entry point could not verify the mutation lock"
     configure_managed_environment
     create_mise_directories
     bootstrap_mise

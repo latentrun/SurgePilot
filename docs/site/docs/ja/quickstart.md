@@ -73,9 +73,8 @@ surgepilot down
 
 ## ソースコードから起動する
 
-ソースコードからの起動には Git、GNU Make または互換実装、POSIX Shell、`curl`、
-`tar`/gzip、SHA-256 検証ツール、ホストのファイルロックツール（macOS は `lockf`、
-Linux は `flock`）、Docker、Docker Compose が必要です。
+ソースコードからの起動には Git、GNU Make または互換実装、POSIX Shell、Perl、`curl`、
+`tar`/gzip、SHA-256 検証ツール、Docker、Docker Compose が必要です。
 リポジトリのルートで次を実行します。
 
 ```sh
