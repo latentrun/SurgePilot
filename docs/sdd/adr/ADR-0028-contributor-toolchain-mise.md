@@ -319,6 +319,12 @@ UV_NO_MANAGED_PYTHON=1
 If mise-selected Python is unavailable, execution fails. uv cannot repair that failure by
 downloading or selecting a uv-managed interpreter.
 
+These controls govern selection of the contributor interpreter. They do not prohibit the accepted
+Load Node Runtime artifact builder from explicitly installing its pinned, embedded Python payload
+into the Runtime build/cache namespace. That explicit `uv python install` boundary must opt into
+managed Python and manual downloads locally; it must not relax the contributor environment or
+enable automatic Python downloads for other commands.
+
 ### Mutation, validation, and execution phases
 
 mise automatic installation is not permitted outside the serialized mutation phase.
