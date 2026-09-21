@@ -186,10 +186,12 @@ For a feature touching more than one application:
 Simple bug fixes may proceed directly while preserving the same scope, contract, safety, and
 verification rules.
 
-Runtime versions are managed with `mise`; respect existing project version declarations and keep
-global defaults unchanged. Use `uv` and the project `.venv` for Python dependencies. Keep Node
-dependencies project-local and respect the existing package manager and lockfile. Run Java commands
-that require `JAVA_HOME` through `mise exec --`. Swift uses the Xcode toolchain.
+Source-contributor Python, Node.js, pnpm, and uv are selected by the repository-managed toolchain
+defined in accepted `ADR-0028`. Use root `make` targets as the public entry; do not activate a host
+mise installation, change global runtime defaults, or bypass the wrapper for official checks.
+`make toolchain-install` is the explicit repair entry and `make toolchain-check` is the offline,
+non-mutating diagnostic. uv owns project dependencies and `.venv`; mise alone owns Python runtime
+selection. Swift remains owned by Xcode.
 
 Use existing repository commands as the executable source of truth. Detailed source/release startup
 and recovery semantics belong to their owning SDDs and runbooks; do not copy them into this file.

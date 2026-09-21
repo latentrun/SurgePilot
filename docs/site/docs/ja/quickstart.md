@@ -73,13 +73,19 @@ surgepilot down
 
 ## ソースコードから起動する
 
-ソースコードからの起動には Node.js 22、Python 3.12、pnpm、uv、Docker、Docker Compose が
-必要です。リポジトリのルートで次を実行します。
+ソースコードからの起動には Git、GNU Make または互換実装、POSIX Shell、Perl、`curl`、
+`tar`/gzip、SHA-256 検証ツール、Docker、Docker Compose が必要です。
+リポジトリのルートで次を実行します。
 
 ```sh
 make setup
 make start-full-stack
 ```
+
+Make は固定バージョンの mise Bootstrap をダウンロードして検証し、リポジトリが選択した
+Python 3.12、Node.js 22、pnpm、uv を分離された Contributor Namespace にインストールします。
+Global Runtime Version や Shell Startup File は変更しません。オフラインかつ非変更の診断には
+`make toolchain-check`、Managed State の明示的な修復には `make toolchain-install` を使用します。
 
 ルートに `.env` が存在しない場合、`make start-full-stack` は安全なローカルデプロイ状態を
 作成し、Native Linux Architecture の Load Node Runtime を Build または再利用します。その後、

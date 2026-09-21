@@ -1,0 +1,590 @@
+#!/bin/sh
+set -eu
+
+MISE_VERSION=2026.9.11
+MISE_RELEASE_BASE=https://github.com/jdx/mise/releases/download/v$MISE_VERSION
+
+SCRIPT_DIR=$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd -P)
+REPOSITORY_ROOT=$(CDPATH='' cd -- "$SCRIPT_DIR/.." && pwd -P)
+CHECKSUM_FILE=$SCRIPT_DIR/toolchain-mise.sha256
+STAGE_DIR=
+LOCK_PATH=
+MISE_BIN=
+
+fail() {
+    printf 'SurgePilot toolchain: %s\n' "$1" >&2
+    exit 1
+}
+
+require_configured_roots() {
+    : "${SURGEPILOT_TOOLCHAIN_DATA_ROOT:?SURGEPILOT_TOOLCHAIN_DATA_ROOT is required}"
+    : "${SURGEPILOT_TOOLCHAIN_CACHE_ROOT:?SURGEPILOT_TOOLCHAIN_CACHE_ROOT is required}"
+    : "${SURGEPILOT_TOOLCHAIN_STATE_ROOT:?SURGEPILOT_TOOLCHAIN_STATE_ROOT is required}"
+    : "${SURGEPILOT_TOOLCHAIN_CONFIG_ROOT:?SURGEPILOT_TOOLCHAIN_CONFIG_ROOT is required}"
+}
+
+file_owner() {
+    if value=$(stat -c '%u' "$1" 2>/dev/null); then
+        printf '%s\n' "$value"
+        return
+    fi
+    stat -f '%u' "$1"
+}
+
+file_mode() {
+    if value=$(stat -c '%a' "$1" 2>/dev/null); then
+        printf '%s\n' "$value"
+        return
+    fi
+    stat -f '%Lp' "$1"
+}
+
+validate_root() {
+    root=$1
+    case "$root" in
+        /*) ;;
+        *) fail "toolchain root must be absolute: $root" ;;
+    esac
+    [ ! -L "$root" ] || fail "toolchain root must not be a symlink: $root"
+    [ -d "$root" ] || fail "toolchain root is not a directory: $root"
+    [ "$(file_owner "$root")" = "$(id -u)" ] || fail "toolchain root has the wrong owner: $root"
+    mode=$(file_mode "$root")
+    case "$mode" in
+        *[2367] | *[2367]?) fail "toolchain root is group- or other-writable: $root" ;;
+    esac
+}
+
+ensure_private_directory() {
+    directory=$1
+    [ ! -L "$directory" ] || fail "toolchain directory must not be a symlink: $directory"
+    if [ -e "$directory" ]; then
+        validate_root "$directory"
+        return
+    fi
+    mkdir -p "$directory"
+    chmod 700 "$directory"
+    validate_root "$directory"
+}
+
+validate_private_file() {
+    file=$1
+    [ ! -L "$file" ] || fail "toolchain file must not be a symlink: $file"
+    [ -f "$file" ] || fail "toolchain file is not regular: $file"
+    [ "$(file_owner "$file")" = "$(id -u)" ] || fail "toolchain file has the wrong owner: $file"
+    mode=$(file_mode "$file")
+    case "$mode" in
+        *[2367] | *[2367]?) fail "toolchain file is group- or other-writable: $file" ;;
+    esac
+}
+
+canonicalize_configured_roots() {
+    SURGEPILOT_TOOLCHAIN_DATA_ROOT=$(CDPATH='' cd -- "$SURGEPILOT_TOOLCHAIN_DATA_ROOT" && pwd -P)
+    SURGEPILOT_TOOLCHAIN_CACHE_ROOT=$(CDPATH='' cd -- "$SURGEPILOT_TOOLCHAIN_CACHE_ROOT" && pwd -P)
+    SURGEPILOT_TOOLCHAIN_STATE_ROOT=$(CDPATH='' cd -- "$SURGEPILOT_TOOLCHAIN_STATE_ROOT" && pwd -P)
+    SURGEPILOT_TOOLCHAIN_CONFIG_ROOT=$(CDPATH='' cd -- "$SURGEPILOT_TOOLCHAIN_CONFIG_ROOT" && pwd -P)
+    export SURGEPILOT_TOOLCHAIN_DATA_ROOT SURGEPILOT_TOOLCHAIN_CACHE_ROOT
+    export SURGEPILOT_TOOLCHAIN_STATE_ROOT SURGEPILOT_TOOLCHAIN_CONFIG_ROOT
+}
+
+check_existing_roots() {
+    for root in \
+        "$SURGEPILOT_TOOLCHAIN_DATA_ROOT" \
+        "$SURGEPILOT_TOOLCHAIN_CACHE_ROOT" \
+        "$SURGEPILOT_TOOLCHAIN_STATE_ROOT" \
+        "$SURGEPILOT_TOOLCHAIN_CONFIG_ROOT"
+    do
+        [ -d "$root" ] || fail "managed state is missing; run: make toolchain-install"
+        validate_root "$root"
+    done
+    canonicalize_configured_roots
+}
+
+host_platform() {
+    operating_system=$(uname -s)
+    architecture=$(uname -m)
+
+    case "$operating_system" in
+        Linux)
+            glibc_version=$(getconf GNU_LIBC_VERSION 2>/dev/null || true)
+            case "$glibc_version" in
+                glibc\ *) ;;
+                *) fail "managed mode requires glibc Linux; musl Linux is unsupported" ;;
+            esac
+            case "$architecture" in
+                x86_64) printf '%s\n' linux-x64 ;;
+                aarch64 | arm64) printf '%s\n' linux-arm64 ;;
+                *) fail "unsupported Linux architecture: $architecture" ;;
+            esac
+            ;;
+        Darwin)
+            case "$architecture" in
+                x86_64) printf '%s\n' macos-x64 ;;
+                arm64 | aarch64) printf '%s\n' macos-arm64 ;;
+                *) fail "unsupported macOS architecture: $architecture" ;;
+            esac
+            ;;
+        *) fail "unsupported operating system: $operating_system" ;;
+    esac
+}
+
+expected_checksum() {
+    artifact_name=$1
+    checksum=
+    matches=0
+    while read -r digest filename; do
+        [ "$filename" = "$artifact_name" ] || continue
+        checksum=$digest
+        matches=$((matches + 1))
+    done < "$CHECKSUM_FILE"
+    [ "$matches" -eq 1 ] || fail "expected one checksum entry for $artifact_name"
+    printf '%s\n' "$checksum"
+}
+
+actual_checksum() {
+    archive=$1
+    if command -v sha256sum >/dev/null 2>&1; then
+        sha256sum "$archive" | awk '{print $1}'
+    elif command -v shasum >/dev/null 2>&1; then
+        shasum -a 256 "$archive" | awk '{print $1}'
+    else
+        fail "a SHA-256 utility (sha256sum or shasum) is required"
+    fi
+}
+
+create_roots() {
+    old_umask=$(umask)
+    umask 077
+    for root in \
+        "$SURGEPILOT_TOOLCHAIN_DATA_ROOT" \
+        "$SURGEPILOT_TOOLCHAIN_CACHE_ROOT" \
+        "$SURGEPILOT_TOOLCHAIN_STATE_ROOT" \
+        "$SURGEPILOT_TOOLCHAIN_CONFIG_ROOT"
+    do
+        case "$root" in
+            /*) ;;
+            *) fail "toolchain root must be absolute: $root" ;;
+        esac
+        [ ! -L "$root" ] || fail "toolchain root must not be a symlink: $root"
+        if [ -e "$root" ]; then
+            validate_root "$root"
+        else
+            ensure_private_directory "$root"
+        fi
+    done
+    ensure_private_directory "$SURGEPILOT_TOOLCHAIN_DATA_ROOT/bootstrap"
+    umask "$old_umask"
+    canonicalize_configured_roots
+}
+
+cleanup() {
+    if [ -n "$STAGE_DIR" ] && [ -d "$STAGE_DIR" ]; then
+        rm -rf "$STAGE_DIR"
+    fi
+}
+
+run_locked_install() {
+    LOCK_PATH=$SURGEPILOT_TOOLCHAIN_STATE_ROOT/mutation.lock
+    command -v perl >/dev/null 2>&1 \
+        || fail "Perl is required for toolchain mutation locking"
+    perl "$SCRIPT_DIR/toolchain-lock" "$LOCK_PATH" 120 \
+        "$SCRIPT_DIR/toolchain" install-locked &
+    lock_supervisor=$!
+    trap 'kill -HUP "$lock_supervisor" 2>/dev/null || true; wait "$lock_supervisor" 2>/dev/null || true; exit 129' HUP
+    trap 'kill -INT "$lock_supervisor" 2>/dev/null || true; wait "$lock_supervisor" 2>/dev/null || true; exit 130' INT
+    trap 'kill -TERM "$lock_supervisor" 2>/dev/null || true; wait "$lock_supervisor" 2>/dev/null || true; exit 143' TERM
+    if wait "$lock_supervisor"; then
+        lock_status=0
+    else
+        lock_status=$?
+    fi
+    trap 'exit 129' HUP
+    trap 'exit 130' INT
+    trap 'exit 143' TERM
+    return "$lock_status"
+}
+
+mise_binary_is_valid() {
+    candidate=$1
+    [ ! -L "$candidate" ] || return 1
+    [ -x "$candidate" ] || return 1
+    version=$($candidate --version 2>/dev/null | awk 'NR == 1 {print $1}') || return 1
+    [ "$version" = "$MISE_VERSION" ]
+}
+
+bootstrap_mise() {
+    platform=$(host_platform)
+    artifact=mise-v$MISE_VERSION-$platform.tar.gz
+    expected=$(expected_checksum "$artifact")
+    final_parent=$SURGEPILOT_TOOLCHAIN_DATA_ROOT/bootstrap/mise/v$MISE_VERSION
+    final_dir=$final_parent/$platform
+    MISE_BIN=$final_dir/mise
+
+    ensure_private_directory "$SURGEPILOT_TOOLCHAIN_DATA_ROOT/bootstrap/mise"
+    ensure_private_directory "$SURGEPILOT_TOOLCHAIN_DATA_ROOT/bootstrap/mise/v$MISE_VERSION"
+    [ ! -L "$final_dir" ] || fail "pinned mise directory must not be a symlink: $final_dir"
+    if [ -e "$final_dir" ]; then
+        validate_root "$final_dir"
+        if [ -e "$MISE_BIN" ] || [ -L "$MISE_BIN" ]; then
+            validate_private_file "$MISE_BIN"
+        fi
+    fi
+
+    if mise_binary_is_valid "$MISE_BIN"; then
+        return 0
+    fi
+
+    STAGE_DIR=$(mktemp -d "$SURGEPILOT_TOOLCHAIN_DATA_ROOT/bootstrap/.mise-stage.XXXXXX")
+    archive=$STAGE_DIR/$artifact
+    curl --fail --location --silent --show-error \
+        --output "$archive" "$MISE_RELEASE_BASE/$artifact"
+    actual=$(actual_checksum "$archive")
+    [ "$actual" = "$expected" ] || fail "checksum verification failed for $artifact"
+
+    tar -xzf "$archive" -C "$STAGE_DIR"
+    candidate=$STAGE_DIR/mise/bin/mise
+    mise_binary_is_valid "$candidate" || fail "verified archive does not contain mise $MISE_VERSION"
+    publish=$STAGE_DIR/publish
+    mkdir "$publish"
+    chmod 700 "$publish"
+    cp "$candidate" "$publish/mise"
+    chmod 700 "$publish/mise"
+
+    if [ -e "$final_dir" ]; then
+        invalid=$STAGE_DIR/invalid
+        mv "$final_dir" "$invalid"
+        mv "$publish" "$final_dir"
+    else
+        mv "$publish" "$final_dir"
+    fi
+    MISE_BIN=$final_dir/mise
+    mise_binary_is_valid "$MISE_BIN" || fail "published mise bootstrap is invalid"
+    rm -rf "$STAGE_DIR"
+    STAGE_DIR=
+}
+
+clear_inherited_mise_environment() {
+    inherited=$(env | sed -n 's/^\(MISE_[A-Za-z0-9_]*\)=.*/\1/p')
+    for name in $inherited; do
+        unset "$name"
+    done
+}
+
+configure_managed_environment() {
+    clear_inherited_mise_environment
+    MISE_DATA_DIR=$SURGEPILOT_TOOLCHAIN_DATA_ROOT/mise
+    MISE_CACHE_DIR=$SURGEPILOT_TOOLCHAIN_CACHE_ROOT/mise
+    MISE_STATE_DIR=$SURGEPILOT_TOOLCHAIN_STATE_ROOT/mise
+    MISE_CONFIG_DIR=$SURGEPILOT_TOOLCHAIN_CONFIG_ROOT/mise
+    MISE_SYSTEM_DATA_DIR=$SURGEPILOT_TOOLCHAIN_DATA_ROOT/mise-system
+    MISE_GLOBAL_CONFIG_FILE=$SURGEPILOT_TOOLCHAIN_CONFIG_ROOT/mise/config.toml
+    MISE_SYSTEM_CONFIG_DIR=$SURGEPILOT_TOOLCHAIN_CONFIG_ROOT/mise-system
+    MISE_SYSTEM_CONFIG_FILE=$SURGEPILOT_TOOLCHAIN_CONFIG_ROOT/mise-system/config.toml
+    MISE_CEILING_PATHS=$(dirname "$REPOSITORY_ROOT")
+    MISE_OVERRIDE_CONFIG_FILENAMES=mise.toml
+    MISE_OVERRIDE_TOOL_VERSIONS_FILENAMES=none
+    MISE_AUTO_ENV=false
+    MISE_IDIOMATIC_VERSION_FILE_ENABLE_TOOLS=
+    MISE_LOCKFILE=false
+    MISE_ENABLE_TOOLS=python,node,pnpm,uv
+    MISE_AUTO_INSTALL=0
+    MISE_EXEC_AUTO_INSTALL=0
+    MISE_NOT_FOUND_AUTO_INSTALL=0
+    MISE_TASK_RUN_AUTO_INSTALL=0
+    MISE_NOT_FOUND_SYSTEM_FALLBACK=0
+    UV_PYTHON_DOWNLOADS=never
+    UV_NO_MANAGED_PYTHON=1
+    export MISE_DATA_DIR MISE_CACHE_DIR MISE_STATE_DIR MISE_CONFIG_DIR
+    export MISE_SYSTEM_DATA_DIR MISE_GLOBAL_CONFIG_FILE MISE_SYSTEM_CONFIG_DIR
+    export MISE_SYSTEM_CONFIG_FILE MISE_CEILING_PATHS MISE_OVERRIDE_CONFIG_FILENAMES
+    export MISE_OVERRIDE_TOOL_VERSIONS_FILENAMES MISE_AUTO_ENV
+    export MISE_IDIOMATIC_VERSION_FILE_ENABLE_TOOLS MISE_LOCKFILE MISE_ENABLE_TOOLS
+    export MISE_AUTO_INSTALL MISE_EXEC_AUTO_INSTALL MISE_NOT_FOUND_AUTO_INSTALL
+    export MISE_TASK_RUN_AUTO_INSTALL MISE_NOT_FOUND_SYSTEM_FALLBACK
+    export UV_PYTHON_DOWNLOADS UV_NO_MANAGED_PYTHON
+}
+
+create_mise_directories() {
+    old_umask=$(umask)
+    umask 077
+    for directory in \
+        "$MISE_DATA_DIR" "$MISE_CACHE_DIR" "$MISE_STATE_DIR" "$MISE_CONFIG_DIR" \
+        "$MISE_SYSTEM_DATA_DIR" "$MISE_SYSTEM_CONFIG_DIR"
+    do
+        ensure_private_directory "$directory"
+    done
+    for config_file in "$MISE_GLOBAL_CONFIG_FILE" "$MISE_SYSTEM_CONFIG_FILE"; do
+        if [ -e "$config_file" ]; then
+            validate_private_file "$config_file"
+        else
+            : > "$config_file"
+            chmod 600 "$config_file"
+            validate_private_file "$config_file"
+        fi
+    done
+    umask "$old_umask"
+}
+
+validate_repository_policy() {
+    [ -f "$REPOSITORY_ROOT/mise.toml" ] || fail "repository mise.toml is missing"
+    if find "$REPOSITORY_ROOT" -maxdepth 1 -type f -name 'mise*.lock' -print -quit \
+        | grep -q .; then
+        fail "mise lockfiles are disabled by ADR-0028"
+    fi
+}
+
+validate_tool_version() {
+    context=$1
+    tool=$2
+    version=$3
+    case "$tool:$version" in
+        python:Python\ 3.12.*) ;;
+        node:v22.*) ;;
+        pnpm:11.3.0) ;;
+        uv:uv\ 0.12.17 | uv:uv\ 0.12.17\ *) ;;
+        *) fail "$context $tool version does not satisfy repository policy: $version" ;;
+    esac
+}
+
+validate_managed_tool() {
+    tool=$1
+    executable=$("$MISE_BIN" which "$tool" 2>/dev/null) \
+        || fail "managed $tool executable cannot be resolved"
+    canonical_executable=$executable
+    while [ -L "$canonical_executable" ]; do
+        link_target=$(readlink "$canonical_executable") \
+            || fail "managed $tool executable symlink cannot be read"
+        case "$link_target" in
+            /*) canonical_executable=$link_target ;;
+            *) canonical_executable=$(dirname "$canonical_executable")/$link_target ;;
+        esac
+    done
+    canonical_directory=$(CDPATH='' cd -- "$(dirname "$canonical_executable")" && pwd -P) \
+        || fail "managed $tool executable directory cannot be resolved"
+    canonical_executable=$canonical_directory/$(basename "$canonical_executable")
+    case "$canonical_executable" in
+        "$MISE_DATA_DIR"/installs/*) ;;
+        *) fail "managed $tool resolved outside the isolated toolchain: $canonical_executable" ;;
+    esac
+    case "$canonical_executable" in
+        "$MISE_SYSTEM_DATA_DIR"/*) fail "managed $tool resolved from system mise data" ;;
+    esac
+    version=$("$MISE_BIN" exec -- "$tool" --version 2>&1) \
+        || fail "managed $tool is unavailable; run: make toolchain-install"
+    validate_tool_version managed "$tool" "$version"
+}
+
+validate_managed_installation() {
+    validate_repository_policy
+    mise_binary_is_valid "$MISE_BIN" || fail "pinned mise is missing; run: make toolchain-install"
+    [ "$("$MISE_BIN" settings get lockfile)" = false ] \
+        || fail "managed mise lockfiles are not disabled"
+    [ "$("$MISE_BIN" settings get enable_tools)" = '["node", "pnpm", "python", "uv"]' ] \
+        || fail "managed mise effective tool allowlist is invalid"
+    config_json=$(
+        cd "$REPOSITORY_ROOT"
+        "$MISE_BIN" config ls --json
+    ) || fail "effective mise config sources cannot be read"
+    config_count=$(printf '%s\n' "$config_json" | grep -c '^[[:space:]]*"path": ' || true)
+    [ "$config_count" -eq 3 ] || fail "managed mise discovered an unapproved config source"
+    for approved_config in \
+        "$REPOSITORY_ROOT/mise.toml" \
+        "$MISE_GLOBAL_CONFIG_FILE" \
+        "$MISE_SYSTEM_CONFIG_FILE"
+    do
+        printf '%s\n' "$config_json" | grep -F '"path": ' | grep -Fq "\"$approved_config\"" \
+            || fail "managed mise did not use the approved config source: $approved_config"
+    done
+    for tool in python node pnpm uv; do
+        validate_managed_tool "$tool"
+    done
+}
+
+install_managed_locked() {
+    check_existing_roots
+    LOCK_PATH=$SURGEPILOT_TOOLCHAIN_STATE_ROOT/mutation.lock
+    validate_private_file "$LOCK_PATH"
+    case "${SURGEPILOT_TOOLCHAIN_LOCK_FD-}" in
+        '' | *[!0-9]*) fail "locked install entry point requires the mutation lock" ;;
+    esac
+    perl "$SCRIPT_DIR/toolchain-lock" --verify \
+        "$SURGEPILOT_TOOLCHAIN_LOCK_FD" "$LOCK_PATH" \
+        || fail "locked install entry point could not verify the mutation lock"
+    configure_managed_environment
+    create_mise_directories
+    bootstrap_mise
+    if (validate_managed_installation >/dev/null 2>&1); then
+        return 0
+    fi
+    (
+        cd "$REPOSITORY_ROOT"
+        "$MISE_BIN" install --yes
+    )
+    validate_managed_installation
+}
+
+install_managed() {
+    create_roots
+    run_locked_install
+}
+
+prepare_existing_managed_environment() {
+    check_existing_roots
+    configure_managed_environment
+    platform=$(host_platform)
+    MISE_BIN=$SURGEPILOT_TOOLCHAIN_DATA_ROOT/bootstrap/mise/v$MISE_VERSION/$platform/mise
+    for required_directory in \
+        "$MISE_DATA_DIR" "$MISE_CACHE_DIR" "$MISE_STATE_DIR" "$MISE_CONFIG_DIR" \
+        "$MISE_SYSTEM_DATA_DIR" "$MISE_SYSTEM_CONFIG_DIR" \
+        "$SURGEPILOT_TOOLCHAIN_DATA_ROOT/bootstrap" \
+        "$SURGEPILOT_TOOLCHAIN_DATA_ROOT/bootstrap/mise" \
+        "$SURGEPILOT_TOOLCHAIN_DATA_ROOT/bootstrap/mise/v$MISE_VERSION" \
+        "$SURGEPILOT_TOOLCHAIN_DATA_ROOT/bootstrap/mise/v$MISE_VERSION/$platform"
+    do
+        [ -d "$required_directory" ] \
+            || fail "managed state is incomplete; run: make toolchain-install"
+        validate_root "$required_directory"
+    done
+    for required_file in \
+        "$MISE_GLOBAL_CONFIG_FILE" "$MISE_SYSTEM_CONFIG_FILE" "$MISE_BIN"
+    do
+        [ -f "$required_file" ] \
+            || fail "managed state is incomplete; run: make toolchain-install"
+        validate_private_file "$required_file"
+    done
+}
+
+check_managed() {
+    prepare_existing_managed_environment
+    MISE_OFFLINE=1
+    export MISE_OFFLINE
+    validate_managed_installation
+}
+
+managed_exec() {
+    [ "${1-}" = -- ] || usage
+    shift
+    [ "$#" -gt 0 ] || usage
+    if ! (check_managed >/dev/null 2>&1); then
+        install_managed
+    fi
+    prepare_existing_managed_environment
+    unset MISE_OFFLINE
+    export SURGEPILOT_TOOLCHAIN_ACTIVE=1
+    cd "$REPOSITORY_ROOT"
+    exec "$MISE_BIN" exec -- "$@"
+}
+
+validate_external_tool() {
+    tool=$1
+    command -v "$tool" >/dev/null 2>&1 || fail "external tool is unavailable: $tool"
+    version=$($tool --version 2>&1) || fail "external tool version check failed: $tool"
+    validate_tool_version external "$tool" "$version"
+}
+
+validate_external_tools() {
+    declaration=${SURGEPILOT_TOOLCHAIN_EXTERNAL_TOOLS-}
+    [ -n "$declaration" ] || fail "external mode requires a non-empty tool declaration"
+    case "$declaration" in
+        ,* | *, | *,,*) fail "external tool declaration is malformed: $declaration" ;;
+    esac
+
+    seen=,
+    remaining=$declaration
+    while :; do
+        case "$remaining" in
+            *,*) tool=${remaining%%,*}; remaining=${remaining#*,} ;;
+            *) tool=$remaining; remaining= ;;
+        esac
+        case "$tool" in
+            python | uv | node | pnpm) ;;
+            *) fail "unknown external tool: $tool" ;;
+        esac
+        case "$seen" in
+            *,$tool,*) fail "duplicate external tool: $tool" ;;
+        esac
+        seen=$seen$tool,
+        validate_external_tool "$tool"
+        [ -n "$remaining" ] || break
+    done
+}
+
+require_declared_external_tool() {
+    required_tool=$1
+    case ",$SURGEPILOT_TOOLCHAIN_EXTERNAL_TOOLS," in
+        *,$required_tool,*) ;;
+        *) fail "external tool declaration is insufficient; required: $required_tool" ;;
+    esac
+}
+
+validate_external_command_coverage() {
+    executable=${1##*/}
+    case "$executable" in
+        make | gmake) ;;
+        *) return 0 ;;
+    esac
+    shift
+    required=python,uv,node,pnpm
+    for argument in "$@"; do
+        case "$argument" in
+            -* | *=*) continue ;;
+            verify-runtime-compat | verify-p2-05-release-stack) required=python,uv ;;
+            *) required=python,uv,node,pnpm; break ;;
+        esac
+    done
+    old_ifs=$IFS
+    IFS=,
+    for tool in $required; do
+        require_declared_external_tool "$tool"
+    done
+    IFS=$old_ifs
+}
+
+external_exec() {
+    [ "${1-}" = -- ] || usage
+    shift
+    [ "$#" -gt 0 ] || usage
+    validate_external_tools
+    validate_external_command_coverage "$@"
+    export SURGEPILOT_TOOLCHAIN_ACTIVE=1
+    export UV_PYTHON_DOWNLOADS=never
+    export UV_NO_MANAGED_PYTHON=1
+    exec "$@"
+}
+
+usage() {
+    printf 'Usage: scripts/toolchain {install|check|exec -- command ...}\n' >&2
+    exit 2
+}
+
+trap cleanup EXIT
+trap 'exit 129' HUP
+trap 'exit 130' INT
+trap 'exit 143' TERM
+
+[ "$#" -ge 1 ] || usage
+command_name=$1
+shift
+require_configured_roots
+
+case "$command_name" in
+    check)
+        [ "$#" -eq 0 ] || usage
+        check_managed
+        ;;
+    install)
+        [ "$#" -eq 0 ] || usage
+        install_managed
+        ;;
+    install-locked)
+        [ "$#" -eq 0 ] || usage
+        install_managed_locked
+        ;;
+    exec)
+        case "${SURGEPILOT_TOOLCHAIN_MODE-managed}" in
+            external) external_exec "$@" ;;
+            managed) managed_exec "$@" ;;
+            *) fail "unknown toolchain mode: ${SURGEPILOT_TOOLCHAIN_MODE}" ;;
+        esac
+        ;;
+    *) usage ;;
+esac

@@ -74,13 +74,18 @@ surgepilot down
 
 ## 从源码启动
 
-源码启动需要 Node.js 22、Python 3.12、pnpm、uv、Docker 和 Docker Compose。
-在仓库根目录运行：
+源码启动需要 Git、GNU Make 或兼容实现、POSIX Shell、Perl、`curl`、`tar`/gzip、
+SHA-256 校验工具、Docker 和 Docker Compose。在仓库根目录运行：
 
 ```sh
 make setup
 make start-full-stack
 ```
+
+Make 会下载并校验固定版本的 mise Bootstrap，然后在隔离的 Contributor Namespace 中
+安装仓库选定的 Python 3.12、Node.js 22、pnpm 和 uv。它不会修改全局 Runtime 版本或
+Shell 启动文件。可使用 `make toolchain-check` 进行离线、无变更诊断，或使用
+`make toolchain-install` 显式修复 Managed State。
 
 当根目录不存在 `.env` 时，`make start-full-stack` 会创建安全的本地部署状态，
 构建或复用当前原生 Linux 架构的 Load Node Runtime，并启动控制平面、Monitoring

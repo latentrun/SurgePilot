@@ -22,6 +22,8 @@ v1.0.0 lifecycle audit.
   to the commit SHA resolved from the v1.0.0 tag during the audit.
 - `adr/ADR-0027-product-version-and-artifact-identity.md` — accepted repository-wide product
   version and release-artifact identity decision for Issue #34 and future release work.
+- `adr/ADR-0028-contributor-toolchain-mise.md` — accepted repository-managed contributor toolchain,
+  Make dispatch, isolation, and CI execution decision for Issue #35.
 - `00-product-scope-and-priority.md`
 - `01-architecture-overview.md`
 - `02-repo-structure-and-dev-workflow.md`

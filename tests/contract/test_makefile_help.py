@@ -262,6 +262,7 @@ def test_source_preview_bootstraps_then_uses_process_local_incomplete_topology(
         [
             "make",
             "start-preview",
+            "SURGEPILOT_TOOLCHAIN_ACTIVE=1",
             "BOOTSTRAP_DEPLOYMENT_ENV=true",
             f"SURGEPILOT_API_HOST_PORT={api_port}",
             f"SURGEPILOT_MONITORING_INFLUXDB_HOST_PORT={influxdb_port}",
@@ -322,6 +323,7 @@ def test_source_preview_clears_native_compose_profiles_from_effective_services(
         [
             "make",
             "start-preview",
+            "SURGEPILOT_TOOLCHAIN_ACTIVE=1",
             "BOOTSTRAP_DEPLOYMENT_ENV=true",
             f"SURGEPILOT_API_HOST_PORT={api_port}",
             f"SURGEPILOT_MONITORING_INFLUXDB_HOST_PORT={influxdb_port}",
@@ -389,6 +391,7 @@ def test_source_preview_validation_fails_before_creating_runtime_mount(tmp_path:
         [
             "make",
             "start-preview",
+            "SURGEPILOT_TOOLCHAIN_ACTIVE=1",
             "BOOTSTRAP_DEPLOYMENT_ENV=true",
             "SURGEPILOT_NODE_API_BASE_URL=http://192.0.2.10:8080",
             f"PREVIEW_RUNTIME_ARTIFACT_HOST_DIR={preview_runtime_dir}",
@@ -416,6 +419,7 @@ def test_official_full_stack_targets_print_access_summary() -> None:
             [
                 "make",
                 target,
+                "SURGEPILOT_TOOLCHAIN_ACTIVE=1",
                 "BOOTSTRAP_DEPLOYMENT_ENV=true",
                 f"SURGEPILOT_API_HOST_PORT={api_port}",
                 f"SURGEPILOT_MONITORING_INFLUXDB_HOST_PORT={influxdb_port}",
@@ -509,6 +513,7 @@ def test_start_full_stack_fails_fast_when_runtime_release_fails_with_stale_env(
         [
             "make",
             "start-full-stack",
+            "SURGEPILOT_TOOLCHAIN_ACTIVE=1",
             "BOOTSTRAP_DEPLOYMENT_ENV=true",
             f"SURGEPILOT_API_HOST_PORT={api_port}",
             f"SURGEPILOT_MONITORING_INFLUXDB_HOST_PORT={influxdb_port}",
@@ -555,6 +560,7 @@ def test_restart_full_stack_skip_preflight_stops_on_down_failure(tmp_path: Path)
         [
             "make",
             "restart-full-stack",
+            "SURGEPILOT_TOOLCHAIN_ACTIVE=1",
             "BOOTSTRAP_DEPLOYMENT_ENV=true",
             f"SURGEPILOT_API_HOST_PORT={api_port}",
             f"SURGEPILOT_MONITORING_INFLUXDB_HOST_PORT={influxdb_port}",

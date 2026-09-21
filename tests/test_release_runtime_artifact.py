@@ -1264,6 +1264,12 @@ def test_prepare_runtime_source_installs_recorded_taurus_dependency_closure(
         },
     )
 
+    python_install_command = runner_commands[0]
+    assert python_install_command[:3] == ["uv", "python", "install"]
+    assert "--managed-python" in python_install_command
+    python_install_env = runner_envs[0]
+    assert python_install_env["UV_PYTHON_DOWNLOADS"] == "manual"
+
     source_dir = tmp_path / "build" / "runtime-source"
     runtime_python_path = source_dir / "python" / "bin" / "python3"
     pip_install_commands = [

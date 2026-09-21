@@ -35,6 +35,7 @@ ADR documents explain **why** a decision was made, which alternatives were rejec
 | [ADR-0025](ADR-0025-public-user-documentation-localization.md) | Public User Documentation Localization | Accepted | Simplified Chinese and Japanese mirrors of the bounded six-page VitePress user guide |
 | [ADR-0026](ADR-0026-p2-public-launch-github-pages-seo.md) | P2 Public Launch, GitHub Pages, and SEO | Accepted | Unified VitePress public site, original AI-authored baseline evidence, SEO, and self-hosted indexing boundary |
 | [ADR-0027](ADR-0027-product-version-and-artifact-identity.md) | Product Version and Artifact Identity | Accepted | Repository-wide product metadata and release-artifact identity |
+| [ADR-0028](ADR-0028-contributor-toolchain-mise.md) | Repository-managed Contributor Toolchain | Accepted | Source-contributor runtime bootstrap, Make dispatch, isolation, and CI modes |
 
 ## Status Values
 

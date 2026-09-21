@@ -532,6 +532,7 @@ def test_development_release_validation_workflow_contract() -> None:
     jobs = parsed["jobs"]
     assert set(jobs) == {
         "verify",
+        "managed-toolchain-smoke",
         "pr-native",
         "pr-installer-smoke",
         "tag-preflight",

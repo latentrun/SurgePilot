@@ -77,13 +77,20 @@ surgepilot down
 
 ## Start from source
 
-The source path requires Node.js 22, Python 3.12, pnpm, uv, Docker, and Docker
-Compose. From the repository root:
+The source path requires Git, GNU or compatible Make, a POSIX shell, Perl, `curl`,
+`tar`/gzip, a SHA-256 utility, Docker, and Docker Compose. From the repository root:
 
 ```sh
 make setup
 make start-full-stack
 ```
+
+Make downloads and verifies the pinned mise bootstrap, then installs the
+repository-selected Python 3.12, Node.js 22, pnpm, and uv versions in an
+isolated contributor namespace. It does not change your global runtime
+versions or shell startup files. Use `make toolchain-check` for an offline,
+non-mutating diagnostic, or `make toolchain-install` to repair the managed
+state explicitly.
 
 `make start-full-stack` creates secure local deployment state when the root
 `.env` does not exist, builds or reuses the native Linux Load Node Runtime, and

@@ -691,7 +691,9 @@ def _prepare_runtime_source(
             str(python_install_dir),
             "--no-bin",
             "--no-progress",
-        ]
+            "--managed-python",
+        ],
+        extra_env={"UV_PYTHON_DOWNLOADS": "manual"},
     )
     python_install = _find_uv_python_install(python_install_dir, python_version)
     shutil.copytree(python_install, source_dir / "python")

@@ -1,4 +1,30 @@
-.PHONY: help setup setup-docs-browser dev dev-web dev-api dev-worker dev-runner dev-compose release-runtime _release-runtime start-preview _start-preview-with-env _start-preview stop-preview start-full-stack _start-full-stack-with-env _start-full-stack restart-full-stack _restart-full-stack-with-env _restart-full-stack stop-full-stack seed-full-ssh-e2e-runtime _seed-full-ssh-e2e-runtime start-full-ssh-e2e _start-full-ssh-e2e start-full-ssh-e2e-build _start-full-ssh-e2e-build restart-full-ssh-e2e _restart-full-ssh-e2e restart-full-ssh-e2e-build _restart-full-ssh-e2e-build stop-full-ssh-e2e infra-up infra-down e2e-clean migrate migration generate-contracts lint test api-coverage ai-skill-tests verifier-tests python-patch-coverage verify-db verify-smoke-compose verify verify-e2e verify-runtime-compat verify-p2-05-release-stack verify-p1-00-monitoring-compose verify-p1-00-monitoring-ssh verify-p1-00-monitoring-remote-node-write verify-p1-08-debug-http-trace-e2e verify-p2-01-openapi-two-node-e2e verify-p2-02-public-api-lifecycle verify-runner-ssh verify-runner-ssh-fast _verify-runner-ssh verify-p0-api-main-flow-e2e verify-p0-api-main-flow-e2e-fast verify-p0-06-runner-ssh verify-p0-06-runner-ssh-fast contracts-stale-check
+.DEFAULT_GOAL := help
+
+ORIGINAL_XDG_DATA_HOME := $(XDG_DATA_HOME)
+ORIGINAL_XDG_CACHE_HOME := $(XDG_CACHE_HOME)
+ORIGINAL_XDG_STATE_HOME := $(XDG_STATE_HOME)
+ORIGINAL_XDG_CONFIG_HOME := $(XDG_CONFIG_HOME)
+
+SURGEPILOT_TOOLCHAIN_DATA_ROOT ?= $(if $(strip $(ORIGINAL_XDG_DATA_HOME)),$(ORIGINAL_XDG_DATA_HOME),$(HOME)/.local/share)/surgepilot-contributor-toolchain
+SURGEPILOT_TOOLCHAIN_CACHE_ROOT ?= $(if $(strip $(ORIGINAL_XDG_CACHE_HOME)),$(ORIGINAL_XDG_CACHE_HOME),$(HOME)/.cache)/surgepilot-contributor-toolchain
+SURGEPILOT_TOOLCHAIN_STATE_ROOT ?= $(if $(strip $(ORIGINAL_XDG_STATE_HOME)),$(ORIGINAL_XDG_STATE_HOME),$(HOME)/.local/state)/surgepilot-contributor-toolchain
+SURGEPILOT_TOOLCHAIN_CONFIG_ROOT ?= $(if $(strip $(ORIGINAL_XDG_CONFIG_HOME)),$(ORIGINAL_XDG_CONFIG_HOME),$(HOME)/.config)/surgepilot-contributor-toolchain
+export SURGEPILOT_TOOLCHAIN_DATA_ROOT SURGEPILOT_TOOLCHAIN_CACHE_ROOT
+export SURGEPILOT_TOOLCHAIN_STATE_ROOT SURGEPILOT_TOOLCHAIN_CONFIG_ROOT
+
+TOOLCHAIN_FREE_GOALS := help dev infra-up infra-down e2e-clean stop-preview stop-full-stack stop-full-ssh-e2e
+TOOLCHAIN_MANAGEMENT_GOALS := toolchain-install toolchain-check
+TOOLCHAIN_MANAGEMENT_REQUESTS := $(filter $(TOOLCHAIN_MANAGEMENT_GOALS),$(MAKECMDGOALS))
+TOOLCHAIN_REQUIRED_GOALS := $(filter-out $(TOOLCHAIN_FREE_GOALS) $(TOOLCHAIN_MANAGEMENT_GOALS),$(MAKECMDGOALS))
+TOOLCHAIN_DISPATCH_REQUIRED := $(if $(filter 1,$(SURGEPILOT_TOOLCHAIN_ACTIVE)),,$(if $(TOOLCHAIN_REQUIRED_GOALS),1,))
+
+ifneq ($(TOOLCHAIN_MANAGEMENT_REQUESTS),)
+ifneq ($(words $(MAKECMDGOALS)),1)
+$(error toolchain-install and toolchain-check must be requested alone)
+endif
+endif
+
+.PHONY: help toolchain-install toolchain-check toolchain-tests setup setup-docs-browser dev dev-web dev-api dev-worker dev-runner dev-compose release-runtime _release-runtime start-preview _start-preview-with-env _start-preview stop-preview start-full-stack _start-full-stack-with-env _start-full-stack restart-full-stack _restart-full-stack-with-env _restart-full-stack stop-full-stack seed-full-ssh-e2e-runtime _seed-full-ssh-e2e-runtime start-full-ssh-e2e _start-full-ssh-e2e start-full-ssh-e2e-build _start-full-ssh-e2e-build restart-full-ssh-e2e _restart-full-ssh-e2e restart-full-ssh-e2e-build _restart-full-ssh-e2e-build stop-full-ssh-e2e infra-up infra-down e2e-clean migrate migration generate-contracts lint test api-coverage ai-skill-tests verifier-tests python-patch-coverage verify-db verify-smoke-compose verify verify-e2e verify-runtime-compat verify-p2-05-release-stack verify-p1-00-monitoring-compose verify-p1-00-monitoring-ssh verify-p1-00-monitoring-remote-node-write verify-p1-08-debug-http-trace-e2e verify-p2-01-openapi-two-node-e2e verify-p2-02-public-api-lifecycle verify-runner-ssh verify-runner-ssh-fast _verify-runner-ssh verify-p0-api-main-flow-e2e verify-p0-api-main-flow-e2e-fast verify-p0-06-runner-ssh verify-p0-06-runner-ssh-fast contracts-stale-check
 
 COMPOSE_BASE=docker compose -f infra/docker/docker-compose.base.yml
 COMPOSE_FULL=docker compose -f infra/docker/docker-compose.yml $(if $(filter false,$(SURGEPILOT_DEMO_LOAD_NODE_ENABLED)),,--profile demo)
@@ -48,8 +74,30 @@ export XDG_DATA_HOME ?= /tmp/surgepilot-xdg-data
 export PNPM_HOME ?= /tmp/surgepilot-pnpm
 export PNPM_STORE_PATH ?= /tmp/surgepilot-pnpm-store
 
+ifneq ($(TOOLCHAIN_MANAGEMENT_REQUESTS),)
+
+toolchain-install:
+	@scripts/toolchain install
+
+toolchain-check:
+	@scripts/toolchain check
+
+else ifeq ($(TOOLCHAIN_DISPATCH_REQUIRED),1)
+
+.PHONY: __toolchain-dispatch $(MAKECMDGOALS)
+
+$(MAKECMDGOALS): __toolchain-dispatch
+
+__toolchain-dispatch:
+	+@scripts/toolchain exec -- $(MAKE) $(MAKECMDGOALS)
+
+else
+
 help:
 	@printf "SurgePilot commands:\n"
+	@printf "  make toolchain-install  Install or repair the isolated contributor toolchain\n"
+	@printf "  make toolchain-check    Validate the contributor toolchain offline without mutation\n"
+	@printf "  make toolchain-tests    Run focused contributor-toolchain tests\n"
 	@printf "  make setup              Install pnpm and uv workspace dependencies\n"
 	@printf "  make setup-docs-browser Install the Playwright-managed Chromium used by docs verification\n"
 	@printf "  make infra-up           Start PostgreSQL and MinIO for local development\n"
@@ -104,6 +152,9 @@ setup:
 
 setup-docs-browser:
 	pnpm --filter @surgepilot/docs exec playwright install chromium
+
+toolchain-tests:
+	uv run --all-packages pytest -q tests/contract/test_toolchain_governance.py tests/test_toolchain_bootstrap.py
 
 dev:
 	@printf "Run make infra-up, then use separate terminals for make dev-api, make dev-worker, and make dev-web.\n"
@@ -462,3 +513,5 @@ _verify-runner-ssh:
 		-q || status=$$?; \
 	$(VERIFY_COMPOSE_ENV) $(COMPOSE_SSH_E2E) down -v; \
 	exit $$status
+
+endif
