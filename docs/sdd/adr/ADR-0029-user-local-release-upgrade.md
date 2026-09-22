@@ -43,9 +43,10 @@ releases. It can also replace files that running containers bind-mount.
 ### Option C: Hold PostgreSQL table locks while stopping the previous control plane
 
 Rejected as unnecessary complexity. The supported release topology exposes the API only through
-Nginx. After Nginx, api-worker, and API are confirmed stopped, no supported process can create new
-business work. A final read-only probe after writer shutdown closes the race without a long-lived
-database transaction, FIFO protocol, keepalive, or lock-timeout state machine.
+Nginx. After Nginx, api-worker, and API are confirmed stopped and every source `api-migrate`
+container is confirmed non-running, no supported PostgreSQL writer remains. A final read-only
+probe after writer shutdown closes the race without a long-lived database transaction, FIFO
+protocol, keepalive, or lock-timeout state machine.
 
 ### Option D: Automatically reclaim a process lock owned by a dead PID
 
@@ -93,9 +94,12 @@ ${XDG_DATA_HOME:-$HOME/.local/share}/surgepilot/
 ├── surgepilot                    # schema-1 dispatcher
 ├── .release-state                # atomic transition record
 ├── .releases/
-│   ├── v1.1.0/                   # immutable release payload
+│   ├── v1.1.0/                   # immutable legacy release payload
 │   │   └── .surgepilot -> ../../.surgepilot
-│   └── v1.2.0/
+│   └── v1.2.0/                   # first schema-1 release payload
+│       ├── surgepilot-dispatcher
+│       ├── surgepilot            # version wrapper
+│       └── .surgepilot -> ../../.surgepilot
 ├── .env                          # deployment-owned
 └── .surgepilot/                  # deployment-owned private state and Runtime cache
 ```
@@ -113,6 +117,20 @@ An existing version directory is never repaired or overwritten; a same-version i
 every required member and fails on any difference. Old version directories are retained.
 Automatic cleanup is outside this ADR.
 
+The dispatcher artifact seam is fixed:
+
+```text
+repository infra/release/dispatcher -> bundle surgepilot-dispatcher
+repository infra/release/surgepilot -> bundle surgepilot (version wrapper)
+bundle surgepilot-dispatcher         -> deployment-root surgepilot
+bundle surgepilot                    -> .releases/<version>/surgepilot
+```
+
+The schema-1 exact archive-member contract adds `surgepilot/surgepilot-dispatcher`; both bundle
+executables must be non-symlink regular executable files. The bundle builder performs release
+substitutions only in the version wrapper. The dispatcher has no release substitution and is
+byte-identical in every schema-1 bundle.
+
 The root dispatcher is deliberately small. It acquires the deployment lock, strictly parses
 schema 1 state, overwrites the internal `SURGEPILOT_DEPLOYMENT_ROOT`,
 `SURGEPILOT_RELEASE_ROOT`, and `SURGEPILOT_LOCK_NONCE` values, then `exec`s the target version
@@ -121,9 +139,26 @@ root and passes the deployment `.env` explicitly to Compose. Containerized helpe
 deployment and release roots separately and do not use the Compose-only `.surgepilot` path bridge.
 The dispatcher does not run Docker, download Runtime assets, or access PostgreSQL.
 
-The schema-1 dispatcher is immutable. Later releases verify it byte-for-byte and do not replace it.
-A future state schema or dispatcher change requires a separate accepted design. This avoids a
-second transition protocol whose only purpose would be upgrading the transition protocol.
+The schema-1 dispatcher is immutable. A fresh installer copies the checksum-verified bundled
+dispatcher to the private deployment root before publication. Every later installer first requires
+the installed dispatcher to be an owner-owned, non-symlink regular executable, then compares it
+byte-for-byte with the checksum-verified target bundle copy and fails on any difference; it does
+not replace the dispatcher. A future state schema or dispatcher change requires a separate
+accepted design. This avoids a second transition protocol whose only purpose would be upgrading
+the transition protocol.
+
+Archive integrity and runtime identity are deliberately distinct. At install/prepare time, the
+sidecar SHA256, exact archive-member list, required path/type checks, and payload validation anchor
+the published release. A same-target installer compares existing archive-owned members with its
+newly checksum-verified payload and fails on any difference. After installer publication, runtime
+checks validate required path/type, version/revision consistency, image/OCI identity, API product
+version, and health; they do not continuously cryptographically attest every release file.
+
+Same-user manual mutation of release-owned files after publication is unsupported. Here,
+`immutable` means SurgePilot never edits or repairs a published release directory; it is not a
+claim that owner-writable local files have continuous cryptographic attestation. This narrower
+interface avoids a second release-file hash registry that is not required by the current threat
+model.
 
 ### 3. Module seams
 
@@ -227,8 +262,10 @@ Fresh installation retains ADR-0024's strongest publication property:
 
 ```text
 download exact target
--> verify sidecar, archive members, manifest, and dispatcher
--> build the complete root in a private same-parent directory
+-> verify sidecar, exact archive members, manifest, wrapper, and dispatcher
+-> place the complete bundle under .releases/<target> in a private deployment root
+-> create the exact .surgepilot path bridge
+-> copy the bundled dispatcher byte-for-byte to deployment-root surgepilot
 -> write phase=installed, base=none
 -> atomically publish the complete root
 -> atomically publish the launcher
@@ -249,7 +286,7 @@ lock, the installer rereads and validates the actual state and immutable payload
 For `stable source -> target` it performs:
 
 ```text
-validate schema-1 dispatcher and stable state
+validate stable state and byte-compare the installed dispatcher with the target bundle copy
 -> require source < target, same major, and source within target range
 -> publish immutable .releases/<target>
 -> publish phase=prepared with base=source
@@ -273,7 +310,7 @@ The target installer:
 1. downloads the official source bundle and target bundle;
 2. verifies the legacy release-owned files against the official source bundle;
 3. publishes immutable source and target directories;
-4. atomically replaces only the root wrapper with the immutable schema-1 dispatcher;
+4. atomically replaces only the root wrapper with the exact target-bundled schema-1 dispatcher;
 5. writes `phase=unclassified`, `base=source`.
 
 The copied legacy wrapper is never executed; it is retained only as validated source payload. The
@@ -283,8 +320,9 @@ dispatcher publication and are not deleted by this transition.
 
 If the process stops before dispatcher publication, the legacy installation remains executable.
 If dispatcher publication succeeds but state publication does not, lifecycle commands fail closed.
-Only the same target installer may recover, and only when the launcher, dispatcher digest, legacy
-root version, official source directory, and exact target directory all match. It writes the same
+Only the same target installer may recover, and only when the launcher, root dispatcher, legacy
+root version, official source directory, and exact target directory all match. Dispatcher recovery
+requires byte equality with the newly checksum-verified target bundle copy. It writes the same
 `unclassified/source` state; it never guesses from the highest directory version. Other installers
 fail closed. Orphan release directories are inert and are not deleted automatically.
 
@@ -333,6 +371,11 @@ For a known source that is running, the wrapper first runs a non-authoritative r
 it finds active work, upgrade returns non-zero without stopping the source. A quiet result is only
 an optimization; it does not authorize migration.
 
+Before entering downtime, the wrapper also checks every container in the persisted Compose project
+whose Compose service is `api-migrate`. If any source `api-migrate` container is running, upgrade
+returns non-zero without stopping or killing it. The operator waits for the source migration to
+finish or performs manual source recovery before retrying.
+
 The authoritative sequence is:
 
 ```text
@@ -340,20 +383,28 @@ stop source nginx
 -> stop source api-worker
 -> stop source api
 -> verify all three source writer/ingress containers are absent or stopped
+-> require every source api-migrate container to be absent or stopped
 -> run the final read-only active-work probe
 ```
 
 The release API is not published directly, so stopping Nginx closes the supported ingress path.
-After api-worker and API are stopped, no supported writer remains. Existing transactions have
-committed or rolled back before the container stop completes, so the final probe has no TOCTOU with
-a supported writer and needs no table lock or long-lived IPC.
+API, api-worker, and `api-migrate` are the complete supported PostgreSQL writer set. After the first
+two are stopped and every `api-migrate` container is confirmed non-running, no supported writer
+remains. Existing API/worker transactions have committed or rolled back before container stop
+completes, so the final probe has no TOCTOU with a supported writer and needs no table lock or
+long-lived IPC.
+
+If `api-migrate` is found running after downtime begins, the wrapper does not stop it, does not run
+the final probe, keeps the pre-migration state, and returns non-zero with wait/recovery guidance.
+This is fail-closed source-migration handling, not active-work restoration.
 
 If the source was already down, the wrapper starts only source PostgreSQL and runs the final probe.
 It does not start source Web/API merely to prove quiescence.
 
 For `base=none`, the classified schema contains no work tables. The wrapper still confirms that
-any legacy Nginx, api-worker, and API containers are absent or stopped before publishing
-`migration_started`; it does not run the active-work query against an absent schema.
+any legacy Nginx, api-worker, and API containers are absent or stopped and that no legacy
+`api-migrate` container is running before publishing `migration_started`; it does not run the
+active-work query against an absent schema.
 
 The probe returns BLOCKED when any of these exists:
 
@@ -372,12 +423,15 @@ source recovery fails, target migration remains forbidden and the wrapper report
 guidance. The upgrade path never force-kills active Runs or initialization work.
 
 Any other failure after a known source was stopped but before `migration_started` uses the same
-source-restoration rule. With `base=none`, there is no valid source application stack to restore;
-state remains `installed` and retry stays on the same target.
+source-restoration rule. The exception is a still-running source `api-migrate`: the wrapper never
+starts other source services around it and instead waits for operator retry after it exits. With
+`base=none`, there is no valid source application stack to restore; state remains `installed` and
+retry stays on the same target.
 
 Immediately before the irreversible marker, the wrapper re-verifies that source ingress/writer
-containers have not reappeared. Raw Compose, direct database access, and a concurrently running
-legacy wrapper are expert/operator actions outside this interface.
+containers, including `api-migrate`, have not reappeared. A running `api-migrate` again fails closed
+without being stopped. Raw Compose, direct database access, and a concurrently running legacy
+wrapper are expert/operator actions outside this interface.
 
 ### 11. Migration and recovery
 
@@ -408,11 +462,18 @@ The wrapper publishes `stable` only after all of the following pass:
 
 1. required containers belong to the persisted Compose project and expected Compose service;
 2. target Compose was invoked from `.releases/<target>/compose/docker-compose.yml`;
-3. the target manifest and every required release member pass exact integrity validation;
-4. every SurgePilot-owned running container uses the manifest's exact repository digest;
-5. OCI version/revision labels equal the target release and manifest revision;
-6. the API product-version probe returns target `X.Y.Z` under ADR-0027;
-7. every required release health/readiness check passes.
+3. required release paths have the expected regular-file, executable, directory, or exact bridge
+   symlink type;
+4. `VERSION`, manifest version/revision, and the version embedded in the wrapper agree with the
+   target state;
+5. every SurgePilot-owned running container uses the manifest's exact repository digest;
+6. OCI version/revision labels equal the target release and manifest revision;
+7. the API product-version probe returns target `X.Y.Z` under ADR-0027;
+8. every required release health/readiness check passes.
+
+This gate checks operational identity, not continuous file attestation. Exact release-file content
+is anchored when the checksum-verified archive is published and whenever a same-target installer
+revalidates it, as defined above.
 
 A crash after health but before the stable commit leaves `migration_started`. On retry, passing the
 same identity/health gate permits only the final stable state write.
@@ -481,9 +542,10 @@ and other persistent-volume backups that meet their recovery objective.
 ### Design-freeze conditions
 
 Design freeze requires review agreement on this exact state grammar, immutable dispatcher rule,
-manual stale-lock recovery, legacy concurrency precondition, one-shot `--no-deps` probe,
-writer-stop/final-probe ordering, migration marker, target identity gate, and supported range.
-Design freeze does not require implementation or release evidence.
+dispatcher artifact seam, archive-versus-runtime integrity scope, manual stale-lock recovery, legacy
+concurrency precondition, one-shot `--no-deps` probe, the complete writer set including
+`api-migrate`, writer-stop/final-probe ordering, migration marker, target identity gate, and
+supported range. Design freeze does not require implementation or release evidence.
 
 ### Implementation acceptance
 
@@ -495,14 +557,19 @@ Implementation must cover:
 - lock contention, crash before/after lock-directory publication, holder-only release, and stale-lock
   fail-closed guidance;
 - installer/lifecycle concurrency for schema-1 deployments;
+- exact dispatcher source/bundle/install mapping, archive-member validation, and byte-identical
+  later-release verification;
 - legacy source/target payload validation and bootstrap crash points;
 - classification for absent, empty, exact-head, partial, and unknown databases;
 - proof that transition probes use `--no-deps` and never start `api-migrate`;
 - connection, statement, lock, and total probe timeout failure paths;
 - preliminary and final active-work checks, including non-terminal allocation state;
+- source `api-migrate` running before downtime, appearing during downtime, and remaining untouched
+  on refusal;
 - source restoration on BLOCKED and failure before migration;
 - crash before and after `migration_started` and before stable commit;
-- target digest, OCI identity, product version, and health checks;
+- archive publication integrity plus runtime path/type, version/revision, target digest, OCI
+  identity, product version, and health checks;
 - old Runtime rejection and explicit Load Node reinitialization;
 - Linux and macOS installer, dispatcher, lock, and transition smoke;
 - `make generate-contracts`, `make verify`, and applicable release validation.
@@ -525,9 +592,10 @@ If accepted, this ADR supersedes only:
 - the blanket exclusion of an official bounded user-local version transition.
 
 It retains no sudo, no package manager, no Docker installation, exact-version downloads,
-checksum/digest integrity, immutable release/image/Runtime identity, existing `.env` and private
-state safety, no updater daemon, no background release checks, no automatic downgrade, no database
-downgrade, no automatic rollback, no Runner protocol change, and no Workspace/security weakening.
+download/archive checksum integrity, immutable release lifecycle, image/Runtime identity, existing
+`.env` and private state safety, no updater daemon, no background release checks, no automatic
+downgrade, no database downgrade, no automatic rollback, no Runner protocol change, and no
+Workspace/security weakening.
 
 Manual bundle transitions, source-checkout startup, and raw Compose remain outside the installed
 state protocol.
@@ -554,6 +622,7 @@ The design deliberately removes the following from earlier drafts:
 - a long-lived PostgreSQL table-lock transaction;
 - FIFO/keepalive/release IPC and its timeout state machine;
 - automatic stale-lock reclaim and PID-start fingerprinting;
+- a second release-file hash registry and continuous local-file attestation;
 - dispatcher self-upgrade and future-schema compatibility machinery;
 - automatic payload cleanup, backup/restore, rollback, Load Node reinitialization, and repair.
 
