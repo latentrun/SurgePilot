@@ -36,6 +36,7 @@ ADR documents explain **why** a decision was made, which alternatives were rejec
 | [ADR-0026](ADR-0026-p2-public-launch-github-pages-seo.md) | P2 Public Launch, GitHub Pages, and SEO | Accepted | Unified VitePress public site, original AI-authored baseline evidence, SEO, and self-hosted indexing boundary |
 | [ADR-0027](ADR-0027-product-version-and-artifact-identity.md) | Product Version and Artifact Identity | Accepted | Repository-wide product metadata and release-artifact identity |
 | [ADR-0028](ADR-0028-contributor-toolchain-mise.md) | Repository-managed Contributor Toolchain | Accepted | Source-contributor runtime bootstrap, Make dispatch, isolation, and CI modes |
+| [ADR-0029](ADR-0029-user-local-release-upgrade.md) | User-local Release Upgrade Transition | Proposed | Exact-target installed-release transition and recovery protocol |
 
 ## Status Values
 

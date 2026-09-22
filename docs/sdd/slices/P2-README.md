@@ -9,6 +9,10 @@ P2 capabilities remain inactive until a named accepted P2 Slice SDD and any requ
 Dynamic Slice activation belongs in this index and the owning Slice/ADR, not in root `AGENTS.md`.
 Root instructions provide the stable scope gate and route feature work here for discovery.
 
+`ADR-0029-user-local-release-upgrade.md` is a Proposed, non-authorizing amendment to P2-05/P2-06.
+It does not activate implementation or change their accepted manual-transition contract until it
+is explicitly accepted and the owning Slices are synchronized.
+
 ## Authoritative References
 
 Use only these references for P2 Slice drafting decisions:

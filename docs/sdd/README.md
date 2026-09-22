@@ -37,6 +37,9 @@ v1.0.0 lifecycle audit.
 
 ## Proposed plans
 
+- `adr/ADR-0029-user-local-release-upgrade.md` — non-authorizing proposal for an exact-target,
+  user-local tagged-release transition using immutable release directories, one dispatcher, one
+  atomic state record, and a bounded read-only transition probe.
 - `public-launch-github-pages-and-star-growth-plan.md` : non-authorizing proposal for the
   `latentrun/SurgePilot` public launch, unified GitHub Pages site, SEO, AI-authorship evidence, and
   legitimate GitHub Star growth.
