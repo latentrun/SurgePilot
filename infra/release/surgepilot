@@ -585,7 +585,7 @@ validate_owned_service_identity() {
 validate_api_product_identity() {
     identity_release_root=$1
     identity_release_version=$2
-    expected_product_version=${identity_release_version#v}
+    expected_product_version=$3
     product_version=$(compose_at "$identity_release_root" "$identity_release_version" exec -T \
         api /app/.venv/bin/python -c \
         'from importlib.metadata import version; import json, urllib.request; data=json.load(urllib.request.urlopen("http://127.0.0.1:8000/api/readyz", timeout=10)); assert data.get("status") == "ready"; print(version("surgepilot-api"))') || \
@@ -634,12 +634,17 @@ validate_target_identity() {
         validate_owned_service_identity \
             "$RELEASE_ROOT" "$RELEASE_VERSION" demo-load-node "$identity_demo_image"
     fi
-    validate_api_product_identity "$RELEASE_ROOT" "$RELEASE_VERSION"
+    validate_api_product_identity "$RELEASE_ROOT" "$RELEASE_VERSION" "${RELEASE_VERSION#v}"
 }
 
 validate_source_identity() {
     source_identity_root=$1
     source_identity_version=$2
+    case "$source_identity_version" in
+        v1.0.0) source_product_version=0.1.0 ;;
+        v1.1.0) source_product_version=1.1.0 ;;
+        *) source_product_version=${source_identity_version#v} ;;
+    esac
     load_release_identity "/deployment/.releases/$source_identity_version" \
         "$source_identity_version" legacy
     [ "$identity_version" = "$source_identity_version" ] || \
@@ -654,7 +659,8 @@ validate_source_identity() {
         validate_owned_service_identity "$source_identity_root" "$source_identity_version" \
             demo-load-node "$identity_demo_image"
     fi
-    validate_api_product_identity "$source_identity_root" "$source_identity_version"
+    validate_api_product_identity \
+        "$source_identity_root" "$source_identity_version" "$source_product_version"
 }
 
 print_release_summary() {

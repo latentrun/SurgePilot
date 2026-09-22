@@ -300,6 +300,10 @@ containers. Re-run behavior follows the complete state rules above.
 The first upgrade-capable release supports only the two actually published legacy sources:
 `v1.0.0` and `v1.1.0`.
 
+`v1.0.0` predates ADR-0027 and reports API/Runner product metadata `0.1.0`, while `v1.1.0`
+reports `1.1.0`. Source recovery and release validation use only this explicit historical mapping;
+release identity remains `v1.0.0` or `v1.1.0` and is never inferred from package metadata.
+
 The operator must not run another legacy `surgepilot` command concurrently with the target
 installer or first target `up`. Those historical wrappers cannot be made to honor a future lock.
 This one-time limitation is explicit; full installer/lifecycle serialization starts after the
@@ -560,6 +564,7 @@ Implementation must cover:
 - exact dispatcher source/bundle/install mapping, archive-member validation, and byte-identical
   later-release verification;
 - legacy source/target payload validation and bootstrap crash points;
+- exact legacy launcher ownership, mode, and content proof, including tampered-launcher refusal;
 - classification for absent, empty, exact-head, partial, and unknown databases;
 - proof that transition probes use `--no-deps` and never start `api-migrate`;
 - connection, statement, lock, and total probe timeout failure paths;
@@ -581,7 +586,8 @@ from process-level fault injection.
 
 The first formal release additionally requires real v1.0.0 and v1.1.0 data upgrades, active-work
 refusal, clean-down transition, Load Node reinitialization, existing native release smoke, reviewed
-`docs/releases/v1.2.0.md`, and a publish job that depends on all required upgrade jobs.
+`docs/releases/v1.2.0.md`, the bounded historical product-metadata mapping above, and a publish job
+that depends on all required upgrade jobs.
 
 ## Supersession Scope
 

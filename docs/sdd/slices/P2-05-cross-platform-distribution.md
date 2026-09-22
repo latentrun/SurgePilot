@@ -350,7 +350,10 @@ Rules:
    and every other `.env` value remain unchanged.
 3. `COMPOSE_PROJECT_NAME` is generated or persisted in the root `.env`, defaults to `surgepilot`, and remains stable while volumes are reused. Operators running multiple deployments must choose distinct persisted project names.
 4. `down` stops/removes containers and networks but does not delete named volumes, `.env`, `.surgepilot/`, Runtime files, or Demo SSH identity.
-5. A manual version transition replaces only release-owned files in the same stable deployment root, then runs the new bundle's preflight before stopping the old containers. P2-05 does not add an automatic upgrade command or rollback engine.
+5. A manually extracted bundle uses the expert-managed replacement of release-owned files in the
+   same stable deployment root. An installer-managed deployment uses only ADR-0029's bounded
+   prepare-then-`up` transition, including preflight, quiescence, forward migration, and stable
+   publication. Neither path adds a background update command or rollback engine.
 6. Generated secret plaintext must not be printed by normal startup.
 7. Health timeout returns non-zero and prints the failing service plus safe diagnostic commands.
 8. Raw `docker compose` remains an expert/manual path, not the public quickstart promise.
@@ -635,8 +638,12 @@ Release publication is create-only for a semantic version:
 2. Missing image architecture blocks release publication.
 3. Release bundle Compose validation failure blocks publication.
 4. Runtime download or checksum failure blocks `up` before starting an unready new stack.
-5. Repeated `up`, `down`/`up`, and a manual same-root version transition must preserve the persisted Compose project, volumes, Admin data, MinIO data, Monitoring data, deployment secrets, Demo password, and Demo SSH fingerprint.
-6. A manual version transition must not stop an existing stack until new-version bootstrap, Runtime, digest-pinned image references, and Compose preflight succeed.
+5. Repeated `up`, `down`/`up`, an expert-managed extracted-bundle transition, and an ADR-0029
+   installer-managed transition must preserve the persisted Compose project, volumes, Admin data,
+   MinIO data, Monitoring data, deployment secrets, Demo password, and Demo SSH fingerprint.
+6. Neither transition path may stop an existing stack until new-version bootstrap, Runtime,
+   digest-pinned image references, and Compose preflight succeed; the installer-managed path also
+   satisfies ADR-0029's quiescence and state-publication rules.
 7. P2-05 does not promise automatic rollback after a successful stop or partial external infrastructure failure.
 
 ## 15. Tests and Acceptance Criteria
@@ -655,7 +662,9 @@ Implementation must cover:
 6. release wrapper command parsing, rejection of the seven quickstart process overrides, complete
    persisted node-facing URL requirements independent of the Demo switch, and non-destructive
    failure ordering;
-7. repeated `up`, `down` without volume deletion, `down`/`up`, and manual same-root version transition without loss of PostgreSQL, MinIO, Monitoring, Admin, secret, or Demo identity state;
+7. repeated `up`, `down` without volume deletion, `down`/`up`, expert-managed extracted-bundle
+   transition, and ADR-0029 installer-managed transition without loss of PostgreSQL, MinIO,
+   Monitoring, Admin, secret, or Demo identity state;
 8. source/release effective Compose separation, absence of application build contexts from release Compose, release digest pinning, service topology, secret mounts, port exposure, health dependencies, and Demo-node enable/disable behavior;
 9. GHCR multi-architecture index requirements for amd64 and arm64, equality with the digest recorded in `release-manifest.json`, Runtime archive/sidecar equality with the release-manifest digest, and create-only rejection when the semantic version already exists;
 10. exact-tag release-note source existence, non-empty workflow gating, and publication through the
@@ -853,10 +862,11 @@ The P2-05 implementation uses these final repository and release boundaries:
     initialize the SSH node, execute Debug and Standard Runs against the published LAN target,
     and require the Standard Run measurements through the published InfluxDB port. Manual physical
     external-node and Apple Silicon records remain required where hosted infrastructure is absent.
-11. There is no API, database, migration, Web route, Runtime catalog, automatic upgrade, signing,
-    SBOM, SDK, MCP, marketplace, or standalone Public API AI skill publication in this change.
-    A release version transition remains the documented manual replacement of release-owned files
-    in the same deployment root followed by the new bundle's non-destructive `up` preflight.
+11. There is no new product API, product table, Web route, Runtime catalog, background update,
+    signing, SBOM, SDK, MCP, marketplace, or standalone Public API AI skill publication in this
+    change. A manually extracted bundle retains the expert-managed replacement path. An
+    installer-managed deployment uses ADR-0029's bounded transition, including its explicit
+    forward Alembic migration and fail-closed recovery contract.
 
 Implementation evidence that inherently requires external runners or publication is recorded by
 the tagged workflow rather than inferred from a local amd64 run. Apple Silicon Docker Desktop full

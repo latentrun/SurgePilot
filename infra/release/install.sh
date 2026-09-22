@@ -251,6 +251,33 @@ shell_quote() {
     printf "'%s'" "$escaped"
 }
 
+write_launcher() {
+    launcher_destination=$1
+    quoted_install_root=$(shell_quote "$INSTALL_ROOT")
+    cat > "$launcher_destination" <<EOF
+#!/bin/sh
+set -eu
+SURGEPILOT_COMMAND_NAME=surgepilot
+export SURGEPILOT_COMMAND_NAME
+INSTALL_ROOT=$quoted_install_root
+exec "\$INSTALL_ROOT/surgepilot" "\$@"
+EOF
+    chmod 700 "$launcher_destination" || fail "Cannot make the launcher executable."
+}
+
+verify_existing_launcher() {
+    [ -f "$LAUNCHER" ] && [ ! -L "$LAUNCHER" ] && [ -x "$LAUNCHER" ] || \
+        fail "Existing installation launcher is missing or unsafe: $LAUNCHER"
+    require_owned_mode "$LAUNCHER" 700 "Existing installation launcher"
+    LAUNCHER_TEMP=$(mktemp "$LAUNCHER_PARENT/.surgepilot-launcher.XXXXXX") || \
+        fail "Cannot prepare expected launcher state."
+    write_launcher "$LAUNCHER_TEMP"
+    cmp -s "$LAUNCHER" "$LAUNCHER_TEMP" || \
+        fail "Existing installation launcher differs from the expected launcher."
+    rm -f "$LAUNCHER_TEMP"
+    LAUNCHER_TEMP=
+}
+
 is_canonical_version() {
     printf '%s\n' "$1" | grep -Eq '^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$'
 }
@@ -605,6 +632,7 @@ prepare_legacy_upgrade() {
     download_legacy_payload "$source_version"
 
     acquire_lock
+    verify_existing_launcher
     require_safe_deployment_layout
     [ "$(cat "$INSTALL_ROOT/VERSION")" = "$source_version" ] || \
         fail "Legacy installation changed while preparing the transition."
@@ -681,18 +709,9 @@ prepare_fresh_installation() {
 
 publish_installation() {
     candidate=$1
-    quoted_install_root=$(shell_quote "$INSTALL_ROOT")
     LAUNCHER_TEMP=$(mktemp "$LAUNCHER_PARENT/.surgepilot-launcher.XXXXXX") || \
         fail "Cannot prepare the launcher."
-    cat > "$LAUNCHER_TEMP" <<EOF
-#!/bin/sh
-set -eu
-SURGEPILOT_COMMAND_NAME=surgepilot
-export SURGEPILOT_COMMAND_NAME
-INSTALL_ROOT=$quoted_install_root
-exec "\$INSTALL_ROOT/surgepilot" "\$@"
-EOF
-    chmod 700 "$LAUNCHER_TEMP" || fail "Cannot make the launcher executable."
+    write_launcher "$LAUNCHER_TEMP"
 
     [ ! -e "$INSTALL_ROOT" ] && [ ! -L "$INSTALL_ROOT" ] || \
         fail "Installation root already exists: $INSTALL_ROOT"
@@ -751,8 +770,7 @@ if [ -e "$INSTALL_ROOT" ] || [ -L "$INSTALL_ROOT" ]; then
     [ -d "$INSTALL_ROOT" ] && [ ! -L "$INSTALL_ROOT" ] || \
         fail "Installation root already exists and is unsafe: $INSTALL_ROOT"
     EXISTING_INSTALLATION=true
-    [ -f "$LAUNCHER" ] && [ ! -L "$LAUNCHER" ] && [ -x "$LAUNCHER" ] || \
-        fail "Existing installation launcher is missing or unsafe: $LAUNCHER"
+    verify_existing_launcher
 else
     EXISTING_INSTALLATION=false
     [ ! -e "$LAUNCHER" ] && [ ! -L "$LAUNCHER" ] || \

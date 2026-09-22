@@ -136,7 +136,10 @@ case "$*" in
     case "$*" in *"${TEST_SOURCE_ROOT:-__none__}"*) printf 'source-web-id\n' ;; *) printf 'web-id\n' ;; esac
     exit 0 ;;
   *" exec -T api "*)
-    case "$*" in *"${TEST_SOURCE_ROOT:-__none__}"*) printf '0.2.0\n' ;; *) printf '0.3.0\n' ;; esac
+    case "$*" in
+      *"${TEST_SOURCE_ROOT:-__none__}"*) printf '%s\n' "${TEST_SOURCE_PRODUCT_VERSION:-0.2.0}" ;;
+      *) printf '0.3.0\n' ;;
+    esac
     exit 0 ;;
   inspect*"{{.State.Running}}"*" source-api-id")
     case "${TEST_SOURCE_CONTAINER_STATE:-running}" in
@@ -161,7 +164,7 @@ case "$*" in
   inspect*"org.opencontainers.image.version"*" web-id")
     printf 'v0.3.0|aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n'; exit 0 ;;
   inspect*"org.opencontainers.image.version"*"source-api-id"|inspect*"org.opencontainers.image.version"*"source-api-worker-id"|inspect*"org.opencontainers.image.version"*"source-web-id")
-    printf 'v0.2.0|aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n'; exit 0 ;;
+    printf '%s|aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n' "${TEST_SOURCE_RELEASE_VERSION:-v0.2.0}"; exit 0 ;;
   inspect*" api-id")
     printf 'ghcr.io/latentrun/surgepilot-api@sha256:1111111111111111111111111111111111111111111111111111111111111111|surgepilot|api\n'; exit 0 ;;
   inspect*" api-worker-id")
@@ -226,7 +229,10 @@ EOF
     ;;
   *"release_preflight.py describe-identity"*)
     identity_version=v0.3.0
-    case "$*" in *"--expected-version v0.2.0"*) identity_version=v0.2.0 ;; esac
+    case "$*" in
+      *"--expected-version v0.2.0"*) identity_version=v0.2.0 ;;
+      *"--expected-version v1.0.0"*) identity_version=v1.0.0 ;;
+    esac
     identity_api_digest=1111111111111111111111111111111111111111111111111111111111111111
     if [ "${TEST_BAD_IDENTITY:-false}" = true ]; then
       identity_api_digest=9999999999999999999999999999999999999999999999999999999999999999
@@ -889,6 +895,45 @@ def test_prepared_up_restores_source_when_nginx_stop_partially_fails(tmp_path: P
     assert "stop source Nginx" in result.stderr
     assert (install_root / "source-restored").is_file()
     assert state.read_text(encoding="utf-8") == original_state
+    assert not any(
+        str(target_root) in line and " up -d --wait " in line
+        for line in log.read_text(encoding="utf-8").splitlines()
+    )
+
+
+def test_v1_0_source_restore_accepts_legacy_product_metadata(tmp_path: Path) -> None:
+    install_root, source_root, target_root, state, environment, log = (
+        prepare_transition_installation(tmp_path)
+    )
+    legacy_source_root = install_root / ".releases/v1.0.0"
+    source_root.rename(legacy_source_root)
+    state.write_text(
+        "schema=1\nphase=prepared\ntarget=v0.3.0\nbase=v1.0.0\n",
+        encoding="utf-8",
+    )
+    environment.update(
+        {
+            "TEST_SOURCE_ROOT": str(legacy_source_root),
+            "TEST_SOURCE_RELEASE_VERSION": "v1.0.0",
+            "TEST_SOURCE_PRODUCT_VERSION": "0.1.0",
+            "TEST_ACTIVE_BLOCK_AT": "2",
+        }
+    )
+
+    result = subprocess.run(
+        [install_root / "surgepilot", "up"],
+        env=environment,
+        text=True,
+        capture_output=True,
+    )
+
+    assert result.returncode != 0
+    assert "active" in result.stderr.lower()
+    assert "source identity is invalid" not in result.stderr.lower()
+    assert (install_root / "source-restored").is_file()
+    assert state.read_text(encoding="utf-8") == (
+        "schema=1\nphase=prepared\ntarget=v0.3.0\nbase=v1.0.0\n"
+    )
     assert not any(
         str(target_root) in line and " up -d --wait " in line
         for line in log.read_text(encoding="utf-8").splitlines()

@@ -72,6 +72,21 @@ surgepilot logs
 surgepilot down
 ```
 
+### 升级已安装的 Release
+
+先备份 PostgreSQL、MinIO 和其他持久化 Volume，并等待正在执行的 Run 和 Load Node
+初始化完成，然后再次执行相同的两个命令：
+
+```sh
+curl -fsSL https://github.com/latentrun/SurgePilot/releases/latest/download/install.sh | sh
+surgepilot up
+```
+
+Installer 会校验并准备一个明确的、更新的同 Major Release。当仍有受支持的工作正在执行时，
+`surgepilot up` 会拒绝迁移。目标数据库迁移一旦开始，恢复方式只能是重试同一个目标版本；
+系统不会自动降级数据库或回滚。控制平面升级成功后，如果 Load Node 记录的 Runtime 仍是旧版本，
+请显式重新初始化所需的 Load Node。
+
 ## 从源码启动
 
 源码启动需要 Git、GNU Make 或兼容实现、POSIX Shell、Perl、`curl`、`tar`/gzip、

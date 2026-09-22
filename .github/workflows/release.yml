@@ -480,10 +480,13 @@ jobs:
       matrix:
         include:
           - source: v1.0.0
+            source_product_version: 0.1.0
             source_mode: running
           - source: v1.1.0
+            source_product_version: 1.1.0
             source_mode: running
           - source: v1.1.0
+            source_product_version: 1.1.0
             source_mode: clean_down
     runs-on: ubuntu-24.04
     env:
@@ -504,6 +507,7 @@ jobs:
       - name: Upgrade persisted source data and complete a target Run
         env:
           SOURCE_VERSION: ${{ matrix.source }}
+          SOURCE_PRODUCT_VERSION: ${{ matrix.source_product_version }}
           SOURCE_MODE: ${{ matrix.source_mode }}
         run: |
           set -euo pipefail
@@ -559,7 +563,7 @@ jobs:
           "$SURGEPILOT" up
           uv sync --all-packages --all-groups
           SURGEPILOT_E2E_API_ORCHESTRATION_URL="http://$smoke_host:8080" \
-          SURGEPILOT_E2E_EXPECTED_PRODUCT_VERSION="${SOURCE_VERSION#v}" \
+          SURGEPILOT_E2E_EXPECTED_PRODUCT_VERSION="$SOURCE_PRODUCT_VERSION" \
           SURGEPILOT_E2E_TARGET_URL="http://$smoke_host:8080/api/healthz" \
           SURGEPILOT_E2E_INFLUXDB_QUERY_URL="http://$smoke_host:8086" \
           SURGEPILOT_E2E_INFLUXDB_TOKEN_FILE="$INSTALL_ROOT/.surgepilot/secrets/influxdb-token.secret" \

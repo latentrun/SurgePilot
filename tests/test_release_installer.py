@@ -154,6 +154,22 @@ def run_installer(
     )
 
 
+def write_installed_launcher(home: Path, install_root: Path) -> Path:
+    launcher = home / ".local/bin/surgepilot"
+    launcher.parent.mkdir(parents=True, exist_ok=True)
+    launcher.write_text(
+        "#!/bin/sh\n"
+        "set -eu\n"
+        "SURGEPILOT_COMMAND_NAME=surgepilot\n"
+        "export SURGEPILOT_COMMAND_NAME\n"
+        f"INSTALL_ROOT='{install_root}'\n"
+        'exec "$INSTALL_ROOT/surgepilot" "$@"\n',
+        encoding="utf-8",
+    )
+    launcher.chmod(0o700)
+    return launcher
+
+
 def isolated_tool_path(
     directory: Path,
     *,
@@ -351,10 +367,7 @@ def test_installer_bootstraps_supported_legacy_installation(
     )
     (install_root / ".env").chmod(0o600)
     (install_root / ".surgepilot").mkdir()
-    launcher = home / ".local/bin/surgepilot"
-    launcher.parent.mkdir(parents=True)
-    launcher.write_text(f"#!/bin/sh\nexec '{install_root}/surgepilot' \"$@\"\n", encoding="utf-8")
-    launcher.chmod(0o700)
+    write_installed_launcher(home, install_root)
 
     with serve(assets) as base_url:
         result = run_installer(installer, home=home, xdg_data_home=xdg_data_home, base_url=base_url)
@@ -395,10 +408,7 @@ def test_legacy_upgrade_rejects_symlinked_private_state_before_publication(
     unsafe_target = tmp_path / "unsafe-private-state"
     unsafe_target.mkdir()
     (install_root / ".surgepilot").symlink_to(unsafe_target)
-    launcher = home / ".local/bin/surgepilot"
-    launcher.parent.mkdir(parents=True)
-    launcher.write_text(f"#!/bin/sh\nexec '{install_root}/surgepilot' \"$@\"\n", encoding="utf-8")
-    launcher.chmod(0o700)
+    write_installed_launcher(home, install_root)
 
     with serve(assets) as base_url:
         result = run_installer(
@@ -412,6 +422,61 @@ def test_legacy_upgrade_rejects_symlinked_private_state_before_publication(
     assert "private state is unsafe" in result.stderr.lower()
     assert not (install_root / ".release-state").exists()
     assert not (install_root / ".releases").exists()
+
+
+def test_legacy_recovery_rejects_tampered_launcher(tmp_path: Path) -> None:
+    assets = tmp_path / "assets"
+    assets.mkdir()
+    installer = render_installer(assets, "v1.2.0")
+    write_release_assets(assets, version="v1.2.0")
+    source_build = tmp_path / "source-build"
+    source_build.mkdir()
+    source_archive, source_sidecar = write_release_assets(
+        source_build, version="v1.1.0", legacy=True
+    )
+    shutil.copy2(source_archive, assets / source_archive.name)
+    shutil.copy2(source_sidecar, assets / source_sidecar.name)
+
+    home = tmp_path / "home"
+    home.mkdir()
+    xdg_data_home = tmp_path / "data"
+    install_root = xdg_data_home / "surgepilot"
+    source_payload = source_build / "payload/surgepilot"
+    target_payload = assets / "payload/surgepilot"
+    shutil.copytree(source_payload, install_root)
+    (install_root / ".surgepilot").mkdir()
+    releases = install_root / ".releases"
+    releases.mkdir()
+    source_release = releases / "v1.1.0"
+    target_release = releases / "v1.2.0"
+    shutil.copytree(source_payload, source_release)
+    shutil.copytree(target_payload, target_release)
+    (source_release / ".surgepilot").symlink_to("../../.surgepilot")
+    (target_release / ".surgepilot").symlink_to("../../.surgepilot")
+    shutil.copy2(target_payload / "surgepilot-dispatcher", install_root / "surgepilot")
+    (install_root / "surgepilot").chmod(0o700)
+    launcher = write_installed_launcher(home, install_root)
+    launcher.write_text(
+        launcher.read_text(encoding="utf-8") + "# tampered\n",
+        encoding="utf-8",
+    )
+
+    with serve(assets) as base_url:
+        result = run_installer(
+            installer,
+            home=home,
+            xdg_data_home=xdg_data_home,
+            base_url=base_url,
+        )
+
+    assert result.returncode != 0
+    assert "launcher differs" in result.stderr.lower()
+    assert not (install_root / ".release-state").exists()
+    assert source_release.is_dir()
+    assert target_release.is_dir()
+    assert (install_root / "surgepilot").read_bytes() == (
+        target_payload / "surgepilot-dispatcher"
+    ).read_bytes()
 
 
 def test_schema1_upgrade_rejects_symlinked_private_state_before_publication(
