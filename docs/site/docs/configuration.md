@@ -12,13 +12,17 @@ lifecycles have different networking, Runtime, and build requirements.
 
 | Deployment      | Template in this repository                                                                | Ordinary command                                |
 | --------------- | ------------------------------------------------------------------------------------------ | ----------------------------------------------- |
-| Tagged release  | `infra/release/.env.example`, shipped as `.env.example` in the installed release directory | `surgepilot up` or `./surgepilot up`            |
+| Tagged release  | `infra/release/.env.example`, shipped inside each immutable release payload                 | `surgepilot up` or `./surgepilot up`            |
 | Source checkout | Root `.env.example`                                                                        | `make start-full-stack` or `make start-preview` |
 
 Do not copy one template over the other. The release template requires final
 node-facing LAN origins and secure-cookie intent. The source template contains
 development ports, source-build mirrors, and locally generated Runtime inputs
 that do not belong in a release deployment.
+
+For an installer-managed release, the generated `.env` stays at the deployment root while release
+payloads live below `.releases/vX.Y.Z`. Supported upgrades preserve that root `.env`; do not move
+or duplicate it into a version directory.
 
 ## How `.env` is managed
 

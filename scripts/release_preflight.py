@@ -21,7 +21,7 @@ from dotenv import dotenv_values
 
 MINIMUM_DOCKER_VERSION = "26.0.0"
 MINIMUM_COMPOSE_VERSION = "2.27.0"
-SEMANTIC_VERSION_PATTERN = re.compile(r"v[0-9]+\.[0-9]+\.[0-9]+\Z")
+SEMANTIC_VERSION_PATTERN = re.compile(r"v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\Z")
 DIGEST_PATTERN = re.compile(r"sha256:[a-f0-9]{64}\Z")
 ARCHITECTURES = ("amd64", "arm64")
 DNS_LABEL_PATTERN = re.compile(r"(?!-)[a-z0-9-]{1,63}(?<!-)\Z", re.IGNORECASE)
@@ -528,7 +528,9 @@ def _runtime_asset_names(arch: str, version: str) -> tuple[str, str, str]:
     return f"{prefix}.tar.gz", f"{prefix}.tar.gz.sha256", f"{prefix}.manifest.json"
 
 
-def load_release_manifest(root: Path, *, expected_version: str) -> dict[str, object]:
+def load_release_manifest(
+    root: Path, *, expected_version: str, require_minimum_upgrade: bool = True
+) -> dict[str, object]:
     path = root / "release-manifest.json"
     try:
         manifest = json.loads(path.read_text(encoding="utf-8"))
@@ -546,6 +548,18 @@ def load_release_manifest(root: Path, *, expected_version: str) -> dict[str, obj
     revision = manifest.get("revision")
     if not isinstance(revision, str) or re.fullmatch(r"[a-f0-9]{40}", revision) is None:
         raise ReleasePreflightError("release manifest revision must be a full Git commit SHA")
+    minimum = manifest.get("minimumUpgradeVersion")
+    if require_minimum_upgrade or minimum is not None:
+        if not isinstance(minimum, str) or SEMANTIC_VERSION_PATTERN.fullmatch(minimum) is None:
+            raise ReleasePreflightError(
+                "release manifest minimumUpgradeVersion must use canonical vX.Y.Z form"
+            )
+        target_parts = tuple(int(part) for part in expected_version[1:].split("."))
+        minimum_parts = tuple(int(part) for part in minimum[1:].split("."))
+        if minimum_parts[0] != target_parts[0] or minimum_parts > target_parts:
+            raise ReleasePreflightError(
+                "release manifest minimumUpgradeVersion must be in the target major and not newer"
+            )
 
     images = manifest.get("images")
     expected_images = {
@@ -585,6 +599,31 @@ def load_release_manifest(root: Path, *, expected_version: str) -> dict[str, obj
     return manifest
 
 
+def release_identity(
+    root: Path, *, expected_version: str, require_minimum_upgrade: bool = True
+) -> dict[str, str]:
+    manifest = load_release_manifest(
+        root,
+        expected_version=expected_version,
+        require_minimum_upgrade=require_minimum_upgrade,
+    )
+    images = manifest["images"]
+    assert isinstance(images, dict)
+    result = {
+        "SURGEPILOT_IDENTITY_VERSION": expected_version,
+        "SURGEPILOT_IDENTITY_REVISION": str(manifest["revision"]),
+    }
+    for key, output_key in (
+        ("api", "SURGEPILOT_IDENTITY_API_IMAGE"),
+        ("web", "SURGEPILOT_IDENTITY_WEB_IMAGE"),
+        ("demoNode", "SURGEPILOT_IDENTITY_DEMO_IMAGE"),
+    ):
+        entry = images[key]
+        assert isinstance(entry, dict)
+        result[output_key] = f"{entry['repository']}@{entry['digest']}"
+    return result
+
+
 def _environment(root: Path) -> dict[str, str]:
     values = dotenv_values(root / ".env")
     return {key: value for key, value in values.items() if value is not None}
@@ -612,14 +651,20 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
 
     select = subparsers.add_parser("select-runtime")
     select.add_argument("--root", required=True, type=Path)
+    select.add_argument("--deployment-root", type=Path)
     select.add_argument("--expected-version", required=True)
     select.add_argument("--daemon-arch", required=True)
     select.add_argument("--forced-platform", default="")
     describe = subparsers.add_parser("describe-release")
     describe.add_argument("--root", required=True, type=Path)
+    describe.add_argument("--deployment-root", type=Path)
     describe.add_argument("--expected-version", required=True)
     describe.add_argument("--daemon-arch", required=True)
     describe.add_argument("--forced-platform", default="")
+    identity = subparsers.add_parser("describe-identity")
+    identity.add_argument("--root", required=True, type=Path)
+    identity.add_argument("--expected-version", required=True)
+    identity.add_argument("--allow-legacy-manifest", action="store_true")
     validate_runtime = subparsers.add_parser("validate-runtime")
     validate_runtime.add_argument("--configured", required=True)
     validate_runtime.add_argument("--demo-enabled", required=True)
@@ -670,6 +715,21 @@ def main(argv: list[str] | None = None) -> int:
             for key in REQUIRED_RELEASE_ENVIRONMENT_KEYS:
                 print(f"{key}={values[key]}")
             return 0
+        if args.command == "describe-identity":
+            identity = release_identity(
+                args.root,
+                expected_version=args.expected_version,
+                require_minimum_upgrade=not args.allow_legacy_manifest,
+            )
+            for key in (
+                "SURGEPILOT_IDENTITY_VERSION",
+                "SURGEPILOT_IDENTITY_REVISION",
+                "SURGEPILOT_IDENTITY_API_IMAGE",
+                "SURGEPILOT_IDENTITY_WEB_IMAGE",
+                "SURGEPILOT_IDENTITY_DEMO_IMAGE",
+            ):
+                print(f"{key}={identity[key]}")
+            return 0
         load_release_manifest(args.root, expected_version=args.expected_version)
         if args.command == "preflight":
             require_minimum_version("Docker Engine", args.engine_version, MINIMUM_DOCKER_VERSION)
@@ -678,7 +738,7 @@ def main(argv: list[str] | None = None) -> int:
             return 0
         if args.command == "describe-release":
             description = describe_release_environment(
-                args.root,
+                args.deployment_root or args.root,
                 daemon_arch=args.daemon_arch,
                 forced_platform=args.forced_platform,
             )
@@ -686,7 +746,7 @@ def main(argv: list[str] | None = None) -> int:
                 print(f"{key}={description[key]}")
             return 0
 
-        environ = _environment(args.root)
+        environ = _environment(args.deployment_root or args.root)
         selected = validate_release_environment(
             environ,
             daemon_arch=args.daemon_arch,

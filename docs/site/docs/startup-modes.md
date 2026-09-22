@@ -29,6 +29,11 @@ If you manually downloaded and verified a versioned release archive instead,
 run the same lifecycle commands as `./surgepilot up`, `./surgepilot status`,
 `./surgepilot logs`, and `./surgepilot down` from the extracted directory.
 
+Installer-managed deployments keep immutable payloads below `.releases/vX.Y.Z` and keep `.env`
+and `.surgepilot/` at the stable deployment root. Re-running the installer prepares a supported
+newer same-major target; the next `surgepilot up` performs the bounded forward transition. Manual
+archive deployments remain outside this installed-release protocol.
+
 The release starts Web, API, api-worker, PostgreSQL, MinIO, Nginx, InfluxDB,
 and Grafana. It does not build application source or compile a Runtime on the
 deployment host. Load Nodes and their Runtime remain Linux-only; macOS support

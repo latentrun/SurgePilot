@@ -4,6 +4,7 @@ import hashlib
 import os
 from pathlib import Path
 import pty
+import shutil
 import signal
 import subprocess
 import time
@@ -46,6 +47,137 @@ def configuration_docker_script() -> str:
     return r"""#!/bin/sh
 set -eu
 printf '%s\n' "$*" >> "$DOCKER_LOG"
+case "$*" in
+  *" ps -a -q "*)
+    ps_count=0
+    if [ -f "$TEST_ROOT/ps-count" ]; then ps_count=$(cat "$TEST_ROOT/ps-count"); fi
+    ps_count=$((ps_count + 1))
+    printf '%s\n' "$ps_count" > "$TEST_ROOT/ps-count"
+    if [ "${TEST_PS_FAIL_AT:-0}" -eq "$ps_count" ]; then exit 1; fi
+    if [ -n "${TEST_PS_FAIL_MATCH:-}" ]; then
+      case "$*" in *"$TEST_PS_FAIL_MATCH"*) exit 1 ;; esac
+    fi
+    ;;
+esac
+case "$*" in
+  *" up -d --wait --wait-timeout "*)
+    case "$*" in
+      *" postgres")
+        if [ "${TEST_POSTGRES_START_FAILURE:-false}" = true ] && \
+          [ ! -f "$TEST_ROOT/postgres-start-failed" ]; then
+          : > "$TEST_ROOT/postgres-start-failed"
+          exit 1
+        fi
+        ;;
+    esac
+    if [ -n "${TEST_STATE_SNAPSHOT:-}" ]; then
+      cp "$TEST_ROOT/.release-state" "$TEST_STATE_SNAPSHOT"
+    fi
+    case "$*" in
+      *"${TEST_SOURCE_ROOT:-__none__}"*) : > "$TEST_ROOT/source-restored" ;;
+    esac
+    ;;
+esac
+case "$*" in
+  "volume ls --quiet --filter name=surgepilot_postgres-data")
+    if [ "${TEST_VOLUME_INSPECTION_FAILURE:-false}" = true ]; then exit 1; fi
+    if [ "${TEST_POSTGRES_EXISTS:-false}" = true ]; then printf 'surgepilot_postgres-data\n'; fi
+    exit 0
+    ;;
+  *"release-transition-probe.py classify"*)
+    case "${TEST_CLASSIFICATION:-source}" in
+      empty) printf '{"classification":"empty"}\n' ;;
+      source) printf '{"classification":"source","heads":["head"]}\n' ;;
+      *) exit 2 ;;
+    esac
+    exit 0
+    ;;
+  *"release-transition-probe.py active-work"*)
+    probe_count=0
+    if [ -f "$TEST_ROOT/probe-count" ]; then probe_count=$(cat "$TEST_ROOT/probe-count"); fi
+    probe_count=$((probe_count + 1))
+    printf '%s\n' "$probe_count" > "$TEST_ROOT/probe-count"
+    if [ "${TEST_ACTIVE_BLOCK_AT:-0}" -eq "$probe_count" ]; then
+      printf '{"counts":{"runs":1},"status":"blocked"}\n'
+    else
+      printf '{"counts":{},"status":"quiescent"}\n'
+    fi
+    exit 0
+    ;;
+  *" ps -a -q api-migrate")
+    if [ "${TEST_MIGRATE_RUNNING:-false}" = true ]; then printf 'source-migrate-id\n'; fi
+    exit 0
+    ;;
+  *" ps -a -q postgres")
+    if [ "${TEST_POSTGRES_EXISTS:-false}" = true ]; then printf 'source-postgres\n'; fi
+    exit 0
+    ;;
+  *" ps -a -q nginx api-worker api")
+    case "$*" in
+      *"${TEST_SOURCE_ROOT:-__none__}"*)
+        if [ ! -f "$TEST_ROOT/source-stopped" ]; then printf 'source-api-id\n'; fi
+        ;;
+    esac
+    exit 0
+    ;;
+  *" stop nginx")
+    : > "$TEST_ROOT/source-stopped"
+    if [ "${TEST_STOP_NGINX_FAILURE:-false}" = true ]; then exit 1; fi
+    exit 0
+    ;;
+  *" stop api-worker"|*" stop api") exit 0 ;;
+  *" ps -q api")
+    case "$*" in *"${TEST_SOURCE_ROOT:-__none__}"*) printf 'source-api-id\n' ;; *) printf 'api-id\n' ;; esac
+    exit 0 ;;
+  *" ps -q api-worker")
+    case "$*" in *"${TEST_SOURCE_ROOT:-__none__}"*) printf 'source-api-worker-id\n' ;; *) printf 'api-worker-id\n' ;; esac
+    exit 0 ;;
+  *" ps -q web")
+    case "$*" in *"${TEST_SOURCE_ROOT:-__none__}"*) printf 'source-web-id\n' ;; *) printf 'web-id\n' ;; esac
+    exit 0 ;;
+  *" exec -T api "*)
+    case "$*" in
+      *"${TEST_SOURCE_ROOT:-__none__}"*) printf '%s\n' "${TEST_SOURCE_PRODUCT_VERSION:-0.2.0}" ;;
+      *) printf '0.3.0\n' ;;
+    esac
+    exit 0 ;;
+  inspect*"{{.State.Running}}"*" source-api-id")
+    case "${TEST_SOURCE_CONTAINER_STATE:-running}" in
+      stopped) printf 'false|false|false\n' ;;
+      paused) printf 'true|true|false\n' ;;
+      restarting) printf 'true|false|true\n' ;;
+      *) printf 'true|false|false\n' ;;
+    esac
+    exit 0 ;;
+  inspect*"{{.State.Running}}"*" source-migrate-id")
+    case "${TEST_MIGRATE_CONTAINER_STATE:-running}" in
+      paused) printf 'true|true|false\n' ;;
+      restarting) printf 'true|false|true\n' ;;
+      stopped) printf 'false|false|false\n' ;;
+      *) printf 'true|false|false\n' ;;
+    esac
+    exit 0 ;;
+  inspect*"org.opencontainers.image.version"*" api-id")
+    printf 'v0.3.0|aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n'; exit 0 ;;
+  inspect*"org.opencontainers.image.version"*" api-worker-id")
+    printf 'v0.3.0|aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n'; exit 0 ;;
+  inspect*"org.opencontainers.image.version"*" web-id")
+    printf 'v0.3.0|aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n'; exit 0 ;;
+  inspect*"org.opencontainers.image.version"*"source-api-id"|inspect*"org.opencontainers.image.version"*"source-api-worker-id"|inspect*"org.opencontainers.image.version"*"source-web-id")
+    printf '%s|aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n' "${TEST_SOURCE_RELEASE_VERSION:-v0.2.0}"; exit 0 ;;
+  inspect*" api-id")
+    printf 'ghcr.io/latentrun/surgepilot-api@sha256:1111111111111111111111111111111111111111111111111111111111111111|surgepilot|api\n'; exit 0 ;;
+  inspect*" api-worker-id")
+    printf 'ghcr.io/latentrun/surgepilot-api@sha256:1111111111111111111111111111111111111111111111111111111111111111|surgepilot|api-worker\n'; exit 0 ;;
+  inspect*" web-id")
+    printf 'ghcr.io/latentrun/surgepilot-web@sha256:2222222222222222222222222222222222222222222222222222222222222222|surgepilot|web\n'; exit 0 ;;
+  inspect*" source-api-id")
+    printf 'ghcr.io/latentrun/surgepilot-api@sha256:1111111111111111111111111111111111111111111111111111111111111111|surgepilot|api\n'; exit 0 ;;
+  inspect*" source-api-worker-id")
+    printf 'ghcr.io/latentrun/surgepilot-api@sha256:1111111111111111111111111111111111111111111111111111111111111111|surgepilot|api-worker\n'; exit 0 ;;
+  inspect*" source-web-id")
+    printf 'ghcr.io/latentrun/surgepilot-web@sha256:2222222222222222222222222222222222222222222222222222222222222222|surgepilot|web\n'; exit 0 ;;
+esac
 case "$*" in
   *"--publish ${TEST_OCCUPIED_PORT:-__none__}:80"*) exit 1 ;;
 esac
@@ -92,6 +224,25 @@ SURGEPILOT_RUNTIME_ARCHITECTURES=${TEST_RUNTIME_ARCHITECTURES:-auto}
 SURGEPILOT_SELECTED_RUNTIME_ARCHITECTURES=${TEST_SELECTED_ARCHITECTURES:-amd64}
 SURGEPILOT_DEMO_LOAD_NODE_ENABLED=${TEST_DEMO_ENABLED:-false}
 SURGEPILOT_ENV_SHA256=$env_sha256
+EOF
+    exit 0
+    ;;
+  *"release_preflight.py describe-identity"*)
+    identity_version=v0.3.0
+    case "$*" in
+      *"--expected-version v0.2.0"*) identity_version=v0.2.0 ;;
+      *"--expected-version v1.0.0"*) identity_version=v1.0.0 ;;
+    esac
+    identity_api_digest=1111111111111111111111111111111111111111111111111111111111111111
+    if [ "${TEST_BAD_IDENTITY:-false}" = true ]; then
+      identity_api_digest=9999999999999999999999999999999999999999999999999999999999999999
+    fi
+    cat <<EOF
+SURGEPILOT_IDENTITY_VERSION=$identity_version
+SURGEPILOT_IDENTITY_REVISION=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+SURGEPILOT_IDENTITY_API_IMAGE=ghcr.io/latentrun/surgepilot-api@sha256:$identity_api_digest
+SURGEPILOT_IDENTITY_WEB_IMAGE=ghcr.io/latentrun/surgepilot-web@sha256:2222222222222222222222222222222222222222222222222222222222222222
+SURGEPILOT_IDENTITY_DEMO_IMAGE=ghcr.io/latentrun/surgepilot-demo-node@sha256:3333333333333333333333333333333333333333333333333333333333333333
 EOF
     exit 0
     ;;
@@ -164,6 +315,7 @@ EOF
       exit 0
     fi
     cat > "$TEST_ROOT/.env" <<EOF
+COMPOSE_PROJECT_NAME=${COMPOSE_PROJECT_NAME:-surgepilot}
 SURGEPILOT_HTTP_PORT=$http_port
 SURGEPILOT_NODE_API_BASE_URL=$api_url
 SURGEPILOT_MONITORING_INFLUXDB_HOST_PORT=$influx_port
@@ -226,9 +378,11 @@ def write_release_env(
     env_file.chmod(0o600)
 
 
-def render_wrapper(directory: Path, *, create_env: bool = True) -> Path:
+def render_wrapper(
+    directory: Path, *, create_env: bool = True, release_version: str = "v0.3.0"
+) -> Path:
     text = WRAPPER.read_text(encoding="utf-8")
-    text = text.replace("@@RELEASE_VERSION@@", "v0.3.0")
+    text = text.replace("@@RELEASE_VERSION@@", release_version)
     text = text.replace(
         "@@API_IMAGE@@",
         f"ghcr.io/latentrun/surgepilot-api@sha256:{'1' * 64}",
@@ -241,6 +395,65 @@ def render_wrapper(directory: Path, *, create_env: bool = True) -> Path:
     if create_env:
         write_release_env(directory)
     return path
+
+
+def prepare_installed_identity_files(
+    release_root: Path, *, release_version: str = "v0.3.0"
+) -> None:
+    (release_root / "VERSION").write_text(f"{release_version}\n", encoding="utf-8")
+    (release_root / "release-manifest.json").write_text("{}\n", encoding="utf-8")
+    for relative in (
+        ".env.example",
+        "README.md",
+        "scripts/__init__.py",
+        "scripts/bootstrap_deployment_env.py",
+        "scripts/fetch_runtime_release.py",
+        "scripts/release_preflight.py",
+        "scripts/release_transition_probe.py",
+        "compose/grafana/dashboards/surgepilot-jmeter-13644.json",
+        "compose/grafana/entrypoint.sh",
+        "compose/grafana/provisioning/dashboards/surgepilot.yml",
+        "compose/grafana/provisioning/datasources/influxdb.yml",
+        "compose/minio/init-bucket.sh",
+        "compose/nginx/default.conf",
+    ):
+        path = release_root / relative
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text("\n", encoding="utf-8")
+    shutil.copy2(ROOT / "infra/release/dispatcher", release_root / "surgepilot-dispatcher")
+    (release_root / "surgepilot-dispatcher").chmod(0o755)
+    if not (release_root / ".surgepilot").exists():
+        (release_root / ".surgepilot").symlink_to("../../.surgepilot")
+
+
+def prepare_transition_installation(
+    tmp_path: Path,
+    *,
+    phase: str = "prepared",
+    source_version: str = "v0.2.0",
+    target_version: str = "v0.3.0",
+) -> tuple[Path, Path, Path, Path, dict[str, str], Path]:
+    install_root = tmp_path / "surgepilot"
+    source_root = install_root / f".releases/{source_version}"
+    target_root = install_root / f".releases/{target_version}"
+    source_root.mkdir(parents=True)
+    target_root.mkdir(parents=True)
+    render_wrapper(target_root, create_env=False, release_version=target_version)
+    prepare_installed_identity_files(target_root, release_version=target_version)
+    (source_root / "compose").mkdir()
+    (source_root / "compose/docker-compose.yml").write_text("services: {}\n", encoding="utf-8")
+    write_release_env(install_root)
+    shutil.copy2(ROOT / "infra/release/dispatcher", install_root / "surgepilot")
+    (install_root / "surgepilot").chmod(0o755)
+    state = install_root / ".release-state"
+    state.write_text(
+        f"schema=1\nphase={phase}\ntarget={target_version}\nbase={source_version}\n",
+        encoding="utf-8",
+    )
+    state.chmod(0o600)
+    _docker, environment, log = prepare_configuration_docker(install_root)
+    environment["TEST_SOURCE_ROOT"] = str(source_root)
+    return install_root, source_root, target_root, state, environment, log
 
 
 def run_interactive(
@@ -302,6 +515,542 @@ def test_help_and_invalid_command_do_not_require_docker(tmp_path: Path) -> None:
     assert "upgrade" not in invalid_result.stdout
 
 
+def test_installed_wrapper_uses_separate_release_and_deployment_roots(
+    tmp_path: Path,
+) -> None:
+    install_root = tmp_path / "surgepilot"
+    release_root = install_root / ".releases/v0.3.0"
+    release_root.mkdir(parents=True)
+    render_wrapper(release_root, create_env=False)
+    prepare_installed_identity_files(release_root)
+    write_release_env(install_root)
+    shutil.copy2(ROOT / "infra/release/dispatcher", install_root / "surgepilot")
+    (install_root / "surgepilot").chmod(0o755)
+    (install_root / ".release-state").write_text(
+        "schema=1\nphase=stable\ntarget=v0.3.0\nbase=v0.3.0\n",
+        encoding="utf-8",
+    )
+    (install_root / ".release-state").chmod(0o600)
+
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    log = tmp_path / "docker.log"
+    docker = bin_dir / "docker"
+    docker.write_text(
+        "#!/bin/sh\n"
+        "set -eu\n"
+        'printf "%s\\n" "$*" >> "$DOCKER_LOG"\n'
+        'case "$*" in\n'
+        '  "compose version") exit 0 ;;\n'
+        '  "info") exit 0 ;;\n'
+        "esac\n"
+        "exit 0\n",
+        encoding="utf-8",
+    )
+    docker.chmod(0o755)
+    environment = os.environ.copy()
+    environment["PATH"] = f"{bin_dir}:{environment['PATH']}"
+    environment["DOCKER_LOG"] = str(log)
+
+    result = subprocess.run(
+        [install_root / "surgepilot", "status"],
+        env=environment,
+        text=True,
+        capture_output=True,
+    )
+
+    assert result.returncode == 0, result.stderr
+    invocation = log.read_text(encoding="utf-8")
+    assert f"--env-file {install_root / '.env'}" in invocation
+    assert f"-f {release_root / 'compose/docker-compose.yml'}" in invocation
+    assert not Path(f"{install_root}.lock").exists()
+
+
+def test_fresh_installed_status_does_not_require_environment_or_docker(tmp_path: Path) -> None:
+    install_root = tmp_path / "surgepilot"
+    release_root = install_root / ".releases/v0.3.0"
+    release_root.mkdir(parents=True)
+    render_wrapper(release_root, create_env=False)
+    prepare_installed_identity_files(release_root)
+    shutil.copy2(ROOT / "infra/release/dispatcher", install_root / "surgepilot")
+    (install_root / "surgepilot").chmod(0o755)
+    state = install_root / ".release-state"
+    state.write_text("schema=1\nphase=installed\ntarget=v0.3.0\nbase=none\n", encoding="utf-8")
+    state.chmod(0o600)
+    environment = os.environ.copy()
+
+    result = subprocess.run(
+        [install_root / "surgepilot", "status"],
+        env=environment,
+        text=True,
+        capture_output=True,
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert "phase=installed target=v0.3.0 base=none" in result.stdout
+    assert "not configured" in result.stdout
+
+
+def test_first_installed_up_persists_migration_marker_before_target_start(
+    tmp_path: Path,
+) -> None:
+    install_root = tmp_path / "surgepilot"
+    release_root = install_root / ".releases/v0.3.0"
+    release_root.mkdir(parents=True)
+    render_wrapper(release_root, create_env=False)
+    prepare_installed_identity_files(release_root)
+    write_release_env(install_root)
+    shutil.copy2(ROOT / "infra/release/dispatcher", install_root / "surgepilot")
+    (install_root / "surgepilot").chmod(0o755)
+    state = install_root / ".release-state"
+    state.write_text("schema=1\nphase=installed\ntarget=v0.3.0\nbase=none\n", encoding="utf-8")
+    state.chmod(0o600)
+    snapshot = tmp_path / "state-at-target-start"
+    _docker, environment, _log = prepare_configuration_docker(install_root)
+    environment["TEST_STATE_SNAPSHOT"] = str(snapshot)
+
+    result = subprocess.run(
+        [install_root / "surgepilot", "up"],
+        env=environment,
+        text=True,
+        capture_output=True,
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert snapshot.read_text(encoding="utf-8") == (
+        "schema=1\nphase=migration_started\ntarget=v0.3.0\nbase=none\n"
+    )
+    assert state.read_text(encoding="utf-8") == (
+        "schema=1\nphase=stable\ntarget=v0.3.0\nbase=v0.3.0\n"
+    )
+
+
+def test_target_identity_failure_keeps_migration_started_for_same_target_retry(
+    tmp_path: Path,
+) -> None:
+    install_root = tmp_path / "surgepilot"
+    release_root = install_root / ".releases/v0.3.0"
+    release_root.mkdir(parents=True)
+    render_wrapper(release_root, create_env=False)
+    prepare_installed_identity_files(release_root)
+    write_release_env(install_root)
+    shutil.copy2(ROOT / "infra/release/dispatcher", install_root / "surgepilot")
+    (install_root / "surgepilot").chmod(0o755)
+    state = install_root / ".release-state"
+    state.write_text("schema=1\nphase=installed\ntarget=v0.3.0\nbase=none\n", encoding="utf-8")
+    state.chmod(0o600)
+    _docker, environment, _log = prepare_configuration_docker(install_root)
+    environment["TEST_BAD_IDENTITY"] = "true"
+
+    result = subprocess.run(
+        [install_root / "surgepilot", "up"],
+        env=environment,
+        text=True,
+        capture_output=True,
+    )
+
+    assert result.returncode != 0
+    assert "identity" in result.stderr.lower()
+    assert state.read_text(encoding="utf-8") == (
+        "schema=1\nphase=migration_started\ntarget=v0.3.0\nbase=none\n"
+    )
+
+
+def test_target_identity_requires_every_release_member_before_stable(tmp_path: Path) -> None:
+    install_root = tmp_path / "surgepilot"
+    release_root = install_root / ".releases/v0.3.0"
+    release_root.mkdir(parents=True)
+    render_wrapper(release_root, create_env=False)
+    prepare_installed_identity_files(release_root)
+    (release_root / "compose/nginx/default.conf").unlink()
+    write_release_env(install_root)
+    shutil.copy2(ROOT / "infra/release/dispatcher", install_root / "surgepilot")
+    (install_root / "surgepilot").chmod(0o755)
+    state = install_root / ".release-state"
+    state.write_text("schema=1\nphase=installed\ntarget=v0.3.0\nbase=none\n", encoding="utf-8")
+    state.chmod(0o600)
+    _docker, environment, _log = prepare_configuration_docker(install_root)
+
+    result = subprocess.run(
+        [install_root / "surgepilot", "up"],
+        env=environment,
+        text=True,
+        capture_output=True,
+    )
+
+    assert result.returncode != 0
+    assert "compose/nginx/default.conf" in result.stderr
+    assert "phase=migration_started" in state.read_text(encoding="utf-8")
+
+
+def test_prepared_status_uses_exact_source_release(tmp_path: Path) -> None:
+    install_root = tmp_path / "surgepilot"
+    source_root = install_root / ".releases/v0.2.0"
+    target_root = install_root / ".releases/v0.3.0"
+    source_root.mkdir(parents=True)
+    target_root.mkdir(parents=True)
+    render_wrapper(target_root, create_env=False)
+    (source_root / "compose").mkdir()
+    (source_root / "compose/docker-compose.yml").write_text("services: {}\n", encoding="utf-8")
+    write_release_env(install_root)
+    shutil.copy2(ROOT / "infra/release/dispatcher", install_root / "surgepilot")
+    (install_root / "surgepilot").chmod(0o755)
+    state = install_root / ".release-state"
+    state.write_text("schema=1\nphase=prepared\ntarget=v0.3.0\nbase=v0.2.0\n", encoding="utf-8")
+    state.chmod(0o600)
+    _docker, environment, log = prepare_configuration_docker(install_root)
+
+    result = subprocess.run(
+        [install_root / "surgepilot", "status"],
+        env=environment,
+        text=True,
+        capture_output=True,
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert "phase=prepared target=v0.3.0 base=v0.2.0" in result.stdout
+    invocation = log.read_text(encoding="utf-8")
+    assert f"-f {source_root / 'compose/docker-compose.yml'}" in invocation
+    assert f"-f {target_root / 'compose/docker-compose.yml'}" not in invocation
+
+
+def test_prepared_up_quiesces_source_before_publishing_migration_marker(
+    tmp_path: Path,
+) -> None:
+    install_root = tmp_path / "surgepilot"
+    source_root = install_root / ".releases/v0.2.0"
+    target_root = install_root / ".releases/v0.3.0"
+    source_root.mkdir(parents=True)
+    target_root.mkdir(parents=True)
+    render_wrapper(target_root, create_env=False)
+    prepare_installed_identity_files(target_root)
+    (target_root / "scripts").mkdir(exist_ok=True)
+    (target_root / "scripts/release_transition_probe.py").write_text("", encoding="utf-8")
+    (source_root / "compose").mkdir()
+    (source_root / "compose/docker-compose.yml").write_text("services: {}\n", encoding="utf-8")
+    write_release_env(install_root)
+    shutil.copy2(ROOT / "infra/release/dispatcher", install_root / "surgepilot")
+    (install_root / "surgepilot").chmod(0o755)
+    state = install_root / ".release-state"
+    state.write_text("schema=1\nphase=prepared\ntarget=v0.3.0\nbase=v0.2.0\n", encoding="utf-8")
+    state.chmod(0o600)
+    snapshot = tmp_path / "state-at-target-start"
+    _docker, environment, log = prepare_configuration_docker(install_root)
+    environment["TEST_SOURCE_ROOT"] = str(source_root)
+    environment["TEST_STATE_SNAPSHOT"] = str(snapshot)
+
+    result = subprocess.run(
+        [install_root / "surgepilot", "up"],
+        env=environment,
+        text=True,
+        capture_output=True,
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert snapshot.read_text(encoding="utf-8") == (
+        "schema=1\nphase=migration_started\ntarget=v0.3.0\nbase=v0.2.0\n"
+    )
+    assert state.read_text(encoding="utf-8") == (
+        "schema=1\nphase=stable\ntarget=v0.3.0\nbase=v0.3.0\n"
+    )
+    invocations = log.read_text(encoding="utf-8").splitlines()
+    target_pull = next(
+        i
+        for i, line in enumerate(invocations)
+        if str(target_root) in line and line.endswith(" pull")
+    )
+    stop_nginx = next(i for i, line in enumerate(invocations) if line.endswith(" stop nginx"))
+    stop_worker = next(i for i, line in enumerate(invocations) if line.endswith(" stop api-worker"))
+    stop_api = next(i for i, line in enumerate(invocations) if line.endswith(" stop api"))
+    probes = [
+        i for i, line in enumerate(invocations) if "release-transition-probe.py active-work" in line
+    ]
+    target_up = next(
+        i
+        for i, line in enumerate(invocations)
+        if str(target_root) in line and " up -d --wait --wait-timeout " in line
+    )
+    assert target_pull < probes[0] < stop_nginx < stop_worker < stop_api < probes[1] < target_up
+    assert all(" --no-deps " in invocations[i] for i in probes)
+
+
+@pytest.mark.parametrize("block_at", [1, 2])
+def test_prepared_up_refuses_active_work_without_starting_target(
+    tmp_path: Path, block_at: int
+) -> None:
+    install_root = tmp_path / "surgepilot"
+    source_root = install_root / ".releases/v0.2.0"
+    target_root = install_root / ".releases/v0.3.0"
+    source_root.mkdir(parents=True)
+    target_root.mkdir(parents=True)
+    render_wrapper(target_root, create_env=False)
+    prepare_installed_identity_files(target_root)
+    (target_root / "scripts").mkdir(exist_ok=True)
+    (target_root / "scripts/release_transition_probe.py").write_text("", encoding="utf-8")
+    (source_root / "compose").mkdir()
+    (source_root / "compose/docker-compose.yml").write_text("services: {}\n", encoding="utf-8")
+    write_release_env(install_root)
+    shutil.copy2(ROOT / "infra/release/dispatcher", install_root / "surgepilot")
+    (install_root / "surgepilot").chmod(0o755)
+    state = install_root / ".release-state"
+    original_state = "schema=1\nphase=prepared\ntarget=v0.3.0\nbase=v0.2.0\n"
+    state.write_text(original_state, encoding="utf-8")
+    state.chmod(0o600)
+    _docker, environment, log = prepare_configuration_docker(install_root)
+    environment["TEST_SOURCE_ROOT"] = str(source_root)
+    environment["TEST_ACTIVE_BLOCK_AT"] = str(block_at)
+
+    result = subprocess.run(
+        [install_root / "surgepilot", "up"],
+        env=environment,
+        text=True,
+        capture_output=True,
+    )
+
+    assert result.returncode != 0
+    assert "active" in result.stderr.lower()
+    assert state.read_text(encoding="utf-8") == original_state
+    invocations = log.read_text(encoding="utf-8").splitlines()
+    assert not any(str(target_root) in line and " up -d " in line for line in invocations)
+    if block_at == 1:
+        assert not any(line.endswith(" stop nginx") for line in invocations)
+    else:
+        assert any(str(source_root) in line and " up -d --wait " in line for line in invocations)
+        assert (install_root / "source-restored").is_file()
+        assert "source recovery failed" not in result.stderr.lower()
+
+
+@pytest.mark.parametrize("container_state", ["running", "paused", "restarting"])
+def test_prepared_up_never_stops_active_source_migration(
+    tmp_path: Path, container_state: str
+) -> None:
+    install_root = tmp_path / "surgepilot"
+    source_root = install_root / ".releases/v0.2.0"
+    target_root = install_root / ".releases/v0.3.0"
+    source_root.mkdir(parents=True)
+    target_root.mkdir(parents=True)
+    render_wrapper(target_root, create_env=False)
+    (source_root / "compose").mkdir()
+    (source_root / "compose/docker-compose.yml").write_text("services: {}\n", encoding="utf-8")
+    write_release_env(install_root)
+    shutil.copy2(ROOT / "infra/release/dispatcher", install_root / "surgepilot")
+    (install_root / "surgepilot").chmod(0o755)
+    state = install_root / ".release-state"
+    state.write_text("schema=1\nphase=prepared\ntarget=v0.3.0\nbase=v0.2.0\n", encoding="utf-8")
+    state.chmod(0o600)
+    _docker, environment, log = prepare_configuration_docker(install_root)
+    environment["TEST_SOURCE_ROOT"] = str(source_root)
+    environment["TEST_MIGRATE_RUNNING"] = "true"
+    environment["TEST_MIGRATE_CONTAINER_STATE"] = container_state
+
+    result = subprocess.run(
+        [install_root / "surgepilot", "up"],
+        env=environment,
+        text=True,
+        capture_output=True,
+    )
+
+    assert result.returncode != 0
+    assert "api-migrate" in result.stderr
+    invocations = log.read_text(encoding="utf-8").splitlines()
+    assert not any(" stop api-migrate" in line for line in invocations)
+    assert not any(line.endswith(" stop nginx") for line in invocations)
+
+
+@pytest.mark.parametrize("inspection_number", [1, 3, 4, 5, 6])
+def test_prepared_up_fails_closed_when_writer_inspection_fails(
+    tmp_path: Path, inspection_number: int
+) -> None:
+    install_root, _source_root, target_root, state, environment, log = (
+        prepare_transition_installation(tmp_path)
+    )
+    original_state = state.read_text(encoding="utf-8")
+    environment["TEST_PS_FAIL_AT"] = str(inspection_number)
+
+    result = subprocess.run(
+        [install_root / "surgepilot", "up"],
+        env=environment,
+        text=True,
+        capture_output=True,
+    )
+
+    assert result.returncode != 0
+    assert "prove" in result.stderr.lower() or "reverify" in result.stderr.lower()
+    assert state.read_text(encoding="utf-8") == original_state
+    assert not any(
+        str(target_root) in line and " up -d --wait " in line
+        for line in log.read_text(encoding="utf-8").splitlines()
+    )
+    if inspection_number >= 3:
+        assert (install_root / "source-restored").is_file()
+
+
+def test_prepared_up_restores_source_when_nginx_stop_partially_fails(tmp_path: Path) -> None:
+    install_root, _source_root, target_root, state, environment, log = (
+        prepare_transition_installation(tmp_path)
+    )
+    original_state = state.read_text(encoding="utf-8")
+    environment["TEST_STOP_NGINX_FAILURE"] = "true"
+
+    result = subprocess.run(
+        [install_root / "surgepilot", "up"],
+        env=environment,
+        text=True,
+        capture_output=True,
+    )
+
+    assert result.returncode != 0
+    assert "stop source Nginx" in result.stderr
+    assert (install_root / "source-restored").is_file()
+    assert state.read_text(encoding="utf-8") == original_state
+    assert not any(
+        str(target_root) in line and " up -d --wait " in line
+        for line in log.read_text(encoding="utf-8").splitlines()
+    )
+
+
+def test_v1_0_source_restore_accepts_legacy_product_metadata(tmp_path: Path) -> None:
+    install_root, source_root, target_root, state, environment, log = (
+        prepare_transition_installation(
+            tmp_path,
+            source_version="v1.0.0",
+            target_version="v1.2.0",
+        )
+    )
+    environment.update(
+        {
+            "TEST_SOURCE_RELEASE_VERSION": "v1.0.0",
+            "TEST_SOURCE_PRODUCT_VERSION": "0.1.0",
+            "TEST_ACTIVE_BLOCK_AT": "2",
+        }
+    )
+
+    result = subprocess.run(
+        [install_root / "surgepilot", "up"],
+        env=environment,
+        text=True,
+        capture_output=True,
+    )
+
+    assert result.returncode != 0
+    assert "active" in result.stderr.lower()
+    assert "source identity is invalid" not in result.stderr.lower()
+    assert (install_root / "source-restored").is_file()
+    assert (install_root / "probe-count").read_text(encoding="utf-8") == "2\n"
+    assert state.read_text(encoding="utf-8") == (
+        "schema=1\nphase=prepared\ntarget=v1.2.0\nbase=v1.0.0\n"
+    )
+    invocations = log.read_text(encoding="utf-8").splitlines()
+    assert any(line.endswith(" stop nginx") for line in invocations)
+    assert any(str(source_root) in line and " exec -T api " in line for line in invocations)
+    assert not any(str(target_root) in line and " up -d --wait " in line for line in invocations)
+
+
+def test_prepared_up_restores_source_when_stopped_source_postgres_start_fails(
+    tmp_path: Path,
+) -> None:
+    install_root, _source_root, target_root, state, environment, log = (
+        prepare_transition_installation(tmp_path)
+    )
+    (install_root / "source-stopped").touch()
+    original_state = state.read_text(encoding="utf-8")
+    environment["TEST_POSTGRES_START_FAILURE"] = "true"
+
+    result = subprocess.run(
+        [install_root / "surgepilot", "up"],
+        env=environment,
+        text=True,
+        capture_output=True,
+    )
+
+    assert result.returncode != 0
+    assert "source PostgreSQL" in result.stderr
+    assert (install_root / "source-restored").is_file()
+    assert state.read_text(encoding="utf-8") == original_state
+    assert not any(
+        str(target_root) in line and " up -d --wait " in line
+        for line in log.read_text(encoding="utf-8").splitlines()
+    )
+
+
+@pytest.mark.parametrize("classification", ["absent", "empty", "source"])
+def test_unclassified_up_classifies_legacy_database_before_migration(
+    tmp_path: Path, classification: str
+) -> None:
+    install_root = tmp_path / "surgepilot"
+    source_root = install_root / ".releases/v0.2.0"
+    target_root = install_root / ".releases/v0.3.0"
+    source_root.mkdir(parents=True)
+    target_root.mkdir(parents=True)
+    render_wrapper(target_root, create_env=False)
+    prepare_installed_identity_files(target_root)
+    (target_root / "scripts").mkdir(exist_ok=True)
+    (target_root / "scripts/release_transition_probe.py").write_text("", encoding="utf-8")
+    (source_root / "compose").mkdir()
+    (source_root / "compose/docker-compose.yml").write_text("services: {}\n", encoding="utf-8")
+    write_release_env(install_root)
+    shutil.copy2(ROOT / "infra/release/dispatcher", install_root / "surgepilot")
+    (install_root / "surgepilot").chmod(0o755)
+    state = install_root / ".release-state"
+    state.write_text(
+        "schema=1\nphase=unclassified\ntarget=v0.3.0\nbase=v0.2.0\n",
+        encoding="utf-8",
+    )
+    state.chmod(0o600)
+    snapshot = tmp_path / "state-at-target-start"
+    _docker, environment, log = prepare_configuration_docker(install_root)
+    environment["TEST_STATE_SNAPSHOT"] = str(snapshot)
+    if classification != "absent":
+        environment["TEST_POSTGRES_EXISTS"] = "true"
+        environment["TEST_CLASSIFICATION"] = classification
+
+    result = subprocess.run(
+        [install_root / "surgepilot", "up"],
+        env=environment,
+        text=True,
+        capture_output=True,
+    )
+
+    assert result.returncode == 0, result.stderr
+    marker = snapshot.read_text(encoding="utf-8")
+    if classification == "source":
+        assert "phase=migration_started" in marker
+        assert "base=v0.2.0" in marker
+    else:
+        assert "phase=migration_started" in marker
+        assert "base=none" in marker
+    assert "phase=stable" in state.read_text(encoding="utf-8")
+    invocations = log.read_text(encoding="utf-8")
+    if classification == "absent":
+        assert "release-transition-probe.py classify" not in invocations
+    else:
+        assert "release-transition-probe.py classify" in invocations
+        assert f"-f {source_root / 'compose/docker-compose.yml'}" in invocations
+
+
+def test_unclassified_up_fails_closed_when_volume_inspection_fails(tmp_path: Path) -> None:
+    install_root, _source_root, target_root, state, environment, log = (
+        prepare_transition_installation(tmp_path, phase="unclassified")
+    )
+    original_state = state.read_text(encoding="utf-8")
+    environment["TEST_VOLUME_INSPECTION_FAILURE"] = "true"
+
+    result = subprocess.run(
+        [install_root / "surgepilot", "up"],
+        env=environment,
+        text=True,
+        capture_output=True,
+    )
+
+    assert result.returncode != 0
+    assert "volume" in result.stderr.lower()
+    assert state.read_text(encoding="utf-8") == original_state
+    assert not any(
+        str(target_root) in line and " up -d --wait " in line
+        for line in log.read_text(encoding="utf-8").splitlines()
+    )
+
+
 @pytest.mark.parametrize("command", ["down", "status", "logs"])
 @pytest.mark.parametrize(
     "key",
@@ -313,6 +1062,11 @@ def test_help_and_invalid_command_do_not_require_docker(tmp_path: Path) -> None:
         "SURGEPILOT_RUNTIME_ARCHITECTURES",
         "SURGEPILOT_DEMO_LOAD_NODE_ENABLED",
         "SESSION_COOKIE_SECURE",
+        "COMPOSE_PROJECT_NAME",
+        "COMPOSE_PROFILES",
+        "COMPOSE_ENV_FILES",
+        "LOAD_NODE_RUNTIME_ARTIFACT_HOST_DIR",
+        "SURGEPILOT_MONITORING_INFLUXDB_TOKEN_FILE_HOST",
     ],
 )
 def test_lifecycle_commands_reject_process_level_quickstart_overrides(
@@ -362,6 +1116,23 @@ exit 0
 
     assert code != 0
     assert "LAN host or IP" not in output
+
+
+def test_first_up_persists_inherited_compose_project_name(tmp_path: Path) -> None:
+    wrapper = render_wrapper(tmp_path, create_env=False)
+    _docker, environment, _log = prepare_configuration_docker(tmp_path)
+    environment["COMPOSE_PROJECT_NAME"] = "surgepilot-secondary"
+
+    code, _output, stderr = run_interactive(
+        wrapper,
+        environment=environment,
+        answers="192.0.2.20\n\n\n\n",
+    )
+
+    assert code == 0, stderr
+    assert "COMPOSE_PROJECT_NAME=surgepilot-secondary\n" in (tmp_path / ".env").read_text(
+        encoding="utf-8"
+    )
 
 
 def test_up_orders_preflight_bootstrap_runtime_and_compose_without_host_python(
@@ -777,6 +1548,11 @@ exit 0
         "SURGEPILOT_RUNTIME_ARCHITECTURES",
         "SURGEPILOT_DEMO_LOAD_NODE_ENABLED",
         "SESSION_COOKIE_SECURE",
+        "COMPOSE_PROJECT_NAME",
+        "COMPOSE_PROFILES",
+        "COMPOSE_ENV_FILES",
+        "LOAD_NODE_RUNTIME_ARTIFACT_HOST_DIR",
+        "SURGEPILOT_MONITORING_INFLUXDB_TOKEN_FILE_HOST",
     ],
 )
 def test_up_rejects_process_level_release_quickstart_overrides(tmp_path: Path, key: str) -> None:

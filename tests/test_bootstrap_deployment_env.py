@@ -128,7 +128,6 @@ def test_first_run_generates_secure_deployment_configuration(
     assert file_mode(demo_public_key_path) == 0o600
     assert file_mode(demo_private_key_path.parent) == 0o700
     assert file_mode(token_path.parent) == 0o700
-
     values = parse_env(env_path)
     assert len(values["RUNNER_INTERNAL_TOKEN"]) == 64
     assert bytes.fromhex(values["RUNNER_INTERNAL_TOKEN"])
@@ -148,6 +147,26 @@ def test_first_run_generates_secure_deployment_configuration(
     )
     assert token_path.read_text(encoding="utf-8").strip()
     assert "replace-with-" not in env_path.read_text(encoding="utf-8")
+
+
+def test_release_bootstrap_reads_payload_from_release_root_and_writes_deployment_root(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    release_root = prepare_release_root(tmp_path)
+    deployment_root = tmp_path / "deployment"
+    deployment_root.mkdir()
+
+    result = run_bootstrap(
+        release_root,
+        capsys,
+        extra_args=["--deployment-root", str(deployment_root), *release_bootstrap_args()],
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert (deployment_root / ".env").is_file()
+    assert (deployment_root / TOKEN_RELATIVE_PATH).is_file()
+    assert not (release_root / ".env").exists()
+    assert not (release_root / ".surgepilot").exists()
 
 
 def test_generated_influxdb_password_cannot_be_parsed_as_a_cli_flag(

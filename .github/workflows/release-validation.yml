@@ -162,8 +162,11 @@ jobs:
           uv run --all-packages pytest -q \
             tests/test_release_installer.py \
             tests/test_build_release_bundle.py \
+            tests/test_release_dispatcher.py \
+            tests/test_release_transition_probe.py \
+            tests/test_release_wrapper.py \
             tests/contract/test_p2_05_distribution.py
-          sh -n infra/release/install.sh infra/release/surgepilot
+          sh -n infra/release/install.sh infra/release/surgepilot infra/release/dispatcher
 
   tag-preflight:
     if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/validation-')
@@ -375,6 +378,7 @@ jobs:
           test "$(jq -r '.version' "$bundle_manifest")" = "$VALIDATION_VERSION"
           test "$(jq -r '.revision' "$bundle_manifest")" = "$GITHUB_SHA"
           sh -n validation-output/surgepilot/surgepilot
+          sh -n validation-output/surgepilot/surgepilot-dispatcher
           cp validation-output/surgepilot/.env.example validation-output/surgepilot/.env
           RUNNER_INTERNAL_TOKEN=validation-runner-token \
           SSH_CREDENTIAL_ENCRYPTION_KEY=MDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDA= \
@@ -491,6 +495,7 @@ jobs:
           curl -fsSL "$installer_url" | \
             SURGEPILOT_INSTALLER_RELEASE_BASE_URL="http://127.0.0.1:$asset_port" sh
           INSTALL_ROOT="$XDG_DATA_HOME/surgepilot"
+          RELEASE_ROOT="$INSTALL_ROOT/.releases/v0.0.0"
           SURGEPILOT="$HOME/.local/bin/surgepilot"
           anonymous_config=$(mktemp -d)
           cleanup() {
@@ -509,13 +514,14 @@ jobs:
               echo "Validation image must allow anonymous pulls: $image" >&2
               exit 1
             fi
-          done < <(jq -r '.images[] | "\(.repository)@\(.digest)"' "$INSTALL_ROOT/release-manifest.json")
+          done < <(jq -r '.images[] | "\(.repository)@\(.digest)"' "$RELEASE_ROOT/release-manifest.json")
           smoke_host=$(ip -4 route get 1.1.1.1 | awk '{for (i=1; i<=NF; i++) if ($i=="src") {print $(i+1); exit}}')
           test -n "$smoke_host"
           RUNNER_INTERNAL_TOKEN=validation-runner-token \
           SSH_CREDENTIAL_ENCRYPTION_KEY=MDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDA= \
-          python "$INSTALL_ROOT/scripts/bootstrap_deployment_env.py" \
-            --root "$INSTALL_ROOT" \
+          python "$RELEASE_ROOT/scripts/bootstrap_deployment_env.py" \
+            --root "$RELEASE_ROOT" \
+            --deployment-root "$INSTALL_ROOT" \
             --release-http-port 8080 \
             --release-node-api-base-url "http://$smoke_host:8080" \
             --release-influxdb-host-port 8086 \
@@ -524,7 +530,7 @@ jobs:
             --release-runtime-architectures auto \
             --session-cookie-secure false
           docker compose --env-file "$INSTALL_ROOT/.env" \
-            -f "$INSTALL_ROOT/compose/docker-compose.yml" --profile demo config >/dev/null
+            -f "$RELEASE_ROOT/compose/docker-compose.yml" --profile demo config >/dev/null
           install -d -m 700 "$INSTALL_ROOT/.surgepilot" "$INSTALL_ROOT/.surgepilot/runtime-artifacts"
           cp validation-release-assets/surgepilot-runtime-linux-$RELEASE_ARCH-v0.0.0.* \
             "$INSTALL_ROOT/.surgepilot/runtime-artifacts/"

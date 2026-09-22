@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import csv
+from http.cookiejar import CookieJar
 from io import BytesIO
 import json
 import os
@@ -20,11 +21,17 @@ sys.path.insert(0, str(ROOT))
 
 from scripts.verify_p0_api_main_flow_e2e import (  # noqa: E402
     API_BASE_URL,
+    ApiSession,
+    LocalhostSecureCookiePolicy,
+    api_headers,
     create_json,
     get_json,
+    http_bytes,
+    http_json,
     initialize_node,
     new_ulid_like,
     poll_report_state,
+    read_headers,
     register_user,
     scan_load_node_ssh_host_key,
 )
@@ -38,6 +45,8 @@ INFLUXDB_BUCKET = os.environ.get("SURGEPILOT_MONITORING_INFLUXDB_BUCKET", "jmete
 REQUIRED_MEASUREMENTS = {"requestsRaw", "virtualUsers", "testStartEnd"}
 PRODUCT_VERSION_PATTERN = re.compile(r"^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$")
 SKILL_OPENAPI_PATH = "surgepilot-public-api/references/public-api.openapi.json"
+UPGRADE_STATE_FILE = os.environ.get("SURGEPILOT_E2E_UPGRADE_STATE_FILE")
+REUSE_UPGRADE_STATE = os.environ.get("SURGEPILOT_E2E_REUSE_UPGRADE_STATE") == "true"
 
 
 def target_origin() -> str:
@@ -250,7 +259,144 @@ def assert_no_monitoring_secrets(*payloads: dict) -> None:
         raise RuntimeError("Release acceptance response exposed InfluxDB token or node-write URL")
 
 
+def login_existing_user(email: str) -> ApiSession:
+    cookie_jar = CookieJar(policy=LocalhostSecureCookiePolicy())
+    opener = urllib.request.build_opener(urllib.request.HTTPCookieProcessor(cookie_jar))
+    data, _headers, _status = http_json(
+        opener,
+        "POST",
+        "/api/v1/auth/login",
+        payload={"email": email, "password": "password123"},
+        expected_status=200,
+    )
+    return ApiSession(
+        csrf_token=data["csrfToken"],
+        workspace_id=data["defaultWorkspace"]["id"],
+        email=data["user"]["email"],
+        opener=opener,
+    )
+
+
+def persist_upgrade_state(
+    *,
+    session: ApiSession,
+    node: dict,
+    env_group: dict,
+    scenario: dict,
+    source_run: dict,
+) -> None:
+    if not UPGRADE_STATE_FILE:
+        return
+    artifacts = get_json(session, f"/api/v1/runs/{source_run['id']}/artifacts")
+    items = artifacts.get("items") or []
+    if not items:
+        raise RuntimeError("Source release Run did not preserve a MinIO-backed artifact")
+    artifact = items[0]
+    state = {
+        "email": session.email,
+        "workspaceId": session.workspace_id,
+        "nodeId": node["id"],
+        "sourceRuntimeVersion": get_json(session, f"/api/v1/load-nodes/{node['id']}")[
+            "runtimeVersion"
+        ],
+        "envGroupId": env_group["id"],
+        "scenarioId": scenario["id"],
+        "scenarioRevision": scenario["revision"],
+        "sourceRunId": source_run["id"],
+        "artifactId": artifact["id"],
+        "artifactSha256": artifact["sha256"],
+    }
+    path = Path(UPGRADE_STATE_FILE)
+    path.write_text(json.dumps(state, sort_keys=True) + "\n", encoding="utf-8")
+    path.chmod(0o600)
+
+
+def verify_preserved_upgrade_state() -> None:
+    if not UPGRADE_STATE_FILE:
+        raise RuntimeError("SURGEPILOT_E2E_UPGRADE_STATE_FILE is required for upgrade reuse")
+    state = json.loads(Path(UPGRADE_STATE_FILE).read_text(encoding="utf-8"))
+    session = login_existing_user(str(state["email"]))
+    if session.workspace_id != state["workspaceId"]:
+        raise RuntimeError("Upgrade did not preserve the source Workspace identity")
+
+    node = get_json(session, f"/api/v1/load-nodes/{state['nodeId']}")
+    if (
+        node.get("status") != "idle"
+        or node.get("credentialConfigured") is not True
+        or node.get("runtimeVersion") != state["sourceRuntimeVersion"]
+        or node.get("runtimeVersion") == expected_product_version()
+    ):
+        raise RuntimeError(f"Source Load Node eligibility state was not preserved: {node}")
+
+    rejected, _headers, status = http_json(
+        session.opener,
+        "POST",
+        "/api/v1/runs",
+        payload={
+            "runType": "debug",
+            "sourceType": "debug_scenario",
+            "sourceId": state["scenarioId"],
+            "expectedSourceRevision": state["scenarioRevision"],
+            "envGroupId": state["envGroupId"],
+            "selectedNodeId": state["nodeId"],
+        },
+        headers=api_headers(session),
+        expected_status=409,
+    )
+    if status != 409:
+        raise RuntimeError(f"Old Runtime unexpectedly accepted a target Run: {rejected}")
+
+    source_report = get_json(session, f"/api/v1/runs/{state['sourceRunId']}")
+    if source_report.get("verdict", {}).get("state") != "finished":
+        raise RuntimeError("Upgrade did not preserve the source Run record")
+    artifacts = get_json(session, f"/api/v1/runs/{state['sourceRunId']}/artifacts")
+    artifact = next(
+        (item for item in artifacts.get("items", []) if item.get("id") == state["artifactId"]),
+        None,
+    )
+    if artifact is None or artifact.get("sha256") != state["artifactSha256"]:
+        raise RuntimeError("Upgrade did not preserve source artifact metadata")
+    artifact_bytes, _headers, _status = http_bytes(
+        session.opener,
+        "GET",
+        artifact["downloadUrl"],
+        headers=read_headers(session),
+    )
+    if not artifact_bytes:
+        raise RuntimeError("Upgrade did not preserve the MinIO-backed source artifact")
+
+    initialize_node(session, str(state["nodeId"]))
+    initialized = get_json(session, f"/api/v1/load-nodes/{state['nodeId']}")
+    if (
+        initialized.get("credentialConfigured") is not True
+        or initialized.get("runtimeVersion") != expected_product_version()
+    ):
+        raise RuntimeError(
+            "Explicit reinitialization did not preserve credentials and install target"
+        )
+    verify_product_identity(session, str(state["nodeId"]))
+
+    post_run = create_json(
+        session,
+        "/api/v1/runs",
+        {
+            "runType": "debug",
+            "sourceType": "debug_scenario",
+            "sourceId": state["scenarioId"],
+            "expectedSourceRevision": state["scenarioRevision"],
+            "envGroupId": state["envGroupId"],
+            "selectedNodeId": state["nodeId"],
+        },
+    )
+    post_report = poll_report_state(session, post_run["id"], {"finished"}, 300)
+    if post_report["verdict"]["state"] != "finished":
+        raise RuntimeError(f"Post-upgrade Run in preserved Workspace did not finish: {post_report}")
+
+
 def verify_release_stack() -> None:
+    if REUSE_UPGRADE_STATE:
+        verify_preserved_upgrade_state()
+        return
     password_path = Path(
         os.environ.get(
             "SURGEPILOT_E2E_NODE_SSH_PASSWORD_FILE",
@@ -357,6 +503,13 @@ def verify_release_stack() -> None:
     assert_no_monitoring_secrets(monitoring)
     if monitoring.get("status") != "ready" or not monitoring.get("iframeUrl"):
         raise RuntimeError(f"Release Monitoring entry is not ready: {monitoring}")
+    persist_upgrade_state(
+        session=session,
+        node=node,
+        env_group=env_group,
+        scenario=scenario,
+        source_run=standard_run,
+    )
 
 
 def main() -> int:

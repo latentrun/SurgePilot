@@ -1,6 +1,6 @@
 # P2-05 Cross-platform Distribution and Full-stack Release Bootstrap
 
-- Document status: Accepted and active through `docs/sdd/adr/ADR-0017-p2-cross-platform-distribution.md`, with source-preview startup amended by `docs/sdd/adr/ADR-0019-p2-source-preview-startup.md`, the new-release Runtime default amended by `docs/sdd/adr/ADR-0020-p2-release-dual-runtime-default.md`, the user-local platform Release installer amended by `docs/sdd/adr/ADR-0024-p2-user-local-release-installer.md`, and product/artifact version identity amended by `docs/sdd/adr/ADR-0027-product-version-and-artifact-identity.md`; implementation backfill is recorded in §17.1.
+- Document status: Accepted and active through `docs/sdd/adr/ADR-0017-p2-cross-platform-distribution.md`, with source-preview startup amended by `docs/sdd/adr/ADR-0019-p2-source-preview-startup.md`, the new-release Runtime default amended by `docs/sdd/adr/ADR-0020-p2-release-dual-runtime-default.md`, the user-local platform Release installer amended by `docs/sdd/adr/ADR-0024-p2-user-local-release-installer.md`, product/artifact version identity amended by `docs/sdd/adr/ADR-0027-product-version-and-artifact-identity.md`, and bounded installed-release transitions amended by `docs/sdd/adr/ADR-0029-user-local-release-upgrade.md`; implementation backfill is recorded in §17.1.
 - Phase: P2
 - Capability: `cross_platform_distribution`
 - Scope Gate: `docs/sdd/00-product-scope-and-priority.md` §7 deployment expansion, plus the open-source deployment success criteria in `docs/prd/PRD.md` §3.3 and §4.2
@@ -27,6 +27,10 @@
   `docs/sdd/adr/ADR-0024-p2-user-local-release-installer.md` supersedes only blanket platform
   installer/downloader exclusions. It authorizes a version-pinned POSIX installer, bundle checksum,
   user-owned launcher, and installer smoke while leaving `up` as a separate interactive command.
+- User-local Release transition amendment:
+  `docs/sdd/adr/ADR-0029-user-local-release-upgrade.md` supersedes ADR-0024's fail-on-existing-root
+  rule only for its exact-target, same-major, forward-only installed transition. It preserves the
+  existing command surface and excludes background updates, downgrade, and automatic rollback.
 
 ## 1. Core Decision
 
@@ -56,8 +60,8 @@ Load Nodes and the Runtime remain Linux-only. macOS support means:
 4. Runtime artifacts built from macOS must be produced inside a Linux builder container and must never contain macOS executables labeled as Linux.
 
 P2-05 does not create a runtime-management product, general installer platform, package manager,
-orchestration platform, or automatic upgrade system. ADR-0024 authorizes only one bounded
-user-local installer for this existing release bundle.
+orchestration platform, or automatic upgrade system. ADR-0024 and ADR-0029 authorize only one
+bounded user-local installer and its explicit exact-target transition for this release bundle.
 
 The complete product experience has two intentionally separate delivery paths:
 
@@ -148,19 +152,21 @@ P2-05 must not implement:
 3. Homebrew, apt, yum, winget, Chocolatey, or another package-manager distribution.
 4. Windows control-plane or Windows Load Node support.
 5. A single all-in-one image that combines Web, API, databases, object storage, Monitoring, and Runner processes.
-6. Automatic application upgrade, downgrade, migration orchestration, rollback, release channel selection, or background update checks.
+6. Background or channel-driven application updates, downgrade, automatic rollback, or migration
+   orchestration outside ADR-0029's explicit bounded installed-release transition.
 7. Runtime UI, Runtime Catalog, Runtime upload API, version negotiation, gray release, automatic cleanup, or automatic rollback.
 8. Runtime storage in MinIO, Dependency Files, Run artifacts, the database, or another product-managed storage surface.
 9. Load Node direct download of Runtime assets or GitHub credentials; api-worker remains the component that pushes Runtime through SFTP.
 10. Cross-compiling or QEMU-validating a release-grade Runtime as a substitute for native architecture release jobs.
 11. Publishing the Public API AI skill source as a GitHub Release, GHCR artifact, marketplace package, SDK, MCP server, or installer.
 12. Docker Hub mirroring, multiple public registries, image signing, SBOM publication, provenance attestation, or vulnerability-management UI in this Slice.
-13. API routes, database migrations, new product tables, new RBAC, new Web product pages, or automatic Demo Load Node database seeding.
+13. API routes, new product-schema migrations outside ADR-0029 transition execution, new product
+    tables, new RBAC, new Web product pages, or automatic Demo Load Node database seeding.
 14. Changing the Runner protocol, Run state machine, Workspace semantics, storage backend, or existing Load Node credential boundary.
 15. Resumable same-version release publication, draft reconciliation, or byte-for-byte continuation of a partially published release.
 16. Package-manager/system installers, Docker installation, `sudo`, shell-startup-file mutation,
-    automatic update/rollback/uninstall, or a one-pipeline install-and-start command. The bounded
-    ADR-0024 user-local installer is the only installer exception.
+    background update/automatic rollback/uninstall, or a one-pipeline install-and-start command.
+    The bounded ADR-0024 installer and ADR-0029 exact-target transition are the only exceptions.
 
 ## 6. Platform Support Contract
 
@@ -345,7 +351,10 @@ Rules:
    and every other `.env` value remain unchanged.
 3. `COMPOSE_PROJECT_NAME` is generated or persisted in the root `.env`, defaults to `surgepilot`, and remains stable while volumes are reused. Operators running multiple deployments must choose distinct persisted project names.
 4. `down` stops/removes containers and networks but does not delete named volumes, `.env`, `.surgepilot/`, Runtime files, or Demo SSH identity.
-5. A manual version transition replaces only release-owned files in the same stable deployment root, then runs the new bundle's preflight before stopping the old containers. P2-05 does not add an automatic upgrade command or rollback engine.
+5. A manually extracted bundle uses the expert-managed replacement of release-owned files in the
+   same stable deployment root. An installer-managed deployment uses only ADR-0029's bounded
+   prepare-then-`up` transition, including preflight, quiescence, forward migration, and stable
+   publication. Neither path adds a background update command or rollback engine.
 6. Generated secret plaintext must not be printed by normal startup.
 7. Health timeout returns non-zero and prints the failing service plus safe diagnostic commands.
 8. Raw `docker compose` remains an expert/manual path, not the public quickstart promise.
@@ -601,8 +610,9 @@ The exact safe publish ordering must prevent a release page or semantic tag from
 
 Every formal release has one reviewed user-facing notes source at
 `docs/releases/vX.Y.Z.md`, matching the exact tag. The workflow validates that the file exists and
-has the exact tag-matched title, required ordered sections, and substantive content before
-publication work; it revalidates the file before draft creation and passes it to
+has the exact tag-matched filename, omits the redundant top-level Release title, and contains the
+required ordered sections with substantive content before publication work; it revalidates the
+file before draft creation and passes it to
 `gh release create --notes-file`. The format and author/review procedure are defined in
 `docs/releases/README.md`; installation, upgrade, compatibility, and breaking-change guidance are
 explicit rather than inferred from commits.
@@ -630,8 +640,12 @@ Release publication is create-only for a semantic version:
 2. Missing image architecture blocks release publication.
 3. Release bundle Compose validation failure blocks publication.
 4. Runtime download or checksum failure blocks `up` before starting an unready new stack.
-5. Repeated `up`, `down`/`up`, and a manual same-root version transition must preserve the persisted Compose project, volumes, Admin data, MinIO data, Monitoring data, deployment secrets, Demo password, and Demo SSH fingerprint.
-6. A manual version transition must not stop an existing stack until new-version bootstrap, Runtime, digest-pinned image references, and Compose preflight succeed.
+5. Repeated `up`, `down`/`up`, an expert-managed extracted-bundle transition, and an ADR-0029
+   installer-managed transition must preserve the persisted Compose project, volumes, Admin data,
+   MinIO data, Monitoring data, deployment secrets, Demo password, and Demo SSH fingerprint.
+6. Neither transition path may stop an existing stack until new-version bootstrap, Runtime,
+   digest-pinned image references, and Compose preflight succeed; the installer-managed path also
+   satisfies ADR-0029's quiescence and state-publication rules.
 7. P2-05 does not promise automatic rollback after a successful stop or partial external infrastructure failure.
 
 ## 15. Tests and Acceptance Criteria
@@ -650,7 +664,9 @@ Implementation must cover:
 6. release wrapper command parsing, rejection of the seven quickstart process overrides, complete
    persisted node-facing URL requirements independent of the Demo switch, and non-destructive
    failure ordering;
-7. repeated `up`, `down` without volume deletion, `down`/`up`, and manual same-root version transition without loss of PostgreSQL, MinIO, Monitoring, Admin, secret, or Demo identity state;
+7. repeated `up`, `down` without volume deletion, `down`/`up`, expert-managed extracted-bundle
+   transition, and ADR-0029 installer-managed transition without loss of PostgreSQL, MinIO,
+   Monitoring, Admin, secret, or Demo identity state;
 8. source/release effective Compose separation, absence of application build contexts from release Compose, release digest pinning, service topology, secret mounts, port exposure, health dependencies, and Demo-node enable/disable behavior;
 9. GHCR multi-architecture index requirements for amd64 and arm64, equality with the digest recorded in `release-manifest.json`, Runtime archive/sidecar equality with the release-manifest digest, and create-only rejection when the semantic version already exists;
 10. exact-tag release-note source existence, non-empty workflow gating, and publication through the
@@ -848,10 +864,11 @@ The P2-05 implementation uses these final repository and release boundaries:
     initialize the SSH node, execute Debug and Standard Runs against the published LAN target,
     and require the Standard Run measurements through the published InfluxDB port. Manual physical
     external-node and Apple Silicon records remain required where hosted infrastructure is absent.
-11. There is no API, database, migration, Web route, Runtime catalog, automatic upgrade, signing,
-    SBOM, SDK, MCP, marketplace, or standalone Public API AI skill publication in this change.
-    A release version transition remains the documented manual replacement of release-owned files
-    in the same deployment root followed by the new bundle's non-destructive `up` preflight.
+11. There is no new product API, product table, Web route, Runtime catalog, background update,
+    signing, SBOM, SDK, MCP, marketplace, or standalone Public API AI skill publication in this
+    change. A manually extracted bundle retains the expert-managed replacement path. An
+    installer-managed deployment uses ADR-0029's bounded transition, including its explicit
+    forward Alembic migration and fail-closed recovery contract.
 
 Implementation evidence that inherently requires external runners or publication is recorded by
 the tagged workflow rather than inferred from a local amd64 run. Apple Silicon Docker Desktop full

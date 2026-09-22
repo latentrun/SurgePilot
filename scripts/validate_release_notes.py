@@ -17,13 +17,18 @@ HTML_COMMENT = re.compile(r"<!--.*?-->", re.DOTALL)
 
 def validate_release_notes(*, tag: str, path: Path) -> None:
     text = path.read_text(encoding="utf-8")
-    expected_title = f"# SurgePilot {tag}"
+    expected_name = f"{tag}.md"
+    if path.name != expected_name:
+        raise ValueError(f"release notes filename must be exactly: {expected_name}")
+
     lines = text.splitlines()
-    if not lines or lines[0] != expected_title:
-        raise ValueError(f"release notes must start with exactly: {expected_title}")
+    if not lines or lines[0] != "## Highlights":
+        raise ValueError("release notes must start with exactly: ## Highlights")
+    if any(line.startswith("# ") for line in lines):
+        raise ValueError("release notes body must not contain a top-level Release title")
 
     headings: list[tuple[str, int]] = []
-    for index, line in enumerate(lines[1:], start=1):
+    for index, line in enumerate(lines):
         if line.startswith("## "):
             headings.append((line[3:], index))
 

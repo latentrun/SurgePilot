@@ -216,8 +216,8 @@ def _validate_no_template_placeholders(values: Mapping[str, str]) -> None:
             raise BootstrapError(f"{key} still uses a template placeholder")
 
 
-def _requires_demo_state(root: Path, values: Mapping[str, str]) -> bool:
-    if not (root / "release-manifest.json").is_file():
+def _requires_demo_state(*, is_release: bool, values: Mapping[str, str]) -> bool:
+    if not is_release:
         return True
     return _strict_boolean(values, "SURGEPILOT_DEMO_LOAD_NODE_ENABLED")
 
@@ -500,6 +500,7 @@ def _validate_reconfiguration_candidate(path: Path, *, expected_bytes: bytes) ->
 def reconfigure_release_network(
     root: Path,
     *,
+    deployment_root: Path | None = None,
     expected_sha256: str,
     updates: Mapping[str, str],
     daemon_arch: str,
@@ -507,9 +508,10 @@ def reconfigure_release_network(
 ) -> bool:
     """Replace the four existing direct-LAN release network assignments."""
 
-    root = root.resolve()
-    manifest_path = root / "release-manifest.json"
-    env_path = root / ENV_NAME
+    release_root = root.resolve()
+    state_root = (deployment_root or release_root).resolve()
+    manifest_path = release_root / "release-manifest.json"
+    env_path = state_root / ENV_NAME
     if not manifest_path.is_file():
         raise BootstrapError(f"release-manifest.json is missing: {manifest_path}")
     if not env_path.exists():
@@ -521,7 +523,7 @@ def reconfigure_release_network(
 
     _validate_private_text_file(env_path, label="deployment .env")
     _validate_existing_environment(
-        root=root,
+        root=state_root,
         env_path=env_path,
         environ={},
         persisted_keys=RELEASE_PERSISTED_ENV_KEYS,
@@ -560,7 +562,7 @@ def reconfigure_release_network(
     temporary_path: Path | None = None
     try:
         try:
-            descriptor, temporary_name = tempfile.mkstemp(prefix=".reconfigure-", dir=root)
+            descriptor, temporary_name = tempfile.mkstemp(prefix=".reconfigure-", dir=state_root)
             temporary_path = Path(temporary_name)
             os.fchmod(descriptor, 0o600)
             with os.fdopen(descriptor, "wb") as handle:
@@ -596,7 +598,7 @@ def reconfigure_release_network(
         except OSError as exc:
             raise BootstrapError(f"cannot replace deployment .env: {exc}") from exc
         try:
-            _fsync_directory(root)
+            _fsync_directory(state_root)
         except OSError as exc:
             raise BootstrapError(
                 "deployment .env was updated but durability could not be confirmed; inspect "
@@ -611,33 +613,39 @@ def reconfigure_release_network(
     return True
 
 
-def bootstrap(root: Path, *, environ: Mapping[str, str] | None = None) -> bool:
+def bootstrap(
+    root: Path,
+    *,
+    deployment_root: Path | None = None,
+    environ: Mapping[str, str] | None = None,
+) -> bool:
     """Create first-run deployment files and return whether `.env` was created."""
 
-    root = root.resolve()
-    env_path = root / ENV_NAME
+    release_root = root.resolve()
+    state_root = (deployment_root or release_root).resolve()
+    env_path = state_root / ENV_NAME
     effective_environ = os.environ if environ is None else environ
-    is_release = (root / "release-manifest.json").is_file()
+    is_release = (release_root / "release-manifest.json").is_file()
     persisted_keys = RELEASE_PERSISTED_ENV_KEYS if is_release else PERSISTED_ENV_KEYS
     if env_path.exists():
         _validate_private_text_file(env_path, label="deployment .env")
         try:
-            secret_directory = _ensure_secret_directory(root)
+            secret_directory = _ensure_secret_directory(state_root)
         except OSError as exc:
             raise BootstrapError(f"cannot prepare private deployment state: {exc}") from exc
         values = _active_environment_values(env_path.read_text(encoding="utf-8"))
         _validate_existing_environment(
-            root=root,
+            root=state_root,
             env_path=env_path,
             environ=effective_environ,
             persisted_keys=persisted_keys,
         )
-        if _requires_demo_state(root, values):
-            _ensure_demo_state(root, secret_directory)
+        if _requires_demo_state(is_release=is_release, values=values):
+            _ensure_demo_state(state_root, secret_directory)
         print("Existing .env found; deployment configuration remains unchanged.")
         return False
 
-    template_path = root / ENV_TEMPLATE_NAME
+    template_path = release_root / ENV_TEMPLATE_NAME
     try:
         template = template_path.read_text(encoding="utf-8")
     except OSError as exc:
@@ -652,7 +660,7 @@ def bootstrap(root: Path, *, environ: Mapping[str, str] | None = None) -> bool:
     rendered_values = _active_environment_values(rendered)
 
     try:
-        secret_directory = _ensure_secret_directory(root)
+        secret_directory = _ensure_secret_directory(state_root)
         token_path = secret_directory / TOKEN_RELATIVE_PATH.name
     except OSError as exc:
         raise BootstrapError(f"cannot prepare private deployment state: {exc}") from exc
@@ -673,8 +681,8 @@ def bootstrap(root: Path, *, environ: Mapping[str, str] | None = None) -> bool:
             raise BootstrapError(f"cannot create Monitoring token file: {exc}") from exc
     if manages_default_token:
         _validate_monitoring_token(token_path)
-    if _requires_demo_state(root, rendered_values):
-        _ensure_demo_state(root, secret_directory)
+    if _requires_demo_state(is_release=is_release, values=rendered_values):
+        _ensure_demo_state(state_root, secret_directory)
 
     try:
         _write_private_file(
@@ -684,7 +692,7 @@ def bootstrap(root: Path, *, environ: Mapping[str, str] | None = None) -> bool:
         )
     except FileExistsError:
         _validate_existing_environment(
-            root=root,
+            root=state_root,
             env_path=env_path,
             environ=effective_environ,
             persisted_keys=persisted_keys,
@@ -705,6 +713,11 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         type=Path,
         default=Path(__file__).resolve().parents[1],
         help="Repository root containing .env.example (default: script repository root)",
+    )
+    parser.add_argument(
+        "--deployment-root",
+        type=Path,
+        help="Directory containing mutable deployment state (default: --root)",
     )
     parser.add_argument("--reconfigure-release-network", action="store_true")
     parser.add_argument("--expected-env-sha256")
@@ -780,6 +793,7 @@ def main(
             updates = _release_network_reconfiguration_from_args(args)
             changed = reconfigure_release_network(
                 args.root,
+                deployment_root=args.deployment_root,
                 expected_sha256=args.expected_env_sha256,
                 updates=updates,
                 daemon_arch=args.daemon_arch,
@@ -794,7 +808,7 @@ def main(
             raise BootstrapError("--expected-env-sha256 requires --reconfigure-release-network")
         effective_environ = dict(os.environ if environ is None else environ)
         effective_environ.update(_release_environment_from_args(args))
-        bootstrap(args.root, environ=effective_environ)
+        bootstrap(args.root, deployment_root=args.deployment_root, environ=effective_environ)
     except BootstrapError as exc:
         print(f"Deployment bootstrap failed: {exc}", file=sys.stderr)
         return 2

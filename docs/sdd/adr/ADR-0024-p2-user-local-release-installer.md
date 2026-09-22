@@ -4,8 +4,9 @@
 - Scope: Tagged platform Release installation only
 - Active Slices: `docs/sdd/slices/P2-05-cross-platform-distribution.md` and
   `docs/sdd/slices/P2-06-lan-first-deployment-usability.md`
-- Partial supersession: Platform-installer exclusions in ADR-0017 and ADR-0018 only
-- Related ADRs: ADR-0017, ADR-0018, ADR-0020, and ADR-0021
+- Partial supersession: Platform-installer exclusions in ADR-0017 and ADR-0018 only; the
+  existing-installation rule is superseded by ADR-0029
+- Related ADRs: ADR-0017, ADR-0018, ADR-0020, ADR-0021, and ADR-0029
 
 ## Context
 
@@ -86,11 +87,12 @@ two-command experience.
    lowercase SHA-256 before extraction, rejects unexpected or non-regular archive members,
    requires the exact standalone version marker plus canonical top-level manifest version, and
    publishes through same-parent temporary paths plus `mv`.
-9. An existing deployment root or launcher fails closed. The installer never overwrites, repairs,
-   migrates, rotates, or removes existing operator state. A launcher-publication failure may remove
-   only the new deployment root that the same run proved absent and just published. Catchable
-   termination signals cannot interrupt the bounded two-path publication window and leave only one
-   destination published.
+9. For releases before ADR-0029, an existing deployment root or launcher fails closed. ADR-0029
+   supersedes that blanket rule only for its exact installed-release transition; operator-owned
+   `.env`, private state, volumes, and the launcher remain preserved. A fresh launcher-publication
+   failure may remove only the new deployment root that the same run proved absent and just
+   published. Catchable termination signals cannot interrupt the bounded two-path publication
+   window and leave only one destination published.
 10. The installer never invokes `sudo`, changes groups, installs or configures Docker, writes shell
     startup files, changes `PATH`, or calls `surgepilot up`. When `$HOME/.local/bin` is not in
     `PATH`, it prints the direct command and a copyable export instruction.

@@ -71,7 +71,7 @@ operator-managed HTTPS reverse proxy, final node-facing origins, and
 
 Use `surgepilot status`, `surgepilot logs`, and `surgepilot down` for the minimal lifecycle. `down` preserves volumes and all deployment state.
 
-To run more than one installation on the same Docker host, set a distinct `COMPOSE_PROJECT_NAME` in each deployment directory before its first `surgepilot up`. Keep that value stable for later lifecycle commands and manual version transitions.
+To run more than one installation on the same Docker host, set a distinct `COMPOSE_PROJECT_NAME` in each deployment directory before its first `surgepilot up`. Keep that value stable for later lifecycle commands and installed transitions.
 
 The release `.env` is the ordinary deployment input after first run. Process-level overrides for
 the published ports, node-facing URLs, Runtime architectures, Demo selection, or cookie policy are
@@ -121,4 +121,8 @@ Replace the example host with an explicit non-loopback address reachable from br
 Nodes. An automation system that does not use the helper must provide an equivalent complete
 owner-only `.env` and private token state; unexpanded template placeholders are rejected.
 
-For a manual version transition, keep the same deployment directory, `.env`, `.surgepilot/`, and Compose project name. Replace only release-owned files, run the new `surgepilot up` preflight, and stop the old stack only after preflight succeeds.
+For an installer-managed upgrade, back up persistent volumes, finish active work, rerun the exact
+release installer, and then run `surgepilot up`. The wrapper prepares target assets before downtime,
+refuses active work, and uses forward-only same-target retry after migration starts. It does not
+provide automatic rollback. Reinitialize required Load Nodes after the control plane reaches the
+new version. Manually extracted bundles remain expert-managed and outside this transition protocol.

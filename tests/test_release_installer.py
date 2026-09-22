@@ -65,6 +65,7 @@ def write_release_assets(
     omit: str | None = None,
     extra_file: str | None = None,
     symlink_readme: bool = False,
+    legacy: bool = False,
 ) -> tuple[Path, Path]:
     payload = directory / "payload" / "surgepilot"
     (payload / "compose").mkdir(parents=True)
@@ -72,6 +73,8 @@ def write_release_assets(
         "schemaVersion": 1,
         "version": manifest_version or version,
     }
+    if not legacy:
+        manifest["minimumUpgradeVersion"] = "v1.0.0" if version.startswith("v1.") else version
     if nested_manifest_version is not None:
         manifest["nested"] = {"version": nested_manifest_version}
     files = {
@@ -93,6 +96,11 @@ def write_release_assets(
         "compose/grafana/provisioning/dashboards/surgepilot.yml": "",
         "compose/grafana/provisioning/datasources/influxdb.yml": "",
     }
+    if not legacy:
+        files["surgepilot-dispatcher"] = (ROOT / "infra/release/dispatcher").read_text(
+            encoding="utf-8"
+        )
+        files["scripts/release_transition_probe.py"] = ""
     if extra_file is not None:
         files[extra_file] = "unexpected\n"
     for relative, content in files.items():
@@ -106,6 +114,8 @@ def write_release_assets(
         (payload / "README.md").symlink_to(".env.example")
     if (payload / "surgepilot").exists():
         (payload / "surgepilot").chmod(0o755)
+    if (payload / "surgepilot-dispatcher").exists():
+        (payload / "surgepilot-dispatcher").chmod(0o755)
 
     archive = directory / f"surgepilot-{version}.tar.gz"
     with tarfile.open(archive, "w:gz") as output:
@@ -144,6 +154,22 @@ def run_installer(
     )
 
 
+def write_installed_launcher(home: Path, install_root: Path) -> Path:
+    launcher = home / ".local/bin/surgepilot"
+    launcher.parent.mkdir(parents=True, exist_ok=True)
+    launcher.write_text(
+        "#!/bin/sh\n"
+        "set -eu\n"
+        "SURGEPILOT_COMMAND_NAME=surgepilot\n"
+        "export SURGEPILOT_COMMAND_NAME\n"
+        f"INSTALL_ROOT='{install_root}'\n"
+        'exec "$INSTALL_ROOT/surgepilot" "$@"\n',
+        encoding="utf-8",
+    )
+    launcher.chmod(0o700)
+    return launcher
+
+
 def isolated_tool_path(
     directory: Path,
     *,
@@ -160,11 +186,24 @@ def isolated_tool_path(
         "mktemp",
         "mkdir",
         "rm",
+        "rmdir",
         "chmod",
         "mv",
         "grep",
         "sed",
         "sort",
+        "cmp",
+        "sync",
+        "readlink",
+        "ps",
+        "ls",
+        "cp",
+        "ln",
+        "wc",
+        "tr",
+        "stat",
+        "id",
+        "find",
     ):
         source = shutil.which(name)
         assert source is not None
@@ -205,6 +244,16 @@ def test_installer_publishes_user_owned_release_and_location_independent_launche
     install_root = xdg_data_home / "surgepilot"
     launcher = home / ".local/bin/surgepilot"
     assert install_root.is_dir()
+    assert (install_root / "surgepilot").read_bytes() == (
+        install_root / ".releases" / VERSION / "surgepilot-dispatcher"
+    ).read_bytes()
+    assert (install_root / ".release-state").read_text(encoding="utf-8") == (
+        f"schema=1\nphase=installed\ntarget={VERSION}\nbase=none\n"
+    )
+    release_root = install_root / ".releases" / VERSION
+    assert (release_root / "surgepilot").is_file()
+    assert (release_root / ".surgepilot").is_symlink()
+    assert os.readlink(release_root / ".surgepilot") == "../../.surgepilot"
     assert launcher.stat().st_mode & 0o111
     launched = subprocess.run(
         [launcher, "--help"],
@@ -218,6 +267,308 @@ def test_installer_publishes_user_owned_release_and_location_independent_launche
     assert "Run surgepilot up" in result.stdout
     assert str(launcher) in result.stdout
     assert shell_rc.read_text(encoding="utf-8") == "preserve-me\n"
+
+
+def test_installer_prepares_newer_same_major_release_from_stable_installation(
+    tmp_path: Path,
+) -> None:
+    home = tmp_path / "home"
+    home.mkdir()
+    xdg_data_home = tmp_path / "data"
+
+    source_assets = tmp_path / "source-assets"
+    source_assets.mkdir()
+    source_installer = render_installer(source_assets, "v1.1.0")
+    write_release_assets(source_assets, version="v1.1.0")
+    with serve(source_assets) as base_url:
+        first = run_installer(
+            source_installer,
+            home=home,
+            xdg_data_home=xdg_data_home,
+            base_url=base_url,
+        )
+    assert first.returncode == 0, first.stderr
+
+    install_root = xdg_data_home / "surgepilot"
+    (install_root / ".release-state").write_text(
+        "schema=1\nphase=stable\ntarget=v1.1.0\nbase=v1.1.0\n",
+        encoding="utf-8",
+    )
+    (install_root / ".release-state").chmod(0o600)
+    (install_root / ".env").write_text("PRESERVE=yes\n", encoding="utf-8")
+
+    target_assets = tmp_path / "target-assets"
+    target_assets.mkdir()
+    target_installer = render_installer(target_assets, "v1.2.0")
+    write_release_assets(target_assets, version="v1.2.0")
+    with serve(target_assets) as base_url:
+        result = run_installer(
+            target_installer,
+            home=home,
+            xdg_data_home=xdg_data_home,
+            base_url=base_url,
+        )
+
+    assert result.returncode == 0, result.stderr
+    assert (install_root / ".release-state").read_text(encoding="utf-8") == (
+        "schema=1\nphase=prepared\ntarget=v1.2.0\nbase=v1.1.0\n"
+    )
+    assert (install_root / ".releases/v1.1.0").is_dir()
+    assert (install_root / ".releases/v1.2.0").is_dir()
+    assert (install_root / ".env").read_text(encoding="utf-8") == "PRESERVE=yes\n"
+    assert not Path(f"{install_root}.lock").exists()
+
+
+def test_same_target_installer_verifies_and_leaves_state_unchanged(tmp_path: Path) -> None:
+    assets = tmp_path / "assets"
+    assets.mkdir()
+    installer = render_installer(assets, "v1.2.0")
+    write_release_assets(assets, version="v1.2.0")
+    home = tmp_path / "home"
+    home.mkdir()
+    xdg_data_home = tmp_path / "data"
+
+    with serve(assets) as base_url:
+        first = run_installer(installer, home=home, xdg_data_home=xdg_data_home, base_url=base_url)
+        second = run_installer(installer, home=home, xdg_data_home=xdg_data_home, base_url=base_url)
+
+    assert first.returncode == 0, first.stderr
+    assert second.returncode == 0, second.stderr
+    install_root = xdg_data_home / "surgepilot"
+    assert (install_root / ".release-state").read_text(encoding="utf-8") == (
+        "schema=1\nphase=installed\ntarget=v1.2.0\nbase=none\n"
+    )
+    assert not Path(f"{install_root}.lock").exists()
+
+
+@pytest.mark.parametrize("source_version", ["v1.0.0", "v1.1.0"])
+def test_installer_bootstraps_supported_legacy_installation(
+    tmp_path: Path, source_version: str
+) -> None:
+    assets = tmp_path / "assets"
+    assets.mkdir()
+    installer = render_installer(assets, "v1.2.0")
+    write_release_assets(assets, version="v1.2.0")
+    source_build = tmp_path / "source-build"
+    source_build.mkdir()
+    source_archive, source_sidecar = write_release_assets(
+        source_build, version=source_version, legacy=True
+    )
+    shutil.copy2(source_archive, assets / source_archive.name)
+    shutil.copy2(source_sidecar, assets / source_sidecar.name)
+
+    home = tmp_path / "home"
+    home.mkdir()
+    xdg_data_home = tmp_path / "data"
+    install_root = xdg_data_home / "surgepilot"
+    shutil.copytree(source_build / "payload/surgepilot", install_root)
+    (install_root / ".env").write_text(
+        "COMPOSE_PROJECT_NAME=surgepilot\nPRESERVE=yes\n", encoding="utf-8"
+    )
+    (install_root / ".env").chmod(0o600)
+    (install_root / ".surgepilot").mkdir()
+    write_installed_launcher(home, install_root)
+
+    with serve(assets) as base_url:
+        result = run_installer(installer, home=home, xdg_data_home=xdg_data_home, base_url=base_url)
+
+    assert result.returncode == 0, result.stderr
+    assert (install_root / ".release-state").read_text(encoding="utf-8") == (
+        f"schema=1\nphase=unclassified\ntarget=v1.2.0\nbase={source_version}\n"
+    )
+    assert (install_root / "surgepilot").read_bytes() == (
+        install_root / ".releases/v1.2.0/surgepilot-dispatcher"
+    ).read_bytes()
+    assert (install_root / ".releases" / source_version).is_dir()
+    assert (install_root / ".releases/v1.2.0").is_dir()
+    assert (install_root / ".env").is_file()
+    assert (install_root / ".surgepilot").is_dir()
+
+
+def test_legacy_upgrade_rejects_symlinked_private_state_before_publication(
+    tmp_path: Path,
+) -> None:
+    assets = tmp_path / "assets"
+    assets.mkdir()
+    installer = render_installer(assets, "v1.2.0")
+    write_release_assets(assets, version="v1.2.0")
+    source_build = tmp_path / "source-build"
+    source_build.mkdir()
+    source_archive, source_sidecar = write_release_assets(
+        source_build, version="v1.1.0", legacy=True
+    )
+    shutil.copy2(source_archive, assets / source_archive.name)
+    shutil.copy2(source_sidecar, assets / source_sidecar.name)
+    home = tmp_path / "home"
+    home.mkdir()
+    xdg_data_home = tmp_path / "data"
+    install_root = xdg_data_home / "surgepilot"
+    shutil.copytree(source_build / "payload/surgepilot", install_root)
+    (install_root / ".env").write_text("COMPOSE_PROJECT_NAME=surgepilot\n", encoding="utf-8")
+    unsafe_target = tmp_path / "unsafe-private-state"
+    unsafe_target.mkdir()
+    (install_root / ".surgepilot").symlink_to(unsafe_target)
+    write_installed_launcher(home, install_root)
+
+    with serve(assets) as base_url:
+        result = run_installer(
+            installer,
+            home=home,
+            xdg_data_home=xdg_data_home,
+            base_url=base_url,
+        )
+
+    assert result.returncode != 0
+    assert "private state is unsafe" in result.stderr.lower()
+    assert not (install_root / ".release-state").exists()
+    assert not (install_root / ".releases").exists()
+
+
+def test_legacy_recovery_rejects_tampered_launcher(tmp_path: Path) -> None:
+    assets = tmp_path / "assets"
+    assets.mkdir()
+    installer = render_installer(assets, "v1.2.0")
+    write_release_assets(assets, version="v1.2.0")
+    source_build = tmp_path / "source-build"
+    source_build.mkdir()
+    source_archive, source_sidecar = write_release_assets(
+        source_build, version="v1.1.0", legacy=True
+    )
+    shutil.copy2(source_archive, assets / source_archive.name)
+    shutil.copy2(source_sidecar, assets / source_sidecar.name)
+
+    home = tmp_path / "home"
+    home.mkdir()
+    xdg_data_home = tmp_path / "data"
+    install_root = xdg_data_home / "surgepilot"
+    source_payload = source_build / "payload/surgepilot"
+    target_payload = assets / "payload/surgepilot"
+    shutil.copytree(source_payload, install_root)
+    (install_root / ".surgepilot").mkdir()
+    releases = install_root / ".releases"
+    releases.mkdir()
+    source_release = releases / "v1.1.0"
+    target_release = releases / "v1.2.0"
+    shutil.copytree(source_payload, source_release)
+    shutil.copytree(target_payload, target_release)
+    (source_release / ".surgepilot").symlink_to("../../.surgepilot")
+    (target_release / ".surgepilot").symlink_to("../../.surgepilot")
+    shutil.copy2(target_payload / "surgepilot-dispatcher", install_root / "surgepilot")
+    (install_root / "surgepilot").chmod(0o700)
+    launcher = write_installed_launcher(home, install_root)
+    launcher.write_text(
+        launcher.read_text(encoding="utf-8") + "# tampered\n",
+        encoding="utf-8",
+    )
+
+    with serve(assets) as base_url:
+        result = run_installer(
+            installer,
+            home=home,
+            xdg_data_home=xdg_data_home,
+            base_url=base_url,
+        )
+
+    assert result.returncode != 0
+    assert "launcher differs" in result.stderr.lower()
+    assert not (install_root / ".release-state").exists()
+    assert source_release.is_dir()
+    assert target_release.is_dir()
+    assert (install_root / "surgepilot").read_bytes() == (
+        target_payload / "surgepilot-dispatcher"
+    ).read_bytes()
+
+
+def test_schema1_upgrade_rejects_symlinked_private_state_before_publication(
+    tmp_path: Path,
+) -> None:
+    home = tmp_path / "home"
+    home.mkdir()
+    xdg_data_home = tmp_path / "data"
+    source_assets = tmp_path / "source-assets"
+    source_assets.mkdir()
+    source_installer = render_installer(source_assets, "v1.1.0")
+    write_release_assets(source_assets, version="v1.1.0")
+    with serve(source_assets) as base_url:
+        first = run_installer(
+            source_installer,
+            home=home,
+            xdg_data_home=xdg_data_home,
+            base_url=base_url,
+        )
+    assert first.returncode == 0, first.stderr
+    install_root = xdg_data_home / "surgepilot"
+    state = install_root / ".release-state"
+    state.write_text("schema=1\nphase=stable\ntarget=v1.1.0\nbase=v1.1.0\n", encoding="utf-8")
+    state.chmod(0o600)
+    unsafe_target = tmp_path / "unsafe-private-state"
+    unsafe_target.mkdir()
+    (install_root / ".surgepilot").symlink_to(unsafe_target)
+    target_assets = tmp_path / "target-assets"
+    target_assets.mkdir()
+    target_installer = render_installer(target_assets, "v1.2.0")
+    write_release_assets(target_assets, version="v1.2.0")
+
+    with serve(target_assets) as base_url:
+        result = run_installer(
+            target_installer,
+            home=home,
+            xdg_data_home=xdg_data_home,
+            base_url=base_url,
+        )
+
+    assert result.returncode != 0
+    assert "private state is unsafe" in result.stderr.lower()
+    assert "target=v1.1.0" in state.read_text(encoding="utf-8")
+    assert not (install_root / ".releases/v1.2.0").exists()
+
+
+@pytest.mark.parametrize("owner_pid", [os.getpid(), 999999])
+def test_upgrade_installer_never_reclaims_existing_deployment_lock(
+    tmp_path: Path, owner_pid: int
+) -> None:
+    home = tmp_path / "home"
+    home.mkdir()
+    xdg_data_home = tmp_path / "data"
+    source_assets = tmp_path / "source-assets"
+    source_assets.mkdir()
+    source_installer = render_installer(source_assets, "v1.1.0")
+    write_release_assets(source_assets, version="v1.1.0")
+    with serve(source_assets) as base_url:
+        first = run_installer(
+            source_installer,
+            home=home,
+            xdg_data_home=xdg_data_home,
+            base_url=base_url,
+        )
+    assert first.returncode == 0, first.stderr
+    install_root = xdg_data_home / "surgepilot"
+    state = install_root / ".release-state"
+    state.write_text("schema=1\nphase=stable\ntarget=v1.1.0\nbase=v1.1.0\n", encoding="utf-8")
+    state.chmod(0o600)
+    lock = Path(f"{install_root}.lock")
+    lock.mkdir(mode=0o700)
+    owner = lock / "owner"
+    owner.write_text(f"schema=1\npid={owner_pid}\nnonce=test-lock\n", encoding="utf-8")
+    owner.chmod(0o600)
+
+    target_assets = tmp_path / "target-assets"
+    target_assets.mkdir()
+    target_installer = render_installer(target_assets, "v1.2.0")
+    write_release_assets(target_assets, version="v1.2.0")
+    with serve(target_assets) as base_url:
+        result = run_installer(
+            target_installer,
+            home=home,
+            xdg_data_home=xdg_data_home,
+            base_url=base_url,
+        )
+
+    assert result.returncode != 0
+    assert ("running" if owner_pid == os.getpid() else "stale") in result.stderr.lower()
+    assert lock.is_dir()
+    assert owner.is_file()
+    assert "target=v1.1.0" in state.read_text(encoding="utf-8")
 
 
 @pytest.mark.parametrize(

@@ -71,6 +71,22 @@ Volume と `.env` を削除せずに Stack を停止するには、次を実行�
 surgepilot down
 ```
 
+### インストール済み Release のアップグレード
+
+PostgreSQL、MinIO、その他の永続 Volume をバックアップし、実行中の Run と Load Node の
+初期化が完了してから、同じ 2 つのコマンドを再度実行します。
+
+```sh
+curl -fsSL https://github.com/latentrun/SurgePilot/releases/latest/download/install.sh | sh
+surgepilot up
+```
+
+Installer は、同じ Major Version に属する明示的な新しい Release を検証して準備します。
+サポート対象の処理が実行中の場合、`surgepilot up` は Migration を拒否します。Target Database
+Migration の開始後は、同じ Target を再試行して Recovery します。Database の自動 Downgrade や
+Rollback はありません。Control Plane の Upgrade が成功した後も記録済み Runtime が古いままの
+Load Node は、必要に応じて明示的に再初期化してください。
+
 ## ソースコードから起動する
 
 ソースコードからの起動には Git、GNU Make または互換実装、POSIX Shell、Perl、`curl`、
