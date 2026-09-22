@@ -1710,7 +1710,7 @@ wheels = [
 
 [[package]]
 name = "surgepilot-api"
-version = "1.2.0"
+version = "1.2.1"
 source = { editable = "apps/api" }
 dependencies = [
     { name = "alembic" },
@@ -1761,7 +1761,7 @@ dev = [
 
 [[package]]
 name = "surgepilot-runner"
-version = "1.2.0"
+version = "1.2.1"
 source = { editable = "apps/runner" }
 dependencies = [
     { name = "click" },
