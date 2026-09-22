@@ -322,8 +322,8 @@ def test_installer_prepares_newer_same_major_release_from_stable_installation(
 def test_same_target_installer_verifies_and_leaves_state_unchanged(tmp_path: Path) -> None:
     assets = tmp_path / "assets"
     assets.mkdir()
-    installer = render_installer(assets, "v1.2.0")
-    write_release_assets(assets, version="v1.2.0")
+    installer = render_installer(assets, "v1.2.1")
+    write_release_assets(assets, version="v1.2.1")
     home = tmp_path / "home"
     home.mkdir()
     xdg_data_home = tmp_path / "data"
@@ -336,7 +336,7 @@ def test_same_target_installer_verifies_and_leaves_state_unchanged(tmp_path: Pat
     assert second.returncode == 0, second.stderr
     install_root = xdg_data_home / "surgepilot"
     assert (install_root / ".release-state").read_text(encoding="utf-8") == (
-        "schema=1\nphase=installed\ntarget=v1.2.0\nbase=none\n"
+        "schema=1\nphase=installed\ntarget=v1.2.1\nbase=none\n"
     )
     assert not Path(f"{install_root}.lock").exists()
 
@@ -347,8 +347,8 @@ def test_installer_bootstraps_supported_legacy_installation(
 ) -> None:
     assets = tmp_path / "assets"
     assets.mkdir()
-    installer = render_installer(assets, "v1.2.0")
-    write_release_assets(assets, version="v1.2.0")
+    installer = render_installer(assets, "v1.2.1")
+    write_release_assets(assets, version="v1.2.1")
     source_build = tmp_path / "source-build"
     source_build.mkdir()
     source_archive, source_sidecar = write_release_assets(
@@ -374,13 +374,13 @@ def test_installer_bootstraps_supported_legacy_installation(
 
     assert result.returncode == 0, result.stderr
     assert (install_root / ".release-state").read_text(encoding="utf-8") == (
-        f"schema=1\nphase=unclassified\ntarget=v1.2.0\nbase={source_version}\n"
+        f"schema=1\nphase=unclassified\ntarget=v1.2.1\nbase={source_version}\n"
     )
     assert (install_root / "surgepilot").read_bytes() == (
-        install_root / ".releases/v1.2.0/surgepilot-dispatcher"
+        install_root / ".releases/v1.2.1/surgepilot-dispatcher"
     ).read_bytes()
     assert (install_root / ".releases" / source_version).is_dir()
-    assert (install_root / ".releases/v1.2.0").is_dir()
+    assert (install_root / ".releases/v1.2.1").is_dir()
     assert (install_root / ".env").is_file()
     assert (install_root / ".surgepilot").is_dir()
 
@@ -390,8 +390,8 @@ def test_legacy_upgrade_rejects_symlinked_private_state_before_publication(
 ) -> None:
     assets = tmp_path / "assets"
     assets.mkdir()
-    installer = render_installer(assets, "v1.2.0")
-    write_release_assets(assets, version="v1.2.0")
+    installer = render_installer(assets, "v1.2.1")
+    write_release_assets(assets, version="v1.2.1")
     source_build = tmp_path / "source-build"
     source_build.mkdir()
     source_archive, source_sidecar = write_release_assets(
@@ -427,8 +427,8 @@ def test_legacy_upgrade_rejects_symlinked_private_state_before_publication(
 def test_legacy_recovery_rejects_tampered_launcher(tmp_path: Path) -> None:
     assets = tmp_path / "assets"
     assets.mkdir()
-    installer = render_installer(assets, "v1.2.0")
-    write_release_assets(assets, version="v1.2.0")
+    installer = render_installer(assets, "v1.2.1")
+    write_release_assets(assets, version="v1.2.1")
     source_build = tmp_path / "source-build"
     source_build.mkdir()
     source_archive, source_sidecar = write_release_assets(
@@ -448,7 +448,7 @@ def test_legacy_recovery_rejects_tampered_launcher(tmp_path: Path) -> None:
     releases = install_root / ".releases"
     releases.mkdir()
     source_release = releases / "v1.1.0"
-    target_release = releases / "v1.2.0"
+    target_release = releases / "v1.2.1"
     shutil.copytree(source_payload, source_release)
     shutil.copytree(target_payload, target_release)
     (source_release / ".surgepilot").symlink_to("../../.surgepilot")

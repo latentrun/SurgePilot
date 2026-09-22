@@ -26,6 +26,8 @@ def _engine():
     database_url = os.environ.get("DATABASE_URL", "")
     if not database_url:
         raise TransitionProbeError("DATABASE_URL is required")
+    if database_url.startswith("postgresql://"):
+        database_url = database_url.replace("postgresql://", "postgresql+psycopg://", 1)
     return create_engine(
         database_url,
         connect_args={

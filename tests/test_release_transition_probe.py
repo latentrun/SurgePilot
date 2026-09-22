@@ -122,9 +122,18 @@ def test_active_work_reports_all_bounded_categories(monkeypatch) -> None:
     }
 
 
-def test_engine_sets_fixed_postgres_timeouts(monkeypatch) -> None:
+@pytest.mark.parametrize(
+    ("configured_url", "expected_url"),
+    [
+        ("postgresql://example", "postgresql+psycopg://example"),
+        ("postgresql+psycopg://example", "postgresql+psycopg://example"),
+    ],
+)
+def test_engine_uses_psycopg_and_sets_fixed_postgres_timeouts(
+    monkeypatch, configured_url: str, expected_url: str
+) -> None:
     captured: dict[str, object] = {}
-    monkeypatch.setenv("DATABASE_URL", "postgresql://example")
+    monkeypatch.setenv("DATABASE_URL", configured_url)
 
     def fake_create_engine(url: str, **kwargs):
         captured.update(url=url, **kwargs)
@@ -134,6 +143,7 @@ def test_engine_sets_fixed_postgres_timeouts(monkeypatch) -> None:
 
     probe._engine()
 
+    assert captured["url"] == expected_url
     assert captured["connect_args"] == {
         "connect_timeout": 10,
         "options": "-c statement_timeout=10000 -c lock_timeout=5000",
