@@ -75,6 +75,22 @@ To stop the stack without deleting its volumes or `.env`:
 surgepilot down
 ```
 
+### Upgrade an installed release
+
+Back up PostgreSQL, MinIO, and the other persistent volumes, finish active Runs and Load Node
+initialization work, then repeat the same two commands:
+
+```sh
+curl -fsSL https://github.com/latentrun/SurgePilot/releases/latest/download/install.sh | sh
+surgepilot up
+```
+
+The installer verifies and prepares one exact newer same-major release. `surgepilot up` refuses to
+migrate while supported work is active. Once target database migration starts, recovery is a retry
+of the same target; there is no automatic database downgrade or rollback. After a successful
+control-plane upgrade, explicitly reinitialize required Load Nodes whose recorded Runtime is still
+the older version.
+
 ## Start from source
 
 The source path requires Git, GNU or compatible Make, a POSIX shell, Perl, `curl`,

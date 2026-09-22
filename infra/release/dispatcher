@@ -1,0 +1,195 @@
+#!/bin/sh
+set -eu
+umask 077
+
+INSTALL_ROOT=$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd)
+LOCK_DIR="${INSTALL_ROOT}.lock"
+LOCK_PARENT=${LOCK_DIR%/*}
+STATE_FILE="$INSTALL_ROOT/.release-state"
+OWNER_CANDIDATE=
+LOCK_OWNED=false
+nonce=
+
+fail() {
+    printf 'SurgePilot: %s\n' "$*" >&2
+    exit 1
+}
+
+file_identity() {
+    case "$(uname -s)" in
+        Linux) stat -c '%u %a' "$1" ;;
+        Darwin) stat -f '%u %Lp' "$1" ;;
+        *) fail "unsupported operating system for local state validation." ;;
+    esac
+}
+
+require_owned_mode() {
+    identity=$(file_identity "$1") || fail "$3 cannot be inspected safely."
+    [ "$identity" = "$(id -u) $2" ] || fail "$3 has unsafe ownership or permissions."
+}
+
+require_owned() {
+    identity=$(file_identity "$1") || fail "$2 cannot be inspected safely."
+    owner_uid=${identity%% *}
+    [ "$owner_uid" = "$(id -u)" ] || fail "$2 has unsafe ownership."
+}
+
+is_version() {
+    printf '%s\n' "$1" | grep -Eq '^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$'
+}
+
+require_lower_same_major() {
+    source_numbers=${1#v}
+    source_major=${source_numbers%%.*}
+    source_remainder=${source_numbers#*.}
+    source_minor=${source_remainder%%.*}
+    source_patch=${source_remainder#*.}
+    target_numbers=${2#v}
+    target_major=${target_numbers%%.*}
+    target_remainder=${target_numbers#*.}
+    target_minor=${target_remainder%%.*}
+    target_patch=${target_remainder#*.}
+    [ "$source_major" -eq "$target_major" ] || fail "release state versions cross a product major."
+    if [ "$source_minor" -gt "$target_minor" ] || \
+        { [ "$source_minor" -eq "$target_minor" ] && [ "$source_patch" -ge "$target_patch" ]; }; then
+        fail "release state base is not lower than target."
+    fi
+}
+
+cleanup_candidate() {
+    if [ -n "$OWNER_CANDIDATE" ]; then
+        rm -f "$OWNER_CANDIDATE"
+    fi
+}
+
+cleanup_lock() {
+    if [ "$LOCK_OWNED" != "true" ] || [ ! -f "$LOCK_DIR/owner" ] || \
+        [ -L "$LOCK_DIR/owner" ]; then
+        return
+    fi
+    if grep -q "^pid=$$\$" "$LOCK_DIR/owner" && \
+        grep -q "^nonce=$nonce\$" "$LOCK_DIR/owner"; then
+        rm -f "$LOCK_DIR/owner"
+        rmdir "$LOCK_DIR" 2>/dev/null || :
+    fi
+}
+
+cleanup() {
+    cleanup_candidate
+    cleanup_lock
+}
+
+trap cleanup 0
+trap 'exit 129' HUP
+trap 'exit 130' INT
+trap 'exit 143' TERM
+
+[ -d "$INSTALL_ROOT" ] && [ ! -L "$INSTALL_ROOT" ] || \
+    fail "installation root is missing or unsafe: $INSTALL_ROOT"
+require_owned "$INSTALL_ROOT" "installation root"
+
+OWNER_CANDIDATE=$(mktemp "$LOCK_PARENT/.surgepilot-owner.XXXXXX") || \
+    fail "cannot prepare deployment lock owner state."
+nonce="$$-${OWNER_CANDIDATE##*.}"
+printf 'schema=1\npid=%s\nnonce=%s\n' "$$" "$nonce" > "$OWNER_CANDIDATE" || \
+    fail "cannot write deployment lock owner state."
+
+if ! mkdir -m 700 "$LOCK_DIR" 2>/dev/null; then
+    [ -d "$LOCK_DIR" ] && [ ! -L "$LOCK_DIR" ] && \
+        [ -f "$LOCK_DIR/owner" ] && [ ! -L "$LOCK_DIR/owner" ] || \
+        fail "deployment lock state is unsafe at $LOCK_DIR; inspect it manually."
+    require_owned_mode "$LOCK_DIR" 700 "deployment lock"
+    require_owned_mode "$LOCK_DIR/owner" 600 "deployment lock owner"
+    [ "$(ls -A "$LOCK_DIR" 2>/dev/null)" = owner ] || \
+        fail "deployment lock state is unsafe at $LOCK_DIR; inspect it manually."
+    {
+        IFS= read -r owner_schema || fail "deployment lock owner state is unsafe."
+        IFS= read -r owner_pid_line || fail "deployment lock owner state is unsafe."
+        IFS= read -r owner_nonce_line || fail "deployment lock owner state is unsafe."
+        if IFS= read -r _; then fail "deployment lock owner state is unsafe."; fi
+    } < "$LOCK_DIR/owner"
+    owner_pid=${owner_pid_line#pid=}
+    owner_nonce=${owner_nonce_line#nonce=}
+    [ "$owner_schema" = schema=1 ] && [ "$owner_pid_line" = "pid=$owner_pid" ] && \
+        [ "$owner_nonce_line" = "nonce=$owner_nonce" ] && [ -n "$owner_nonce" ] || \
+        fail "deployment lock owner state is unsafe; inspect $LOCK_DIR manually."
+    case "$owner_pid" in
+        ''|*[!0-9]*)
+            fail "deployment lock owner state is unsafe; inspect $LOCK_DIR manually."
+            ;;
+    esac
+    if kill -0 "$owner_pid" 2>/dev/null || ps -p "$owner_pid" >/dev/null 2>&1; then
+        fail "another SurgePilot command is running with PID $owner_pid."
+    fi
+    fail "a stale deployment lock exists at $LOCK_DIR; verify no SurgePilot command is running before removing that exact directory."
+fi
+if ! mv "$OWNER_CANDIDATE" "$LOCK_DIR/owner"; then
+    OWNER_CANDIDATE=
+    fail "cannot publish deployment lock owner state; inspect $LOCK_DIR manually."
+fi
+OWNER_CANDIDATE=
+LOCK_OWNED=true
+require_owned_mode "$LOCK_DIR" 700 "deployment lock"
+require_owned_mode "$LOCK_DIR/owner" 600 "deployment lock owner"
+
+[ -f "$STATE_FILE" ] && [ ! -L "$STATE_FILE" ] || \
+    fail "release state is missing or unsafe: $STATE_FILE"
+require_owned_mode "$STATE_FILE" 600 "release state"
+{
+    IFS= read -r schema_line || fail "release state is incomplete."
+    IFS= read -r phase_line || fail "release state is incomplete."
+    IFS= read -r target_line || fail "release state is incomplete."
+    IFS= read -r base_line || fail "release state is incomplete."
+    if IFS= read -r _; then
+        fail "release state contains unexpected fields."
+    fi
+} < "$STATE_FILE"
+
+[ "$schema_line" = "schema=1" ] || fail "release state schema is unsupported."
+phase=${phase_line#phase=}
+target=${target_line#target=}
+base=${base_line#base=}
+[ "$phase_line" = "phase=$phase" ] && [ "$target_line" = "target=$target" ] && \
+    [ "$base_line" = "base=$base" ] || fail "release state is malformed."
+case "$phase" in
+    installed|stable|unclassified|prepared|migration_started) ;;
+    *) fail "release state phase is unsupported." ;;
+esac
+is_version "$target" || fail "release state target is malformed."
+if [ "$base" != none ]; then
+    is_version "$base" || fail "release state base is malformed."
+fi
+case "$phase" in
+    installed)
+        [ "$base" = none ] || fail "release state fields are inconsistent."
+        ;;
+    stable)
+        [ "$base" = "$target" ] || fail "release state fields are inconsistent."
+        ;;
+    unclassified|prepared)
+        [ "$base" != none ] || fail "release state fields are inconsistent."
+        require_lower_same_major "$base" "$target"
+        ;;
+    migration_started)
+        if [ "$base" != none ]; then require_lower_same_major "$base" "$target"; fi
+        ;;
+esac
+
+RELEASE_ROOT="$INSTALL_ROOT/.releases/$target"
+WRAPPER="$RELEASE_ROOT/surgepilot"
+[ -d "$RELEASE_ROOT" ] && [ ! -L "$RELEASE_ROOT" ] || \
+    fail "target release directory is missing or unsafe: $RELEASE_ROOT"
+[ -f "$WRAPPER" ] && [ ! -L "$WRAPPER" ] && [ -x "$WRAPPER" ] || \
+    fail "target release wrapper is missing or unsafe: $WRAPPER"
+
+SURGEPILOT_DEPLOYMENT_ROOT=$INSTALL_ROOT
+SURGEPILOT_RELEASE_ROOT=$RELEASE_ROOT
+SURGEPILOT_RELEASE_PHASE=$phase
+SURGEPILOT_RELEASE_TARGET=$target
+SURGEPILOT_RELEASE_BASE=$base
+SURGEPILOT_LOCK_NONCE=$nonce
+SURGEPILOT_LOCK_PID=$$
+export SURGEPILOT_DEPLOYMENT_ROOT SURGEPILOT_RELEASE_ROOT SURGEPILOT_RELEASE_PHASE
+export SURGEPILOT_RELEASE_TARGET SURGEPILOT_RELEASE_BASE SURGEPILOT_LOCK_NONCE
+export SURGEPILOT_LOCK_PID
+exec "$WRAPPER" "$@"

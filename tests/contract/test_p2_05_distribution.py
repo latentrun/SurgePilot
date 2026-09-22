@@ -389,7 +389,25 @@ def test_release_workflows_validate_and_install_generated_assets() -> None:
         "bundle",
         "installer-smoke",
         "release-smoke",
+        "upgrade-smoke",
     ]
+    upgrade = formal_jobs["upgrade-smoke"]
+    assert upgrade["needs"] == "bundle"
+    assert upgrade["strategy"]["matrix"]["include"] == [
+        {"source": "v1.0.0", "source_mode": "running"},
+        {"source": "v1.1.0", "source_mode": "running"},
+        {"source": "v1.1.0", "source_mode": "clean_down"},
+    ]
+    upgrade_run = next(
+        step["run"]
+        for step in upgrade["steps"]
+        if step.get("name") == "Upgrade persisted source data and complete a target Run"
+    )
+    assert "SURGEPILOT_E2E_UPGRADE_STATE_FILE" in upgrade_run
+    assert "SURGEPILOT_E2E_REUSE_UPGRADE_STATE=true" in upgrade_run
+    publish_condition = formal_jobs["publish"]["if"]
+    assert "needs.upgrade-smoke.result == 'success'" in publish_condition
+    assert "skipped" not in publish_condition
 
 
 def test_release_smokes_prepare_runtime_state_with_owner_only_permissions() -> None:
@@ -397,7 +415,7 @@ def test_release_smokes_prepare_runtime_state_with_owner_only_permissions() -> N
         (
             ROOT / ".github/workflows/release.yml",
             "\n  release-smoke:\n",
-            "\n  publish:\n",
+            "\n  upgrade-smoke:\n",
         ),
         (
             ROOT / ".github/workflows/release-validation.yml",
@@ -512,7 +530,7 @@ def test_release_smokes_preprovision_complete_non_loopback_environment() -> None
         (
             ROOT / ".github/workflows/release.yml",
             "\n  release-smoke:\n",
-            "\n  publish:\n",
+            "\n  upgrade-smoke:\n",
             "amd64,arm64",
         ),
         (
@@ -530,7 +548,7 @@ def test_release_smokes_preprovision_complete_non_loopback_environment() -> None
             smoke = smoke.split(section_end, maxsplit=1)[0]
 
         up_index = smoke.index('"$SURGEPILOT" up')
-        bootstrap_index = smoke.index('python "$INSTALL_ROOT/scripts/bootstrap_deployment_env.py"')
+        bootstrap_index = smoke.index('python "$RELEASE_ROOT/scripts/bootstrap_deployment_env.py"')
         compose_config_index = smoke.index('docker compose --env-file "$INSTALL_ROOT/.env"')
         assert bootstrap_index < compose_config_index < up_index
         assert "smoke_host=$(ip -4 route get 1.1.1.1" in smoke

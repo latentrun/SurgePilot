@@ -144,6 +144,7 @@ def test_assemble_bundle_pins_images_and_excludes_source_and_private_state(tmp_p
     assert result.installer.stat().st_mode & 0o111
     manifest = json.loads((result.bundle_root / "release-manifest.json").read_text())
     assert manifest["images"]["api"]["digest"] == f"sha256:{'1' * 64}"
+    assert manifest["minimumUpgradeVersion"] == VERSION
     assert manifest["runtimes"]["amd64"]["sha256"]
     assert (result.bundle_root / "VERSION").read_text(encoding="utf-8") == f"{VERSION}\n"
     compose = (result.bundle_root / "compose/docker-compose.yml").read_text()
@@ -152,6 +153,11 @@ def test_assemble_bundle_pins_images_and_excludes_source_and_private_state(tmp_p
     wrapper = (result.bundle_root / "surgepilot").read_text()
     assert f"ghcr.io/latentrun/surgepilot-api@sha256:{'1' * 64}" in wrapper
     assert "@@RELEASE_VERSION@@" not in wrapper
+    dispatcher = result.bundle_root / "surgepilot-dispatcher"
+    assert dispatcher.is_file()
+    assert dispatcher.stat().st_mode & 0o111
+    assert "@@RELEASE_VERSION@@" not in dispatcher.read_text(encoding="utf-8")
+    assert (result.bundle_root / "scripts/release_transition_probe.py").is_file()
     bundled_fetch = subprocess.run(
         [sys.executable, str(result.bundle_root / "scripts/fetch_runtime_release.py"), "--help"],
         cwd=result.bundle_root,
@@ -167,6 +173,8 @@ def test_assemble_bundle_pins_images_and_excludes_source_and_private_state(tmp_p
     assert not any(name.startswith("surgepilot/apps/") for name in names)
     assert not any("ai-skills" in name for name in names)
     assert not any(name.endswith(".tar.gz") and "runtime" in name for name in names)
+    assert "surgepilot/surgepilot-dispatcher" in names
+    assert "surgepilot/scripts/release_transition_probe.py" in names
 
 
 def test_assemble_bundle_rejects_non_semantic_version_or_wrong_image_repository(

@@ -1,6 +1,6 @@
 # P2-06 LAN-first Release Bootstrap Usability
 
-- Document status: Active through `ADR-0018`, amended by `ADR-0020`, `ADR-0021`, and `ADR-0024`; implementation
+- Document status: Active through `ADR-0018`, amended by `ADR-0020`, `ADR-0021`, `ADR-0024`, and `ADR-0029`; implementation
   authorized within this Slice.
 - Phase: P2
 - Capability: `lan_first_release_bootstrap`
@@ -19,6 +19,8 @@
   `docs/sdd/adr/ADR-0021-p2-release-up-configuration-confirmation.md`.
 - User-local Release installer amendment ADR:
   `docs/sdd/adr/ADR-0024-p2-user-local-release-installer.md`.
+- User-local Release transition amendment ADR:
+  `docs/sdd/adr/ADR-0029-user-local-release-upgrade.md`.
 
 ## 1. Core Decision
 
@@ -49,9 +51,10 @@ The design remains intentionally small:
 1. no network scan or automatic interface choice;
 2. no first-run Web wizard;
 3. no new API, database table, Monitoring setting, or Runner protocol;
-4. ADR-0024 adds only one version-pinned, user-local platform Release installer and checksum with
-   separate `surgepilot up`; package managers, system installers, Docker installation, automatic
-   upgrades, and new public workflow dispatch capability remain excluded;
+4. ADR-0024 and ADR-0029 add only one version-pinned, user-local platform Release installer and its
+   explicit exact-target transition with separate `surgepilot up`; package managers, system
+   installers, Docker installation, background updates, downgrade, automatic rollback, and new
+   public workflow dispatch capability remain excluded;
 5. no change to source-checkout `make start-full-stack` behavior.
 
 P2-06 is the active release-path amendment to P2-05. ADR-0017 remains authoritative outside the
@@ -59,8 +62,9 @@ explicit partial supersession recorded by ADR-0018. ADR-0020 partially supersede
 new-release `auto` default and interactive Runtime architecture prompt. ADR-0021 partially
 supersedes only conflicting existing-`.env` not-prompted/never-rewritten wording and authorizes
 default-Yes review plus an explicit interactive four-field standard-LAN update.
-ADR-0024 partially supersedes only blanket platform-installer/downloader exclusions and does not
-change any `up` configuration or startup behavior.
+ADR-0024 partially supersedes blanket platform-installer/downloader exclusions. ADR-0029 further
+authorizes only the bounded installed-release transition and its state-aware `up|down|status|logs`
+behavior; normal stable and manually extracted bundle behavior remains unchanged.
 
 ## 2. Scope and Supersession Boundary
 

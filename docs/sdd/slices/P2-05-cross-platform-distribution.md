@@ -1,6 +1,6 @@
 # P2-05 Cross-platform Distribution and Full-stack Release Bootstrap
 
-- Document status: Accepted and active through `docs/sdd/adr/ADR-0017-p2-cross-platform-distribution.md`, with source-preview startup amended by `docs/sdd/adr/ADR-0019-p2-source-preview-startup.md`, the new-release Runtime default amended by `docs/sdd/adr/ADR-0020-p2-release-dual-runtime-default.md`, the user-local platform Release installer amended by `docs/sdd/adr/ADR-0024-p2-user-local-release-installer.md`, and product/artifact version identity amended by `docs/sdd/adr/ADR-0027-product-version-and-artifact-identity.md`; implementation backfill is recorded in §17.1.
+- Document status: Accepted and active through `docs/sdd/adr/ADR-0017-p2-cross-platform-distribution.md`, with source-preview startup amended by `docs/sdd/adr/ADR-0019-p2-source-preview-startup.md`, the new-release Runtime default amended by `docs/sdd/adr/ADR-0020-p2-release-dual-runtime-default.md`, the user-local platform Release installer amended by `docs/sdd/adr/ADR-0024-p2-user-local-release-installer.md`, product/artifact version identity amended by `docs/sdd/adr/ADR-0027-product-version-and-artifact-identity.md`, and bounded installed-release transitions amended by `docs/sdd/adr/ADR-0029-user-local-release-upgrade.md`; implementation backfill is recorded in §17.1.
 - Phase: P2
 - Capability: `cross_platform_distribution`
 - Scope Gate: `docs/sdd/00-product-scope-and-priority.md` §7 deployment expansion, plus the open-source deployment success criteria in `docs/prd/PRD.md` §3.3 and §4.2
@@ -27,6 +27,10 @@
   `docs/sdd/adr/ADR-0024-p2-user-local-release-installer.md` supersedes only blanket platform
   installer/downloader exclusions. It authorizes a version-pinned POSIX installer, bundle checksum,
   user-owned launcher, and installer smoke while leaving `up` as a separate interactive command.
+- User-local Release transition amendment:
+  `docs/sdd/adr/ADR-0029-user-local-release-upgrade.md` supersedes ADR-0024's fail-on-existing-root
+  rule only for its exact-target, same-major, forward-only installed transition. It preserves the
+  existing command surface and excludes background updates, downgrade, and automatic rollback.
 
 ## 1. Core Decision
 
@@ -56,8 +60,8 @@ Load Nodes and the Runtime remain Linux-only. macOS support means:
 4. Runtime artifacts built from macOS must be produced inside a Linux builder container and must never contain macOS executables labeled as Linux.
 
 P2-05 does not create a runtime-management product, general installer platform, package manager,
-orchestration platform, or automatic upgrade system. ADR-0024 authorizes only one bounded
-user-local installer for this existing release bundle.
+orchestration platform, or automatic upgrade system. ADR-0024 and ADR-0029 authorize only one
+bounded user-local installer and its explicit exact-target transition for this release bundle.
 
 The complete product experience has two intentionally separate delivery paths:
 
@@ -148,7 +152,8 @@ P2-05 must not implement:
 3. Homebrew, apt, yum, winget, Chocolatey, or another package-manager distribution.
 4. Windows control-plane or Windows Load Node support.
 5. A single all-in-one image that combines Web, API, databases, object storage, Monitoring, and Runner processes.
-6. Automatic application upgrade, downgrade, migration orchestration, rollback, release channel selection, or background update checks.
+6. Background or channel-driven application updates, downgrade, automatic rollback, or migration
+   orchestration outside ADR-0029's explicit bounded installed-release transition.
 7. Runtime UI, Runtime Catalog, Runtime upload API, version negotiation, gray release, automatic cleanup, or automatic rollback.
 8. Runtime storage in MinIO, Dependency Files, Run artifacts, the database, or another product-managed storage surface.
 9. Load Node direct download of Runtime assets or GitHub credentials; api-worker remains the component that pushes Runtime through SFTP.
@@ -159,8 +164,8 @@ P2-05 must not implement:
 14. Changing the Runner protocol, Run state machine, Workspace semantics, storage backend, or existing Load Node credential boundary.
 15. Resumable same-version release publication, draft reconciliation, or byte-for-byte continuation of a partially published release.
 16. Package-manager/system installers, Docker installation, `sudo`, shell-startup-file mutation,
-    automatic update/rollback/uninstall, or a one-pipeline install-and-start command. The bounded
-    ADR-0024 user-local installer is the only installer exception.
+    background update/automatic rollback/uninstall, or a one-pipeline install-and-start command.
+    The bounded ADR-0024 installer and ADR-0029 exact-target transition are the only exceptions.
 
 ## 6. Platform Support Contract
 

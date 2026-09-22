@@ -4,12 +4,20 @@ set -eu
 RELEASE_VERSION="@@RELEASE_VERSION@@"
 API_IMAGE="@@API_IMAGE@@"
 COMMAND_NAME=${SURGEPILOT_COMMAND_NAME:-./surgepilot}
-ROOT=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
-BASE_COMPOSE="$ROOT/compose/docker-compose.yml"
-ENV_FILE="$ROOT/.env"
+SCRIPT_ROOT=$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd)
+RELEASE_ROOT=${SURGEPILOT_RELEASE_ROOT:-$SCRIPT_ROOT}
+DEPLOYMENT_ROOT=${SURGEPILOT_DEPLOYMENT_ROOT:-$RELEASE_ROOT}
+ENV_FILE="$DEPLOYMENT_ROOT/.env"
+INSTALLED_MODE=false
+DEPLOYMENT_LOCK_DIR=
 HELPER_TEMP_DIR=
 HELPER_PASSWD=
 HELPER_OUTPUT=
+STATE_CANDIDATE=
+RELEASE_PHASE=manual
+RELEASE_BASE=none
+TRANSITION_SOURCE=none
+ACTIVE_SERVICE_CONTAINERS=
 
 usage() {
     cat <<USAGE
@@ -49,10 +57,298 @@ cleanup_helper_state() {
     fi
 }
 
-trap cleanup_helper_state 0
+cleanup_deployment_lock() {
+    if [ "$INSTALLED_MODE" != "true" ] || [ ! -d "$DEPLOYMENT_LOCK_DIR" ] || \
+        [ -L "$DEPLOYMENT_LOCK_DIR" ] || [ ! -f "$DEPLOYMENT_LOCK_DIR/owner" ] || \
+        [ -L "$DEPLOYMENT_LOCK_DIR/owner" ]; then
+        return
+    fi
+    if [ "$(ls -A "$DEPLOYMENT_LOCK_DIR" 2>/dev/null)" = "owner" ] && \
+        grep -q "^pid=$$\$" "$DEPLOYMENT_LOCK_DIR/owner" && \
+        grep -q "^nonce=$SURGEPILOT_LOCK_NONCE\$" "$DEPLOYMENT_LOCK_DIR/owner"; then
+        rm -f "$DEPLOYMENT_LOCK_DIR/owner"
+        rmdir "$DEPLOYMENT_LOCK_DIR" 2>/dev/null || :
+    fi
+}
+
+cleanup() {
+    cleanup_helper_state
+    if [ -n "$STATE_CANDIDATE" ]; then
+        rm -f "$STATE_CANDIDATE"
+        STATE_CANDIDATE=
+    fi
+    cleanup_deployment_lock
+}
+
+validate_dispatcher_context() {
+    if [ "${SURGEPILOT_DEPLOYMENT_ROOT+x}" != x ]; then
+        [ "${SURGEPILOT_RELEASE_ROOT+x}" != x ] && \
+            [ "${SURGEPILOT_RELEASE_PHASE+x}" != x ] && \
+            [ "${SURGEPILOT_RELEASE_TARGET+x}" != x ] && \
+            [ "${SURGEPILOT_RELEASE_BASE+x}" != x ] && \
+            [ "${SURGEPILOT_LOCK_NONCE+x}" != x ] && \
+            [ "${SURGEPILOT_LOCK_PID+x}" != x ] || \
+            fail "incomplete internal dispatcher context."
+        return
+    fi
+    [ "${SURGEPILOT_RELEASE_ROOT+x}" = x ] && \
+        [ "${SURGEPILOT_RELEASE_PHASE+x}" = x ] && \
+        [ "${SURGEPILOT_RELEASE_TARGET+x}" = x ] && \
+        [ "${SURGEPILOT_RELEASE_BASE+x}" = x ] && \
+        [ "${SURGEPILOT_LOCK_NONCE+x}" = x ] && \
+        [ "${SURGEPILOT_LOCK_PID+x}" = x ] || \
+        fail "incomplete internal dispatcher context."
+    [ "$SURGEPILOT_LOCK_PID" = "$$" ] || fail "internal deployment lock owner is invalid."
+    [ -d "$DEPLOYMENT_ROOT" ] && [ ! -L "$DEPLOYMENT_ROOT" ] || \
+        fail "internal deployment root is unsafe."
+    DEPLOYMENT_LOCK_DIR="${DEPLOYMENT_ROOT}.lock"
+    [ -d "$DEPLOYMENT_LOCK_DIR" ] && [ ! -L "$DEPLOYMENT_LOCK_DIR" ] && \
+        [ -f "$DEPLOYMENT_LOCK_DIR/owner" ] && [ ! -L "$DEPLOYMENT_LOCK_DIR/owner" ] || \
+        fail "internal deployment lock is unsafe."
+    [ "$(ls -A "$DEPLOYMENT_LOCK_DIR" 2>/dev/null)" = "owner" ] || \
+        fail "internal deployment lock contains unexpected entries."
+    expected_owner=$(printf 'schema=1\npid=%s\nnonce=%s' "$$" "$SURGEPILOT_LOCK_NONCE")
+    actual_owner=$(cat "$DEPLOYMENT_LOCK_DIR/owner")
+    [ "$actual_owner" = "$expected_owner" ] || fail "internal deployment lock owner is invalid."
+    INSTALLED_MODE=true
+    [ "$RELEASE_ROOT" = "$SCRIPT_ROOT" ] || fail "internal release root does not match this wrapper."
+    [ "$SURGEPILOT_RELEASE_TARGET" = "$RELEASE_VERSION" ] || \
+        fail "internal release target does not match this wrapper."
+    RELEASE_PHASE=$SURGEPILOT_RELEASE_PHASE
+    RELEASE_BASE=$SURGEPILOT_RELEASE_BASE
+    case "$RELEASE_PHASE:$RELEASE_BASE" in
+        unclassified:none|prepared:none|migration_started:none|stable:*|installed:*) ;;
+        unclassified:*|prepared:*|migration_started:*) TRANSITION_SOURCE=$RELEASE_BASE ;;
+    esac
+}
+
+trap cleanup 0
 trap 'exit 129' HUP
 trap 'exit 130' INT
 trap 'exit 143' TERM
+
+validate_dispatcher_context
+
+write_release_state() {
+    next_phase=$1
+    next_base=$2
+    [ "$INSTALLED_MODE" = true ] || fail "release state is available only for installed releases."
+    STATE_CANDIDATE=$(mktemp "$DEPLOYMENT_ROOT/.release-state.XXXXXX") || \
+        fail "Cannot prepare release state."
+    printf 'schema=1\nphase=%s\ntarget=%s\nbase=%s\n' \
+        "$next_phase" "$RELEASE_VERSION" "$next_base" > "$STATE_CANDIDATE" || \
+        fail "Cannot write release state."
+    chmod 600 "$STATE_CANDIDATE" || fail "Cannot protect release state."
+    sync || fail "Cannot confirm release state durability."
+    mv "$STATE_CANDIDATE" "$DEPLOYMENT_ROOT/.release-state" || \
+        fail "Cannot publish release state."
+    STATE_CANDIDATE=
+    sync || fail "Cannot confirm release state durability."
+    RELEASE_PHASE=$next_phase
+    RELEASE_BASE=$next_base
+}
+
+source_release_root() {
+    printf '%s\n' "$DEPLOYMENT_ROOT/.releases/$RELEASE_BASE"
+}
+
+inspect_active_services() {
+    inspect_root=$1
+    inspect_version=$2
+    shift 2
+    ACTIVE_SERVICE_CONTAINERS=
+    inspected_ids=$(compose_at "$inspect_root" "$inspect_version" ps -a -q "$@") || return 1
+    for inspected_id in $inspected_ids; do
+        inspected_state=$(docker inspect --format \
+            '{{.State.Running}}|{{.State.Paused}}|{{.State.Restarting}}' \
+            "$inspected_id") || return 1
+        case "$inspected_state" in
+            false\|false\|false) ;;
+            true\|false\|false|true\|true\|false|true\|false\|true|false\|false\|true)
+                ACTIVE_SERVICE_CONTAINERS="${ACTIVE_SERVICE_CONTAINERS}${ACTIVE_SERVICE_CONTAINERS:+ }$inspected_id"
+                ;;
+            *) return 1 ;;
+        esac
+    done
+}
+
+run_transition_probe() {
+    probe_root=$1
+    probe_version=$2
+    probe_mode=$3
+    probe_output=$(compose_at "$probe_root" "$probe_version" run --rm -T --no-deps \
+        --volume "$RELEASE_ROOT/scripts/release_transition_probe.py:/tmp/release-transition-probe.py:ro" \
+        api /app/.venv/bin/python /tmp/release-transition-probe.py "$probe_mode") || return 2
+    [ "$(printf '%s\n' "$probe_output" | wc -l | tr -d ' ')" -eq 1 ] || return 2
+    case "$probe_mode:$probe_output" in
+        active-work:*'"status":"quiescent"'*) return 0 ;;
+        active-work:*'"status":"blocked"'*) return 3 ;;
+        classify:*'"classification":"empty"'*) return 10 ;;
+        classify:*'"classification":"source"'*) return 11 ;;
+        *) return 2 ;;
+    esac
+}
+
+restore_source_stack() {
+    restore_root=$1
+    restore_version=$2
+    printf 'SurgePilot: restoring source release %s after a pre-migration refusal.\n' \
+        "$restore_version" >&2
+    if ! compose_at "$restore_root" "$restore_version" up -d --wait \
+        --wait-timeout "${SURGEPILOT_HEALTH_TIMEOUT_SECONDS:-300}"; then
+        printf 'SurgePilot: source recovery failed; recover %s manually before retrying.\n' \
+            "$restore_version" >&2
+        return 1
+    fi
+    if ! validate_source_identity "$restore_root" "$restore_version"; then
+        printf 'SurgePilot: restored source identity is invalid; recover %s manually.\n' \
+            "$restore_version" >&2
+        return 1
+    fi
+}
+
+enter_prepared_transition() {
+    source_root=$(source_release_root)
+    source_version=$RELEASE_BASE
+    [ -d "$source_root" ] && [ ! -L "$source_root" ] || \
+        fail "Source release directory is missing or unsafe: $source_root"
+
+    inspect_active_services "$source_root" "$source_version" api-migrate || \
+        fail "Cannot prove source api-migrate state."
+    if [ -n "$ACTIVE_SERVICE_CONTAINERS" ]; then
+        fail "Source api-migrate is still running; wait for it to finish and retry."
+    fi
+
+    inspect_active_services "$source_root" "$source_version" nginx api-worker api || \
+        fail "Cannot prove source ingress and writer state."
+    if [ -n "$ACTIVE_SERVICE_CONTAINERS" ]; then
+        if run_transition_probe "$source_root" "$source_version" active-work; then
+            :
+        else
+            probe_status=$?
+            if [ "$probe_status" -eq 3 ]; then
+                fail "Active source work blocks this release transition; wait for it to finish."
+            fi
+            fail "The preliminary active-work probe failed closed."
+        fi
+        compose_at "$source_root" "$source_version" stop nginx || {
+            restore_source_stack "$source_root" "$source_version" || :
+            fail "Cannot stop source Nginx."
+        }
+        compose_at "$source_root" "$source_version" stop api-worker || {
+            restore_source_stack "$source_root" "$source_version" || :
+            fail "Cannot stop source api-worker."
+        }
+        compose_at "$source_root" "$source_version" stop api || {
+            restore_source_stack "$source_root" "$source_version" || :
+            fail "Cannot stop source API."
+        }
+    else
+        if ! compose_at "$source_root" "$source_version" up -d --wait \
+            --wait-timeout "${SURGEPILOT_HEALTH_TIMEOUT_SECONDS:-300}" postgres; then
+            restore_source_stack "$source_root" "$source_version" || :
+            fail "Cannot start source PostgreSQL for the final transition probe."
+        fi
+    fi
+
+    if ! inspect_active_services "$source_root" "$source_version" nginx api-worker api; then
+        restore_source_stack "$source_root" "$source_version" || :
+        fail "Cannot prove source ingress and writer state after stop."
+    fi
+    if [ -n "$ACTIVE_SERVICE_CONTAINERS" ]; then
+        restore_source_stack "$source_root" "$source_version" || :
+        fail "Source ingress or writers remained running after stop."
+    fi
+    if ! inspect_active_services "$source_root" "$source_version" api-migrate; then
+        restore_source_stack "$source_root" "$source_version" || :
+        fail "Cannot prove source api-migrate state after stop."
+    fi
+    if [ -n "$ACTIVE_SERVICE_CONTAINERS" ]; then
+        fail "Source api-migrate appeared during downtime; it was not stopped. Wait and retry."
+    fi
+
+    if run_transition_probe "$source_root" "$source_version" active-work; then
+        :
+    else
+        probe_status=$?
+        restore_source_stack "$source_root" "$source_version" || :
+        if [ "$probe_status" -eq 3 ]; then
+            fail "Active work was found by the authoritative probe; source release restored."
+        fi
+        fail "The authoritative active-work probe failed; source release restored."
+    fi
+
+    if ! inspect_active_services "$source_root" "$source_version" nginx api-worker api; then
+        restore_source_stack "$source_root" "$source_version" || :
+        fail "Cannot reverify source ingress and writer state before migration."
+    fi
+    if [ -n "$ACTIVE_SERVICE_CONTAINERS" ]; then
+        restore_source_stack "$source_root" "$source_version" || :
+        fail "A source writer reappeared before migration."
+    fi
+    if ! inspect_active_services "$source_root" "$source_version" api-migrate; then
+        restore_source_stack "$source_root" "$source_version" || :
+        fail "Cannot reverify source api-migrate state before migration."
+    fi
+    if [ -n "$ACTIVE_SERVICE_CONTAINERS" ]; then
+        fail "Source api-migrate reappeared before migration; it was not stopped. Wait and retry."
+    fi
+    write_release_state migration_started "$source_version"
+}
+
+classify_legacy_database() {
+    source_root=$(source_release_root)
+    source_version=$RELEASE_BASE
+    [ -d "$source_root" ] && [ ! -L "$source_root" ] || \
+        fail "Source release directory is missing or unsafe: $source_root"
+    inspect_active_services "$source_root" "$source_version" api-migrate || \
+        fail "Cannot prove source api-migrate state for classification."
+    if [ -n "$ACTIVE_SERVICE_CONTAINERS" ]; then
+        fail "Source api-migrate is still running; wait for it to finish and retry."
+    fi
+    project_name=$(env_value COMPOSE_PROJECT_NAME)
+    [ -n "$project_name" ] || project_name=surgepilot
+    postgres_container=$(compose_at "$source_root" "$source_version" ps -a -q postgres) || \
+        fail "Cannot inspect source PostgreSQL containers for legacy classification."
+    postgres_volume=$(docker volume ls --quiet \
+        --filter "name=${project_name}_postgres-data") || \
+        fail "Cannot inspect the persisted PostgreSQL volume for legacy classification."
+    case "$postgres_volume" in
+        ''|"${project_name}_postgres-data") ;;
+        *) fail "PostgreSQL volume classification returned an ambiguous result." ;;
+    esac
+    if [ -z "$postgres_container" ] && [ -z "$postgres_volume" ]; then
+        write_release_state installed none
+        return
+    fi
+    compose_at "$source_root" "$source_version" up -d --wait \
+        --wait-timeout "${SURGEPILOT_HEALTH_TIMEOUT_SECONDS:-300}" postgres || \
+        fail "Cannot start source PostgreSQL for legacy classification."
+    if run_transition_probe "$source_root" "$source_version" classify; then
+        fail "Legacy classification returned an unsupported success result."
+    else
+        classification_status=$?
+    fi
+    case "$classification_status" in
+        10) write_release_state installed none ;;
+        11) write_release_state prepared "$source_version" ;;
+        *) fail "Legacy database classification failed closed." ;;
+    esac
+}
+
+enter_installed_transition() {
+    inspect_active_services "$RELEASE_ROOT" "$RELEASE_VERSION" nginx api-worker api || \
+        fail "Cannot prove target ingress and writer state before first migration."
+    if [ -n "$ACTIVE_SERVICE_CONTAINERS" ]; then
+        fail "Existing ingress or writer containers must be stopped before first migration."
+    fi
+    inspect_active_services "$RELEASE_ROOT" "$RELEASE_VERSION" api-migrate || \
+        fail "Cannot prove target api-migrate state before first migration."
+    if [ -n "$ACTIVE_SERVICE_CONTAINERS" ]; then
+        fail "Existing api-migrate is still running; wait for it to finish and retry."
+    fi
+    write_release_state migration_started none
+}
 
 require_docker() {
     command -v docker >/dev/null 2>&1 || fail "Docker Engine or Docker Desktop is required."
@@ -86,12 +382,33 @@ is_local_only_origin() {
     esac
 }
 
-compose() {
+compose_at() {
+    compose_release_root=$1
+    compose_release_version=$2
+    shift 2
+    compose_file="$compose_release_root/compose/docker-compose.yml"
+    [ -f "$compose_file" ] && [ ! -L "$compose_file" ] || \
+        fail "Release Compose file is missing or unsafe: $compose_file"
     demo_enabled=$(env_value SURGEPILOT_DEMO_LOAD_NODE_ENABLED | tr '[:upper:]' '[:lower:]')
     if [ "$demo_enabled" = "true" ]; then
-        docker compose --env-file "$ENV_FILE" -f "$BASE_COMPOSE" --profile demo "$@"
+        LOAD_NODE_RUNTIME_VERSION="$compose_release_version" docker compose \
+            --env-file "$ENV_FILE" -f "$compose_file" --profile demo "$@"
     else
-        docker compose --env-file "$ENV_FILE" -f "$BASE_COMPOSE" "$@"
+        LOAD_NODE_RUNTIME_VERSION="$compose_release_version" docker compose \
+            --env-file "$ENV_FILE" -f "$compose_file" "$@"
+    fi
+}
+
+compose() {
+    compose_at "$RELEASE_ROOT" "$RELEASE_VERSION" "$@"
+}
+
+lifecycle_compose() {
+    if [ "$INSTALLED_MODE" = true ] && \
+        { [ "$RELEASE_PHASE" = unclassified ] || [ "$RELEASE_PHASE" = prepared ]; }; then
+        compose_at "$DEPLOYMENT_ROOT/.releases/$RELEASE_BASE" "$RELEASE_BASE" "$@"
+    else
+        compose "$@"
     fi
 }
 
@@ -130,7 +447,8 @@ helper() {
         --env SURGEPILOT_MONITORING_INFLUXDB_ORG \
         --env SURGEPILOT_MONITORING_INFLUXDB_BUCKET \
         --env SURGEPILOT_GRAFANA_ADMIN_USER \
-        --volume "$ROOT:/release" \
+        --volume "$RELEASE_ROOT:/release:ro" \
+        --volume "$DEPLOYMENT_ROOT:/deployment" \
         --volume "$HELPER_PASSWD:/etc/passwd:ro" \
         --workdir /release \
         "$API_IMAGE" \
@@ -144,6 +462,22 @@ helper() {
 }
 
 reject_process_overrides() {
+    if [ "${COMPOSE_PROJECT_NAME+x}" = x ] && [ -f "$ENV_FILE" ]; then
+        fail "COMPOSE_PROJECT_NAME process-level overrides are not supported; edit .env instead."
+    fi
+    if [ "${COMPOSE_PROFILES+x}" = x ]; then
+        fail "COMPOSE_PROFILES process-level overrides are not supported; edit .env instead."
+    fi
+    if [ "${COMPOSE_ENV_FILES+x}" = x ]; then
+        fail "COMPOSE_ENV_FILES process-level overrides are not supported; edit .env instead."
+    fi
+    if [ "${LOAD_NODE_RUNTIME_ARTIFACT_HOST_DIR+x}" = x ]; then
+        fail "LOAD_NODE_RUNTIME_ARTIFACT_HOST_DIR process-level overrides are not supported."
+    fi
+    if [ "${SURGEPILOT_MONITORING_INFLUXDB_TOKEN_FILE_HOST+x}" = x ] && \
+        [ -f "$ENV_FILE" ]; then
+        fail "SURGEPILOT_MONITORING_INFLUXDB_TOKEN_FILE_HOST process-level overrides are not supported; edit .env instead."
+    fi
     if [ "${SURGEPILOT_HTTP_PORT+x}" = x ]; then
         fail "SURGEPILOT_HTTP_PORT process-level overrides are not supported; edit .env instead."
     fi
@@ -180,6 +514,7 @@ load_release_description() {
         fail "Cannot prepare helper output."
     if ! helper /opt/surgepilot/release-tools/release_preflight.py describe-release \
         --root /release \
+        --deployment-root /deployment \
         --expected-version "$RELEASE_VERSION" \
         --daemon-arch "$daemon_arch" \
         --forced-platform "${DOCKER_DEFAULT_PLATFORM:-}" > "$HELPER_OUTPUT"; then
@@ -199,6 +534,127 @@ load_release_description() {
     demo_enabled=$(normalized_value SURGEPILOT_DEMO_LOAD_NODE_ENABLED)
     env_sha256=$(normalized_value SURGEPILOT_ENV_SHA256)
     cleanup_helper_output
+}
+
+load_release_identity() {
+    identity_root=$1
+    identity_expected_version=$2
+    identity_manifest_mode=${3:-current}
+    ensure_helper_temp_dir
+    HELPER_OUTPUT=$(mktemp "$HELPER_TEMP_DIR/helper-output.XXXXXX") || \
+        fail "Cannot prepare helper output."
+    if [ "$identity_manifest_mode" = legacy ]; then
+        helper /opt/surgepilot/release-tools/release_preflight.py describe-identity \
+            --root "$identity_root" --expected-version "$identity_expected_version" \
+            --allow-legacy-manifest > "$HELPER_OUTPUT" || fail "Cannot read release identity."
+    else
+        helper /opt/surgepilot/release-tools/release_preflight.py describe-identity \
+            --root "$identity_root" --expected-version "$identity_expected_version" > \
+            "$HELPER_OUTPUT" || fail "Cannot read release identity."
+    fi
+    identity_version=$(normalized_value SURGEPILOT_IDENTITY_VERSION)
+    identity_revision=$(normalized_value SURGEPILOT_IDENTITY_REVISION)
+    identity_api_image=$(normalized_value SURGEPILOT_IDENTITY_API_IMAGE)
+    identity_web_image=$(normalized_value SURGEPILOT_IDENTITY_WEB_IMAGE)
+    identity_demo_image=$(normalized_value SURGEPILOT_IDENTITY_DEMO_IMAGE)
+    cleanup_helper_output
+}
+
+validate_owned_service_identity() {
+    identity_release_root=$1
+    identity_release_version=$2
+    service=$3
+    expected_image=$4
+    container_ids=$(compose_at "$identity_release_root" "$identity_release_version" ps -q "$service")
+    [ -n "$container_ids" ] && [ "$(printf '%s\n' "$container_ids" | wc -l | tr -d ' ')" -eq 1 ] || \
+        fail "Target service $service does not have exactly one running container."
+    project_name=$(env_value COMPOSE_PROJECT_NAME)
+    [ -n "$project_name" ] || project_name=surgepilot
+    container_identity=$(docker inspect --format \
+        '{{.Config.Image}}|{{ index .Config.Labels "com.docker.compose.project" }}|{{ index .Config.Labels "com.docker.compose.service" }}' \
+        "$container_ids") || fail "Cannot inspect target service $service."
+    [ "$container_identity" = "$expected_image|$project_name|$service" ] || \
+        fail "Target service $service image or Compose identity is incorrect."
+    oci_identity=$(docker inspect --format \
+        '{{ index .Config.Labels "org.opencontainers.image.version" }}|{{ index .Config.Labels "org.opencontainers.image.revision" }}' \
+        "$container_ids") || fail "Cannot inspect target OCI identity for $service."
+    [ "$oci_identity" = "$identity_version|$identity_revision" ] || \
+        fail "Target service $service OCI identity is incorrect."
+}
+
+validate_api_product_identity() {
+    identity_release_root=$1
+    identity_release_version=$2
+    expected_product_version=${identity_release_version#v}
+    product_version=$(compose_at "$identity_release_root" "$identity_release_version" exec -T \
+        api /app/.venv/bin/python -c \
+        'from importlib.metadata import version; import json, urllib.request; data=json.load(urllib.request.urlopen("http://127.0.0.1:8000/api/readyz", timeout=10)); assert data.get("status") == "ready"; print(version("surgepilot-api"))') || \
+        fail "API readiness and product-version probe failed."
+    [ "$product_version" = "$expected_product_version" ] || \
+        fail "API product version is incorrect."
+}
+
+validate_target_identity() {
+    for path in .env.example README.md VERSION release-manifest.json surgepilot \
+        surgepilot-dispatcher compose/docker-compose.yml scripts/__init__.py \
+        scripts/bootstrap_deployment_env.py scripts/fetch_runtime_release.py \
+        scripts/release_preflight.py scripts/release_transition_probe.py \
+        compose/grafana/dashboards/surgepilot-jmeter-13644.json \
+        compose/grafana/entrypoint.sh \
+        compose/grafana/provisioning/dashboards/surgepilot.yml \
+        compose/grafana/provisioning/datasources/influxdb.yml \
+        compose/minio/init-bucket.sh compose/nginx/default.conf
+    do
+        [ -f "$RELEASE_ROOT/$path" ] && [ ! -L "$RELEASE_ROOT/$path" ] || \
+            fail "Target release path is missing or unsafe: $path"
+    done
+    for path in compose compose/grafana compose/grafana/dashboards \
+        compose/grafana/provisioning compose/grafana/provisioning/dashboards \
+        compose/grafana/provisioning/datasources compose/minio compose/nginx scripts
+    do
+        [ -d "$RELEASE_ROOT/$path" ] && [ ! -L "$RELEASE_ROOT/$path" ] || \
+            fail "Target release directory is missing or unsafe: $path"
+    done
+    [ -x "$RELEASE_ROOT/surgepilot" ] && [ -x "$RELEASE_ROOT/surgepilot-dispatcher" ] || \
+        fail "Target release executables are unsafe."
+    [ "$(cat "$RELEASE_ROOT/VERSION")" = "$RELEASE_VERSION" ] || \
+        fail "Target VERSION does not match release state."
+    if [ "$INSTALLED_MODE" = true ]; then
+        [ -L "$RELEASE_ROOT/.surgepilot" ] && \
+            [ "$(readlink "$RELEASE_ROOT/.surgepilot")" = ../../.surgepilot ] || \
+            fail "Target private-state bridge is invalid."
+    fi
+    load_release_identity /release "$RELEASE_VERSION"
+    [ "$identity_version" = "$RELEASE_VERSION" ] || fail "Target manifest version is incorrect."
+    validate_owned_service_identity "$RELEASE_ROOT" "$RELEASE_VERSION" api "$identity_api_image"
+    validate_owned_service_identity \
+        "$RELEASE_ROOT" "$RELEASE_VERSION" api-worker "$identity_api_image"
+    validate_owned_service_identity "$RELEASE_ROOT" "$RELEASE_VERSION" web "$identity_web_image"
+    if [ "$(env_value SURGEPILOT_DEMO_LOAD_NODE_ENABLED | tr '[:upper:]' '[:lower:]')" = true ]; then
+        validate_owned_service_identity \
+            "$RELEASE_ROOT" "$RELEASE_VERSION" demo-load-node "$identity_demo_image"
+    fi
+    validate_api_product_identity "$RELEASE_ROOT" "$RELEASE_VERSION"
+}
+
+validate_source_identity() {
+    source_identity_root=$1
+    source_identity_version=$2
+    load_release_identity "/deployment/.releases/$source_identity_version" \
+        "$source_identity_version" legacy
+    [ "$identity_version" = "$source_identity_version" ] || \
+        fail "Restored source manifest version is incorrect."
+    validate_owned_service_identity \
+        "$source_identity_root" "$source_identity_version" api "$identity_api_image"
+    validate_owned_service_identity \
+        "$source_identity_root" "$source_identity_version" api-worker "$identity_api_image"
+    validate_owned_service_identity \
+        "$source_identity_root" "$source_identity_version" web "$identity_web_image"
+    if [ "$(env_value SURGEPILOT_DEMO_LOAD_NODE_ENABLED | tr '[:upper:]' '[:lower:]')" = true ]; then
+        validate_owned_service_identity "$source_identity_root" "$source_identity_version" \
+            demo-load-node "$identity_demo_image"
+    fi
+    validate_api_product_identity "$source_identity_root" "$source_identity_version"
 }
 
 print_release_summary() {
@@ -367,6 +823,7 @@ up() {
             fi
             helper /opt/surgepilot/release-tools/bootstrap_deployment_env.py \
                 --root /release \
+                --deployment-root /deployment \
                 --release-http-port "$http_port" \
                 --release-node-api-base-url "$api_url" \
                 --release-influxdb-host-port "$influx_port" \
@@ -414,6 +871,7 @@ up() {
                     fi
                     helper /opt/surgepilot/release-tools/bootstrap_deployment_env.py \
                         --root /release \
+                        --deployment-root /deployment \
                         --reconfigure-release-network \
                         --daemon-arch "$daemon_arch" \
                         --forced-platform "${DOCKER_DEFAULT_PLATFORM:-}" \
@@ -430,7 +888,8 @@ up() {
 
         check_required_port "SurgePilot HTTP" "$http_port"
         check_required_port "InfluxDB" "$influx_port"
-        helper /opt/surgepilot/release-tools/bootstrap_deployment_env.py --root /release
+        helper /opt/surgepilot/release-tools/bootstrap_deployment_env.py \
+            --root /release --deployment-root /deployment
     fi
 
     if [ "$first_run" = "true" ]; then
@@ -439,6 +898,7 @@ up() {
             fail "Cannot prepare helper output."
         helper /opt/surgepilot/release-tools/release_preflight.py select-runtime \
             --root /release \
+            --deployment-root /deployment \
             --expected-version "$RELEASE_VERSION" \
             --daemon-arch "$daemon_arch" \
             --forced-platform "${DOCKER_DEFAULT_PLATFORM:-}" > "$HELPER_OUTPUT"
@@ -450,18 +910,31 @@ up() {
         --root /release \
         --version "$RELEASE_VERSION" \
         --architectures "$architectures" \
-        --target-directory /release/.surgepilot/runtime-artifacts \
-        --env-host-directory "$ROOT/.surgepilot/runtime-artifacts"
+        --target-directory /deployment/.surgepilot/runtime-artifacts \
+        --env-host-directory "$DEPLOYMENT_ROOT/.surgepilot/runtime-artifacts"
 
     export LOAD_NODE_RUNTIME_VERSION="$RELEASE_VERSION"
     compose config >/dev/null
     compose pull
+    if [ "$INSTALLED_MODE" = true ] && [ "$RELEASE_PHASE" = unclassified ]; then
+        classify_legacy_database
+    fi
+    if [ "$INSTALLED_MODE" = true ] && [ "$RELEASE_PHASE" = prepared ]; then
+        enter_prepared_transition
+    fi
+    if [ "$INSTALLED_MODE" = true ] && [ "$RELEASE_PHASE" = installed ]; then
+        enter_installed_transition
+    fi
     if ! compose up -d --wait --wait-timeout "${SURGEPILOT_HEALTH_TIMEOUT_SECONDS:-300}"; then
         printf "SurgePilot: the release stack did not become healthy. Current service state:\n" >&2
         compose ps >&2 || true
         printf "Run %s status and %s logs for bounded diagnostics.\n" \
             "$COMMAND_NAME" "$COMMAND_NAME" >&2
         exit 1
+    fi
+    if [ "$INSTALLED_MODE" = true ] && [ "$RELEASE_PHASE" = migration_started ]; then
+        validate_target_identity
+        write_release_state stable "$RELEASE_VERSION"
     fi
 
     api_url=$(env_value SURGEPILOT_NODE_API_BASE_URL)
@@ -481,13 +954,17 @@ up() {
     fi
     printf "Commands: %s status | %s logs | %s down\n" \
         "$COMMAND_NAME" "$COMMAND_NAME" "$COMMAND_NAME"
+    if [ "$TRANSITION_SOURCE" != none ]; then
+        printf "Load Nodes that still report Runtime %s must be explicitly reinitialized for %s before new Runs are execution-ready.\n" \
+            "$TRANSITION_SOURCE" "$RELEASE_VERSION"
+    fi
     if [ "$cookie_secure" = "false" ]; then
         printf "Warning: direct HTTP is intended for a trusted LAN and does not provide transport encryption.\n" >&2
     fi
     if [ "$(env_value SURGEPILOT_DEMO_LOAD_NODE_ENABLED | tr '[:upper:]' '[:lower:]')" = "true" ]; then
         printf "Demo Load Node: host=demo-load-node port=22 username=surgepilot\n"
-        printf "Demo password file: %s/.surgepilot/secrets/demo-load-node-password.secret\n" "$ROOT"
-        printf "Demo SSH public key: %s/.surgepilot/demo-load-node/ssh_host_ed25519_key.pub\n" "$ROOT"
+        printf "Demo password file: %s/.surgepilot/secrets/demo-load-node-password.secret\n" "$DEPLOYMENT_ROOT"
+        printf "Demo SSH public key: %s/.surgepilot/demo-load-node/ssh_host_ed25519_key.pub\n" "$DEPLOYMENT_ROOT"
     fi
 }
 
@@ -502,21 +979,30 @@ case "$command" in
         reject_process_overrides
         require_docker
         [ -f "$ENV_FILE" ] || fail "No deployment .env exists; run $COMMAND_NAME up first."
-        compose down
+        lifecycle_compose down
         ;;
     status)
         [ "$#" -eq 1 ] || fail "status does not accept additional arguments"
         reject_process_overrides
+        if [ "$INSTALLED_MODE" = true ]; then
+            printf 'Release transition: phase=%s target=%s base=%s\n' \
+                "$RELEASE_PHASE" "$RELEASE_VERSION" "$RELEASE_BASE"
+            if [ ! -f "$ENV_FILE" ] && [ "$RELEASE_PHASE" = installed ]; then
+                printf 'Deployment: not configured; run %s up to complete first deployment.\n' \
+                    "$COMMAND_NAME"
+                exit 0
+            fi
+        fi
         require_docker
         [ -f "$ENV_FILE" ] || fail "No deployment .env exists; run $COMMAND_NAME up first."
-        compose ps
+        lifecycle_compose ps
         ;;
     logs)
         [ "$#" -eq 1 ] || fail "logs does not accept additional arguments"
         reject_process_overrides
         require_docker
         [ -f "$ENV_FILE" ] || fail "No deployment .env exists; run $COMMAND_NAME up first."
-        compose logs --tail 200
+        lifecycle_compose logs --tail 200
         ;;
     -h|--help|help)
         usage

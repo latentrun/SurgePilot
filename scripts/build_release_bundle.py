@@ -137,6 +137,7 @@ def _copy_release_files(*, root: Path, bundle_root: Path) -> None:
         "bootstrap_deployment_env.py",
         "release_preflight.py",
         "fetch_runtime_release.py",
+        "release_transition_probe.py",
     ):
         shutil.copy2(root / "scripts" / name, scripts_root / name)
     shutil.copy2(root / "infra/release/.env.example", bundle_root / ".env.example")
@@ -187,9 +188,12 @@ def assemble_bundle(
     bundle_root.mkdir()
     _copy_release_files(root=root, bundle_root=bundle_root)
 
+    minimum_upgrade_version = "v1.0.0" if version.startswith("v1.") else version
+
     manifest_data: dict[str, object] = {
         "schemaVersion": 1,
         "version": version,
+        "minimumUpgradeVersion": minimum_upgrade_version,
         "revision": revision,
         "images": validated_images,
         "runtimes": runtimes,
@@ -215,6 +219,10 @@ def assemble_bundle(
     wrapper_path = bundle_root / "surgepilot"
     wrapper_path.write_text(wrapper, encoding="utf-8")
     wrapper_path.chmod(0o755)
+
+    dispatcher_path = bundle_root / "surgepilot-dispatcher"
+    shutil.copy2(root / "infra/release/dispatcher", dispatcher_path)
+    dispatcher_path.chmod(0o755)
 
     readme = (root / "infra/release/README.md").read_text(encoding="utf-8")
     readme = _replace_exact(readme, "@@RELEASE_VERSION@@", version)

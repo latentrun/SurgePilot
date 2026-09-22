@@ -362,6 +362,244 @@ def test_verify_release_stack_runs_lan_debug_and_standard_monitoring_flow(
     assert [item[0] for item in calls if isinstance(item[0], str)][-1] == "/api/v1/runs"
 
 
+def test_upgrade_reuse_preserves_workspace_artifact_and_reinitializes_same_node(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    state_path = tmp_path / "upgrade-state.json"
+    state_path.write_text(
+        json.dumps(
+            {
+                "email": "upgrade@example.com",
+                "workspaceId": "workspace-1",
+                "nodeId": "node-1",
+                "sourceRuntimeVersion": "1.1.0",
+                "envGroupId": "env-1",
+                "scenarioId": "scenario-1",
+                "scenarioRevision": 3,
+                "sourceRunId": "source-run-1",
+                "artifactId": "artifact-1",
+                "artifactSha256": "a" * 64,
+            }
+        ),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(verify_p2_05_release_stack, "UPGRADE_STATE_FILE", str(state_path))
+    monkeypatch.setenv("SURGEPILOT_E2E_EXPECTED_PRODUCT_VERSION", "1.2.0")
+    session = type(
+        "Session",
+        (),
+        {
+            "workspace_id": "workspace-1",
+            "email": "upgrade@example.com",
+            "csrf_token": "csrf",
+            "opener": object(),
+        },
+    )()
+    monkeypatch.setattr(verify_p2_05_release_stack, "login_existing_user", lambda _email: session)
+    initialized = False
+
+    def get_json(actual_session: object, path: str) -> dict:
+        assert actual_session is session
+        if path == "/api/v1/load-nodes/node-1":
+            return {
+                "status": "idle",
+                "credentialConfigured": True,
+                "runtimeVersion": "1.2.0" if initialized else "1.1.0",
+            }
+        if path == "/api/v1/runs/source-run-1":
+            return {"verdict": {"state": "finished"}}
+        if path == "/api/v1/runs/source-run-1/artifacts":
+            return {
+                "items": [
+                    {
+                        "id": "artifact-1",
+                        "sha256": "a" * 64,
+                        "downloadUrl": "/api/v1/runs/source-run-1/artifacts/artifact-1/download",
+                    }
+                ]
+            }
+        return pytest.fail(f"unexpected path: {path}")
+
+    monkeypatch.setattr(verify_p2_05_release_stack, "get_json", get_json)
+    monkeypatch.setattr(
+        verify_p2_05_release_stack,
+        "http_json",
+        lambda *_args, **_kwargs: ({"code": "LOAD_NODE_BUSY"}, {}, 409),
+    )
+    monkeypatch.setattr(
+        verify_p2_05_release_stack,
+        "http_bytes",
+        lambda *_args, **_kwargs: (b"preserved-artifact", {}, 200),
+    )
+
+    def initialize(actual_session: object, node_id: str) -> None:
+        nonlocal initialized
+        assert actual_session is session and node_id == "node-1"
+        initialized = True
+
+    monkeypatch.setattr(verify_p2_05_release_stack, "initialize_node", initialize)
+    identities: list[str] = []
+    monkeypatch.setattr(
+        verify_p2_05_release_stack,
+        "verify_product_identity",
+        lambda actual_session, node_id: (
+            identities.append(node_id)
+            if actual_session is session
+            else pytest.fail("unexpected identity session")
+        ),
+    )
+    monkeypatch.setattr(
+        verify_p2_05_release_stack,
+        "create_json",
+        lambda actual_session, path, payload: (
+            {"id": "post-run-1"}
+            if actual_session is session
+            and path == "/api/v1/runs"
+            and payload["selectedNodeId"] == "node-1"
+            else pytest.fail("unexpected post-upgrade Run")
+        ),
+    )
+    monkeypatch.setattr(
+        verify_p2_05_release_stack,
+        "poll_report_state",
+        lambda actual_session, run_id, states, timeout: (
+            {"verdict": {"state": "finished"}}
+            if actual_session is session
+            and run_id == "post-run-1"
+            and states == {"finished"}
+            and timeout == 300
+            else pytest.fail("unexpected post-upgrade polling")
+        ),
+    )
+
+    verify_p2_05_release_stack.verify_preserved_upgrade_state()
+
+    assert initialized is True
+    assert identities == ["node-1"]
+
+
+def test_source_release_persists_bounded_upgrade_evidence(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    state_path = tmp_path / "upgrade-state.json"
+    monkeypatch.setattr(verify_p2_05_release_stack, "UPGRADE_STATE_FILE", str(state_path))
+    session = type(
+        "Session",
+        (),
+        {"workspace_id": "workspace-1", "email": "upgrade@example.com"},
+    )()
+
+    def get_json(actual_session: object, path: str) -> dict:
+        assert actual_session is session
+        if path == "/api/v1/runs/source-run-1/artifacts":
+            return {"items": [{"id": "artifact-1", "sha256": "a" * 64}]}
+        if path == "/api/v1/load-nodes/node-1":
+            return {"runtimeVersion": "1.1.0"}
+        return pytest.fail(f"unexpected path: {path}")
+
+    monkeypatch.setattr(verify_p2_05_release_stack, "get_json", get_json)
+
+    verify_p2_05_release_stack.persist_upgrade_state(
+        session=session,
+        node={"id": "node-1"},
+        env_group={"id": "env-1"},
+        scenario={"id": "scenario-1", "revision": 3},
+        source_run={"id": "source-run-1"},
+    )
+
+    state = json.loads(state_path.read_text(encoding="utf-8"))
+    assert state["workspaceId"] == "workspace-1"
+    assert state["sourceRuntimeVersion"] == "1.1.0"
+    assert state["artifactSha256"] == "a" * 64
+    assert state_path.stat().st_mode & 0o777 == 0o600
+
+
+def test_login_existing_user_reuses_saved_identity(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    opener = object()
+    monkeypatch.setattr(
+        verify_p2_05_release_stack.urllib.request,
+        "build_opener",
+        lambda *_handlers: opener,
+    )
+
+    def http_json(
+        actual_opener: object,
+        method: str,
+        path: str,
+        **kwargs: object,
+    ) -> tuple[dict, dict, int]:
+        assert actual_opener is opener
+        assert method == "POST"
+        assert path == "/api/v1/auth/login"
+        assert kwargs == {
+            "payload": {"email": "upgrade@example.com", "password": "password123"},
+            "expected_status": 200,
+        }
+        return (
+            {
+                "csrfToken": "csrf-token",
+                "defaultWorkspace": {"id": "workspace-1"},
+                "user": {"email": "upgrade@example.com"},
+            },
+            {},
+            200,
+        )
+
+    monkeypatch.setattr(verify_p2_05_release_stack, "http_json", http_json)
+
+    session = verify_p2_05_release_stack.login_existing_user("upgrade@example.com")
+
+    assert session.opener is opener
+    assert session.csrf_token == "csrf-token"
+    assert session.workspace_id == "workspace-1"
+    assert session.email == "upgrade@example.com"
+
+
+def test_upgrade_evidence_fails_closed_when_required_state_is_missing(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(verify_p2_05_release_stack, "UPGRADE_STATE_FILE", None)
+    with pytest.raises(RuntimeError, match="UPGRADE_STATE_FILE is required"):
+        verify_p2_05_release_stack.verify_preserved_upgrade_state()
+
+    monkeypatch.setattr(
+        verify_p2_05_release_stack,
+        "UPGRADE_STATE_FILE",
+        str(tmp_path / "upgrade-state.json"),
+    )
+    monkeypatch.setattr(
+        verify_p2_05_release_stack,
+        "get_json",
+        lambda *_args, **_kwargs: {"items": []},
+    )
+    with pytest.raises(RuntimeError, match="MinIO-backed artifact"):
+        verify_p2_05_release_stack.persist_upgrade_state(
+            session=object(),
+            node={"id": "node-1"},
+            env_group={"id": "env-1"},
+            scenario={"id": "scenario-1", "revision": 3},
+            source_run={"id": "source-run-1"},
+        )
+
+
+def test_verify_release_stack_dispatches_upgrade_reuse(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls: list[str] = []
+    monkeypatch.setattr(verify_p2_05_release_stack, "REUSE_UPGRADE_STATE", True)
+    monkeypatch.setattr(
+        verify_p2_05_release_stack,
+        "verify_preserved_upgrade_state",
+        lambda: calls.append("reuse"),
+    )
+
+    verify_p2_05_release_stack.verify_release_stack()
+
+    assert calls == ["reuse"]
+
+
 def test_query_measurements_uses_token_and_parses_flux_csv(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

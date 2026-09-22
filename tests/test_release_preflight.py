@@ -72,6 +72,7 @@ def write_manifest(root: Path, *, version: str = "v0.3.0") -> None:
             {
                 "schemaVersion": 1,
                 "version": version,
+                "minimumUpgradeVersion": "v0.1.0",
                 "revision": "a" * 40,
                 "images": {
                     "api": {
@@ -711,6 +712,25 @@ def test_release_manifest_requires_exact_version_and_digest_pins(tmp_path: Path)
         release_preflight.load_release_manifest(tmp_path, expected_version="v0.3.1")
 
 
+def test_legacy_identity_allows_only_the_missing_upgrade_minimum(tmp_path: Path) -> None:
+    write_manifest(tmp_path, version="v1.1.0")
+    path = tmp_path / "release-manifest.json"
+    manifest = json.loads(path.read_text(encoding="utf-8"))
+    del manifest["minimumUpgradeVersion"]
+    path.write_text(json.dumps(manifest), encoding="utf-8")
+
+    with pytest.raises(release_preflight.ReleasePreflightError, match="minimumUpgradeVersion"):
+        release_preflight.release_identity(tmp_path, expected_version="v1.1.0")
+
+    identity = release_preflight.release_identity(
+        tmp_path,
+        expected_version="v1.1.0",
+        require_minimum_upgrade=False,
+    )
+
+    assert identity["SURGEPILOT_IDENTITY_VERSION"] == "v1.1.0"
+
+
 def test_external_node_urls_must_be_supplied_as_a_pair() -> None:
     with pytest.raises(release_preflight.ReleasePreflightError, match="must be set together"):
         release_preflight.validate_external_node_urls(
@@ -917,6 +937,84 @@ def test_describe_validated_release_cli_prints_fixed_order_without_secrets(
     ]
     assert "must-not-be-printed" not in stdout
     assert "PASSWORD" not in stdout
+
+
+def test_describe_identity_prints_exact_manifest_identity(tmp_path: Path, capsys) -> None:
+    write_manifest(tmp_path)
+
+    result = release_preflight.main(
+        [
+            "describe-identity",
+            "--root",
+            str(tmp_path),
+            "--expected-version",
+            "v0.3.0",
+        ]
+    )
+
+    assert result == 0
+    lines = capsys.readouterr().out.splitlines()
+    assert lines[0] == "SURGEPILOT_IDENTITY_VERSION=v0.3.0"
+    assert lines[1].startswith("SURGEPILOT_IDENTITY_REVISION=")
+    assert lines[2].startswith("SURGEPILOT_IDENTITY_API_IMAGE=ghcr.io/latentrun/surgepilot-api@")
+    assert lines[3].startswith("SURGEPILOT_IDENTITY_WEB_IMAGE=ghcr.io/latentrun/surgepilot-web@")
+    assert lines[4].startswith(
+        "SURGEPILOT_IDENTITY_DEMO_IMAGE=ghcr.io/latentrun/surgepilot-demo-node@"
+    )
+
+
+def test_describe_release_reads_manifest_and_environment_from_separate_roots(
+    tmp_path: Path, capsys
+) -> None:
+    release_root = tmp_path / "release"
+    deployment_root = tmp_path / "deployment"
+    release_root.mkdir()
+    deployment_root.mkdir()
+    write_manifest(release_root)
+    write_release_environment(deployment_root, direct_release_environment())
+
+    result = release_preflight.main(
+        [
+            "describe-release",
+            "--root",
+            str(release_root),
+            "--deployment-root",
+            str(deployment_root),
+            "--expected-version",
+            "v0.3.0",
+            "--daemon-arch",
+            "amd64",
+        ]
+    )
+
+    assert result == 0
+    assert "SURGEPILOT_HTTP_PORT=8080" in capsys.readouterr().out
+
+
+def test_select_runtime_reads_environment_from_deployment_root(tmp_path: Path, capsys) -> None:
+    release_root = tmp_path / "release"
+    deployment_root = tmp_path / "deployment"
+    release_root.mkdir()
+    deployment_root.mkdir()
+    write_manifest(release_root)
+    write_release_environment(deployment_root, direct_release_environment())
+
+    result = release_preflight.main(
+        [
+            "select-runtime",
+            "--root",
+            str(release_root),
+            "--deployment-root",
+            str(deployment_root),
+            "--expected-version",
+            "v0.3.0",
+            "--daemon-arch",
+            "amd64",
+        ]
+    )
+
+    assert result == 0
+    assert capsys.readouterr().out.strip() == "amd64"
 
 
 def test_describe_validated_release_cli_rejects_invalid_existing_environment(

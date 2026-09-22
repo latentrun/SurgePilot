@@ -1,13 +1,13 @@
 # ADR-0029: User-local Release Upgrade Transition
 
-- Status: Proposed
+- Status: Accepted
 - Scope: Official `install.sh` user-local tagged-release transitions within one product major
 - Baseline: `origin/main` at `e41d02c9e6ac99dde5d3bf88d7c39e00ff929a56`
 - Proposed amendments: P2-05 Cross-platform Distribution and P2-06 LAN-first Deployment Usability
 - Related ADRs: ADR-0017, ADR-0018, ADR-0020, ADR-0021, ADR-0024, and ADR-0027
 
-This Proposed ADR does not authorize implementation. Acceptance must synchronize the owning P2
-Slices before implementation starts.
+This ADR is accepted. P2-05 and P2-06 synchronize its bounded installed-release transition and
+authorize implementation within the constraints below.
 
 ## Context
 

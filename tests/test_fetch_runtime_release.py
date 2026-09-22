@@ -158,6 +158,7 @@ def write_release_manifest(
             {
                 "schemaVersion": 1,
                 "version": version,
+                "minimumUpgradeVersion": version,
                 "revision": "a" * 40,
                 "images": {
                     "api": {

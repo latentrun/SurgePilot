@@ -309,6 +309,7 @@ jobs:
           (cd release-output && sha256sum -c "surgepilot-$GITHUB_REF_NAME.tar.gz.sha256")
           tar -xzf "release-output/surgepilot-$GITHUB_REF_NAME.tar.gz" -C release-output
           sh -n release-output/surgepilot/surgepilot
+          sh -n release-output/surgepilot/surgepilot-dispatcher
           cp release-output/surgepilot/.env.example release-output/surgepilot/.env
           RUNNER_INTERNAL_TOKEN=release-validation-token \
           SSH_CREDENTIAL_ENCRYPTION_KEY=MDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDA= \
@@ -417,6 +418,7 @@ jobs:
           curl -fsSL "$installer_url" | \
             SURGEPILOT_INSTALLER_RELEASE_BASE_URL="http://127.0.0.1:$asset_port" sh
           INSTALL_ROOT="$XDG_DATA_HOME/surgepilot"
+          RELEASE_ROOT="$INSTALL_ROOT/.releases/$GITHUB_REF_NAME"
           SURGEPILOT="$HOME/.local/bin/surgepilot"
           anonymous_config=$(mktemp -d)
           printf '{"auths":{}}\n' > "$anonymous_config/config.json"
@@ -425,13 +427,14 @@ jobs:
               echo "GHCR packages must allow anonymous pulls before publishing a public release: $image" >&2
               exit 1
             fi
-          done < <(jq -r '.images[] | "\(.repository)@\(.digest)"' "$INSTALL_ROOT/release-manifest.json")
+          done < <(jq -r '.images[] | "\(.repository)@\(.digest)"' "$RELEASE_ROOT/release-manifest.json")
           smoke_host=$(ip -4 route get 1.1.1.1 | awk '{for (i=1; i<=NF; i++) if ($i=="src") {print $(i+1); exit}}')
           test -n "$smoke_host"
           RUNNER_INTERNAL_TOKEN=release-validation-token \
           SSH_CREDENTIAL_ENCRYPTION_KEY=MDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDA= \
-          python "$INSTALL_ROOT/scripts/bootstrap_deployment_env.py" \
-            --root "$INSTALL_ROOT" \
+          python "$RELEASE_ROOT/scripts/bootstrap_deployment_env.py" \
+            --root "$RELEASE_ROOT" \
+            --deployment-root "$INSTALL_ROOT" \
             --release-http-port 8080 \
             --release-node-api-base-url "http://$smoke_host:8080" \
             --release-influxdb-host-port 8086 \
@@ -440,7 +443,7 @@ jobs:
             --release-runtime-architectures amd64,arm64 \
             --session-cookie-secure false
           docker compose --env-file "$INSTALL_ROOT/.env" \
-            -f "$INSTALL_ROOT/compose/docker-compose.yml" --profile demo config >/dev/null
+            -f "$RELEASE_ROOT/compose/docker-compose.yml" --profile demo config >/dev/null
           install -d -m 700 "$INSTALL_ROOT/.surgepilot" "$INSTALL_ROOT/.surgepilot/runtime-artifacts"
           cp release-assets/surgepilot-runtime-linux-* "$INSTALL_ROOT/.surgepilot/runtime-artifacts/"
           cleanup() {
@@ -466,8 +469,152 @@ jobs:
           SURGEPILOT_E2E_NODE_SSH_PASSWORD_FILE="$INSTALL_ROOT/.surgepilot/secrets/demo-load-node-password.secret" \
           make verify-p2-05-release-stack
 
+  upgrade-smoke:
+    if: github.ref_name == 'v1.2.0'
+    needs: bundle
+    permissions:
+      contents: read
+      packages: read
+    strategy:
+      fail-fast: true
+      matrix:
+        include:
+          - source: v1.0.0
+            source_mode: running
+          - source: v1.1.0
+            source_mode: running
+          - source: v1.1.0
+            source_mode: clean_down
+    runs-on: ubuntu-24.04
+    env:
+      SURGEPILOT_TOOLCHAIN_MODE: external
+      SURGEPILOT_TOOLCHAIN_EXTERNAL_TOOLS: python,uv
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: "3.12"
+      - uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e # v6
+        with:
+          version: "0.12.17"
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: release-assets
+          path: release-assets
+      - name: Upgrade persisted source data and complete a target Run
+        env:
+          SOURCE_VERSION: ${{ matrix.source }}
+          SOURCE_MODE: ${{ matrix.source_mode }}
+        run: |
+          set -euo pipefail
+          source_base="https://github.com/$GITHUB_REPOSITORY/releases/download/$SOURCE_VERSION"
+          curl -fsSL "$source_base/install.sh" -o "$RUNNER_TEMP/source-install.sh"
+          curl -fsSL "$source_base/surgepilot-$SOURCE_VERSION.tar.gz" \
+            -o "release-assets/surgepilot-$SOURCE_VERSION.tar.gz"
+          curl -fsSL "$source_base/surgepilot-$SOURCE_VERSION.tar.gz.sha256" \
+            -o "release-assets/surgepilot-$SOURCE_VERSION.tar.gz.sha256"
+
+          asset_port=18765
+          python3 -m http.server "$asset_port" --bind 127.0.0.1 --directory release-assets \
+            >"$RUNNER_TEMP/surgepilot-upgrade-http.log" 2>&1 &
+          asset_server_pid=$!
+          HOME="$RUNNER_TEMP/surgepilot-home"
+          XDG_DATA_HOME="$RUNNER_TEMP/surgepilot-data"
+          export HOME XDG_DATA_HOME
+          mkdir -p "$HOME"
+          INSTALL_ROOT="$XDG_DATA_HOME/surgepilot"
+          SURGEPILOT="$HOME/.local/bin/surgepilot"
+          cleanup() {
+            cleanup_status=$?
+            if [ -x "$SURGEPILOT" ] && [ "$cleanup_status" -ne 0 ]; then
+              "$SURGEPILOT" logs || true
+            fi
+            if [ -x "$SURGEPILOT" ]; then "$SURGEPILOT" down || true; fi
+            kill "$asset_server_pid" 2>/dev/null || true
+          }
+          trap cleanup EXIT
+          attempt=0
+          until curl -fsSL "http://127.0.0.1:$asset_port/install.sh" -o /dev/null; do
+            attempt=$((attempt + 1))
+            [ "$attempt" -lt 20 ] || exit 1
+            sleep 1
+          done
+
+          SURGEPILOT_INSTALLER_RELEASE_BASE_URL="http://127.0.0.1:$asset_port" \
+            sh "$RUNNER_TEMP/source-install.sh"
+          smoke_host=$(ip -4 route get 1.1.1.1 | \
+            awk '{for (i=1; i<=NF; i++) if ($i=="src") {print $(i+1); exit}}')
+          test -n "$smoke_host"
+          RUNNER_INTERNAL_TOKEN=upgrade-validation-token \
+          SSH_CREDENTIAL_ENCRYPTION_KEY=MDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDA= \
+          python "$INSTALL_ROOT/scripts/bootstrap_deployment_env.py" \
+            --root "$INSTALL_ROOT" \
+            --release-http-port 8080 \
+            --release-node-api-base-url "http://$smoke_host:8080" \
+            --release-influxdb-host-port 8086 \
+            --release-influxdb-node-write-url "http://$smoke_host:8086" \
+            --release-demo-enabled true \
+            --release-runtime-architectures amd64,arm64 \
+            --session-cookie-secure false
+          "$SURGEPILOT" up
+          uv sync --all-packages --all-groups
+          SURGEPILOT_E2E_API_ORCHESTRATION_URL="http://$smoke_host:8080" \
+          SURGEPILOT_E2E_EXPECTED_PRODUCT_VERSION="${SOURCE_VERSION#v}" \
+          SURGEPILOT_E2E_TARGET_URL="http://$smoke_host:8080/api/healthz" \
+          SURGEPILOT_E2E_INFLUXDB_QUERY_URL="http://$smoke_host:8086" \
+          SURGEPILOT_E2E_INFLUXDB_TOKEN_FILE="$INSTALL_ROOT/.surgepilot/secrets/influxdb-token.secret" \
+          SURGEPILOT_E2E_NODE_SSH_HOST=demo-load-node \
+          SURGEPILOT_E2E_NODE_SSH_PORT=22 \
+          SURGEPILOT_E2E_NODE_SSH_PASSWORD_FILE="$INSTALL_ROOT/.surgepilot/secrets/demo-load-node-password.secret" \
+          SURGEPILOT_E2E_UPGRADE_STATE_FILE="$RUNNER_TEMP/surgepilot-upgrade-state.json" \
+          make verify-p2-05-release-stack
+
+          if [ "$SOURCE_MODE" = clean_down ]; then "$SURGEPILOT" down; fi
+          SURGEPILOT_INSTALLER_RELEASE_BASE_URL="http://127.0.0.1:$asset_port" \
+            sh release-assets/install.sh
+          install -d -m 700 "$INSTALL_ROOT/.surgepilot/runtime-artifacts"
+          cp release-assets/surgepilot-runtime-linux-* \
+            "$INSTALL_ROOT/.surgepilot/runtime-artifacts/"
+
+          if [ "$SOURCE_MODE" = running ]; then
+            run_id=$(docker exec surgepilot-postgres-1 psql -U surgepilot -d surgepilot -Atc \
+              "SELECT id FROM runs ORDER BY created_at DESC LIMIT 1")
+            test -n "$run_id"
+            original_state=$(docker exec surgepilot-postgres-1 psql -U surgepilot -d surgepilot \
+              -Atc "SELECT state FROM runs WHERE id='$run_id'")
+            docker exec surgepilot-postgres-1 psql -U surgepilot -d surgepilot -c \
+              "UPDATE runs SET state='running' WHERE id='$run_id'"
+            if "$SURGEPILOT" up; then
+              echo "Upgrade unexpectedly accepted active source work." >&2
+              exit 1
+            fi
+            test "$(sed -n '2p' "$INSTALL_ROOT/.release-state")" = phase=prepared
+            docker exec surgepilot-postgres-1 psql -U surgepilot -d surgepilot -c \
+              "UPDATE runs SET state='$original_state' WHERE id='$run_id'"
+          fi
+
+          "$SURGEPILOT" up
+          test "$(sed -n '2p' "$INSTALL_ROOT/.release-state")" = phase=stable
+          SURGEPILOT_E2E_API_ORCHESTRATION_URL="http://$smoke_host:8080" \
+          SURGEPILOT_E2E_EXPECTED_PRODUCT_VERSION="${GITHUB_REF_NAME#v}" \
+          SURGEPILOT_E2E_TARGET_URL="http://$smoke_host:8080/api/healthz" \
+          SURGEPILOT_E2E_INFLUXDB_QUERY_URL="http://$smoke_host:8086" \
+          SURGEPILOT_E2E_INFLUXDB_TOKEN_FILE="$INSTALL_ROOT/.surgepilot/secrets/influxdb-token.secret" \
+          SURGEPILOT_E2E_NODE_SSH_HOST=demo-load-node \
+          SURGEPILOT_E2E_NODE_SSH_PORT=22 \
+          SURGEPILOT_E2E_NODE_SSH_PASSWORD_FILE="$INSTALL_ROOT/.surgepilot/secrets/demo-load-node-password.secret" \
+          SURGEPILOT_E2E_UPGRADE_STATE_FILE="$RUNNER_TEMP/surgepilot-upgrade-state.json" \
+          SURGEPILOT_E2E_REUSE_UPGRADE_STATE=true \
+          make verify-p2-05-release-stack
+
   publish:
-    needs: [bundle, installer-smoke, release-smoke]
+    needs: [bundle, installer-smoke, release-smoke, upgrade-smoke]
+    if: >-
+      always() &&
+      needs.bundle.result == 'success' &&
+      needs.installer-smoke.result == 'success' &&
+      needs.release-smoke.result == 'success' &&
+      needs.upgrade-smoke.result == 'success'
     runs-on: ubuntu-24.04
     permissions:
       contents: write
