@@ -470,7 +470,7 @@ jobs:
           make verify-p2-05-release-stack
 
   upgrade-smoke:
-    if: github.ref_name == 'v1.2.1'
+    if: github.ref_name == 'v1.2.2'
     needs: bundle
     permissions:
       contents: read

@@ -65,6 +65,10 @@ def expected_product_version() -> str:
     return value
 
 
+def expected_runtime_version() -> str:
+    return f"v{expected_product_version()}"
+
+
 def fetch_runtime_openapi() -> dict:
     with urllib.request.urlopen(f"{API_BASE_URL}/api/openapi.json", timeout=10) as response:
         return json.loads(response.read().decode("utf-8"))
@@ -315,6 +319,7 @@ def verify_preserved_upgrade_state() -> None:
     if not UPGRADE_STATE_FILE:
         raise RuntimeError("SURGEPILOT_E2E_UPGRADE_STATE_FILE is required for upgrade reuse")
     state = json.loads(Path(UPGRADE_STATE_FILE).read_text(encoding="utf-8"))
+    target_runtime_version = expected_runtime_version()
     session = login_existing_user(str(state["email"]))
     if session.workspace_id != state["workspaceId"]:
         raise RuntimeError("Upgrade did not preserve the source Workspace identity")
@@ -324,7 +329,7 @@ def verify_preserved_upgrade_state() -> None:
         node.get("status") != "idle"
         or node.get("credentialConfigured") is not True
         or node.get("runtimeVersion") != state["sourceRuntimeVersion"]
-        or node.get("runtimeVersion") == expected_product_version()
+        or node.get("runtimeVersion") == target_runtime_version
     ):
         raise RuntimeError(f"Source Load Node eligibility state was not preserved: {node}")
 
@@ -369,10 +374,11 @@ def verify_preserved_upgrade_state() -> None:
     initialized = get_json(session, f"/api/v1/load-nodes/{state['nodeId']}")
     if (
         initialized.get("credentialConfigured") is not True
-        or initialized.get("runtimeVersion") != expected_product_version()
+        or initialized.get("runtimeVersion") != target_runtime_version
     ):
         raise RuntimeError(
-            "Explicit reinitialization did not preserve credentials and install target"
+            "Explicit reinitialization did not preserve credentials and install target: "
+            f"{initialized}"
         )
     verify_product_identity(session, str(state["nodeId"]))
 
