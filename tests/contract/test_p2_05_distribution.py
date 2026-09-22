@@ -392,7 +392,7 @@ def test_release_workflows_validate_and_install_generated_assets() -> None:
         "upgrade-smoke",
     ]
     upgrade = formal_jobs["upgrade-smoke"]
-    assert upgrade["if"] == "github.ref_name == 'v1.2.1'"
+    assert upgrade["if"] == "github.ref_name == 'v1.2.2'"
     assert upgrade["needs"] == "bundle"
     assert upgrade["strategy"]["matrix"]["include"] == [
         {

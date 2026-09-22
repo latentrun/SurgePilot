@@ -372,7 +372,7 @@ def test_upgrade_reuse_preserves_workspace_artifact_and_reinitializes_same_node(
                 "email": "upgrade@example.com",
                 "workspaceId": "workspace-1",
                 "nodeId": "node-1",
-                "sourceRuntimeVersion": "1.1.0",
+                "sourceRuntimeVersion": "v1.1.0",
                 "envGroupId": "env-1",
                 "scenarioId": "scenario-1",
                 "scenarioRevision": 3,
@@ -404,7 +404,7 @@ def test_upgrade_reuse_preserves_workspace_artifact_and_reinitializes_same_node(
             return {
                 "status": "idle",
                 "credentialConfigured": True,
-                "runtimeVersion": "1.2.0" if initialized else "1.1.0",
+                "runtimeVersion": "v1.2.0" if initialized else "v1.1.0",
             }
         if path == "/api/v1/runs/source-run-1":
             return {"verdict": {"state": "finished"}}

@@ -96,7 +96,7 @@ ${XDG_DATA_HOME:-$HOME/.local/share}/surgepilot/
 ├── .releases/
 │   ├── v1.1.0/                   # immutable legacy release payload
 │   │   └── .surgepilot -> ../../.surgepilot
-│   └── v1.2.1/                   # first published schema-1 release payload
+│   └── v1.2.2/                   # first published schema-1 release payload
 │       ├── surgepilot-dispatcher
 │       ├── surgepilot            # version wrapper
 │       └── .surgepilot -> ../../.surgepilot
@@ -516,8 +516,8 @@ same major and interval `[minimumUpgradeVersion, target)`. Formal publication en
 every such source; it may not test only the endpoints. For the first implementation this means:
 
 ```text
-v1.0.0 -> v1.2.1
-v1.1.0 -> v1.2.1
+v1.0.0 -> v1.2.2
+v1.1.0 -> v1.2.2
 ```
 
 The publication workflow must complete those upgrade jobs before semantic image tags or the public
@@ -586,7 +586,7 @@ from process-level fault injection.
 
 The first formal release additionally requires real v1.0.0 and v1.1.0 data upgrades, active-work
 refusal, clean-down transition, Load Node reinitialization, existing native release smoke, reviewed
-`docs/releases/v1.2.1.md`, the bounded historical product-metadata mapping above, and a publish job
+`docs/releases/v1.2.2.md`, the bounded historical product-metadata mapping above, and a publish job
 that depends on all required upgrade jobs.
 
 ## Supersession Scope
