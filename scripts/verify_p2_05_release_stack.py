@@ -88,7 +88,12 @@ def _assert_version(surface: str, actual: object, expected: str) -> None:
         raise RuntimeError(f"{surface} version mismatch: expected {expected}, got {actual!r}")
 
 
-def verify_product_identity(session, node_id: str) -> None:
+def verify_product_identity(
+    session,
+    node_id: str,
+    *,
+    expected_catalog_version: str | None = None,
+) -> None:
     expected = expected_product_version()
     runtime_openapi = fetch_runtime_openapi()
     _assert_version("runtime OpenAPI", runtime_openapi.get("info", {}).get("version"), expected)
@@ -101,7 +106,11 @@ def verify_product_identity(session, node_id: str) -> None:
         raise RuntimeError(
             f"system Catalog entry mismatch: expected one SurgePilot API entry, got {len(system_specs)}"
         )
-    _assert_version("system Catalog", system_specs[0].get("documentVersion"), expected)
+    _assert_version(
+        "system Catalog",
+        system_specs[0].get("documentVersion"),
+        expected if expected_catalog_version is None else expected_catalog_version,
+    )
 
     try:
         with ZipFile(BytesIO(download_skill_bundle(session))) as archive:
@@ -300,6 +309,7 @@ def persist_upgrade_state(
         "email": session.email,
         "workspaceId": session.workspace_id,
         "nodeId": node["id"],
+        "sourceProductVersion": expected_product_version(),
         "sourceRuntimeVersion": get_json(session, f"/api/v1/load-nodes/{node['id']}")[
             "runtimeVersion"
         ],
@@ -380,7 +390,11 @@ def verify_preserved_upgrade_state() -> None:
             "Explicit reinitialization did not preserve credentials and install target: "
             f"{initialized}"
         )
-    verify_product_identity(session, str(state["nodeId"]))
+    verify_product_identity(
+        session,
+        str(state["nodeId"]),
+        expected_catalog_version=str(state["sourceProductVersion"]),
+    )
 
     post_run = create_json(
         session,

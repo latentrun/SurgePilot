@@ -112,6 +112,44 @@ def test_verify_product_identity_covers_runtime_catalog_skill_and_runner(
     verify_p2_05_release_stack.verify_product_identity(session, "node-1")
 
 
+def test_verify_product_identity_accepts_preserved_source_catalog_version(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("SURGEPILOT_E2E_EXPECTED_PRODUCT_VERSION", "1.2.3")
+    monkeypatch.setattr(
+        verify_p2_05_release_stack,
+        "fetch_runtime_openapi",
+        lambda: {"info": {"version": "1.2.3"}},
+    )
+    monkeypatch.setattr(
+        verify_p2_05_release_stack,
+        "download_skill_bundle",
+        lambda _session: skill_zip("1.2.3"),
+    )
+    monkeypatch.setattr(
+        verify_p2_05_release_stack,
+        "get_json",
+        lambda _session, path: (
+            {"items": [{"name": "SurgePilot API", "documentVersion": "0.1.0"}]}
+            if "api-catalog" in path
+            else {"runnerVersion": "1.2.3"}
+        ),
+    )
+
+    verify_p2_05_release_stack.verify_product_identity(
+        object(),
+        "node-1",
+        expected_catalog_version="0.1.0",
+    )
+
+    with pytest.raises(RuntimeError, match="system Catalog"):
+        verify_p2_05_release_stack.verify_product_identity(
+            object(),
+            "node-1",
+            expected_catalog_version="",
+        )
+
+
 @pytest.mark.parametrize(
     ("runtime_version", "catalog_version", "skill_version", "runner_version", "message"),
     [
@@ -372,6 +410,7 @@ def test_upgrade_reuse_preserves_workspace_artifact_and_reinitializes_same_node(
                 "email": "upgrade@example.com",
                 "workspaceId": "workspace-1",
                 "nodeId": "node-1",
+                "sourceProductVersion": "1.1.0",
                 "sourceRuntimeVersion": "v1.1.0",
                 "envGroupId": "env-1",
                 "scenarioId": "scenario-1",
@@ -438,12 +477,12 @@ def test_upgrade_reuse_preserves_workspace_artifact_and_reinitializes_same_node(
         initialized = True
 
     monkeypatch.setattr(verify_p2_05_release_stack, "initialize_node", initialize)
-    identities: list[str] = []
+    identities: list[tuple[str, str]] = []
     monkeypatch.setattr(
         verify_p2_05_release_stack,
         "verify_product_identity",
-        lambda actual_session, node_id: (
-            identities.append(node_id)
+        lambda actual_session, node_id, *, expected_catalog_version: (
+            identities.append((node_id, expected_catalog_version))
             if actual_session is session
             else pytest.fail("unexpected identity session")
         ),
@@ -475,7 +514,7 @@ def test_upgrade_reuse_preserves_workspace_artifact_and_reinitializes_same_node(
     verify_p2_05_release_stack.verify_preserved_upgrade_state()
 
     assert initialized is True
-    assert identities == ["node-1"]
+    assert identities == [("node-1", "1.1.0")]
 
 
 def test_source_release_persists_bounded_upgrade_evidence(
@@ -483,6 +522,7 @@ def test_source_release_persists_bounded_upgrade_evidence(
 ) -> None:
     state_path = tmp_path / "upgrade-state.json"
     monkeypatch.setattr(verify_p2_05_release_stack, "UPGRADE_STATE_FILE", str(state_path))
+    monkeypatch.setenv("SURGEPILOT_E2E_EXPECTED_PRODUCT_VERSION", "1.1.0")
     session = type(
         "Session",
         (),
@@ -509,6 +549,7 @@ def test_source_release_persists_bounded_upgrade_evidence(
 
     state = json.loads(state_path.read_text(encoding="utf-8"))
     assert state["workspaceId"] == "workspace-1"
+    assert state["sourceProductVersion"] == "1.1.0"
     assert state["sourceRuntimeVersion"] == "1.1.0"
     assert state["artifactSha256"] == "a" * 64
     assert state_path.stat().st_mode & 0o777 == 0o600
