@@ -10,8 +10,6 @@ notes and manually entered release text are not parallel sources.
 Write release notes in English for release users, not as a raw commit list. Use these headings:
 
 ```markdown
-# SurgePilot vX.Y.Z
-
 ## Highlights
 
 ## Install
@@ -22,6 +20,10 @@ Write release notes in English for release users, not as a raw commit list. Use 
 
 ## Full changelog
 ```
+
+Do not add a top-level release title to the notes body. GitHub renders the separately configured
+`SurgePilot vX.Y.Z` Release title above the body, while the exact version remains authoritative in
+the `docs/releases/vX.Y.Z.md` filename.
 
 Under those headings:
 
@@ -44,10 +46,11 @@ version-transition changes. The release tag is created only after that review an
 checks pass.
 
 The release workflow checks the exact versioned file during preflight and again immediately before
-staging the draft. `scripts/validate_release_notes.py` requires the exact tag-matched title, the five
-headings above in order, and substantive non-comment content in every section. A missing or invalid
-file blocks publication before the GitHub Release or semantic image tags are created. The draft is
-created with `--notes-file`, so the reviewed file is the published body.
+staging the draft. `scripts/validate_release_notes.py` requires the exact tag-matched filename, no
+top-level title, the five headings above in order, and substantive non-comment content in every
+section. A missing or invalid file blocks publication before the GitHub Release or semantic image
+tags are created. The draft is created with `--notes-file`, so the reviewed file is the published
+body.
 
 ## Historical metadata correction
 

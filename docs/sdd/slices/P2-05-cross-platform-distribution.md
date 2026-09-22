@@ -160,7 +160,8 @@ P2-05 must not implement:
 10. Cross-compiling or QEMU-validating a release-grade Runtime as a substitute for native architecture release jobs.
 11. Publishing the Public API AI skill source as a GitHub Release, GHCR artifact, marketplace package, SDK, MCP server, or installer.
 12. Docker Hub mirroring, multiple public registries, image signing, SBOM publication, provenance attestation, or vulnerability-management UI in this Slice.
-13. API routes, database migrations, new product tables, new RBAC, new Web product pages, or automatic Demo Load Node database seeding.
+13. API routes, new product-schema migrations outside ADR-0029 transition execution, new product
+    tables, new RBAC, new Web product pages, or automatic Demo Load Node database seeding.
 14. Changing the Runner protocol, Run state machine, Workspace semantics, storage backend, or existing Load Node credential boundary.
 15. Resumable same-version release publication, draft reconciliation, or byte-for-byte continuation of a partially published release.
 16. Package-manager/system installers, Docker installation, `sudo`, shell-startup-file mutation,
@@ -609,8 +610,9 @@ The exact safe publish ordering must prevent a release page or semantic tag from
 
 Every formal release has one reviewed user-facing notes source at
 `docs/releases/vX.Y.Z.md`, matching the exact tag. The workflow validates that the file exists and
-has the exact tag-matched title, required ordered sections, and substantive content before
-publication work; it revalidates the file before draft creation and passes it to
+has the exact tag-matched filename, omits the redundant top-level Release title, and contains the
+required ordered sections with substantive content before publication work; it revalidates the
+file before draft creation and passes it to
 `gh release create --notes-file`. The format and author/review procedure are defined in
 `docs/releases/README.md`; installation, upgrade, compatibility, and breaking-change guidance are
 explicit rather than inferred from commits.

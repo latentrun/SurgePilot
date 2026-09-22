@@ -378,9 +378,11 @@ def write_release_env(
     env_file.chmod(0o600)
 
 
-def render_wrapper(directory: Path, *, create_env: bool = True) -> Path:
+def render_wrapper(
+    directory: Path, *, create_env: bool = True, release_version: str = "v0.3.0"
+) -> Path:
     text = WRAPPER.read_text(encoding="utf-8")
-    text = text.replace("@@RELEASE_VERSION@@", "v0.3.0")
+    text = text.replace("@@RELEASE_VERSION@@", release_version)
     text = text.replace(
         "@@API_IMAGE@@",
         f"ghcr.io/latentrun/surgepilot-api@sha256:{'1' * 64}",
@@ -395,8 +397,10 @@ def render_wrapper(directory: Path, *, create_env: bool = True) -> Path:
     return path
 
 
-def prepare_installed_identity_files(release_root: Path) -> None:
-    (release_root / "VERSION").write_text("v0.3.0\n", encoding="utf-8")
+def prepare_installed_identity_files(
+    release_root: Path, *, release_version: str = "v0.3.0"
+) -> None:
+    (release_root / "VERSION").write_text(f"{release_version}\n", encoding="utf-8")
     (release_root / "release-manifest.json").write_text("{}\n", encoding="utf-8")
     for relative in (
         ".env.example",
@@ -423,15 +427,19 @@ def prepare_installed_identity_files(release_root: Path) -> None:
 
 
 def prepare_transition_installation(
-    tmp_path: Path, *, phase: str = "prepared"
+    tmp_path: Path,
+    *,
+    phase: str = "prepared",
+    source_version: str = "v0.2.0",
+    target_version: str = "v0.3.0",
 ) -> tuple[Path, Path, Path, Path, dict[str, str], Path]:
     install_root = tmp_path / "surgepilot"
-    source_root = install_root / ".releases/v0.2.0"
-    target_root = install_root / ".releases/v0.3.0"
+    source_root = install_root / f".releases/{source_version}"
+    target_root = install_root / f".releases/{target_version}"
     source_root.mkdir(parents=True)
     target_root.mkdir(parents=True)
-    render_wrapper(target_root, create_env=False)
-    prepare_installed_identity_files(target_root)
+    render_wrapper(target_root, create_env=False, release_version=target_version)
+    prepare_installed_identity_files(target_root, release_version=target_version)
     (source_root / "compose").mkdir()
     (source_root / "compose/docker-compose.yml").write_text("services: {}\n", encoding="utf-8")
     write_release_env(install_root)
@@ -439,7 +447,7 @@ def prepare_transition_installation(
     (install_root / "surgepilot").chmod(0o755)
     state = install_root / ".release-state"
     state.write_text(
-        f"schema=1\nphase={phase}\ntarget=v0.3.0\nbase=v0.2.0\n",
+        f"schema=1\nphase={phase}\ntarget={target_version}\nbase={source_version}\n",
         encoding="utf-8",
     )
     state.chmod(0o600)
@@ -903,17 +911,14 @@ def test_prepared_up_restores_source_when_nginx_stop_partially_fails(tmp_path: P
 
 def test_v1_0_source_restore_accepts_legacy_product_metadata(tmp_path: Path) -> None:
     install_root, source_root, target_root, state, environment, log = (
-        prepare_transition_installation(tmp_path)
-    )
-    legacy_source_root = install_root / ".releases/v1.0.0"
-    source_root.rename(legacy_source_root)
-    state.write_text(
-        "schema=1\nphase=prepared\ntarget=v0.3.0\nbase=v1.0.0\n",
-        encoding="utf-8",
+        prepare_transition_installation(
+            tmp_path,
+            source_version="v1.0.0",
+            target_version="v1.2.0",
+        )
     )
     environment.update(
         {
-            "TEST_SOURCE_ROOT": str(legacy_source_root),
             "TEST_SOURCE_RELEASE_VERSION": "v1.0.0",
             "TEST_SOURCE_PRODUCT_VERSION": "0.1.0",
             "TEST_ACTIVE_BLOCK_AT": "2",
@@ -931,13 +936,14 @@ def test_v1_0_source_restore_accepts_legacy_product_metadata(tmp_path: Path) -> 
     assert "active" in result.stderr.lower()
     assert "source identity is invalid" not in result.stderr.lower()
     assert (install_root / "source-restored").is_file()
+    assert (install_root / "probe-count").read_text(encoding="utf-8") == "2\n"
     assert state.read_text(encoding="utf-8") == (
-        "schema=1\nphase=prepared\ntarget=v0.3.0\nbase=v1.0.0\n"
+        "schema=1\nphase=prepared\ntarget=v1.2.0\nbase=v1.0.0\n"
     )
-    assert not any(
-        str(target_root) in line and " up -d --wait " in line
-        for line in log.read_text(encoding="utf-8").splitlines()
-    )
+    invocations = log.read_text(encoding="utf-8").splitlines()
+    assert any(line.endswith(" stop nginx") for line in invocations)
+    assert any(str(source_root) in line and " exec -T api " in line for line in invocations)
+    assert not any(str(target_root) in line and " up -d --wait " in line for line in invocations)
 
 
 def test_prepared_up_restores_source_when_stopped_source_postgres_start_fails(

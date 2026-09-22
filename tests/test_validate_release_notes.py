@@ -9,8 +9,10 @@ ROOT = Path(__file__).resolve().parents[1]
 VALIDATOR = ROOT / "scripts" / "validate_release_notes.py"
 
 
-def _run_validator(tmp_path: Path, content: str) -> subprocess.CompletedProcess[str]:
-    notes_path = tmp_path / "v1.2.3.md"
+def _run_validator(
+    tmp_path: Path, content: str, *, filename: str = "v1.2.3.md"
+) -> subprocess.CompletedProcess[str]:
+    notes_path = tmp_path / filename
     notes_path.write_text(content, encoding="utf-8")
     return subprocess.run(
         [sys.executable, str(VALIDATOR), "--tag", "v1.2.3", "--path", str(notes_path)],
@@ -23,9 +25,7 @@ def _run_validator(tmp_path: Path, content: str) -> subprocess.CompletedProcess[
 def test_accepts_complete_release_notes(tmp_path: Path) -> None:
     result = _run_validator(
         tmp_path,
-        """# SurgePilot v1.2.3
-
-## Highlights
+        """## Highlights
 
 - Adds a user-visible improvement.
 
@@ -50,19 +50,24 @@ Compare v1.2.2 with v1.2.3.
     assert result.returncode == 0, result.stderr
 
 
-def test_rejects_wrong_title(tmp_path: Path) -> None:
-    result = _run_validator(tmp_path, "# SurgePilot v9.9.9\n")
+def test_rejects_top_level_release_title(tmp_path: Path) -> None:
+    result = _run_validator(tmp_path, "# SurgePilot v1.2.3\n\n## Highlights\n")
 
     assert result.returncode != 0
     assert "must start with exactly" in result.stderr
 
 
+def test_rejects_filename_that_does_not_match_tag(tmp_path: Path) -> None:
+    result = _run_validator(tmp_path, "## Highlights\n", filename="v9.9.9.md")
+
+    assert result.returncode != 0
+    assert "filename must be exactly: v1.2.3.md" in result.stderr
+
+
 def test_rejects_missing_or_empty_required_section(tmp_path: Path) -> None:
     result = _run_validator(
         tmp_path,
-        """# SurgePilot v1.2.3
-
-## Highlights
+        """## Highlights
 
 <!-- TODO -->
 

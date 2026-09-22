@@ -394,15 +394,30 @@ def test_release_workflows_validate_and_install_generated_assets() -> None:
     upgrade = formal_jobs["upgrade-smoke"]
     assert upgrade["needs"] == "bundle"
     assert upgrade["strategy"]["matrix"]["include"] == [
-        {"source": "v1.0.0", "source_mode": "running"},
-        {"source": "v1.1.0", "source_mode": "running"},
-        {"source": "v1.1.0", "source_mode": "clean_down"},
+        {
+            "source": "v1.0.0",
+            "source_product_version": "0.1.0",
+            "source_mode": "running",
+        },
+        {
+            "source": "v1.1.0",
+            "source_product_version": "1.1.0",
+            "source_mode": "running",
+        },
+        {
+            "source": "v1.1.0",
+            "source_product_version": "1.1.0",
+            "source_mode": "clean_down",
+        },
     ]
-    upgrade_run = next(
-        step["run"]
+    upgrade_step = next(
+        step
         for step in upgrade["steps"]
         if step.get("name") == "Upgrade persisted source data and complete a target Run"
     )
+    assert upgrade_step["env"]["SOURCE_PRODUCT_VERSION"] == ("${{ matrix.source_product_version }}")
+    upgrade_run = upgrade_step["run"]
+    assert 'SURGEPILOT_E2E_EXPECTED_PRODUCT_VERSION="$SOURCE_PRODUCT_VERSION"' in upgrade_run
     assert "SURGEPILOT_E2E_UPGRADE_STATE_FILE" in upgrade_run
     assert "SURGEPILOT_E2E_REUSE_UPGRADE_STATE=true" in upgrade_run
     publish_condition = formal_jobs["publish"]["if"]
