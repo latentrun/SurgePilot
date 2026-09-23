@@ -96,13 +96,33 @@ def verify_product_identity(
     runtime_openapi = fetch_runtime_openapi()
     _assert_version("runtime OpenAPI", runtime_openapi.get("info", {}).get("version"), expected)
 
-    catalog = get_json(session, "/api/v1/api-catalog/specs?limit=100&offset=0")
-    system_specs = [
-        item
-        for item in catalog.get("items", [])
-        if item.get("name") == "SurgePilot API"
-        and item.get("filename") == "surgepilot-api.openapi.json"
-    ]
+    system_specs = []
+    offset = 0
+    expected_total = None
+    while True:
+        catalog = get_json(session, f"/api/v1/api-catalog/specs?limit=100&offset={offset}")
+        items = catalog.get("items")
+        total = catalog.get("total")
+        if (
+            not isinstance(items, list)
+            or not isinstance(total, int)
+            or total < 0
+            or (expected_total is not None and total != expected_total)
+            or len(items) > 100
+            or offset + len(items) > total
+            or (offset < total and not items)
+        ):
+            raise RuntimeError("system Catalog listing is incomplete or invalid")
+        expected_total = total
+        system_specs.extend(
+            item
+            for item in items
+            if item.get("name") == "SurgePilot API"
+            and item.get("filename") == "surgepilot-api.openapi.json"
+        )
+        offset += len(items)
+        if offset == total:
+            break
     if len(system_specs) != 1:
         raise RuntimeError(
             f"system Catalog entry mismatch: expected one SurgePilot API entry, got {len(system_specs)}"
