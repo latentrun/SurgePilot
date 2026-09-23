@@ -11,6 +11,7 @@ from app.core.config import validate_ssh_credential_encryption_key
 from app.core.middleware import request_context_middleware
 from app.core.product_version import PRODUCT_VERSION
 from app.services.storage import get_storage_client
+from app.services.system_openapi_bootstrap import reconcile_system_openapi_best_effort
 from app.routes import (
     account_ai_skill,
     account_api_tokens,
@@ -33,8 +34,9 @@ from app.routes import (
 
 
 @asynccontextmanager
-async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
+async def lifespan(application: FastAPI) -> AsyncIterator[None]:
     validate_ssh_credential_encryption_key()
+    reconcile_system_openapi_best_effort(application=application)
     yield
 
 

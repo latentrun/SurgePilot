@@ -54,7 +54,7 @@ identity.
    deterministic source/local fallback for those installed applications. The private npm
    workspaces and root virtual Python workspace declare no product version.
 3. Product-version consumers are the API/OpenAPI `info.version`, curated and public generated
-   OpenAPI, the Public API AI skill snapshot, first-Admin system Catalog `documentVersion`, the
+   OpenAPI, the Public API AI skill snapshot, active system-owned Catalog `documentVersion` and stored curated OpenAPI `info.version`, the
    generated Runner bundle version, Runner CLI output, detected `runnerVersion`, and Web display
    derived from Catalog metadata.
 4. The API resolves its product version from `SURGEPILOT_PRODUCT_VERSION` when the variable is
@@ -103,7 +103,7 @@ API URL `/v1`, database migration numbers, `bundleVersion`, and historical relea
 ## Consequences
 
 1. A tagged `vX.Y.Z` API image exposes `X.Y.Z` consistently through runtime and generated OpenAPI,
-   first-Admin Catalog metadata, and the installed Runner bundle.
+   active system-owned Catalog metadata and stored curated OpenAPI, and the installed Runner bundle.
 2. Source and local operation remain deterministic without Git and fail clearly when installed
    metadata is unavailable or malformed.
 3. Validation can retain its reserved release artifact `v0.0.0` without contaminating product
@@ -111,7 +111,9 @@ API URL `/v1`, database migration numbers, `bundleVersion`, and historical relea
 4. Releases update one root authority, two meaningful Python package metadata fields, and generated
    artifacts; private workspace manifests do not create mechanical version churn.
 5. This decision adds no version service, release bot, independent component lifecycle,
-   compatibility registry, database migration, or automatic upgrade mechanism.
+   compatibility registry, database migration, or automatic upgrade mechanism. The later P2-04
+   lifecycle amendment introduces the server-only `system_key` migration; it does not revise this
+   decision's original implementation history.
 
 ## Related ADRs
 

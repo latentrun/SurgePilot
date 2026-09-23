@@ -283,8 +283,8 @@ Rules:
 `docs/sdd/adr/ADR-0027-product-version-and-artifact-identity.md` owns product-version resolution.
 FastAPI runtime OpenAPI, the curated Web/business export, and the public export use the same
 canonical `X.Y.Z` product version. A formal release tagged `vX.Y.Z` therefore exposes
-`info.version: X.Y.Z`; a first-Admin system Catalog import derives the same value through the
-curated runtime export.
+`info.version: X.Y.Z`; an active SurgePilot-owned system Catalog asset uses the same canonical
+product version in both its `documentVersion` metadata and stored curated OpenAPI `info.version`.
 
 Generated OpenAPI and the Public API AI skill snapshot are refreshed from FastAPI sources through
 `make generate-contracts`. Docker builds do not rewrite or stamp generated contracts. The reserved

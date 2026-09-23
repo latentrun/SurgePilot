@@ -91,8 +91,6 @@ def _assert_version(surface: str, actual: object, expected: str) -> None:
 def verify_product_identity(
     session,
     node_id: str,
-    *,
-    expected_catalog_version: str | None = None,
 ) -> None:
     expected = expected_product_version()
     runtime_openapi = fetch_runtime_openapi()
@@ -100,7 +98,10 @@ def verify_product_identity(
 
     catalog = get_json(session, "/api/v1/api-catalog/specs?limit=100&offset=0")
     system_specs = [
-        item for item in catalog.get("items", []) if item.get("name") == "SurgePilot API"
+        item
+        for item in catalog.get("items", [])
+        if item.get("name") == "SurgePilot API"
+        and item.get("filename") == "surgepilot-api.openapi.json"
     ]
     if len(system_specs) != 1:
         raise RuntimeError(
@@ -109,8 +110,16 @@ def verify_product_identity(
     _assert_version(
         "system Catalog",
         system_specs[0].get("documentVersion"),
-        expected if expected_catalog_version is None else expected_catalog_version,
+        expected,
     )
+    spec_id = system_specs[0].get("id")
+    if not isinstance(spec_id, str) or not spec_id:
+        raise RuntimeError("system Catalog entry has no spec ID")
+    stored_document = get_json(session, f"/api/v1/api-catalog/specs/{spec_id}/content")
+    info = stored_document.get("info", {})
+    _assert_version("system Catalog content", info.get("version"), expected)
+    if info.get("title") != "SurgePilot API":
+        raise RuntimeError("system Catalog content title mismatch")
 
     try:
         with ZipFile(BytesIO(download_skill_bundle(session))) as archive:
@@ -309,7 +318,6 @@ def persist_upgrade_state(
         "email": session.email,
         "workspaceId": session.workspace_id,
         "nodeId": node["id"],
-        "sourceProductVersion": expected_product_version(),
         "sourceRuntimeVersion": get_json(session, f"/api/v1/load-nodes/{node['id']}")[
             "runtimeVersion"
         ],
@@ -390,11 +398,7 @@ def verify_preserved_upgrade_state() -> None:
             "Explicit reinitialization did not preserve credentials and install target: "
             f"{initialized}"
         )
-    verify_product_identity(
-        session,
-        str(state["nodeId"]),
-        expected_catalog_version=str(state["sourceProductVersion"]),
-    )
+    verify_product_identity(session, str(state["nodeId"]))
 
     post_run = create_json(
         session,

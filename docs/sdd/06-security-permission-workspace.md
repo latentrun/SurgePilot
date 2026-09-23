@@ -194,7 +194,7 @@ Rules:
 6. P0-00 Slice is responsible for defining specific Auth endpoints, request / response schema, form verification and UX.
 7. Setup Status must display the `ALLOW_SIGNUP` status, and indicate "P0 has no new user entry" when there is an Admin and `ALLOW_SIGNUP=false`.
 8. ADR-0016/P2-04 may use the serialized first-user decision only as an explicit return value from `register_user`. The service keeps ownership of the registration commit; the route must not infer the bootstrap event from `role == "admin"`.
-9. The P2-04 system OpenAPI import runs only after registration commit, through an independent `SessionLocal` transaction. OpenAPI generation, MinIO writes, and API Catalog creation must not occur under the first-user table lock or nested registration transaction.
+9. The P2-04 first-Admin system OpenAPI creation runs only after registration commit, through an independent `SessionLocal` transaction. OpenAPI generation, MinIO writes, and API Catalog creation must not occur under the first-user table lock or nested registration transaction. A later API startup separately reconciles an existing active marked system asset through its own `SessionLocal` and has no request actor.
 10. P2-04 import failure is best-effort and must not revoke or roll back the successfully committed first Admin, membership, session, or registration audit.
 
 ### 5.3 Login Behavior Rules
@@ -506,7 +506,7 @@ Rules:
 4. The first Admin joins Default Workspace when registering.
 5. Automatically join the Default Workspace during subsequent User registration.
 6. Setup Status must check if Default Workspace exists.
-7. ADR-0016/P2-04 may create one system-owned API Catalog asset in Default Workspace only after the first Admin and membership commit. The import uses the committed first Admin ID as `created_by`, the committed Default Workspace ID as `workspace_id`, and an independent transaction.
+7. ADR-0016/P2-04 may create one system-owned API Catalog asset in Default Workspace only after the first Admin and membership commit. Creation uses the committed first Admin ID as `created_by`, the committed Default Workspace ID as `workspace_id`, and an independent transaction. Later startup may reconcile only an existing active marked asset in this Workspace, using an independent `SessionLocal` and no request actor; replacement preserves the prior `created_by` and retires the old row with `deleted_by = NULL`.
 
 ### 11.3 Membership
 
@@ -659,7 +659,7 @@ Rules:
 3. Logs and audit records may include normalized IP and truncated user agent for abuse investigation.
 4. Logs must not include token values, passwords, credentials or encryption keys.
 5. P0 does not implement a generic masking framework, but code review must reject obvious secret leaks.
-6. P2-04 skill bundle and bootstrap logs may include safe user/Workspace/spec identifiers and a bounded SHA-256 prefix, but must not include candidate filesystem paths, archive bytes, OpenAPI payload, full MinIO object keys, cookies, PATs, or CSRF values.
+6. P2-04 skill bundle, bootstrap, and system OpenAPI reconciliation logs may include safe user/Workspace/spec identifiers and a bounded SHA-256 prefix, but must not include candidate filesystem paths, archive bytes, OpenAPI payload, full MinIO object keys, credentials, cookies, PATs, or CSRF values.
 
 ### 13.3 Error Response Rules
 

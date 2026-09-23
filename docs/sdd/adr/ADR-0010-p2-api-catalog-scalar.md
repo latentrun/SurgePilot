@@ -25,8 +25,8 @@ The accepted architecture is:
 4. Render detail pages with Scalar API Reference from the authorized `contentUrl` only.
 5. Disable request sending and external Scalar integrations, including Test Request / Try it affordances, API client buttons, auth persistence, hosted proxy, Agent, MCP, developer tools, and telemetry when supported by the integration.
 6. Reuse the existing AppLayout, route/module style, Tailwind tokens, CSS variables, source-owned primitives, generated contracts, session auth, Workspace header, and CSRF rules.
-7. Keep API Catalog isolated from Scenario, Step, Test Plan, Run, Runner, Artifact, Taurus builder, scheduling, SSO, Secret, non-MinIO storage, and OpenAPI Step generation behavior. ADR-0016 adds only a Help explanation and one system-owned first-Admin bootstrap import of SurgePilot's own curated Web/business OpenAPI; it does not add a Catalog generation action.
-8. Allow ADR-0016/P2-04 to invoke the existing API Catalog service after first-Admin registration commit, using an independent session, for one best-effort Default Workspace import deduplicated by `workspace_id + sha256 + status != deleted`.
+7. Keep API Catalog isolated from Scenario, Step, Test Plan, Run, Runner, Artifact, Taurus builder, scheduling, SSO, Secret, non-MinIO storage, and OpenAPI Step generation behavior. ADR-0016 adds Help guidance and one SurgePilot-owned system OpenAPI lifecycle; it does not add a Catalog generation action.
+8. Allow ADR-0016/P2-04 to create the marked system asset after first-Admin registration commit and to reconcile an existing active marked asset once per API startup, each through an independent session. `system_key` identifies the system asset; its SHA-256 determines whether its content needs replacement. A user spec with the same SHA-256 cannot suppress system creation.
 
 ## Boundaries
 
@@ -37,13 +37,13 @@ In scope:
 - Metadata persistence, SHA-256 digest, size, source format, document title/version, and safe status.
 - API-mediated content proxy with private/no-store cache headers.
 - Web list/detail/upload/delete UI and read-only Scalar rendering.
-- One ADR-0016/P2-04 system-owned bootstrap import of SurgePilot's own current curated Web/business OpenAPI into Default Workspace, reusing the same validation, MinIO, metadata, content proxy, and rendering boundaries.
+- One ADR-0016/P2-04 SurgePilot-owned system OpenAPI lifecycle in Default Workspace, reusing the same validation, MinIO, metadata, content proxy, and rendering boundaries.
 - API, contract, Web, Scalar hardening, and E2E/smoke tests required by the Slice.
 
 Out of scope:
 
 - API operation import, operation resources, version diff, coverage analysis, SDK generation, mock server, AI Agent chat, or schema registry.
-- User-provided, externally fetched, scheduled, startup-reconciled, or background automatic OpenAPI ingestion. The ADR-0016 first-Admin system document is the only automatic import exception.
+- User-provided, externally fetched, scheduled, or background automatic OpenAPI ingestion. The ADR-0016 system document is the only automatic lifecycle exception, including bounded startup reconciliation of an existing active asset.
 - API Catalog → Scenario/Test Plan generation, OpenAPI Step auto-generation, Scenario/Test Plan mutation, Run creation, Artifact generation, or Taurus YAML changes.
 - Independent docs service, queue/worker platform, external API Gateway, external object storage backend, self-built OpenAPI renderer, or second UI component/theme system.
 - Any P2 capability other than API Catalog documentation asset management.
@@ -56,7 +56,7 @@ Out of scope:
 - API contracts follow FastAPI/Pydantic schemas → OpenAPI export → generated `@surgepilot/contracts` client/types → Web consumption.
 - The implementation must backfill final API files, migration/model/storage facts, Scalar package/version/import mode, Web module paths, tests, verification commands, and risks in the Slice SDD.
 - Any future change that adds operation import, generation, remote request sending, a different renderer architecture, a new storage backend, or a new UI system requires a new or updated ADR/Scope Gate before implementation.
-- ADR-0016 does not alter the documentation-only model: the imported system asset has no Scenario/Test Plan generation, execution, operation resource, version management, or update/retry behavior.
+- ADR-0016 does not alter the documentation-only model: the system asset has no Scenario/Test Plan generation, execution, operation resource, version graph, worker, or periodic retry behavior. Its stored curated document is replaced when the running contract changes.
 
 ## Implementation Backfill
 

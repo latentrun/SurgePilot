@@ -310,7 +310,7 @@ Rules:
 4. The AI Agents tab is limited to API Keys, explicit Workspace ID, Public API use, official skill source download, local user-owned agent consumption, operation allowlist, and write confirmation.
 5. The Help download action uses the generated Web/business operation for `GET /api/v1/account/ai-skill/download` through the existing API-client wrapper/blob-download pattern.
 6. The page must not claim SDK, MCP, marketplace, installer, built-in agent runtime, automatic Scenario generation, automatic tuning, or automatic report analysis.
-7. `Limits & Activation` must distinguish the active first-Admin system curated OpenAPI bootstrap from inactive user/external automatic ingestion.
+7. `Limits & Activation` must distinguish the active SurgePilot-owned system OpenAPI lifecycle (first-Admin creation and later startup reconciliation of an existing asset) from inactive user/external automatic ingestion.
 8. ADR-0013's unauthenticated Marketing Landing is amended only by ADR-0026/P2-07 for exact public Docs/repository links and truthful presentation labels; P2-04 does not activate API Guide, Community, SDK, MCP, marketplace, or other public targets.
 
 

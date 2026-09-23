@@ -116,7 +116,10 @@ describe("P2-04 Help AI Agents", () => {
     await userEvent.click(
       within(tabList).getByRole("tab", { name: "Limits & Activation" }),
     );
-    expect(screen.getByText("System bootstrap is active")).toBeInTheDocument();
+    expect(screen.getByText("System OpenAPI stays current")).toBeInTheDocument();
+    expect(
+      screen.getByText(/keeps that system-owned document aligned with the running SurgePilot contract on later API startups/i),
+    ).toBeInTheDocument();
     expect(
       screen.getByText(/does not automatically ingest user-provided URLs/i),
     ).toBeInTheDocument();
