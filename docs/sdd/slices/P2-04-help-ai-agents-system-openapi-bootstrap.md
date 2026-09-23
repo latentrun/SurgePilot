@@ -18,7 +18,7 @@ P2-04 is a bounded enhancement package with three connected outcomes:
 
 1. `/help` becomes a real authenticated agent-native guidance page.
 2. A logged-in user can download the official repo-maintained Public API AI skill source as a request-built zip.
-3. The first successfully registered Admin triggers a best-effort import of SurgePilot's own curated Web/business OpenAPI document into the Default Workspace API Catalog.
+3. The first successfully registered Admin triggers best-effort creation of SurgePilot's own curated Web/business OpenAPI document in the Default Workspace API Catalog; later API startups reconcile the existing active system-owned document once.
 
 The package connects existing capabilities without adding a new platform subsystem. It does not add an AI runtime, SDK, MCP server, marketplace, installer, release pipeline, background ingestion worker, or API Catalog generation chain.
 
@@ -28,7 +28,7 @@ The package connects existing capabilities without adding a new platform subsyst
 | --- | --- |
 | PRD P2 Help route | Activates authenticated `/help` with real product guidance. |
 | `ADR-0012` / `P2-02` | Reuses the governed Public API AI skill source package and public OpenAPI snapshot; adds only a session-authenticated source download. |
-| `ADR-0010` / `P2-00` | Reuses existing API Catalog validation, metadata, MinIO storage, and detail rendering; adds only one system-owned bootstrap import exception. |
+| `ADR-0010` / `P2-00` | Reuses existing API Catalog validation, metadata, MinIO storage, and detail rendering; adds one system-owned document lifecycle exception. |
 | `04-api-contract-guidelines.md` | Keeps FastAPI/Pydantic as source of truth, session auth for `/api/v1/*`, and separate Web/business and public artifacts. |
 | `06-security-permission-workspace.md` | Preserves first-Admin serialization, registration commit ownership, Default Workspace membership, and safe logging. |
 | `08-frontend-routing-and-ui-rules.md` | Activates `/help` under `RequireAuth + AppLayout` and keeps the public Marketing Landing boundary unchanged. |
@@ -41,7 +41,7 @@ The package connects existing capabilities without adding a new platform subsyst
 2. Use the exact tab order defined in §6.
 3. Rename the planned `Automation` concept to `AI Agents` and place it second.
 4. Explain API Keys, Workspace ID, Public API use, official skill source download, and local agent consumption.
-5. Clearly distinguish activated system bootstrap behavior from forbidden user/external automatic OpenAPI ingestion.
+5. Clearly distinguish activated system-owned OpenAPI creation/reconciliation from forbidden user/external automatic OpenAPI ingestion.
 
 ### 3.2 Official skill source download
 
@@ -58,20 +58,22 @@ The package connects existing capabilities without adding a new platform subsyst
 2. Keep current `api.openapi.json` and `public-api.openapi.json` document semantics and public pruning behavior unchanged.
 3. Use the shared Web/business export function to construct the bootstrap payload at runtime.
 
-### 3.4 First-Admin system OpenAPI bootstrap
+### 3.4 System OpenAPI lifecycle
 
 1. Return an explicit `first_user` result from account registration service code.
 2. Invoke a separate best-effort helper only after the registration service has committed successfully.
-3. Import exactly one current curated Web/business OpenAPI document into the first Admin's Default Workspace when no non-deleted same-SHA document exists there.
+3. Create the current curated Web/business OpenAPI document in the first Admin's Default Workspace when no active marked system document exists there.
 4. Reuse the existing API Catalog parser, storage path, metadata model, and service.
 5. Compensate a new MinIO object when the helper's database commit fails.
+6. Add a server-only nullable `system_key` and conservatively adopt one unambiguous canonical historical row in Alembic.
+7. At API startup, synchronously make one best-effort attempt to reconcile an existing active marked system asset: same SHA-256 is a no-op; a changed contract replaces the complete stored document and retires the old metadata in one commit. Startup does not create a missing or deleted asset.
 
 ## 4. Out of Scope
 
 P2-04 must not implement:
 
 1. User-supplied or externally fetched OpenAPI automatic ingestion.
-2. Scheduled, startup, periodic, or background OpenAPI reconciliation.
+2. Scheduled, periodic, or background OpenAPI reconciliation of arbitrary assets.
 3. Retry workers, queues, Redis, Celery, RabbitMQ, Kafka, or a new service.
 4. API Catalog operation import, version graph, version diff, coverage analysis, or schema registry.
 5. OpenAPI/API Catalog to Scenario/Test Plan creation or generation.
@@ -81,7 +83,7 @@ P2-04 must not implement:
 9. A SurgePilot-provided local agent installer or installation workflow UI.
 10. Public unauthenticated skill download or PAT-authenticated skill download under `/api/public/v1/*`.
 11. Skill zip persistence, MinIO storage, database metadata, CDN caching, or download history.
-12. New API Catalog tables, new skill tables, or database migrations.
+12. New API Catalog tables, new skill tables, or migrations beyond the server-only `system_key` identity/adoption migration.
 13. Editable OpenAPI, editable Taurus YAML, or public/internal raw OpenAPI exposure outside existing governed artifacts.
 
 ## 5. Architecture and Component Boundaries
@@ -92,7 +94,7 @@ P2-04 must not implement:
 | Account AI skill route | Authenticate the current user and stream one request-built zip. | Resolve Workspace, use CSRF, persist a bundle, or expose server paths. |
 | `SkillBundle` | Resolve the governed source directory and return safe source entries. | Download remote content, follow unsafe symlinks, or accept arbitrary directories from the request. |
 | Shared OpenAPI export module | Normalize/filter/prune OpenAPI documents for script and runtime consumers. | Import FastAPI app state or read generated artifacts. |
-| Bootstrap helper | Build curated bytes, perform same-SHA lookup, create one Catalog spec, and own commit/rollback/cleanup. | Reuse the registration session, run under the bootstrap lock, or affect registration success. |
+| System OpenAPI helper | Build curated bytes, identify the active marked system asset, create or replace its Catalog spec as appropriate, and own commit/rollback/cleanup. | Reuse the registration session, run under the bootstrap lock, recreate a deleted asset at startup, or affect registration success. |
 | Existing API Catalog service | Validate, parse, store, flush, and return metadata for the system document. | Add generation or execution semantics. |
 
 Planned implementation anchors:
@@ -151,7 +153,7 @@ The content must not claim that SurgePilot provides an installer, marketplace, M
 
 This tab must state both of these facts without ambiguity:
 
-1. **Active:** after the first Admin registration, SurgePilot best-effort imports its own current curated Web/business OpenAPI into the Default Workspace API Catalog.
+1. **Active:** after the first Admin registration, SurgePilot best-effort creates its curated Web/business OpenAPI in the Default Workspace API Catalog and keeps an existing active system-owned document aligned with the running contract on later API startups.
 2. **Inactive:** SurgePilot does not automatically ingest user-provided URLs, external OpenAPI documents, repository specs, or arbitrary remote API definitions.
 
 ## 7. Skill Download API Contract
@@ -312,7 +314,7 @@ The helper is synchronous and bounded, but non-critical:
 3. It logs the failure with safe identifiers such as first Admin ID, Default Workspace ID, and request ID when available.
 4. It never raises a failure back through the registration route.
 5. Registration remains `201 Created` with its committed user, membership, session, cookie, and Workspace header.
-6. P2-04 adds no retry, worker, startup reconciliation, admin repair button, or health failure because the import is best-effort.
+6. P2-04 adds no retry loop, worker, admin repair button, or Catalog-specific health gate. Startup reconciliation is one synchronous best-effort attempt; existing DB/MinIO client timeouts may delay lifespan.
 
 ## 11. Bootstrap Import and Idempotency Contract
 
@@ -333,23 +335,23 @@ The helper synthesizes an existing service input with these fixed properties:
 
 The filename and content type must satisfy `validate_spec_filename`, `validate_content_type`, and `parse_api_spec`. The document's `info.title`, `info.version`, and OpenAPI version remain derived from the current FastAPI schema. Under ADR-0027, `info.version` is the canonical product version, so the imported `documentVersion` is `X.Y.Z` for source, validation, and formal-release deployments.
 
-### 11.2 Same-SHA idempotency
+### 11.2 System identity and content idempotency
 
-Before `create_api_catalog_spec`, query:
+For first-Admin creation, query:
 
 ```text
 workspace_id == Default Workspace ID
-AND sha256 == SHA-256(curated payload)
+AND system_key == "surgepilot_api"
 AND status != "deleted"
 ```
 
 Rules:
 
-1. When a match exists, skip creation and commit no new Catalog row or object.
-2. `name`, filename, title, version, creator, and timestamps are not part of the idempotency key.
-3. A deleted same-SHA row does not block a future explicit helper invocation.
-4. No global cross-Workspace deduplication is allowed.
-5. No new unique index or migration is required by this Slice.
+1. When an active marked row exists, skip first-Admin creation and commit no new Catalog row or object.
+2. A user-uploaded row with identical SHA-256 cannot suppress system creation or become system identity.
+3. Startup queries only active marked rows. Zero rows is a no-op, and more than one is a warning with no mutation.
+4. For exactly one active marked row, compare only its SHA-256 with the current curated payload. Equal SHA-256 produces no DB or MinIO mutation.
+5. A deleted row does not block a later explicit first-Admin helper invocation, but startup never recreates it.
 
 ### 11.3 Create and compensation
 
@@ -359,7 +361,11 @@ Rules:
 2. After creation returns, retain the new spec's server-only bucket and object key until commit succeeds.
 3. If the helper's `db.commit()` fails, call `db.rollback()` and then `storage.delete_object_best_effort()` for only that newly created object.
 4. Cleanup failure is logged safely and does not affect registration.
-5. Never delete an object belonging to an existing same-SHA row that was skipped.
+5. Never delete an object belonging to an existing marked row that was skipped.
+
+### 11.4 Startup replacement
+
+After the identity migration and configuration validation, FastAPI lifespan makes one best-effort attempt using an independent `SessionLocal`. If the active system row's SHA-256 differs, the helper validates and writes the current curated payload, creates a replacement marked row with the previous `created_by`, and tombstones the previous row (`deleted_by = NULL`) in the same transaction. It deletes the old object only after commit, best-effort. Failure before commit rolls back and cleans up only the new object; failure after commit leaves the replacement authoritative. No request actor, worker, retry loop, or Catalog-specific release stable gate is added.
 
 ## 12. Security and Privacy Requirements
 
@@ -389,10 +395,11 @@ Required safe log events or equivalent structured messages:
 
 1. Skill bundle source unavailable.
 2. Skill archive construction failed.
-3. System OpenAPI bootstrap skipped because same SHA already exists.
+3. System OpenAPI bootstrap skipped because an active marked asset already exists.
 4. System OpenAPI bootstrap completed.
 5. System OpenAPI bootstrap failed.
 6. Bootstrap commit compensation attempted and whether object cleanup succeeded.
+7. System OpenAPI startup reconciliation completed, failed, skipped because of duplicate active assets, or left an old object after cleanup failure.
 
 Logs may include request ID, first Admin ID, Default Workspace ID, Catalog spec ID after creation, and a bounded SHA-256 prefix. Logs must not include archive bytes, OpenAPI payload, PATs, cookies, CSRF values, absolute paths, MinIO credentials, or full storage object keys.
 
@@ -425,12 +432,22 @@ Logs may include request ID, first Admin ID, Default Workspace ID, Catalog spec 
 3. Registration commits before OpenAPI generation or storage work begins.
 4. The helper uses a different database session from the registration dependency session.
 5. Successful first registration creates one available Catalog row in Default Workspace with first Admin as creator and valid JSON/OpenAPI metadata.
-6. A same-Workspace, non-deleted same-SHA row causes a no-op even when its name differs.
-7. A same SHA in another Workspace does not suppress Default Workspace import.
-8. A deleted same-SHA row does not count as an existing active import.
+6. An active marked system row causes a no-op even when its name differs.
+7. An ordinary same-SHA row does not suppress Default Workspace system creation.
+8. A deleted marked row does not count as an existing active import.
 9. OpenAPI generation, validation, MinIO, flush, and commit failures do not change successful registration status, cookie, session, or Workspace membership.
 10. Commit failure after object creation triggers rollback and best-effort deletion of only the new object.
 11. The imported content contains curated `/v1/*` paths and excludes `/public/v1/*`, `/internal/*`, health, and raw runtime `/api` prefixes.
+
+### 15.3.1 Historical adoption and startup reconciliation
+
+1. Migration adopts exactly one canonical unaudited historical row created by the earliest registered user; zero, duplicate, deleted, non-first-user, and successfully upload-audited candidates remain unmarked. Audit absence alone is not proof of system ownership.
+2. Fresh first-Admin creation sets server-only `system_key`, current metadata version, and current stored `info.version`.
+3. Same-SHA startup performs no DB or MinIO mutation; changed SHA replaces the full stored document and leaves exactly one active marked row.
+4. Replacement inherits `created_by`, retires the previous row with `deleted_by = NULL`, and deletes its object only after commit.
+5. Commit failure preserves the old row/object and attempts cleanup of the new object; old-object cleanup failure leaves the committed replacement authoritative.
+6. Duplicate active system rows, explicit deletion, and unmarked user assets cause no startup mutation. A reconciliation exception itself does not fail lifespan.
+7. Release verification requires exactly one canonical name/filename match and checks both target-version metadata and stored content title/version.
 
 ### 15.4 Help Web
 
@@ -439,7 +456,7 @@ Logs may include request ID, first Admin ID, Default Workspace ID, Catalog spec 
 3. Tab labels and order match §6.2 exactly; `Automation` is absent.
 4. The AI Agents tab covers API Keys, Workspace ID, Public API, download, local-agent consumption, operation allowlist, and write confirmation.
 5. The download action uses the generated contract/API-client wrapper, saves the fixed filename, and shows a safe error state.
-6. Limits & Activation states that system bootstrap is active and user/external auto-ingestion is inactive.
+6. Limits & Activation states that system creation and later startup alignment are active while user/external auto-ingestion is inactive.
 7. Copy tests reject claims for SDK, MCP, marketplace, installer, built-in runtime, automatic Scenario generation, automatic tuning, or automatic report analysis.
 
 ### 15.5 Verification commands
@@ -463,7 +480,7 @@ P2-04 is complete only when:
 4. The API image contains the governed skill source and the route fails closed when source is unavailable.
 5. The export script and runtime helper use one shared API-owned OpenAPI export implementation.
 6. The first Admin's successful registration triggers only the independent best-effort bootstrap path.
-7. The Default Workspace receives at most one active same-SHA curated system spec per helper invocation sequence.
+7. The Default Workspace receives an active marked system asset independent of ordinary same-SHA user uploads.
 8. Registration remains successful on every bootstrap import failure path.
 9. Commit-after-MinIO failure compensation is covered by tests.
 10. Internal/public OpenAPI inclusion and exclusion rules pass automated checks.
@@ -480,7 +497,7 @@ The implementation PR must record:
 4. Final zip builder, exclusion set, archive root, and streaming implementation.
 5. Final shared OpenAPI export module and script import changes.
 6. Final `register_user` return shape and bootstrap helper call site.
-7. Final bootstrap helper/session function names, same-SHA query, and cleanup implementation.
+7. Final bootstrap helper/session function names, system-key query, and cleanup implementation.
 8. Exact API Catalog name/filename/content type used if they differ from §11.1.
 9. Tests added or changed and verification commands/results.
 10. Implementation differences from this SDD. Any scope expansion requires governance revision before merge.
@@ -515,7 +532,7 @@ The implementation uses these final anchors:
    - `register_user()` returns `(user, workspace, created_session, first_user)` while retaining its existing commit
    - `apps/api/app/routes/auth.py` invokes `bootstrap_system_openapi_best_effort()` only after an explicit `first_user=True` return
    - `build_curated_openapi_payload()`, `import_system_openapi()`, and `bootstrap_system_openapi_best_effort()` live in `apps/api/app/services/system_openapi_bootstrap.py`
-   - the helper uses its own `SessionLocal`, same-Workspace/non-deleted SHA-256 lookup, and `create_api_catalog_spec()`
+   - the helper uses its own `SessionLocal`, active Default Workspace `system_key` lookup, and `create_api_catalog_spec()`
    - the fixed Catalog input remains `SurgePilot API`, `surgepilot-api.openapi.json`, and `application/json`
    - commit failure rolls back and calls `delete_object_best_effort()` only for the newly written object
    - `StorageClient.delete_object_best_effort()` now returns a cleanup success boolean so compensation logs can record the outcome
@@ -526,7 +543,7 @@ Added or adjusted tests:
 
 1. `apps/api/tests/test_p2_04_openapi_export.py`: shared export filtering, pruning, and non-mutation.
 2. `apps/api/tests/test_p2_04_ai_skill.py`: source resolution, per-request archives, environment/cache/temp/symlink/path-escape exclusions, session authorization, sliding-session persistence, normal-user access, ignored invalid Workspace header, response headers, and safe route-local failure.
-3. `apps/api/tests/test_p2_04_system_openapi_bootstrap.py`: curated runtime payload, first-user trigger, independent session import, same-SHA behavior, cross-Workspace isolation, deleted-row behavior, the real route-to-wrapper failure-isolation path, commit compensation, and post-commit safety.
+3. `apps/api/tests/test_p2_04_system_openapi_bootstrap.py`: curated runtime payload, first-user trigger, independent session import, system identity, deleted-row behavior, the real route-to-wrapper failure-isolation path, commit compensation, and post-commit safety. Issue #53 extends this suite with startup reconciliation and replacement safety.
 4. `tests/contract/test_p2_04_help_ai_agents_openapi.py`: internal/public OpenAPI separation, route-local error code, and Docker source-copy boundary.
 5. `apps/web/src/features/help/help.test.tsx`: exact tabs, bounded copy, session download without Workspace header, fixed filename, route-local source-unavailable mapping, and expired-session mapping.
 6. `tests/e2e/p2_04_help_ai_agents.spec.ts`: authenticated Help navigation, tab order, source zip download and ZIP signature, and activation limits.
@@ -557,7 +574,8 @@ pnpm exec playwright test tests/e2e/p2_04_help_ai_agents.spec.ts tests/e2e/p2_00
 1. `SkillBundle` builds the bounded archive directly instead of introducing a separate bundle-file DTO; this keeps the implementation smaller without changing the archive contract.
 2. The Tabs primitive is source-owned and delegates keyboard/ARIA behavior to the added `@radix-ui/react-tabs` package, consistent with the frontend interaction rules.
 3. The storage cleanup method returns a boolean only for safe compensation observability; existing callers continue to ignore the result and no storage behavior or product scope changes.
-4. No database migration, worker, retry loop, installer, marketplace, SDK, MCP server, external ingestion, or generation chain was added.
+4. The original P2-04 delivery added no database migration, worker, retry loop, installer, marketplace, SDK, MCP server, external ingestion, or generation chain. Issue #53 later adds only the bounded `system_key` identity/adoption migration.
+
 5. Remaining product risks are unchanged from §18.
 
 ### 17.4 Second independent review
@@ -572,9 +590,21 @@ The additional independent review re-checked authentication/session behavior, Wo
 
 No new capability or architecture component was introduced by these fixes.
 
+### 17.5 System OpenAPI lifecycle amendment (Issue #53)
+
+The current implementation adds `ApiCatalogSpec.system_key` and the `0022_p2_04_system_openapi` Alembic migration. Runtime identity uses `system_key = surgepilot_api` in the Default Workspace. `import_system_openapi()` creates the marked asset after first-Admin commit, and `reconcile_system_openapi_best_effort()` runs once in FastAPI lifespan after configuration validation. `reconcile_system_openapi()` compares the marked row's SHA-256, replaces the complete stored curated document when changed, preserves `created_by`, retires the prior row with `deleted_by = NULL`, and cleans up the previous object only after commit. No public DTO or generated contract field changes.
+
+Historical adoption requires canonical workspace, name, filename, title, JSON source format, earliest registered creator, no successful upload audit, and exactly one candidate. The absence of an upload audit is only a risk-reduction signal: upload audit is best-effort and cannot prove system ownership. This accepted one-time residual risk is confined to a crafted canonical lookalike with missing upload audit; ambiguous candidates are not adopted. After migration, runtime performs no legacy name/filename guessing.
+
+The release verifier traverses the complete paginated Catalog list, requires one canonical match, and reads authorized stored content to assert both metadata and stored OpenAPI use the target product version. It no longer persists `sourceProductVersion` as an upgrade-state Catalog exception. The release transition and source release identity checks remain governed by ADR-0029. Help `Limits & Activation` describes startup alignment of the system-owned document.
+
+Focused coverage lives in `test_p2_04_system_openapi_migration.py`, `test_p2_04_system_openapi_bootstrap.py`, `test_p2_05_release_stack_verifier.py`, and `help.test.tsx`. Required validation is `make generate-contracts`, `make verify-db`, and `make verify`; record any unavailable gate as `NOT VERIFIED` in the PR.
+
 ## 18. Remaining Risks
 
 1. The bootstrap import is intentionally best-effort and has no automatic retry; a transient first-registration storage failure can leave the Default Workspace without the system spec.
 2. Request-time zip creation adds bounded CPU and memory work to the API process; the source package must remain small and repository-owned.
-3. The system Catalog asset is a point-in-time bootstrap snapshot. P2-04 does not update it after later API contract changes.
-4. The downloaded skill source is a point-in-time request bundle with no version, signature, checksum, or automatic update channel.
+3. Historical adoption cannot prove system ownership with certainty because the legacy schema has no marker and upload audit was best-effort. The unique canonical predicate narrows the accepted one-time risk; ambiguous candidates are not adopted.
+4. Duplicate active `system_key` rows cause startup reconciliation to skip with a warning and release verification to fail until an operator identifies the legitimate row.
+5. Synchronous startup reconciliation may wait for existing infrastructure client timeouts. Failure can leave the prior valid Catalog asset stale until a later API startup.
+6. The downloaded skill source is a point-in-time request bundle with no version, signature, checksum, or automatic update channel.

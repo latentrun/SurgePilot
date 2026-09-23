@@ -63,7 +63,7 @@ Governance prerequisites:
 7. Scalar hardening: Close request sending, Agent/MCP, hosted proxy, auth persistence, developer tools and non-SurgePilot topic switching entrances.
 8. Contracts: FastAPI/Pydantic schema is the true source of API contract; `@surgepilot/contracts` is generated after OpenAPI export, and the Web does not hand-write the request/response type.
 9. Tests / verification:API route/storage/contract tests, Web route/component tests, Scalar disabled-request assertions, no MinIO direct access assertions.
-10. ADR-0016/P2-04 system bootstrap exception: after first-Admin registration commits, a best-effort helper may reuse the existing service to import SurgePilot's own curated Web/business OpenAPI into Default Workspace once per active SHA-256.
+10. ADR-0016/P2-04 system lifecycle exception: after first-Admin registration commits, a best-effort helper may create a marked SurgePilot-owned curated Web/business OpenAPI asset in Default Workspace; later API startup may reconcile that existing active asset once.
 
 ## 4. Out of Scope
 
@@ -77,7 +77,7 @@ Governance prerequisites:
 8. The second set of UI component system, the second set of theme provider, hard-coded colors, and P0/P1 dark mode implementation.
 9. Runner, api-worker, Run Snapshot, Run state machine, Taurus builder or Load Node behavior changes.
 10. DB table name, column type, index, migration script, complete ORM/Pydantic/TS type handwritten design.
-11. User-provided, externally fetched, scheduled, startup-reconciled or background automatic OpenAPI ingestion. P2-04's one system-owned first-Admin bootstrap document is the only automatic import exception.
+11. User-provided, externally fetched, scheduled, or background automatic OpenAPI ingestion. P2-04's one system-owned document lifecycle is the only automatic exception; startup reconciliation applies only to an existing active marked asset.
 
 ## 5. Preconditions
 
@@ -105,7 +105,7 @@ Governance prerequisites:
 | APC-10 | Delete affects only the API Catalog spec asset and stored spec content; it must not cascade into Scenario, Test Plan, Run or Artifact domains. |
 | APC-11 | No DB table/column/index detail is locked in this SDD; implementation must backfill actual storage facts after reading code and migrations. |
 | APC-12 | No independent docs service, queue, microservice, API Gateway, second theme provider or self-built OpenAPI renderer is introduced. |
-| APC-13 | ADR-0016/P2-04 may create one system-owned Default Workspace Catalog asset from the current curated Web/business OpenAPI after first-Admin registration commit; same-Workspace active SHA-256 is the idempotency key. |
+| APC-13 | ADR-0016/P2-04 may create one system-owned Default Workspace Catalog asset after first-Admin registration commit and reconcile an existing active marked asset at startup. Server-only `system_key` is identity; the system asset's own SHA-256 controls content idempotency. |
 
 ## 7. Architecture
 
@@ -142,7 +142,7 @@ Component boundaries:
 | --- | --- | --- |
 | `apps/api/app/routes/api_catalog.py` or equivalent API Catalog router | Expose upload/list/detail/content/delete, enforce auth, Workspace, CSRF for writes, safe errors and OpenAPI schemas. | Scenario/Test Plan generation, operation import, returning storage internals, stack traces or server paths. |
 | API Catalog service | Validate basic OpenAPI/Swagger asset shape, store spec through existing storage client, resolve metadata in current Workspace. | Full lint platform, diff engine, background importer, generated Step mapping, external API calls. |
-| P2-04 bootstrap helper | Build current curated Web/business OpenAPI bytes, query same-Workspace active SHA-256, and invoke the existing API Catalog service from an independent post-registration transaction. | Reusing the registration session, running under the bootstrap lock, user/external auto-ingestion, retry workers or generation behavior. |
+| P2-04 system OpenAPI helper | Build current curated Web/business OpenAPI bytes, identify the marked system asset, and invoke the existing API Catalog service from an independent post-registration or startup transaction. | Reusing the registration session, running under the bootstrap lock, user/external auto-ingestion, retry workers or generation behavior. |
 | Storage service boundary | Continue owning server-side MinIO object writes/reads/deletes or invalidation. | Browser-visible storage access, object-key exposure, presigned URL, new storage backend abstraction. |
 | `@surgepilot/contracts` | Generated Web client/types from FastAPI OpenAPI. | Hand-edited OpenAPI or generated TypeScript as source of truth. |
 | Web API Catalog feature module | Render list/upload/delete/detail states and hand authorized `contentUrl` to Scalar. | Hand-written API types, direct MinIO fetch, hidden generation buttons, custom OpenAPI renderer. |
@@ -457,7 +457,7 @@ Minimum coverage:
 10. Storage unavailable returns `STORAGE_UNAVAILABLE` without bucket/object key/path.
 11. `DELETE /api/v1/api-catalog/specs/{specId}` affects only API Catalog metadata/storage and leaves Scenario/Test Plan/Run/Artifact data unchanged.
 12. Upload does not resolve remote `$ref`, call spec `servers[]`, send network requests or enqueue background jobs.
-13. P2-04 bootstrap uses `workspace_id + sha256 + status != deleted` idempotency, keeps `name` out of the key, and does not create a second active same-SHA asset in Default Workspace during repeated helper invocation.
+13. P2-04 uses server-only `system_key` as system identity and compares only that active asset's SHA-256 for content idempotency; an ordinary same-SHA upload does not suppress it.
 14. P2-04 bootstrap failure never changes first-Admin registration success; commit failure after a new MinIO write triggers best-effort object cleanup.
 
 ### 14.2 Contract tests

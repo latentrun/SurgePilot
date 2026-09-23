@@ -1,7 +1,7 @@
 # ADR-0016: P2 Help AI Agents and System OpenAPI Bootstrap
 
 - Status: Accepted
-- Scope: P2-04 authenticated Help AI Agents guidance, official Public API AI skill source download, and first-Admin system OpenAPI bootstrap import
+- Scope: P2-04 authenticated Help AI Agents guidance, official Public API AI skill source download, and one SurgePilot-owned system OpenAPI lifecycle
 - Active Slice: `docs/sdd/slices/P2-04-help-ai-agents-system-openapi-bootstrap.md`
 - Related ADRs: `ADR-0010`, `ADR-0012`
 
@@ -43,6 +43,8 @@ Rejected.
 
 The bootstrap import is best-effort and non-critical. A worker or queue would introduce lifecycle, retry, deduplication, and infrastructure complexity that is not justified for one small system-owned Catalog asset.
 
+Later amendment for Issue #53: workers, queues, periodic reconciliation, and background retry remain rejected. One synchronous best-effort attempt at API startup is authorized only for an existing active SurgePilot-owned system Catalog asset. A missing or deleted asset is not recreated at startup.
+
 ## Decision
 
 1. Create `P2-04 Help AI Agents and System OpenAPI Bootstrap` as one active P2 Slice.
@@ -57,11 +59,13 @@ The bootstrap import is best-effort and non-critical. A worker or queue would in
 10. Change `register_user` to return an explicit `first_user` boolean in addition to its existing result values. The auth route must use this boolean and must not infer bootstrap status from `role == "admin"`.
 11. Preserve the existing registration transaction and `db.commit()` inside `register_user`. Only after that function returns successfully with `first_user is True` may the route invoke the bootstrap import helper.
 12. The bootstrap helper uses its own `SessionLocal` session and transaction. OpenAPI generation, MinIO writes, and `create_api_catalog_spec` must never run inside `begin_nested()` or the `lock_users_for_bootstrap()` lock window.
-13. Import into the registered first Admin's Default Workspace with `created_by` set to that Admin. Before creation, skip when a non-deleted Catalog spec in the same Workspace already has the same SHA-256; `name` is not part of the idempotency key.
+13. Import into the registered first Admin's Default Workspace with `created_by` set to that Admin and server-only `system_key = surgepilot_api`. Before creation, skip only when an active system asset already exists. A user-uploaded same-SHA spec is not system identity.
 14. Reuse `UploadedApiSpec`, `validate_spec_filename`, `parse_api_spec`, and `create_api_catalog_spec` with a `.json` filename and `application/json` content type. No new Catalog storage path or model is introduced.
 15. Registration success is authoritative. Any OpenAPI generation, query, MinIO, flush, or commit failure in the independent bootstrap helper is logged safely and must not change the successful registration response.
 16. If `create_api_catalog_spec` has written a MinIO object and the helper's later commit fails, the helper must roll back and best-effort delete that new object's bucket/key. Existing objects skipped by idempotency must never be deleted.
-17. `Limits & Activation` must state both sides of the boundary: the one-time system curated OpenAPI bootstrap is active, while user/external automatic OpenAPI ingestion remains inactive.
+17. `Limits & Activation` must state both sides of the boundary: first-Admin creation and later startup reconciliation of the existing system curated OpenAPI are active, while user/external automatic OpenAPI ingestion remains inactive.
+18. After migration, startup uses only `system_key` to find an active Default Workspace system asset. It makes one synchronous best-effort attempt: same SHA-256 is a no-op; changed SHA-256 replaces the complete stored document and tombstones the old row in one transaction. Duplicate active keys cause a warning without mutation; missing or deleted assets remain absent.
+19. The one-time migration conservatively adopts exactly one unaudited canonical historical row created by the earliest registered user. Absence of a successful upload audit reduces risk but does not prove system ownership; ambiguous candidates remain unclaimed.
 
 ## Consequences
 
@@ -69,8 +73,8 @@ The bootstrap import is best-effort and non-critical. A worker or queue would in
 2. `ADR-0012` and `P2-02` gain one authenticated source-download surface without turning the skill into a release, SDK, MCP server, installer, marketplace item, or server-side runtime.
 3. The Web/business OpenAPI artifact includes the session download endpoint. The public OpenAPI artifact excludes it through the existing normalized public-path selection.
 4. The system-imported Catalog document is generated from current runtime routes with the same curated `/v1/*` rules as `api.openapi.json`, avoiding generated-file staleness and container-file dependencies.
-5. The first registration may perform a bounded synchronous best-effort Catalog import after registration commit. Import failure may leave the Default Workspace without the system spec; P2-04 adds no worker, retry loop, startup reconciliation, or admin repair UI.
-6. No database migration is required because the bootstrap reuses the existing API Catalog model and storage service.
+5. The first registration may perform a bounded synchronous best-effort Catalog import after registration commit. A later API startup makes one best-effort reconciliation attempt for an existing active system asset; infrastructure timeouts may delay lifespan. Neither failure is a new logical readiness or release stable gate, and there is no worker, retry loop, or admin repair UI.
+6. A migration adds nullable server-only `system_key` and conservatively adopts a unique canonical historical asset. The change does not add a public DTO field.
 
 ## Related ADRs
 

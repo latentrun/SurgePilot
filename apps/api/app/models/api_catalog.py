@@ -33,6 +33,7 @@ class ApiCatalogSpec(Base):
         String(26), ForeignKey("workspaces.id", ondelete="CASCADE"), nullable=False
     )
     name: Mapped[str] = mapped_column(Text, nullable=False)
+    system_key: Mapped[str | None] = mapped_column(Text, nullable=True)
     filename: Mapped[str] = mapped_column(Text, nullable=False)
     content_type: Mapped[str | None] = mapped_column(Text)
     source_format: Mapped[str] = mapped_column(Text, nullable=False)

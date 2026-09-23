@@ -102,9 +102,9 @@ export const HELP_COPY = {
     title: "Know what is active",
     description:
       "Separate active system behavior from capabilities that remain intentionally unavailable.",
-    activeTitle: "System bootstrap is active",
+    activeTitle: "System OpenAPI stays current",
     activeBody:
-      "After the first Admin registration, SurgePilot best-effort imports its own current curated Web/business OpenAPI into the Default Workspace API Catalog.",
+      "After the first Admin registration, SurgePilot creates its curated Web/business OpenAPI in the Default Workspace API Catalog and keeps that system-owned document aligned with the running SurgePilot contract on later API startups.",
     inactiveTitle: "External ingestion is inactive",
     inactiveBody:
       "SurgePilot does not automatically ingest user-provided URLs, external OpenAPI documents, repository specs, or arbitrary remote API definitions.",

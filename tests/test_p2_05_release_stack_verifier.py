@@ -98,11 +98,19 @@ def test_verify_product_identity_covers_runtime_catalog_skill_and_runner(
         assert actual_session is session
         if path == "/api/v1/api-catalog/specs?limit=100&offset=0":
             return {
+                "total": 2,
                 "items": [
                     {"name": "User API", "documentVersion": "9.9.9"},
-                    {"name": "SurgePilot API", "documentVersion": "2.3.4"},
-                ]
+                    {
+                        "id": "system-1",
+                        "name": "SurgePilot API",
+                        "filename": "surgepilot-api.openapi.json",
+                        "documentVersion": "2.3.4",
+                    },
+                ],
             }
+        if path == "/api/v1/api-catalog/specs/system-1/content":
+            return {"info": {"title": "SurgePilot API", "version": "2.3.4"}}
         if path == "/api/v1/load-nodes/node-1":
             return {"runnerVersion": "2.3.4"}
         return pytest.fail(f"unexpected identity path: {path}")
@@ -112,7 +120,7 @@ def test_verify_product_identity_covers_runtime_catalog_skill_and_runner(
     verify_p2_05_release_stack.verify_product_identity(session, "node-1")
 
 
-def test_verify_product_identity_accepts_preserved_source_catalog_version(
+def test_verify_product_identity_rejects_preserved_source_catalog_version(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setenv("SURGEPILOT_E2E_EXPECTED_PRODUCT_VERSION", "1.2.3")
@@ -126,28 +134,218 @@ def test_verify_product_identity_accepts_preserved_source_catalog_version(
         "download_skill_bundle",
         lambda _session: skill_zip("1.2.3"),
     )
+
+    def get_json(_session, path):
+        if path == "/api/v1/api-catalog/specs?limit=100&offset=0":
+            return {
+                "total": 1,
+                "items": [
+                    {
+                        "id": "system-1",
+                        "name": "SurgePilot API",
+                        "filename": "surgepilot-api.openapi.json",
+                        "documentVersion": "0.1.0",
+                    }
+                ],
+            }
+        if path == "/api/v1/api-catalog/specs/system-1/content":
+            return {"info": {"title": "SurgePilot API", "version": "0.1.0"}}
+        return {"runnerVersion": "1.2.3"}
+
+    monkeypatch.setattr(verify_p2_05_release_stack, "get_json", get_json)
+    with pytest.raises(RuntimeError, match="system Catalog"):
+        verify_p2_05_release_stack.verify_product_identity(object(), "node-1")
+
+
+@pytest.mark.parametrize(
+    ("content_title", "content_version", "message"),
+    [
+        ("SurgePilot API", "0.1.0", "system Catalog content"),
+        ("Other API", "1.2.3", "system Catalog content"),
+    ],
+)
+def test_verify_product_identity_rejects_stale_or_wrong_stored_content(
+    monkeypatch: pytest.MonkeyPatch, content_title: str, content_version: str, message: str
+) -> None:
+    monkeypatch.setenv("SURGEPILOT_E2E_EXPECTED_PRODUCT_VERSION", "1.2.3")
+    monkeypatch.setattr(
+        verify_p2_05_release_stack, "fetch_runtime_openapi", lambda: {"info": {"version": "1.2.3"}}
+    )
+
+    def get_json(_session, path):
+        if path == "/api/v1/api-catalog/specs?limit=100&offset=0":
+            return {
+                "total": 1,
+                "items": [
+                    {
+                        "id": "system-1",
+                        "name": "SurgePilot API",
+                        "filename": "surgepilot-api.openapi.json",
+                        "documentVersion": "1.2.3",
+                    }
+                ],
+            }
+        if path == "/api/v1/api-catalog/specs/system-1/content":
+            return {"info": {"title": content_title, "version": content_version}}
+        return pytest.fail(f"unexpected path: {path}")
+
+    monkeypatch.setattr(verify_p2_05_release_stack, "get_json", get_json)
+    with pytest.raises(RuntimeError, match=message):
+        verify_p2_05_release_stack.verify_product_identity(object(), "node-1")
+
+
+def test_verify_product_identity_rejects_duplicate_canonical_catalog_entries(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("SURGEPILOT_E2E_EXPECTED_PRODUCT_VERSION", "1.2.3")
+    monkeypatch.setattr(
+        verify_p2_05_release_stack, "fetch_runtime_openapi", lambda: {"info": {"version": "1.2.3"}}
+    )
     monkeypatch.setattr(
         verify_p2_05_release_stack,
         "get_json",
-        lambda _session, path: (
-            {"items": [{"name": "SurgePilot API", "documentVersion": "0.1.0"}]}
-            if "api-catalog" in path
-            else {"runnerVersion": "1.2.3"}
-        ),
+        lambda _session, _path: {
+            "total": 2,
+            "items": [
+                {"name": "SurgePilot API", "filename": "surgepilot-api.openapi.json"},
+                {"name": "SurgePilot API", "filename": "surgepilot-api.openapi.json"},
+            ],
+        },
+    )
+    with pytest.raises(RuntimeError, match="system Catalog entry mismatch"):
+        verify_p2_05_release_stack.verify_product_identity(object(), "node-1")
+
+
+def test_verify_product_identity_rejects_catalog_entry_without_spec_id(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("SURGEPILOT_E2E_EXPECTED_PRODUCT_VERSION", "1.2.3")
+    monkeypatch.setattr(
+        verify_p2_05_release_stack,
+        "fetch_runtime_openapi",
+        lambda: {"info": {"version": "1.2.3"}},
+    )
+    monkeypatch.setattr(
+        verify_p2_05_release_stack,
+        "get_json",
+        lambda _session, _path: {
+            "total": 1,
+            "items": [
+                {
+                    "name": "SurgePilot API",
+                    "filename": "surgepilot-api.openapi.json",
+                    "documentVersion": "1.2.3",
+                }
+            ],
+        },
+    )
+    with pytest.raises(RuntimeError, match="no spec ID"):
+        verify_p2_05_release_stack.verify_product_identity(object(), "node-1")
+
+
+def test_verify_product_identity_finds_canonical_duplicates_across_pages(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("SURGEPILOT_E2E_EXPECTED_PRODUCT_VERSION", "1.2.3")
+    monkeypatch.setattr(
+        verify_p2_05_release_stack,
+        "fetch_runtime_openapi",
+        lambda: {"info": {"version": "1.2.3"}},
+    )
+    paths: list[str] = []
+
+    def get_json(_session, path):
+        paths.append(path)
+        if path == "/api/v1/api-catalog/specs?limit=100&offset=0":
+            return {
+                "total": 101,
+                "items": [
+                    {
+                        "id": "system-1",
+                        "name": "SurgePilot API",
+                        "filename": "surgepilot-api.openapi.json",
+                    },
+                    *[{"name": f"User API {index}"} for index in range(99)],
+                ],
+            }
+        if path == "/api/v1/api-catalog/specs?limit=100&offset=100":
+            return {
+                "total": 101,
+                "items": [
+                    {
+                        "id": "system-2",
+                        "name": "SurgePilot API",
+                        "filename": "surgepilot-api.openapi.json",
+                    }
+                ],
+            }
+        return pytest.fail(f"unexpected path: {path}")
+
+    monkeypatch.setattr(verify_p2_05_release_stack, "get_json", get_json)
+    with pytest.raises(RuntimeError, match="system Catalog entry mismatch"):
+        verify_p2_05_release_stack.verify_product_identity(object(), "node-1")
+    assert paths == [
+        "/api/v1/api-catalog/specs?limit=100&offset=0",
+        "/api/v1/api-catalog/specs?limit=100&offset=100",
+    ]
+
+
+def test_verify_product_identity_finds_canonical_entry_on_later_page(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("SURGEPILOT_E2E_EXPECTED_PRODUCT_VERSION", "1.2.3")
+    monkeypatch.setattr(
+        verify_p2_05_release_stack,
+        "fetch_runtime_openapi",
+        lambda: {"info": {"version": "1.2.3"}},
+    )
+    monkeypatch.setattr(
+        verify_p2_05_release_stack,
+        "download_skill_bundle",
+        lambda _session: skill_zip("1.2.3"),
     )
 
-    verify_p2_05_release_stack.verify_product_identity(
-        object(),
-        "node-1",
-        expected_catalog_version="0.1.0",
-    )
+    def get_json(_session, path):
+        if path == "/api/v1/api-catalog/specs?limit=100&offset=0":
+            return {"total": 101, "items": [{"name": "User API"} for _ in range(100)]}
+        if path == "/api/v1/api-catalog/specs?limit=100&offset=100":
+            return {
+                "total": 101,
+                "items": [
+                    {
+                        "id": "system-1",
+                        "name": "SurgePilot API",
+                        "filename": "surgepilot-api.openapi.json",
+                        "documentVersion": "1.2.3",
+                    }
+                ],
+            }
+        if path == "/api/v1/api-catalog/specs/system-1/content":
+            return {"info": {"title": "SurgePilot API", "version": "1.2.3"}}
+        if path == "/api/v1/load-nodes/node-1":
+            return {"runnerVersion": "1.2.3"}
+        return pytest.fail(f"unexpected path: {path}")
 
-    with pytest.raises(RuntimeError, match="system Catalog"):
-        verify_p2_05_release_stack.verify_product_identity(
-            object(),
-            "node-1",
-            expected_catalog_version="",
-        )
+    monkeypatch.setattr(verify_p2_05_release_stack, "get_json", get_json)
+    verify_p2_05_release_stack.verify_product_identity(object(), "node-1")
+
+
+def test_verify_product_identity_rejects_incomplete_catalog_listing(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("SURGEPILOT_E2E_EXPECTED_PRODUCT_VERSION", "1.2.3")
+    monkeypatch.setattr(
+        verify_p2_05_release_stack,
+        "fetch_runtime_openapi",
+        lambda: {"info": {"version": "1.2.3"}},
+    )
+    monkeypatch.setattr(
+        verify_p2_05_release_stack,
+        "get_json",
+        lambda _session, _path: {"total": 101, "items": []},
+    )
+    with pytest.raises(RuntimeError, match="system Catalog listing is incomplete"):
+        verify_p2_05_release_stack.verify_product_identity(object(), "node-1")
 
 
 @pytest.mark.parametrize(
@@ -182,8 +380,20 @@ def test_verify_product_identity_fails_closed_on_mismatch(
         verify_p2_05_release_stack,
         "get_json",
         lambda _session, path: (
-            {"items": [{"name": "SurgePilot API", "documentVersion": catalog_version}]}
-            if "api-catalog" in path
+            {
+                "total": 1,
+                "items": [
+                    {
+                        "id": "system-1",
+                        "name": "SurgePilot API",
+                        "filename": "surgepilot-api.openapi.json",
+                        "documentVersion": catalog_version,
+                    }
+                ],
+            }
+            if path.endswith("?limit=100&offset=0")
+            else {"info": {"title": "SurgePilot API", "version": "2.3.4"}}
+            if path.endswith("/content")
             else {"runnerVersion": runner_version}
         ),
     )
@@ -204,7 +414,7 @@ def test_verify_product_identity_rejects_missing_catalog_and_invalid_skill(
     monkeypatch.setattr(
         verify_p2_05_release_stack,
         "get_json",
-        lambda _session, _path: {"items": []},
+        lambda _session, _path: {"total": 0, "items": []},
     )
     with pytest.raises(RuntimeError, match="system Catalog entry"):
         verify_p2_05_release_stack.verify_product_identity(object(), "node-1")
@@ -213,8 +423,20 @@ def test_verify_product_identity_rejects_missing_catalog_and_invalid_skill(
         verify_p2_05_release_stack,
         "get_json",
         lambda _session, path: (
-            {"items": [{"name": "SurgePilot API", "documentVersion": "2.3.4"}]}
-            if "api-catalog" in path
+            {
+                "total": 1,
+                "items": [
+                    {
+                        "id": "system-1",
+                        "name": "SurgePilot API",
+                        "filename": "surgepilot-api.openapi.json",
+                        "documentVersion": "2.3.4",
+                    }
+                ],
+            }
+            if path.endswith("?limit=100&offset=0")
+            else {"info": {"title": "SurgePilot API", "version": "2.3.4"}}
+            if path.endswith("/content")
             else {"runnerVersion": "2.3.4"}
         ),
     )
@@ -410,7 +632,6 @@ def test_upgrade_reuse_preserves_workspace_artifact_and_reinitializes_same_node(
                 "email": "upgrade@example.com",
                 "workspaceId": "workspace-1",
                 "nodeId": "node-1",
-                "sourceProductVersion": "1.1.0",
                 "sourceRuntimeVersion": "v1.1.0",
                 "envGroupId": "env-1",
                 "scenarioId": "scenario-1",
@@ -477,12 +698,12 @@ def test_upgrade_reuse_preserves_workspace_artifact_and_reinitializes_same_node(
         initialized = True
 
     monkeypatch.setattr(verify_p2_05_release_stack, "initialize_node", initialize)
-    identities: list[tuple[str, str]] = []
+    identities: list[str] = []
     monkeypatch.setattr(
         verify_p2_05_release_stack,
         "verify_product_identity",
-        lambda actual_session, node_id, *, expected_catalog_version: (
-            identities.append((node_id, expected_catalog_version))
+        lambda actual_session, node_id: (
+            identities.append(node_id)
             if actual_session is session
             else pytest.fail("unexpected identity session")
         ),
@@ -514,7 +735,7 @@ def test_upgrade_reuse_preserves_workspace_artifact_and_reinitializes_same_node(
     verify_p2_05_release_stack.verify_preserved_upgrade_state()
 
     assert initialized is True
-    assert identities == [("node-1", "1.1.0")]
+    assert identities == ["node-1"]
 
 
 def test_source_release_persists_bounded_upgrade_evidence(
@@ -549,7 +770,7 @@ def test_source_release_persists_bounded_upgrade_evidence(
 
     state = json.loads(state_path.read_text(encoding="utf-8"))
     assert state["workspaceId"] == "workspace-1"
-    assert state["sourceProductVersion"] == "1.1.0"
+    assert "sourceProductVersion" not in state
     assert state["sourceRuntimeVersion"] == "1.1.0"
     assert state["artifactSha256"] == "a" * 64
     assert state_path.stat().st_mode & 0o777 == 0o600

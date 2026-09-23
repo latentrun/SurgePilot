@@ -576,8 +576,9 @@ Implementation must cover:
 - archive publication integrity plus runtime path/type, version/revision, target digest, OCI
   identity, product version, and health checks;
 - old Runtime rejection and explicit Load Node reinitialization;
-- preservation of the first-Admin system Catalog document at its source product version while
-  runtime OpenAPI, the AI skill snapshot, and the reinitialized Runner expose the target version;
+- after target API startup and successful reconciliation, the active system Catalog metadata and
+  stored OpenAPI expose the target product version alongside runtime OpenAPI, the AI skill snapshot,
+  and the reinitialized Runner; Catalog reconciliation adds no release migration or stable gate;
 - Linux and macOS installer, dispatcher, lock, and transition smoke;
 - `make generate-contracts`, `make verify`, and applicable release validation.
 
