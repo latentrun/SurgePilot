@@ -620,8 +620,6 @@ download_legacy_payload() {
 
 prepare_legacy_upgrade() {
     target_payload=$1
-    [ "$RELEASE_VERSION" = v1.2.3 ] || \
-        fail "Legacy installation transition is supported only by v1.2.3."
     [ -f "$INSTALL_ROOT/VERSION" ] && [ ! -L "$INSTALL_ROOT/VERSION" ] || \
         fail "Legacy installation VERSION is missing or unsafe."
     source_version=$(cat "$INSTALL_ROOT/VERSION")

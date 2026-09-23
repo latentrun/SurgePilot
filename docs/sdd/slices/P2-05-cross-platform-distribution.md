@@ -607,6 +607,9 @@ verify source and generated contracts
 ```
 
 The exact safe publish ordering must prevent a release page or semantic tag from appearing complete when required artifacts failed. A draft GitHub Release or equivalent staged publication is used until all required artifacts and digest checks are ready.
+ADR-0029 additionally requires successful upgrade smoke for every canonical published source in
+the target manifest's supported same-major range. The formal workflow derives that source matrix
+before building and cannot publish when the listing is unavailable or an upgrade job is skipped.
 
 Every formal release has one reviewed user-facing notes source at
 `docs/releases/vX.Y.Z.md`, matching the exact tag. The workflow validates that the file exists and
