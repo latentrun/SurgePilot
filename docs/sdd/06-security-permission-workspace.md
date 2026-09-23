@@ -654,7 +654,9 @@ Rules:
 
 ### 13.2 Logging Rules
 
-1. Structured logs must include request ID.
+1. Request-bound structured logs must include request ID when a request context exists. Startup
+   and background lifecycle logs without a request context may omit request ID and must include
+   bounded operational identifiers appropriate to the event.
 2. Logs may include user ID, Workspace ID, resource ID and event type.
 3. Logs and audit records may include normalized IP and truncated user agent for abuse investigation.
 4. Logs must not include token values, passwords, credentials or encryption keys.

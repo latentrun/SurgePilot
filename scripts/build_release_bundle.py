@@ -38,10 +38,6 @@ class BundleResult:
     manifest: Path
 
 
-def minimum_upgrade_version(version: str) -> str:
-    return "v1.0.0" if version.startswith("v1.") else version
-
-
 def _sha256(path: Path) -> str:
     digest = hashlib.sha256()
     with path.open("rb") as handle:
@@ -192,10 +188,12 @@ def assemble_bundle(
     bundle_root.mkdir()
     _copy_release_files(root=root, bundle_root=bundle_root)
 
+    minimum_upgrade_version = "v1.0.0" if version.startswith("v1.") else version
+
     manifest_data: dict[str, object] = {
         "schemaVersion": 1,
         "version": version,
-        "minimumUpgradeVersion": minimum_upgrade_version(version),
+        "minimumUpgradeVersion": minimum_upgrade_version,
         "revision": revision,
         "images": validated_images,
         "runtimes": runtimes,

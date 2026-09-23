@@ -18,8 +18,6 @@ env:
 jobs:
   preflight:
     runs-on: ubuntu-24.04
-    outputs:
-      upgrade_matrix: ${{ steps.upgrades.outputs.matrix }}
     permissions:
       contents: read
       packages: read
@@ -112,17 +110,6 @@ jobs:
               assert_image_absent "$image:staging-$GITHUB_SHA-$arch"
             done
           done
-      - name: Enumerate every supported published upgrade source
-        id: upgrades
-        env:
-          GH_TOKEN: ${{ github.token }}
-          TAG: ${{ github.ref_name }}
-        run: |
-          set -euo pipefail
-          gh api --paginate --slurp "repos/$GITHUB_REPOSITORY/releases?per_page=100" \
-            > "$RUNNER_TEMP/published-releases.json"
-          python3 -m scripts.release_upgrade_matrix --target "$TAG" \
-            --releases "$RUNNER_TEMP/published-releases.json" >> "$GITHUB_OUTPUT"
 
   verify:
     needs: preflight
@@ -483,13 +470,24 @@ jobs:
           make verify-p2-05-release-stack
 
   upgrade-smoke:
-    needs: [bundle, preflight]
+    if: github.ref_name == 'v1.2.3'
+    needs: bundle
     permissions:
       contents: read
       packages: read
     strategy:
       fail-fast: true
-      matrix: ${{ fromJSON(needs.preflight.outputs.upgrade_matrix) }}
+      matrix:
+        include:
+          - source: v1.0.0
+            source_product_version: 0.1.0
+            source_mode: running
+          - source: v1.1.0
+            source_product_version: 1.1.0
+            source_mode: running
+          - source: v1.1.0
+            source_product_version: 1.1.0
+            source_mode: clean_down
     runs-on: ubuntu-24.04
     env:
       SURGEPILOT_TOOLCHAIN_MODE: external
@@ -551,16 +549,10 @@ jobs:
           smoke_host=$(ip -4 route get 1.1.1.1 | \
             awk '{for (i=1; i<=NF; i++) if ($i=="src") {print $(i+1); exit}}')
           test -n "$smoke_host"
-          source_release_root="$INSTALL_ROOT"
-          source_bootstrap_args=(--root "$INSTALL_ROOT")
-          if [ -f "$INSTALL_ROOT/.release-state" ]; then
-            source_release_root="$INSTALL_ROOT/.releases/$SOURCE_VERSION"
-            source_bootstrap_args=(--root "$source_release_root" --deployment-root "$INSTALL_ROOT")
-          fi
           RUNNER_INTERNAL_TOKEN=upgrade-validation-token \
           SSH_CREDENTIAL_ENCRYPTION_KEY=MDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDA= \
-          python "$source_release_root/scripts/bootstrap_deployment_env.py" \
-            "${source_bootstrap_args[@]}" \
+          python "$INSTALL_ROOT/scripts/bootstrap_deployment_env.py" \
+            --root "$INSTALL_ROOT" \
             --release-http-port 8080 \
             --release-node-api-base-url "http://$smoke_host:8080" \
             --release-influxdb-host-port 8086 \

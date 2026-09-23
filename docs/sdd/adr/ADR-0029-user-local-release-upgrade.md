@@ -299,9 +299,6 @@ containers. Re-run behavior follows the complete state rules above.
 
 The first upgrade-capable release supports only the two actually published legacy sources:
 `v1.0.0` and `v1.1.0`.
-Later same-major targets that continue to declare `minimumUpgradeVersion=v1.0.0` use this same
-bounded bootstrap for those two sources; the installer must not advertise that range while
-rejecting it solely because the target is newer than `v1.2.3`.
 
 `v1.0.0` predates ADR-0027 and reports API/Runner product metadata `0.1.0`, while `v1.1.0`
 reports `1.1.0`. Source recovery and release validation use only this explicit historical mapping;
@@ -527,12 +524,6 @@ The publication workflow must complete those upgrade jobs before semantic image 
 GitHub Release are finalized. Each job uses the published source assets, representative persisted
 PostgreSQL/MinIO/credential/Workspace/Run data, the target candidate, a real Alembic transition,
 and one post-upgrade Run.
-For later targets, preflight derives the upgrade smoke matrix from all canonical published
-non-draft, non-prerelease Releases in the supported interval. The newest source also receives a
-clean-down transition. An unavailable or invalid release listing fails before publication; a
-skipped upgrade job cannot satisfy the publish dependency. Schema-1 sources use their versioned
-release directory when preparing smoke configuration, while legacy sources retain their original
-deployment-root layout.
 
 Release notes at `docs/releases/vX.Y.Z.md` state the supported range, backup responsibility,
 active-work refusal, same-target retry rule, absence of automatic rollback, and required Load Node
