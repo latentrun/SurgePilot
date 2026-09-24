@@ -402,8 +402,6 @@ jobs:
 
   release-smoke:
     needs: [preflight, bundle]
-    env:
-      RELEASE_TAG: ${{ needs.preflight.outputs.release_tag }}
     permissions:
       contents: read
       packages: read
@@ -417,6 +415,7 @@ jobs:
             runner: ubuntu-24.04-arm
     runs-on: ${{ matrix.runner }}
     env:
+      RELEASE_TAG: ${{ needs.preflight.outputs.release_tag }}
       SURGEPILOT_TOOLCHAIN_MODE: external
       SURGEPILOT_TOOLCHAIN_EXTERNAL_TOOLS: python,uv
     steps:

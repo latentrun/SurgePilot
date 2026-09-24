@@ -152,6 +152,9 @@ def test_release_workflow_creates_tag_only_after_candidate_smoke() -> None:
     )
     assert jobs["bundle"]["needs"] == ["preflight", "verify", "runtime", "image-indexes"]
     assert jobs["release-smoke"]["needs"] == ["preflight", "bundle"]
+    assert jobs["release-smoke"]["env"]["RELEASE_TAG"] == (
+        "${{ needs.preflight.outputs.release_tag }}"
+    )
 
     preflight = workflow.split("\n  preflight:\n", maxsplit=1)[1].split(
         "\n  verify:\n", maxsplit=1
