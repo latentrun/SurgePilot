@@ -81,12 +81,16 @@ identity.
    `v0.0.0` never enters API, OpenAPI, Catalog, skill, or Runner product metadata. Validation
    changes the existing OCI version label from `validation-<source-identifier>` to the reserved
    validation artifact version `v0.0.0`; candidate identity remains in the registry tag and OCI
-   revision label.
+   revision label. A formal release candidate instead uses its target `vX.Y.Z` artifact version
+   under run-specific `staging-<run-id>-<attempt>[-arch]` image tags. Only after all required
+   smoke jobs pass do semantic image tags point at those recorded digests.
 7. A formal release tag must equal `v` plus the root product version. Ordinary feature, bug,
    documentation, test, and refactoring work does not change `VERSION` unless the approved task
    explicitly includes a product-version or release change. Historical tags and persisted
    `runnerVersion` observations are not rewritten or migrated; a later node initialization records
-   the newly installed Runner version.
+   the newly installed Runner version. The formal release workflow builds its pre-tag candidate with
+   that exact target artifact version; the separate development-validation workflow continues to use
+   `v0.0.0` artifacts.
 8. FastAPI/Pydantic remains the OpenAPI source. Generated internal/public OpenAPI, generated Web
    clients, and the AI skill snapshot are regenerated through `make generate-contracts` and are
    never stamped or hand-edited during Docker builds.

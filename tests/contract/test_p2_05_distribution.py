@@ -126,10 +126,14 @@ def test_release_wrapper_is_posix_shell_and_does_not_require_host_python_or_jq()
     assert "down -v" not in wrapper
 
 
-def test_release_workflow_is_tag_only_native_runtime_and_create_only() -> None:
+def test_release_workflow_creates_tag_only_after_candidate_smoke() -> None:
     workflow = (ROOT / ".github/workflows/release.yml").read_text(encoding="utf-8")
+    jobs = yaml.safe_load(workflow)["jobs"]
 
-    assert "v*.*.*" in workflow
+    assert yaml.safe_load(workflow)[True] == {"workflow_dispatch": None}
+    assert "Formal release must be dispatched from main" in workflow
+    assert "Release candidate must be the current main commit" in workflow
+    assert "staging-${{ github.run_id }}-${{ github.run_attempt }}" in workflow
     assert "ubuntu-24.04-arm" in workflow
     assert "scripts/run_runtime_builder.py" in workflow
     assert "linux/amd64,linux/arm64" not in workflow
@@ -141,7 +145,13 @@ def test_release_workflow_is_tag_only_native_runtime_and_create_only() -> None:
     assert "already exists" in workflow
     assert "manifest unknown" in workflow
     assert "Unable to determine whether" in workflow
-    assert "staging-$GITHUB_SHA-$arch" in workflow
+    assert '"$image:$STAGING_TAG-amd64"' in workflow
+    assert '"$image:$STAGING_TAG-arm64"' in workflow
+    assert jobs["preflight"]["outputs"]["release_tag"] == (
+        "${{ steps.release-version.outputs.release_tag }}"
+    )
+    assert jobs["bundle"]["needs"] == ["preflight", "verify", "runtime", "image-indexes"]
+    assert jobs["release-smoke"]["needs"] == ["preflight", "bundle"]
 
     preflight = workflow.split("\n  preflight:\n", maxsplit=1)[1].split(
         "\n  verify:\n", maxsplit=1
@@ -150,13 +160,18 @@ def test_release_workflow_is_tag_only_native_runtime_and_create_only() -> None:
     assert "CANONICAL_REPOSITORY: latentrun/SurgePilot" in workflow
     assert repository_guard in preflight
     assert preflight.index(repository_guard) < preflight.index("release_probe=")
+    assert 'git ls-remote --exit-code --tags origin "refs/tags/$TAG"' in preflight
 
     publish = workflow.split("\n  publish:\n", maxsplit=1)[1]
     assert "name: image-digests" in publish
     assert "tar -xOf" in publish
     assert "image-digests.json" in publish
     assert 'imagetools create --tag "$image:$TAG" "$image@$digest"' in publish
-    assert 'inspect "$image:staging-$GITHUB_SHA" --format' not in publish
+    assert 'inspect "$image:$STAGING_TAG" --format' not in publish
+    assert 'git push origin "refs/tags/$TAG:refs/tags/$TAG"' in publish
+    assert publish.index('git push origin "refs/tags/$TAG:refs/tags/$TAG"') > publish.index(
+        'assert_image_absent "$image:$TAG"'
+    )
 
     release_smoke = workflow.split("\n  release-smoke:\n", maxsplit=1)[1].split(
         "\n  publish:\n", maxsplit=1
@@ -284,9 +299,9 @@ def test_release_workflows_keep_product_and_artifact_versions_distinct() -> None
         "\n  verify:\n", maxsplit=1
     )[0]
     assert "PRODUCT_VERSION=$(tr -d '\\n' < VERSION)" in formal_preflight
-    assert 'test "$TAG" = "v$PRODUCT_VERSION"' in formal_preflight
+    assert 'TAG="v$PRODUCT_VERSION"' in formal_preflight
     assert '--build-arg SURGEPILOT_PRODUCT_VERSION="$PRODUCT_VERSION"' in formal
-    assert formal.count('--build-arg SURGEPILOT_VERSION="$GITHUB_REF_NAME"') == 3
+    assert formal.count('--build-arg SURGEPILOT_VERSION="$RELEASE_TAG"') == 3
     assert 'test "$(jq -r \'.version\' "$bundle_manifest")" = "$TAG"' in formal
     assert 'test "$(jq -r \'.revision\' "$bundle_manifest")" = "$GITHUB_SHA"' in formal
 
@@ -310,7 +325,7 @@ def test_release_workflows_verify_actual_image_identity() -> None:
         assert "org.opencontainers.image.revision" in workflow
         assert "scripts/verify_api_image_product_version.py" in workflow
 
-    assert 'test "$actual_version" = "$GITHUB_REF_NAME"' in formal
+    assert 'test "$actual_version" = "$RELEASE_TAG"' in formal
     assert 'test "$actual_version" = "$VALIDATION_VERSION"' in validation
     external_expected = '-e SURGEPILOT_EXPECTED_PRODUCT_VERSION="$PRODUCT_VERSION"'
     assert external_expected in formal

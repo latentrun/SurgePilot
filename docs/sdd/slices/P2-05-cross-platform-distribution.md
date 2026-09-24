@@ -587,7 +587,11 @@ Release-grade Runtime compatibility and SSH E2E remain Linux/Docker gates and ar
 
 ### 14.1 Release trigger
 
-Publication occurs only for an exact `vX.Y.Z` Git tag as selected by `ADR-0017`. A manual workflow may validate or dry-run release inputs but must not publish a public release without that tag. A normal push to `main` or a pull request must not publish.
+An operator starts the formal workflow with `workflow_dispatch` on the current `main` commit.
+The workflow derives the exact `vX.Y.Z` target from root `VERSION`, validates that version and its
+reviewed notes, and creates the Git tag only after every required candidate smoke passes. It then
+publishes the public release for that exact tag. A normal push to `main`, a pull request, and a
+manual Git tag push do not trigger publication.
 
 `v0.0.0` is reserved for non-published development validation artifacts and must be rejected by the
 formal release preflight even though it is syntactically valid SemVer.
@@ -601,6 +605,8 @@ verify source and generated contracts
   -> build multi-arch API/Web/Demo images
   -> verify image index architectures and record immutable digests
   -> assemble and test the digest-pinned release bundle/manifest
+  -> run installer, fresh-install, and every required upgrade smoke
+  -> recheck the current main commit and create the exact Git tag
   -> stage the GitHub Release and Runtime assets/bundle
   -> publish non-overwritable semantic GHCR tags
   -> publish the completed GitHub Release
@@ -619,12 +625,16 @@ explicit rather than inferred from commits.
 
 Release publication is create-only for a semantic version:
 
-1. the release tag must resolve to the intended source commit;
-2. before staging begins, any existing GitHub Release, semantic GHCR tag, or same-named release asset for the version causes publication to fail;
+1. the dispatched commit must be the current `main` commit at preflight and immediately before
+   tag creation; the created tag must resolve to that commit;
+2. before staging begins, any existing Git tag, GitHub Release, semantic GHCR tag, or same-named
+   release asset for the version causes publication to fail;
 3. existing tags, assets, and release identity are never replaced or reconciled in place; an
    exceptional metadata-only body correction may publish the matching checked-in notes file after
    recording and then rechecking the unchanged tag target and complete asset inventory;
-4. after partial publication or a failed publication attempt, the operator uses an explicit manual recovery process and publishes a new semantic version;
+4. candidate verification failures before tag creation may be rerun with the same version using a
+   new run-specific staging image tag; after tag creation, partial or failed publication requires an
+   explicit manual recovery process and a new semantic version;
 5. resumable draft publication may be considered later but is not required by P2-05.
 
 ### 14.2 Permissions
@@ -791,10 +801,11 @@ The P2-05 implementation uses these final repository and release boundaries:
    contained in `main`; the workflow performs the same source-identifier prefix and `main` containment
    checks as release validation. It
    does not create a semantic image tag or GitHub Release.
-   `.github/workflows/release.yml` is the tag-only public release workflow. Its jobs are `preflight`, `verify`,
-   native `runtime`, native `images`, `image-indexes`, `bundle`, native `release-smoke`, conditional
-   `upgrade-smoke`, and `publish`. Preflight enumerates every published canonical, non-draft,
-   non-prerelease same-major release in the target manifest's supported interval. Later `v1.x`
+   `.github/workflows/release.yml` is the manually dispatched formal release workflow. Its jobs are
+   `preflight`, `verify`, native `runtime`, native `images`, `image-indexes`, `bundle`, native
+   `release-smoke`, conditional `upgrade-smoke`, and `publish`. Preflight enumerates every published
+   canonical, non-draft, non-prerelease same-major release in the target manifest's supported
+   interval. Later `v1.x`
    targets retain minimum `v1.0.0`; legacy `v1.0.0` and `v1.1.0` root-layout installations remain
    eligible whenever the target manifest includes them. Every eligible source receives a running
    upgrade smoke, and the newest also receives a clean-down upgrade smoke. Missing required source
@@ -802,10 +813,12 @@ The P2-05 implementation uses these final repository and release boundaries:
    when its minimum equals its target; fresh-install release smoke remains mandatory.
    `ubuntu-24.04` and `ubuntu-24.04-arm` build/test their own Runtime and application
    architecture. Semantic GHCR tags and the completed GitHub Release are published only after the
-   draft assets and all required release-stack smoke jobs pass. Existing semantic or staging artifacts
-   fail create-only preflight. GitHub/GHCR existence probes distinguish confirmed absence from
-   authentication, rate-limit, and network failures; publication repeats the semantic checks and
-   creates tags only from the recorded digest artifact that matches the bundled manifest. Release
+   draft assets and all required release-stack smoke jobs pass. The formal Git tag is created only
+   after those smoke jobs pass. Existing Git tags and semantic artifacts fail create-only preflight;
+   run-specific staging tags let a failed pre-tag candidate run be repeated. GitHub/GHCR existence
+   probes distinguish confirmed absence from authentication, rate-limit, and network failures;
+   publication repeats the semantic checks and creates tags only from the recorded digest artifact
+   that matches the bundled manifest. Release
    smoke and the final publish gate use a clean Docker authentication configuration to prove every
    recorded digest is anonymously pullable before the GitHub Release becomes public. Preflight
    also checks the stable bootstrap tag anonymously before it creates any release staging tag. The

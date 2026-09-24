@@ -86,7 +86,7 @@ jobs:
           - `surgepilot-web`
           - `surgepilot-demo-node`
 
-          The tag-only Release workflow verifies `package-bootstrap` anonymously before it creates
+          The formal Release workflow verifies `package-bootstrap` anonymously before it creates
           any semantic or staging release tags. This bootstrap workflow does not create a SurgePilot
           release and its bootstrap images are not runnable product artifacts.
           EOF

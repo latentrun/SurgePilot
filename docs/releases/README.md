@@ -1,7 +1,7 @@
 # Release Notes Runbook
 
 Each formal SurgePilot release has one authoritative user-facing notes file at
-`docs/releases/vX.Y.Z.md`. The filename must exactly match the immutable Git tag. The tagged
+`docs/releases/vX.Y.Z.md`. The filename must exactly match the formal Git tag. The formal
 release workflow reads that file directly and publishes it as the GitHub Release body; generated
 notes and manually entered release text are not parallel sources.
 
@@ -39,11 +39,17 @@ tagged source, governing design, tests, and release evidence.
 
 ## Author and review
 
-The version-preparation change must add or update `docs/releases/vX.Y.Z.md` before the tag is
-created. Review the notes with the version change and compare them against the previous tag,
+The version-preparation change must add or update `docs/releases/vX.Y.Z.md` before publication.
+Review the notes with the version change and compare them against the previous tag,
 merged pull requests, user documentation, compatibility matrix, and any installation or manual
-version-transition changes. The release tag is created only after that review and the repository
-checks pass.
+version-transition changes.
+
+After the version-preparation PR is merged, start the `Release` workflow on `main` through the
+Actions tab or `gh workflow run release.yml --ref main`. The workflow requires the selected commit
+to remain the current `main` commit, derives the exact target tag from root `VERSION`, and runs the
+full candidate build and smoke checks before it creates the formal tag. Do not create or push the
+formal tag manually. A failed pre-tag candidate can be rerun; a failure after tag creation follows
+the create-only new-version recovery rule.
 
 The release workflow checks the exact versioned file during preflight and again immediately before
 staging the draft. `scripts/validate_release_notes.py` requires the exact tag-matched filename, no
@@ -60,6 +66,6 @@ with `gh release edit <tag> --notes-file docs/releases/<tag>.md`, then confirm t
 asset inventory are unchanged. Never upload, replace, rename, or delete assets as part of a notes
 correction.
 
-The tagged workflow remains create-only. Historical body corrections are exceptional maintenance;
+The formal workflow remains create-only. Historical body corrections are exceptional maintenance;
 they do not permit moving tags, changing release identity, replacing artifacts, or resuming a
 failed same-version publication.
