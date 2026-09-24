@@ -802,7 +802,7 @@ The P2-05 implementation uses these final repository and release boundaries:
    when its minimum equals its target; fresh-install release smoke remains mandatory.
    `ubuntu-24.04` and `ubuntu-24.04-arm` build/test their own Runtime and application
    architecture. Semantic GHCR tags and the completed GitHub Release are published only after the
-   draft assets and both release-stack smoke jobs pass. Existing semantic or staging artifacts
+   draft assets and all required release-stack smoke jobs pass. Existing semantic or staging artifacts
    fail create-only preflight. GitHub/GHCR existence probes distinguish confirmed absence from
    authentication, rate-limit, and network failures; publication repeats the semantic checks and
    creates tags only from the recorded digest artifact that matches the bundled manifest. Release
