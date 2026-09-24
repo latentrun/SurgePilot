@@ -792,10 +792,17 @@ The P2-05 implementation uses these final repository and release boundaries:
    checks as release validation. It
    does not create a semantic image tag or GitHub Release.
    `.github/workflows/release.yml` is the tag-only public release workflow. Its jobs are `preflight`, `verify`,
-   native `runtime`, native `images`, `image-indexes`, `bundle`, native `release-smoke`, and
-   `publish`. `ubuntu-24.04` and `ubuntu-24.04-arm` build/test their own Runtime and application
+   native `runtime`, native `images`, `image-indexes`, `bundle`, native `release-smoke`, conditional
+   `upgrade-smoke`, and `publish`. Preflight enumerates every published canonical, non-draft,
+   non-prerelease same-major release in the target manifest's supported interval. Later `v1.x`
+   targets retain minimum `v1.0.0`; legacy `v1.0.0` and `v1.1.0` root-layout installations remain
+   eligible whenever the target manifest includes them. Every eligible source receives a running
+   upgrade smoke, and the newest also receives a clean-down upgrade smoke. Missing required source
+   evidence fails publication. The first release of a major may have an empty upgrade matrix only
+   when its minimum equals its target; fresh-install release smoke remains mandatory.
+   `ubuntu-24.04` and `ubuntu-24.04-arm` build/test their own Runtime and application
    architecture. Semantic GHCR tags and the completed GitHub Release are published only after the
-   draft assets and both release-stack smoke jobs pass. Existing semantic or staging artifacts
+   draft assets and all required release-stack smoke jobs pass. Existing semantic or staging artifacts
    fail create-only preflight. GitHub/GHCR existence probes distinguish confirmed absence from
    authentication, rate-limit, and network failures; publication repeats the semantic checks and
    creates tags only from the recorded digest artifact that matches the bundled manifest. Release

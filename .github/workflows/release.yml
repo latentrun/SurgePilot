@@ -18,6 +18,9 @@ env:
 jobs:
   preflight:
     runs-on: ubuntu-24.04
+    outputs:
+      upgrade_matrix: ${{ steps.upgrade-matrix.outputs.upgrade_matrix }}
+      upgrade_required: ${{ steps.upgrade-matrix.outputs.upgrade_required }}
     permissions:
       contents: read
       packages: read
@@ -110,6 +113,20 @@ jobs:
               assert_image_absent "$image:staging-$GITHUB_SHA-$arch"
             done
           done
+      - name: Select published upgrade sources
+        id: upgrade-matrix
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          gh api --paginate --slurp "repos/$GITHUB_REPOSITORY/releases?per_page=100" \
+            > "$RUNNER_TEMP/published-releases.json"
+          matrix=$(python3 -m scripts.release_upgrade_matrix \
+            --target "$TAG" --releases "$RUNNER_TEMP/published-releases.json")
+          printf 'upgrade_matrix=%s\n' "$matrix" >> "$GITHUB_OUTPUT"
+          printf 'upgrade_required=%s\n' "$(jq -r '.include | length > 0' <<< "$matrix")" \
+            >> "$GITHUB_OUTPUT"
 
   verify:
     needs: preflight
@@ -470,24 +487,14 @@ jobs:
           make verify-p2-05-release-stack
 
   upgrade-smoke:
-    if: github.ref_name == 'v1.2.3'
-    needs: bundle
+    if: needs.preflight.outputs.upgrade_required == 'true'
+    needs: [preflight, bundle]
     permissions:
       contents: read
       packages: read
     strategy:
       fail-fast: true
-      matrix:
-        include:
-          - source: v1.0.0
-            source_product_version: 0.1.0
-            source_mode: running
-          - source: v1.1.0
-            source_product_version: 1.1.0
-            source_mode: running
-          - source: v1.1.0
-            source_product_version: 1.1.0
-            source_mode: clean_down
+      matrix: ${{ fromJSON(needs.preflight.outputs.upgrade_matrix) }}
     runs-on: ubuntu-24.04
     env:
       SURGEPILOT_TOOLCHAIN_MODE: external
@@ -549,10 +556,19 @@ jobs:
           smoke_host=$(ip -4 route get 1.1.1.1 | \
             awk '{for (i=1; i<=NF; i++) if ($i=="src") {print $(i+1); exit}}')
           test -n "$smoke_host"
+          source_release_root="$INSTALL_ROOT"
+          source_bootstrap_args=(--root "$INSTALL_ROOT")
+          if [ -f "$INSTALL_ROOT/.release-state" ]; then
+            source_release_root="$INSTALL_ROOT/.releases/$SOURCE_VERSION"
+            source_bootstrap_args=(
+              --root "$source_release_root"
+              --deployment-root "$INSTALL_ROOT"
+            )
+          fi
           RUNNER_INTERNAL_TOKEN=upgrade-validation-token \
           SSH_CREDENTIAL_ENCRYPTION_KEY=MDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDA= \
-          python "$INSTALL_ROOT/scripts/bootstrap_deployment_env.py" \
-            --root "$INSTALL_ROOT" \
+          python "$source_release_root/scripts/bootstrap_deployment_env.py" \
+            "${source_bootstrap_args[@]}" \
             --release-http-port 8080 \
             --release-node-api-base-url "http://$smoke_host:8080" \
             --release-influxdb-host-port 8086 \
@@ -612,13 +628,15 @@ jobs:
           make verify-p2-05-release-stack
 
   publish:
-    needs: [bundle, installer-smoke, release-smoke, upgrade-smoke]
+    needs: [preflight, bundle, installer-smoke, release-smoke, upgrade-smoke]
     if: >-
       always() &&
+      needs.preflight.result == 'success' &&
       needs.bundle.result == 'success' &&
       needs.installer-smoke.result == 'success' &&
       needs.release-smoke.result == 'success' &&
-      needs.upgrade-smoke.result == 'success'
+      ((needs.preflight.outputs.upgrade_required == 'true' && needs.upgrade-smoke.result == 'success') ||
+       (needs.preflight.outputs.upgrade_required == 'false' && needs.upgrade-smoke.result == 'skipped'))
     runs-on: ubuntu-24.04
     permissions:
       contents: write

@@ -278,8 +278,8 @@ def test_installer_prepares_newer_same_major_release_from_stable_installation(
 
     source_assets = tmp_path / "source-assets"
     source_assets.mkdir()
-    source_installer = render_installer(source_assets, "v1.1.0")
-    write_release_assets(source_assets, version="v1.1.0")
+    source_installer = render_installer(source_assets, "v1.2.3")
+    write_release_assets(source_assets, version="v1.2.3")
     with serve(source_assets) as base_url:
         first = run_installer(
             source_installer,
@@ -291,7 +291,7 @@ def test_installer_prepares_newer_same_major_release_from_stable_installation(
 
     install_root = xdg_data_home / "surgepilot"
     (install_root / ".release-state").write_text(
-        "schema=1\nphase=stable\ntarget=v1.1.0\nbase=v1.1.0\n",
+        "schema=1\nphase=stable\ntarget=v1.2.3\nbase=v1.2.3\n",
         encoding="utf-8",
     )
     (install_root / ".release-state").chmod(0o600)
@@ -299,8 +299,8 @@ def test_installer_prepares_newer_same_major_release_from_stable_installation(
 
     target_assets = tmp_path / "target-assets"
     target_assets.mkdir()
-    target_installer = render_installer(target_assets, "v1.2.0")
-    write_release_assets(target_assets, version="v1.2.0")
+    target_installer = render_installer(target_assets, "v1.2.4")
+    write_release_assets(target_assets, version="v1.2.4")
     with serve(target_assets) as base_url:
         result = run_installer(
             target_installer,
@@ -311,10 +311,10 @@ def test_installer_prepares_newer_same_major_release_from_stable_installation(
 
     assert result.returncode == 0, result.stderr
     assert (install_root / ".release-state").read_text(encoding="utf-8") == (
-        "schema=1\nphase=prepared\ntarget=v1.2.0\nbase=v1.1.0\n"
+        "schema=1\nphase=prepared\ntarget=v1.2.4\nbase=v1.2.3\n"
     )
-    assert (install_root / ".releases/v1.1.0").is_dir()
-    assert (install_root / ".releases/v1.2.0").is_dir()
+    assert (install_root / ".releases/v1.2.3").is_dir()
+    assert (install_root / ".releases/v1.2.4").is_dir()
     assert (install_root / ".env").read_text(encoding="utf-8") == "PRESERVE=yes\n"
     assert not Path(f"{install_root}.lock").exists()
 
@@ -342,13 +342,14 @@ def test_same_target_installer_verifies_and_leaves_state_unchanged(tmp_path: Pat
 
 
 @pytest.mark.parametrize("source_version", ["v1.0.0", "v1.1.0"])
+@pytest.mark.parametrize("target_version", ["v1.2.3", "v1.2.4"])
 def test_installer_bootstraps_supported_legacy_installation(
-    tmp_path: Path, source_version: str
+    tmp_path: Path, source_version: str, target_version: str
 ) -> None:
     assets = tmp_path / "assets"
     assets.mkdir()
-    installer = render_installer(assets, "v1.2.3")
-    write_release_assets(assets, version="v1.2.3")
+    installer = render_installer(assets, target_version)
+    write_release_assets(assets, version=target_version)
     source_build = tmp_path / "source-build"
     source_build.mkdir()
     source_archive, source_sidecar = write_release_assets(
@@ -374,13 +375,13 @@ def test_installer_bootstraps_supported_legacy_installation(
 
     assert result.returncode == 0, result.stderr
     assert (install_root / ".release-state").read_text(encoding="utf-8") == (
-        f"schema=1\nphase=unclassified\ntarget=v1.2.3\nbase={source_version}\n"
+        f"schema=1\nphase=unclassified\ntarget={target_version}\nbase={source_version}\n"
     )
     assert (install_root / "surgepilot").read_bytes() == (
-        install_root / ".releases/v1.2.3/surgepilot-dispatcher"
+        install_root / ".releases" / target_version / "surgepilot-dispatcher"
     ).read_bytes()
     assert (install_root / ".releases" / source_version).is_dir()
-    assert (install_root / ".releases/v1.2.3").is_dir()
+    assert (install_root / ".releases" / target_version).is_dir()
     assert (install_root / ".env").is_file()
     assert (install_root / ".surgepilot").is_dir()
 

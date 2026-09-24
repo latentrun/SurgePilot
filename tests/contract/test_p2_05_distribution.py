@@ -385,32 +385,32 @@ def test_release_workflows_validate_and_install_generated_assets() -> None:
     formal_jobs = yaml.safe_load(
         (ROOT / ".github/workflows/release.yml").read_text(encoding="utf-8")
     )["jobs"]
+    preflight = formal_jobs["preflight"]
+    assert preflight["outputs"]["upgrade_matrix"] == (
+        "${{ steps.upgrade-matrix.outputs.upgrade_matrix }}"
+    )
+    assert preflight["outputs"]["upgrade_required"] == (
+        "${{ steps.upgrade-matrix.outputs.upgrade_required }}"
+    )
+    matrix_step = next(step for step in preflight["steps"] if step.get("id") == "upgrade-matrix")
+    assert (
+        'gh api --paginate --slurp "repos/$GITHUB_REPOSITORY/releases?per_page=100"'
+        in (matrix_step["run"])
+    )
+    assert "python3 -m scripts.release_upgrade_matrix" in matrix_step["run"]
     assert formal_jobs["publish"]["needs"] == [
+        "preflight",
         "bundle",
         "installer-smoke",
         "release-smoke",
         "upgrade-smoke",
     ]
     upgrade = formal_jobs["upgrade-smoke"]
-    assert upgrade["if"] == "github.ref_name == 'v1.2.3'"
-    assert upgrade["needs"] == "bundle"
-    assert upgrade["strategy"]["matrix"]["include"] == [
-        {
-            "source": "v1.0.0",
-            "source_product_version": "0.1.0",
-            "source_mode": "running",
-        },
-        {
-            "source": "v1.1.0",
-            "source_product_version": "1.1.0",
-            "source_mode": "running",
-        },
-        {
-            "source": "v1.1.0",
-            "source_product_version": "1.1.0",
-            "source_mode": "clean_down",
-        },
-    ]
+    assert upgrade["if"] == "needs.preflight.outputs.upgrade_required == 'true'"
+    assert upgrade["needs"] == ["preflight", "bundle"]
+    assert upgrade["strategy"]["matrix"] == (
+        "${{ fromJSON(needs.preflight.outputs.upgrade_matrix) }}"
+    )
     upgrade_step = next(
         step
         for step in upgrade["steps"]
@@ -419,11 +419,17 @@ def test_release_workflows_validate_and_install_generated_assets() -> None:
     assert upgrade_step["env"]["SOURCE_PRODUCT_VERSION"] == ("${{ matrix.source_product_version }}")
     upgrade_run = upgrade_step["run"]
     assert 'SURGEPILOT_E2E_EXPECTED_PRODUCT_VERSION="$SOURCE_PRODUCT_VERSION"' in upgrade_run
+    assert 'source_release_root="$INSTALL_ROOT/.releases/$SOURCE_VERSION"' in upgrade_run
+    assert '--deployment-root "$INSTALL_ROOT"' in upgrade_run
+    assert 'python "$source_release_root/scripts/bootstrap_deployment_env.py"' in upgrade_run
     assert "SURGEPILOT_E2E_UPGRADE_STATE_FILE" in upgrade_run
     assert "SURGEPILOT_E2E_REUSE_UPGRADE_STATE=true" in upgrade_run
     publish_condition = formal_jobs["publish"]["if"]
+    assert "needs.release-smoke.result == 'success'" in publish_condition
+    assert "needs.preflight.outputs.upgrade_required == 'true'" in publish_condition
     assert "needs.upgrade-smoke.result == 'success'" in publish_condition
-    assert "skipped" not in publish_condition
+    assert "needs.preflight.outputs.upgrade_required == 'false'" in publish_condition
+    assert "needs.upgrade-smoke.result == 'skipped'" in publish_condition
 
 
 def test_release_smokes_prepare_runtime_state_with_owner_only_permissions() -> None:
