@@ -297,8 +297,9 @@ containers. Re-run behavior follows the complete state rules above.
 
 ### 8. One-time v1.0.0/v1.1.0 bootstrap
 
-The first upgrade-capable release supports only the two actually published legacy sources:
-`v1.0.0` and `v1.1.0`.
+The only supported legacy sources are the two actually published root-layout releases:
+`v1.0.0` and `v1.1.0`. Their one-time bootstrap is available to any later same-major target whose
+manifest still includes them in its supported upgrade range; it is not limited to `v1.2.3`.
 
 `v1.0.0` predates ADR-0027 and reports API/Runner product metadata `0.1.0`, while `v1.1.0`
 reports `1.1.0`. Source recovery and release validation use only this explicit historical mapping;
@@ -513,12 +514,19 @@ rejected.
 
 The scalar minimum represents every canonical, non-draft, non-prerelease source release in the
 same major and interval `[minimumUpgradeVersion, target)`. Formal publication enumerates and tests
-every such source; it may not test only the endpoints. For the first implementation this means:
+every such source in running mode and additionally tests the newest supported source after a clean
+`down`; it may not test only the endpoints. Later `v1.x` targets retain
+`minimumUpgradeVersion=v1.0.0`. For the first implementation this means:
 
 ```text
 v1.0.0 -> v1.2.3
 v1.1.0 -> v1.2.3
 ```
+
+The first release of a new major advertises its own target as the minimum. If no published
+same-major source lies in that interval, its upgrade matrix is empty and formal publication still
+requires the fresh-install release smoke. An empty matrix when the minimum is lower than the target
+fails closed.
 
 The publication workflow must complete those upgrade jobs before semantic image tags or the public
 GitHub Release are finalized. Each job uses the published source assets, representative persisted
