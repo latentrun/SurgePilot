@@ -88,6 +88,19 @@ def _assert_version(surface: str, actual: object, expected: str) -> None:
         raise RuntimeError(f"{surface} version mismatch: expected {expected}, got {actual!r}")
 
 
+def get_catalog_content(session, spec_id: str) -> dict:
+    document, _headers, _status = http_json(
+        session.opener,
+        "GET",
+        f"/api/v1/api-catalog/specs/{spec_id}/content",
+        headers=read_headers(session),
+        expected_status=200,
+    )
+    if not isinstance(document, dict):
+        raise RuntimeError("system Catalog content is invalid")
+    return document
+
+
 def verify_product_identity(
     session,
     node_id: str,
@@ -135,7 +148,7 @@ def verify_product_identity(
     spec_id = system_specs[0].get("id")
     if not isinstance(spec_id, str) or not spec_id:
         raise RuntimeError("system Catalog entry has no spec ID")
-    stored_document = get_json(session, f"/api/v1/api-catalog/specs/{spec_id}/content")
+    stored_document = get_catalog_content(session, spec_id)
     info = stored_document.get("info", {})
     _assert_version("system Catalog content", info.get("version"), expected)
     if info.get("title") != "SurgePilot API":

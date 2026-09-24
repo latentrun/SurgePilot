@@ -50,7 +50,13 @@ These alternatives increase lifecycle, compatibility, and support cost without i
    - `ghcr.io/latentrun/surgepilot-api`
    - `ghcr.io/latentrun/surgepilot-web`
    - `ghcr.io/latentrun/surgepilot-demo-node`
-3. Use an exact `vX.Y.Z` Git tag as the only public release trigger. The tagged workflow is create-only: any pre-existing semantic GHCR tag or GitHub Release for that version fails publication and requires a new version.
+3. Start a formal release only through an explicit `workflow_dispatch` on the current `main` commit.
+   The workflow derives `vX.Y.Z` from root `VERSION`, builds and verifies that exact version, and
+   creates the Git tag only after every required installer, fresh-install, and upgrade smoke passes.
+   Normal branch and pull-request events do not publish. An existing formal Git tag, semantic GHCR
+   tag, or GitHub Release for the version fails create-only preflight. Failed candidate verification
+   before tag creation may be rerun with the same version; a failure after tag creation still
+   requires a new version under the existing non-resumable publication rule.
 4. The publication job uses only `contents: write` and `packages: write`; it does not request `id-token: write` or unrelated repository permissions. Pull-request and ordinary branch workflows remain read-only and never publish.
 5. Build release-grade `linux-amd64` and `linux-arm64` Runtime assets on native Linux architecture runners. GitHub-hosted native Linux runners are the selected source. If the required native arm64 runner is unavailable, the release is blocked; QEMU or cross-compilation is not an acceptance substitute. A future self-hosted runner requires an explicit governance amendment.
 6. Keep source and release startup contracts separate:

@@ -76,6 +76,35 @@ def test_product_identity_http_reads_use_runtime_api_and_session(
     ]
 
 
+def test_catalog_openapi_allows_schema_password_property() -> None:
+    document = {
+        "info": {"title": "SurgePilot API", "version": "1.2.4"},
+        "components": {
+            "schemas": {"AdminUserCreateRequest": {"properties": {"password": {"type": "string"}}}}
+        },
+    }
+    response_document: object = document
+
+    class Response(BytesResponse):
+        status = 200
+        headers: dict[str, str] = {}
+
+    class Opener:
+        def open(self, request: urllib.request.Request, timeout: int):
+            assert request.full_url.endswith("/api/v1/api-catalog/specs/system-1/content")
+            assert request.get_header("X-workspace-id") == "workspace-1"
+            assert timeout == 15
+            return Response(json.dumps(response_document).encode())
+
+    session = type("Session", (), {"opener": Opener(), "workspace_id": "workspace-1"})()
+    assert verify_p2_05_release_stack.get_catalog_content(session, "system-1") == document
+    with pytest.raises(AssertionError, match="password"):
+        verify_p2_05_release_stack.get_json(session, "/api/v1/api-catalog/specs/system-1/content")
+    response_document = []
+    with pytest.raises(RuntimeError, match="system Catalog content is invalid"):
+        verify_p2_05_release_stack.get_catalog_content(session, "system-1")
+
+
 def test_verify_product_identity_covers_runtime_catalog_skill_and_runner(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -116,6 +145,13 @@ def test_verify_product_identity_covers_runtime_catalog_skill_and_runner(
         return pytest.fail(f"unexpected identity path: {path}")
 
     monkeypatch.setattr(verify_p2_05_release_stack, "get_json", get_json)
+    monkeypatch.setattr(
+        verify_p2_05_release_stack,
+        "get_catalog_content",
+        lambda actual_session, _spec_id: get_json(
+            actual_session, "/api/v1/api-catalog/specs/system-1/content"
+        ),
+    )
 
     verify_p2_05_release_stack.verify_product_identity(session, "node-1")
 
@@ -190,6 +226,11 @@ def test_verify_product_identity_rejects_stale_or_wrong_stored_content(
         return pytest.fail(f"unexpected path: {path}")
 
     monkeypatch.setattr(verify_p2_05_release_stack, "get_json", get_json)
+    monkeypatch.setattr(
+        verify_p2_05_release_stack,
+        "get_catalog_content",
+        lambda session, _spec_id: get_json(session, "/api/v1/api-catalog/specs/system-1/content"),
+    )
     with pytest.raises(RuntimeError, match=message):
         verify_p2_05_release_stack.verify_product_identity(object(), "node-1")
 
@@ -327,6 +368,11 @@ def test_verify_product_identity_finds_canonical_entry_on_later_page(
         return pytest.fail(f"unexpected path: {path}")
 
     monkeypatch.setattr(verify_p2_05_release_stack, "get_json", get_json)
+    monkeypatch.setattr(
+        verify_p2_05_release_stack,
+        "get_catalog_content",
+        lambda session, _spec_id: get_json(session, "/api/v1/api-catalog/specs/system-1/content"),
+    )
     verify_p2_05_release_stack.verify_product_identity(object(), "node-1")
 
 
@@ -397,6 +443,11 @@ def test_verify_product_identity_fails_closed_on_mismatch(
             else {"runnerVersion": runner_version}
         ),
     )
+    monkeypatch.setattr(
+        verify_p2_05_release_stack,
+        "get_catalog_content",
+        lambda _session, _spec_id: {"info": {"title": "SurgePilot API", "version": "2.3.4"}},
+    )
 
     with pytest.raises(RuntimeError, match=message):
         verify_p2_05_release_stack.verify_product_identity(object(), "node-1")
@@ -439,6 +490,11 @@ def test_verify_product_identity_rejects_missing_catalog_and_invalid_skill(
             if path.endswith("/content")
             else {"runnerVersion": "2.3.4"}
         ),
+    )
+    monkeypatch.setattr(
+        verify_p2_05_release_stack,
+        "get_catalog_content",
+        lambda _session, _spec_id: {"info": {"title": "SurgePilot API", "version": "2.3.4"}},
     )
     monkeypatch.setattr(
         verify_p2_05_release_stack,
