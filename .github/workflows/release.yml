@@ -584,31 +584,39 @@ jobs:
             )
           fi
           source_compose="$source_release_root/compose/docker-compose.yml"
-          python - "$source_compose" <<'PY'
+          source_compose_backup="$RUNNER_TEMP/source-compose.original.yml"
+          python - "$source_compose" "$source_compose_backup" <<'PY'
           from pathlib import Path
           import sys
 
           compose_path = Path(sys.argv[1])
+          backup_path = Path(sys.argv[2])
           compose = compose_path.read_bytes()
+          mirror_image = b"mexiaow/minio@sha256:a1ea29fa28355559ef137d71fc570e508a214ec84ff8083e39bc5428980b015e"
           replacements = (
               (
                   b"quay.io/minio/minio:RELEASE.2025-04-22T22-12-26Z",
-                  b"mexiaow/minio@sha256:a1ea29fa28355559ef137d71fc570e508a214ec84ff8083e39bc5428980b015e",
+                  mirror_image,
               ),
               (
                   b"quay.io/minio/mc:RELEASE.2025-04-16T18-13-26Z",
-                  b"mexiaow/minio@sha256:a1ea29fa28355559ef137d71fc570e508a214ec84ff8083e39bc5428980b015e",
+                  mirror_image,
               ),
           )
-          for source_image, _ in replacements:
-              if compose.count(source_image) != 1:
-                  raise SystemExit(f"Expected one historical image reference: {source_image.decode()}")
-          for source_image, mirror_image in replacements:
-              compose = compose.replace(source_image, mirror_image)
-          mirror_image = replacements[0][1]
-          if compose.count(mirror_image) != 2 or b"image: quay.io/minio/" in compose:
-              raise SystemExit("Historical source Compose MinIO image normalization failed.")
-          compose_path.write_bytes(compose)
+          backup_path.unlink(missing_ok=True)
+          reference_counts = tuple(compose.count(source_image) for source_image, _ in replacements)
+          if reference_counts == (1, 1) and compose.count(mirror_image) == 0:
+              backup_path.write_bytes(compose)
+              for source_image, target_image in replacements:
+                  compose = compose.replace(source_image, target_image)
+              if compose.count(mirror_image) != 2 or b"image: quay.io/minio/" in compose:
+                  raise SystemExit("Historical source Compose MinIO image normalization failed.")
+              compose_path.write_bytes(compose)
+          elif reference_counts == (0, 0) and compose.count(mirror_image) == 2:
+              if b"image: quay.io/minio/" in compose:
+                  raise SystemExit("Source Compose still references an unsupported Quay MinIO image.")
+          else:
+              raise SystemExit("Source Compose has unexpected MinIO image references.")
           PY
           RUNNER_INTERNAL_TOKEN=upgrade-validation-token \
           SSH_CREDENTIAL_ENCRYPTION_KEY=MDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDA= \
@@ -635,6 +643,11 @@ jobs:
           make verify-p2-05-release-stack
 
           if [ "$SOURCE_MODE" = clean_down ]; then "$SURGEPILOT" down; fi
+          if [ -f "$source_compose_backup" ]; then
+            cp "$source_compose_backup" "$source_compose"
+            cmp -s "$source_compose_backup" "$source_compose"
+            rm "$source_compose_backup"
+          fi
           SURGEPILOT_INSTALLER_RELEASE_BASE_URL="http://127.0.0.1:$asset_port" \
             sh release-assets/install.sh
           install -d -m 700 "$INSTALL_ROOT/.surgepilot/runtime-artifacts"
