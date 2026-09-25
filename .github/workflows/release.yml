@@ -583,6 +583,33 @@ jobs:
               --deployment-root "$INSTALL_ROOT"
             )
           fi
+          source_compose="$source_release_root/compose/docker-compose.yml"
+          python - "$source_compose" <<'PY'
+          from pathlib import Path
+          import sys
+
+          compose_path = Path(sys.argv[1])
+          compose = compose_path.read_bytes()
+          replacements = (
+              (
+                  b"quay.io/minio/minio:RELEASE.2025-04-22T22-12-26Z",
+                  b"mexiaow/minio@sha256:a1ea29fa28355559ef137d71fc570e508a214ec84ff8083e39bc5428980b015e",
+              ),
+              (
+                  b"quay.io/minio/mc:RELEASE.2025-04-16T18-13-26Z",
+                  b"mexiaow/minio@sha256:a1ea29fa28355559ef137d71fc570e508a214ec84ff8083e39bc5428980b015e",
+              ),
+          )
+          for source_image, _ in replacements:
+              if compose.count(source_image) != 1:
+                  raise SystemExit(f"Expected one historical image reference: {source_image.decode()}")
+          for source_image, mirror_image in replacements:
+              compose = compose.replace(source_image, mirror_image)
+          mirror_image = replacements[0][1]
+          if compose.count(mirror_image) != 2 or b"image: quay.io/minio/" in compose:
+              raise SystemExit("Historical source Compose MinIO image normalization failed.")
+          compose_path.write_bytes(compose)
+          PY
           RUNNER_INTERNAL_TOKEN=upgrade-validation-token \
           SSH_CREDENTIAL_ENCRYPTION_KEY=MDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDA= \
           python "$source_release_root/scripts/bootstrap_deployment_env.py" \
