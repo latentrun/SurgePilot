@@ -235,7 +235,8 @@ Rules:
 1. `surgepilot-api` is reused by `api`, `api-worker`, and `api-migrate`; do not publish three duplicate application images.
 2. Every public release image index has `linux/amd64` and `linux/arm64` manifests.
 3. SurgePilot-owned images include OCI source, revision, and version labels.
-4. PostgreSQL, MinIO, Nginx, InfluxDB, and Grafana continue to use their upstream images; SurgePilot does not republish them.
+4. PostgreSQL, MinIO, Nginx, InfluxDB, and Grafana continue to use their upstream images; SurgePilot does not rebuild or republish them. If an upstream registry stops anonymous pulls, an externally maintained mirror may be used only when it serves the identical
+   immutable upstream OCI digest.
 5. Release Compose pins each SurgePilot-owned image by the immutable multi-architecture OCI index digest recorded in the release manifest. Semantic-version and `latest` tags may exist for discovery but are not the deployment integrity boundary.
 6. Release publication must fail if the semantic-version tag already exists, regardless of whether its digest matches; release tags are never resumed, moved, or overwritten by the P2-05 workflow.
 7. Public release packages allow anonymous pulls after the open-source release. Private prerelease testing may keep package visibility private without changing artifact contents.
