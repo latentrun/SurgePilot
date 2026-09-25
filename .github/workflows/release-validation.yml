@@ -55,9 +55,12 @@ jobs:
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
-      - name: Bootstrap and verify the repository-managed contributor toolchain
+      - name: Bootstrap the repository-managed contributor toolchain
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: make toolchain-install
+      - name: Verify the repository-managed contributor toolchain
         run: |
-          make toolchain-install
           make toolchain-check
           make setup
           make toolchain-tests
