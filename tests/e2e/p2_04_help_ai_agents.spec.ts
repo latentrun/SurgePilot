@@ -4,7 +4,9 @@ import { open } from "node:fs/promises";
 import { expect, test } from "@playwright/test";
 
 
-const minioImage = "quay.io/minio/minio:RELEASE.2025-04-22T22-12-26Z";
+const minioImage =
+  "mexiaow/minio@" +
+  "sha256:a1ea29fa28355559ef137d71fc570e508a214ec84ff8083e39bc5428980b015e";
 let ownedMinioContainer: string | null = null;
 
 function minioEndpoint() {

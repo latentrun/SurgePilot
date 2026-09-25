@@ -16,7 +16,7 @@ services:
       timeout: 5s
       retries: 5
   minio:
-    image: quay.io/minio/minio:RELEASE.2025-04-22T22-12-26Z
+    image: mexiaow/minio@sha256:a1ea29fa28355559ef137d71fc570e508a214ec84ff8083e39bc5428980b015e
     command: server /data --console-address ":9001"
     environment:
       MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
@@ -33,7 +33,7 @@ services:
       timeout: 5s
       retries: 5
   minio-init:
-    image: quay.io/minio/minio:RELEASE.2025-04-22T22-12-26Z
+    image: mexiaow/minio@sha256:a1ea29fa28355559ef137d71fc570e508a214ec84ff8083e39bc5428980b015e
     depends_on:
       minio:
         condition: service_started
