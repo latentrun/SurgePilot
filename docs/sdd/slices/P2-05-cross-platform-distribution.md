@@ -815,7 +815,9 @@ The P2-05 implementation uses these final repository and release boundaries:
    Upgrade smoke downloads historical release bundles into a temporary runner installation. If a
    historical bundle references the withdrawn anonymous Quay MinIO images, the smoke replaces those
    two references in that temporary Compose file with the externally maintained mirror only after
-   verifying its identical immutable upstream OCI digest. Published historical assets remain
+   verifying its identical immutable upstream OCI digest. It restores the original Compose bytes
+   before installing the target release, preserving the source payload's immutability check.
+   Bundles already using the mirror require no rewrite. Published historical assets remain
    unchanged.
    `ubuntu-24.04` and `ubuntu-24.04-arm` build/test their own Runtime and application
    architecture. Semantic GHCR tags and the completed GitHub Release are published only after the
