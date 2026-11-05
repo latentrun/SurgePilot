@@ -642,7 +642,26 @@ jobs:
           SURGEPILOT_E2E_UPGRADE_STATE_FILE="$RUNNER_TEMP/surgepilot-upgrade-state.json" \
           make verify-p2-05-release-stack
 
-          if [ "$SOURCE_MODE" = clean_down ]; then "$SURGEPILOT" down; fi
+          if [ "$SOURCE_MODE" = clean_down ]; then
+            for attempt in $(seq 1 30); do
+              probe_output=$(docker exec -i surgepilot-api-1 /app/.venv/bin/python \
+                - active-work < scripts/release_transition_probe.py)
+              printf 'Source quiescence probe: %s\n' "$probe_output"
+              probe_status=$(printf '%s\n' "$probe_output" | \
+                python -c 'import json, sys; print(json.load(sys.stdin)["status"])')
+              case "$probe_status" in
+                quiescent) break ;;
+                blocked) ;;
+                *) echo "Unexpected source quiescence status." >&2; exit 1 ;;
+              esac
+              if [ "$attempt" -eq 30 ]; then
+                echo "Source work did not become quiescent before clean shutdown." >&2
+                exit 1
+              fi
+              sleep 2
+            done
+            "$SURGEPILOT" down
+          fi
           if [ -f "$source_compose_backup" ]; then
             cp "$source_compose_backup" "$source_compose"
             cmp -s "$source_compose_backup" "$source_compose"

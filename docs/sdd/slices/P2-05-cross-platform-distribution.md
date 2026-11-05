@@ -816,6 +816,11 @@ The P2-05 implementation uses these final repository and release boundaries:
    upgrade smoke, and the newest also receives a clean-down upgrade smoke. Missing required source
    evidence fails publication. The first release of a major may have an empty upgrade matrix only
    when its minimum equals its target; fresh-install release smoke remains mandatory.
+   Before the clean-down smoke stops the source, it polls the existing read-only active-work
+   probe while source writers remain available, for at most 30 attempts separated by two seconds.
+   Only a quiescent result permits shutdown; probe errors, malformed output, unexpected status,
+   or exhausted attempts fail the fixture. Bounded active-work counts are logged for diagnosis.
+   Production transition guards are unchanged.
    Upgrade smoke downloads historical release bundles into a temporary runner installation. If a
    historical bundle references the withdrawn anonymous Quay MinIO images, the smoke replaces those
    two references in that temporary Compose file with the externally maintained mirror only after
