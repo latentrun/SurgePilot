@@ -31,10 +31,10 @@ const registerSchema = z
       .min(10, passwordPolicyMessage)
       .regex(/[A-Za-z]/, passwordPolicyMessage)
       .regex(/[0-9]/, passwordPolicyMessage),
-    confirmPassword: z.string().min(1, "Confirm your password."),
+    confirmPassword: z.string().min(1, authCopy.register.confirmPasswordRequired),
   })
   .refine((form) => form.password === form.confirmPassword, {
-    message: "Passwords must match exactly.",
+    message: authCopy.register.confirmPasswordMismatch,
     path: ["confirmPassword"],
   });
 
@@ -221,10 +221,10 @@ export function RegisterPage() {
             <Field
               autoComplete="new-password"
               error={errors.confirmPassword?.message}
-              label="Confirm password"
+              label={authCopy.register.confirmPasswordLabel}
               name={field.name}
               onChange={field.onChange}
-              placeholder="Confirm password"
+              placeholder={authCopy.register.confirmPasswordLabel}
               revealable
               type="password"
               value={field.value}

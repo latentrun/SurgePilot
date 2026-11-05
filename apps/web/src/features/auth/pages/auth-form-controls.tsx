@@ -1,6 +1,8 @@
 import { useState } from "react";
 import { Eye, EyeOff } from "lucide-react";
 
+import { authCopy } from "../copy";
+
 type FieldProps = Readonly<{
   autoComplete?: string;
   error?: string;
@@ -60,8 +62,8 @@ export function Field({
             aria-controls={name}
             aria-label={
               passwordVisible
-                ? "Hide confirmation password"
-                : "Show confirmation password"
+                ? authCopy.register.hideConfirmationPassword
+                : authCopy.register.showConfirmationPassword
             }
             className="absolute inset-y-0 right-1 flex w-11 items-center justify-center rounded-md text-text-muted transition hover:text-primary focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
             onClick={() => setPasswordVisible((visible) => !visible)}
