@@ -644,6 +644,10 @@ Release publication is create-only for a semantic version:
 2. Release jobs use only the repository/package permissions needed to write GHCR packages and GitHub Release assets.
 3. No long-lived registry password is stored when `GITHUB_TOKEN` can publish to GHCR.
 4. Runtime component checksum pins and optional build mirrors remain release/deployment controls and are not exposed in Web UI.
+   The default JMeter source is the Apache distribution CDN (`dlcdn.apache.org`), with its version
+   unchanged. `RUNTIME_JMETER_URL` and `RUNTIME_JMETER_SHA256` retain their explicit source and
+   checksum override behavior; download retries, atomic writes, and integrity validation remain
+   unchanged.
 
 ### 14.3 Failure safety
 
