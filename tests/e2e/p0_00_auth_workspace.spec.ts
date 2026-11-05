@@ -13,7 +13,8 @@ test("setup status to first admin registration to overview logout and login", as
   ).toBeVisible();
   await page.getByLabel("Email").fill(email);
   await page.getByLabel("Display name").fill("Admin User");
-  await page.getByLabel("Password").fill(password);
+  await page.getByLabel("Password", { exact: true }).fill(password);
+  await page.getByLabel("Confirm password", { exact: true }).fill(password);
   await page.getByRole("button", { name: "Create Administrator" }).click();
 
   await expect(page).toHaveURL(/\/overview$/);

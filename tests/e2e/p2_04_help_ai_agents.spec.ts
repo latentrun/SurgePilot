@@ -99,7 +99,8 @@ test("authenticated user follows AI Agents guidance and downloads the official s
   await page.goto("/register");
   await page.getByLabel("Email").fill(email);
   await page.getByLabel("Display name").fill("Help AI Agents User");
-  await page.getByLabel("Password").fill("password123");
+  await page.getByLabel("Password", { exact: true }).fill("password123");
+  await page.getByLabel("Confirm password", { exact: true }).fill("password123");
   await page.getByRole("button", { name: /create/i }).click();
   await expect(page).toHaveURL(/\/overview$/);
 

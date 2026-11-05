@@ -1,3 +1,6 @@
+import { useState } from "react";
+import { Eye, EyeOff } from "lucide-react";
+
 type FieldProps = Readonly<{
   autoComplete?: string;
   error?: string;
@@ -6,6 +9,7 @@ type FieldProps = Readonly<{
   name: string;
   onChange: (value: string) => void;
   placeholder?: string;
+  revealable?: boolean;
   type: "email" | "password" | "text";
   value: string;
 }>;
@@ -18,9 +22,12 @@ export function Field({
   name,
   onChange,
   placeholder,
+  revealable = false,
   type,
   value,
 }: FieldProps) {
+  const [passwordVisible, setPasswordVisible] = useState(false);
+  const canReveal = revealable && type === "password";
   const hintId = `${name}-hint`;
   const errorId = `${name}-error`;
   const describedBy = [helpText ? hintId : null, error ? errorId : null]
@@ -35,18 +42,39 @@ export function Field({
       >
         {label}
       </label>
-      <input
-        aria-describedby={describedBy || undefined}
-        aria-invalid={error ? "true" : undefined}
-        autoComplete={autoComplete}
-        className="w-full rounded-lg border border-border-subtle bg-black/20 px-4 py-3 font-mono text-sm leading-5 text-text-main outline-none transition placeholder:text-white/25 focus:border-primary-container focus:ring-2 focus:ring-primary-container/20"
-        id={name}
-        name={name}
-        onChange={(event) => onChange(event.target.value)}
-        placeholder={placeholder}
-        type={type}
-        value={value}
-      />
+      <div className="relative">
+        <input
+          aria-describedby={describedBy || undefined}
+          aria-invalid={error ? "true" : undefined}
+          autoComplete={autoComplete}
+          className={`w-full rounded-lg border border-border-subtle bg-black/20 px-4 py-3 font-mono text-sm leading-5 text-text-main outline-none transition placeholder:text-white/25 focus:border-primary-container focus:ring-2 focus:ring-primary-container/20 ${canReveal ? "pr-14" : ""}`}
+          id={name}
+          name={name}
+          onChange={(event) => onChange(event.target.value)}
+          placeholder={placeholder}
+          type={canReveal && passwordVisible ? "text" : type}
+          value={value}
+        />
+        {canReveal ? (
+          <button
+            aria-controls={name}
+            aria-label={
+              passwordVisible
+                ? "Hide confirmation password"
+                : "Show confirmation password"
+            }
+            className="absolute inset-y-0 right-1 flex w-11 items-center justify-center rounded-md text-text-muted transition hover:text-primary focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+            onClick={() => setPasswordVisible((visible) => !visible)}
+            type="button"
+          >
+            {passwordVisible ? (
+              <EyeOff aria-hidden="true" size={18} />
+            ) : (
+              <Eye aria-hidden="true" size={18} />
+            )}
+          </button>
+        ) : null}
+      </div>
       {helpText ? (
         <p className="text-xs leading-4 text-text-muted" id={hintId}>
           {helpText}

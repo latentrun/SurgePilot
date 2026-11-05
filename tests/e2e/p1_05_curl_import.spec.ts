@@ -9,7 +9,8 @@ test("authenticated user imports a cURL command into a Scenario draft", async ({
   await page.goto("/register");
   await page.getByLabel("Email").fill(email);
   await page.getByLabel("Display name").fill("cURL Import User");
-  await page.getByLabel("Password").fill(password);
+  await page.getByLabel("Password", { exact: true }).fill(password);
+  await page.getByLabel("Confirm password", { exact: true }).fill(password);
   await page.getByRole("button", { name: /create/i }).click();
 
   await expect(page).toHaveURL(/\/overview$/);

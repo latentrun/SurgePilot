@@ -384,6 +384,142 @@ describe("P0-00 auth workspace web flow", () => {
     ).toBe(false);
   });
 
+  it.each([
+    { confirmation: "", needsBootstrap: false },
+    { confirmation: "Password123", needsBootstrap: false },
+    { confirmation: "password123 ", needsBootstrap: false },
+    { confirmation: " password123", needsBootstrap: false },
+    { confirmation: "wrong-password", needsBootstrap: true },
+  ])(
+    "rejects registration with $confirmation (bootstrap: $needsBootstrap) and allows correcting it",
+    async ({ confirmation, needsBootstrap }) => {
+      const registrationBodies: unknown[] = [];
+      mockFetch(async (input, init) => {
+        if (requestUrl(input).endsWith("/api/v1/auth/me")) {
+          return jsonResponse(
+            {
+              code: "UNAUTHENTICATED",
+              message: "Unauthenticated.",
+              requestId: "req",
+            },
+            { status: 401 },
+          );
+        }
+        if (requestUrl(input).endsWith("/api/v1/auth/register")) {
+          registrationBodies.push(await requestBody(input, init));
+          return jsonResponse(authSession);
+        }
+        if (requestUrl(input).includes("/api/v1/overview")) {
+          return jsonResponse(overviewPayload);
+        }
+        return jsonResponse({ ...setupStatus, needsBootstrap });
+      });
+      renderAt("/register");
+      await screen.findByRole("heading", {
+        name: needsBootstrap ? "Create administrator" : "Create account",
+      });
+      const submitButton = screen.getByRole("button", {
+        name: needsBootstrap ? "Create Administrator" : "Create account",
+      });
+      await userEvent.type(
+        screen.getByLabelText("Email"),
+        "engineer@example.com",
+      );
+      await userEvent.type(screen.getByLabelText("Display name"), "Engineer");
+      await userEvent.type(screen.getByLabelText("Password"), "password123");
+      const confirmInput = screen.getByLabelText("Confirm password");
+      if (confirmation) await userEvent.type(confirmInput, confirmation);
+      await userEvent.click(submitButton);
+      expect(
+        await screen.findByText(
+          confirmation
+            ? "Passwords must match exactly."
+            : "Confirm your password.",
+        ),
+      ).toBeInTheDocument();
+      expect(confirmInput).toHaveAttribute("aria-invalid", "true");
+      expect(registrationBodies).toEqual([]);
+
+      await userEvent.clear(confirmInput);
+      await userEvent.type(confirmInput, "password123");
+      await userEvent.click(submitButton);
+      await screen.findByRole("heading", { name: "Overview" });
+      expect(registrationBodies).toEqual([
+        {
+          email: "engineer@example.com",
+          displayName: "Engineer",
+          password: "password123",
+        },
+      ]);
+    },
+  );
+
+  it("toggles confirmation password visibility without changing values or submitting", async () => {
+    const fetchMock = mockFetch((input) => {
+      if (requestUrl(input).endsWith("/api/v1/auth/me")) {
+        return jsonResponse(
+          {
+            code: "UNAUTHENTICATED",
+            message: "Unauthenticated.",
+            requestId: "req",
+          },
+          { status: 401 },
+        );
+      }
+      return jsonResponse(setupStatus);
+    });
+    renderAt("/register");
+    await screen.findByRole("heading", { name: "Create account" });
+    await userEvent.type(
+      screen.getByLabelText("Email"),
+      "engineer@example.com",
+    );
+    await userEvent.type(screen.getByLabelText("Display name"), "Engineer");
+    const passwordInput = screen.getByLabelText("Password");
+    const confirmInput = screen.getByLabelText("Confirm password");
+    await userEvent.type(passwordInput, "password123");
+    await userEvent.type(confirmInput, "password123");
+    expect(passwordInput).toHaveAttribute("type", "password");
+    expect(confirmInput).toHaveAttribute("type", "password");
+    expect(confirmInput).toHaveAttribute("autocomplete", "new-password");
+
+    const showButton = screen.getByRole("button", {
+      name: "Show confirmation password",
+    });
+    showButton.focus();
+    await userEvent.keyboard("{Enter}");
+    expect(confirmInput).toHaveAttribute("type", "text");
+    expect(
+      screen.getByRole("button", { name: "Hide confirmation password" }),
+    ).toHaveFocus();
+    await userEvent.keyboard(" ");
+    expect(confirmInput).toHaveAttribute("type", "password");
+    expect(
+      screen.getByRole("button", { name: "Show confirmation password" }),
+    ).toHaveFocus();
+    expect(passwordInput).toHaveAttribute("type", "password");
+    expect(passwordInput).toHaveValue("password123");
+    expect(confirmInput).toHaveValue("password123");
+    expect(
+      fetchMock.mock.calls.some(([input]) =>
+        requestUrl(input).endsWith("/api/v1/auth/register"),
+      ),
+    ).toBe(false);
+
+    await userEvent.type(passwordInput, "4");
+    await userEvent.click(
+      screen.getByRole("button", { name: "Create account" }),
+    );
+    expect(
+      await screen.findByText("Passwords must match exactly."),
+    ).toBeInTheDocument();
+    expect(
+      fetchMock.mock.calls.some(([input]) =>
+        requestUrl(input).endsWith("/api/v1/auth/register"),
+      ),
+    ).toBe(false);
+  });
+
   it("renders overview with current user and default workspace", async () => {
     mockFetch((input) => {
       if (requestUrl(input).endsWith("/api/v1/auth/me")) {

@@ -929,6 +929,7 @@ Fields:
 1. Email.
 2. Display name.
 3. Password.
+4. Confirm password (frontend only).
 
 Behavior:
 
@@ -939,6 +940,13 @@ Behavior:
 5. Shows `PASSWORD_POLICY_VIOLATION` on password field.
 6. Shows `SIGNUP_DISABLED` as a contact-administrator message.
 7. Does not implement invite code, email verification, profile upload, or setup steps.
+8. Both password fields start masked. The confirmation field has an accessible eye button to
+   show or hide its value without submitting the form or changing either password.
+9. Confirmation is required and must match the password exactly, including case and whitespace.
+   Empty or mismatched confirmation shows a field-level error and prevents API submission for
+   both first-Admin and ordinary registration. Users can correct either field and resubmit.
+10. Confirmation stays in form memory only. The existing registration request contains only
+    `email`, `displayName`, and `password`; the backend and generated contracts are unchanged.
 
 ### 11.5 Placeholder Overview
 

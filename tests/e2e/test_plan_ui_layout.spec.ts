@@ -9,7 +9,8 @@ test("Test Plan list columns and Global Context layout stay aligned", async ({
   await page.goto("/register");
   await page.getByLabel("Email").fill("test-plan-layout@example.com");
   await page.getByLabel("Display name").fill("Test Plan Layout User");
-  await page.getByLabel("Password").fill("password123");
+  await page.getByLabel("Password", { exact: true }).fill("password123");
+  await page.getByLabel("Confirm password", { exact: true }).fill("password123");
   await page.getByRole("button", { name: /create/i }).click();
   await expect(page).toHaveURL(/\/overview$/);
 

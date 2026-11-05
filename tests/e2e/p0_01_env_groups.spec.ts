@@ -8,7 +8,8 @@ test("authenticated user creates edits duplicates and deletes Env Groups", async
 
   await page.getByLabel("Email").fill(email);
   await page.getByLabel("Display name").fill("Env Groups User");
-  await page.getByLabel("Password").fill(password);
+  await page.getByLabel("Password", { exact: true }).fill(password);
+  await page.getByLabel("Confirm password", { exact: true }).fill(password);
   await page.getByRole("button", { name: /create/i }).click();
 
   await expect(page).toHaveURL(/\/overview$/);

@@ -13,7 +13,8 @@ async function ensureAdminSession(page: import("@playwright/test").Page) {
   ) {
     await page.getByLabel("Email").fill(adminEmail);
     await page.getByLabel("Display name").fill("Admin User");
-    await page.getByLabel("Password").fill(adminPassword);
+    await page.getByLabel("Password", { exact: true }).fill(adminPassword);
+    await page.getByLabel("Confirm password", { exact: true }).fill(adminPassword);
     await page
       .getByRole("button", { name: /Create (Administrator|account)/ })
       .click();
