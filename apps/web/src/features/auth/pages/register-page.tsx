@@ -18,19 +18,25 @@ import { authCopy } from "../copy";
 const passwordPolicyMessage =
   "Use at least 10 characters with a letter and a number.";
 
-const registerSchema = z.object({
-  displayName: z
-    .string()
-    .trim()
-    .min(1, "Display name is required.")
-    .max(120, "Display name is too long."),
-  email: z.string().trim().email("Enter a valid email address."),
-  password: z
-    .string()
-    .min(10, passwordPolicyMessage)
-    .regex(/[A-Za-z]/, passwordPolicyMessage)
-    .regex(/[0-9]/, passwordPolicyMessage),
-});
+const registerSchema = z
+  .object({
+    displayName: z
+      .string()
+      .trim()
+      .min(1, "Display name is required.")
+      .max(120, "Display name is too long."),
+    email: z.string().trim().email("Enter a valid email address."),
+    password: z
+      .string()
+      .min(10, passwordPolicyMessage)
+      .regex(/[A-Za-z]/, passwordPolicyMessage)
+      .regex(/[0-9]/, passwordPolicyMessage),
+    confirmPassword: z.string().min(1, authCopy.register.confirmPasswordRequired),
+  })
+  .refine((form) => form.password === form.confirmPassword, {
+    message: authCopy.register.confirmPasswordMismatch,
+    path: ["confirmPassword"],
+  });
 
 type RegisterForm = z.infer<typeof registerSchema>;
 
@@ -88,7 +94,12 @@ export function RegisterPage() {
     setError,
     formState: { errors, isSubmitting },
   } = useForm<RegisterForm>({
-    defaultValues: { displayName: "", email: "", password: "" },
+    defaultValues: {
+      displayName: "",
+      email: "",
+      password: "",
+      confirmPassword: "",
+    },
     resolver: zodResolver(registerSchema),
   });
 
@@ -121,7 +132,11 @@ export function RegisterPage() {
   async function onSubmit(form: RegisterForm) {
     setFormError(null);
     try {
-      await signUp(form);
+      await signUp({
+        displayName: form.displayName,
+        email: form.email,
+        password: form.password,
+      });
       navigate("/overview", { replace: true });
     } catch (error) {
       if (error instanceof ApiError) {
@@ -194,6 +209,23 @@ export function RegisterPage() {
               name={field.name}
               onChange={field.onChange}
               placeholder="Password"
+              type="password"
+              value={field.value}
+            />
+          )}
+        />
+        <Controller
+          control={control}
+          name="confirmPassword"
+          render={({ field }) => (
+            <Field
+              autoComplete="new-password"
+              error={errors.confirmPassword?.message}
+              label={authCopy.register.confirmPasswordLabel}
+              name={field.name}
+              onChange={field.onChange}
+              placeholder={authCopy.register.confirmPasswordLabel}
+              revealable
               type="password"
               value={field.value}
             />

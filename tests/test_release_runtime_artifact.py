@@ -250,6 +250,34 @@ def test_runtime_component_selection_is_exactly_the_generated_jmx_plugin_closure
     ]
 
 
+def test_jmeter_defaults_to_apache_distribution_cdn(monkeypatch) -> None:
+    module = load_module()
+    monkeypatch.delenv("RUNTIME_JMETER_URL", raising=False)
+    monkeypatch.delenv("RUNTIME_JMETER_SHA256", raising=False)
+
+    selection = module._current_component_selection()
+
+    assert selection["jmeter"] == {
+        "version": "5.6.3",
+        "url": "https://dlcdn.apache.org/jmeter/binaries/apache-jmeter-5.6.3.tgz",
+        "expectedSha256": None,
+    }
+
+
+def test_jmeter_explicit_source_and_checksum_override_are_preserved(monkeypatch) -> None:
+    module = load_module()
+    monkeypatch.setenv("RUNTIME_JMETER_URL", "https://example.invalid/jmeter.tgz")
+    monkeypatch.setenv("RUNTIME_JMETER_SHA256", "a" * 64)
+
+    selection = module._current_component_selection()
+
+    assert selection["jmeter"] == {
+        "version": "5.6.3",
+        "url": "https://example.invalid/jmeter.tgz",
+        "expectedSha256": "a" * 64,
+    }
+
+
 def test_runtime_plugin_contract_preserves_casutg_filename_and_key_classes() -> None:
     module = load_module()
 

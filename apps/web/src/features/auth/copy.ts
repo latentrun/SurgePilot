@@ -10,6 +10,11 @@ export const authCopy = {
     firstAdminSubmit: "Create Administrator",
     selfTitle: "Create account",
     selfSubmit: "Create account",
+    confirmPasswordLabel: "Confirm password",
+    confirmPasswordRequired: "Confirm your password.",
+    confirmPasswordMismatch: "Passwords must match exactly.",
+    showConfirmationPassword: "Show confirmation password",
+    hideConfirmationPassword: "Hide confirmation password",
     firstAdminDescription:
       "Set up the first administrator for this SurgePilot workspace.",
     selfDescription: "Create an account to use SurgePilot in your workspace.",

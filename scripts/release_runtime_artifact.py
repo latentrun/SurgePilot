@@ -553,7 +553,7 @@ def _current_component_selection() -> dict[str, object]:
     python_version = os.environ.get("RUNTIME_PYTHON_VERSION", DEFAULT_PYTHON_VERSION)
     jmeter_url = os.environ.get(
         "RUNTIME_JMETER_URL",
-        f"https://archive.apache.org/dist/jmeter/binaries/apache-jmeter-{JMETER_VERSION}.tgz",
+        f"https://dlcdn.apache.org/jmeter/binaries/apache-jmeter-{JMETER_VERSION}.tgz",
     )
     jmeter_expected_sha256 = _normalize_expected_sha256(
         os.environ.get("RUNTIME_JMETER_SHA256"), name="RUNTIME_JMETER_SHA256"

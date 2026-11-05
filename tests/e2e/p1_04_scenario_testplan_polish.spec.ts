@@ -114,7 +114,8 @@ test("P1-04 Scenario and Test Plan polish surfaces are visible and scoped", asyn
   await page.goto("/register");
   await page.getByLabel("Email").fill(email);
   await page.getByLabel("Display name").fill("P1 Polish User");
-  await page.getByLabel("Password").fill(password);
+  await page.getByLabel("Password", { exact: true }).fill(password);
+  await page.getByLabel("Confirm password", { exact: true }).fill(password);
   await page.getByRole("button", { name: /create/i }).click();
   await expect(page).toHaveURL(/\/overview$/, { timeout: 15_000 });
 
