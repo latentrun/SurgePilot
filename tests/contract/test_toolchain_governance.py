@@ -258,7 +258,7 @@ def test_release_validation_has_native_managed_fresh_clone_smoke() -> None:
     uses = "\n".join(str(step.get("uses", "")) for step in steps)
     commands = "\n".join(str(step.get("run", "")) for step in steps)
 
-    assert smoke["strategy"]["matrix"]["runner"] == ["ubuntu-24.04", "macos-14"]
+    assert smoke["strategy"]["matrix"]["runner"] == ["ubuntu-24.04", "macos-15"]
     assert "setup-python" not in uses
     assert "setup-node" not in uses
     assert "setup-uv" not in uses

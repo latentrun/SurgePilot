@@ -382,7 +382,7 @@ def test_release_workflows_validate_and_install_generated_assets() -> None:
         assert installer_job["needs"] == bundle_name
         assert installer_job["strategy"]["matrix"]["runner"] == [
             "ubuntu-24.04",
-            "macos-14",
+            "macos-15",
         ]
         installer_smoke = "\n".join(step.get("run", "") for step in installer_job["steps"])
         assert "python3 -m http.server" in installer_smoke
@@ -646,7 +646,7 @@ def test_development_release_validation_workflow_contract() -> None:
     assert jobs["pr-native"]["strategy"]["fail-fast"] is False
     assert jobs["pr-installer-smoke"]["strategy"] == {
         "fail-fast": False,
-        "matrix": {"runner": ["ubuntu-24.04", "macos-14"]},
+        "matrix": {"runner": ["ubuntu-24.04", "macos-15"]},
     }
     tag_condition = "github.event_name == 'push' && startsWith(github.ref, 'refs/tags/validation-')"
     assert jobs["pr-native"]["if"] == "github.event_name == 'pull_request'"

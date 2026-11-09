@@ -813,8 +813,11 @@ The P2-05 implementation uses these final repository and release boundaries:
    does not create a semantic image tag or GitHub Release.
    `.github/workflows/release.yml` is the manually dispatched formal release workflow. Its jobs are
    `preflight`, `verify`, native `runtime`, native `images`, `image-indexes`, `bundle`, native
-   `release-smoke`, conditional `upgrade-smoke`, and `publish`. Preflight enumerates every published
-   canonical, non-draft, non-prerelease same-major release in the target manifest's supported
+   `release-smoke`, conditional `upgrade-smoke`, and `publish`.
+   Installer smoke and validation's managed-toolchain smoke use the available `ubuntu-24.04` and
+   `macos-15` hosted runners; the retired `macos-14` label is not an executable acceptance target.
+   Preflight enumerates every published canonical, non-draft, non-prerelease same-major release
+   in the target manifest's supported
    interval. Later `v1.x`
    targets retain minimum `v1.0.0`; legacy `v1.0.0` and `v1.1.0` root-layout installations remain
    eligible whenever the target manifest includes them. Every eligible source receives a running
