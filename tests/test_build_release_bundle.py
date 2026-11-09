@@ -10,6 +10,7 @@ import tarfile
 import zipfile
 
 import pytest
+import yaml
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
@@ -168,6 +169,12 @@ def test_assemble_bundle_pins_images_and_excludes_source_and_private_state(tmp_p
 
     with tarfile.open(result.archive, "r:gz") as archive:
         names = set(archive.getnames())
+        compose_member = archive.extractfile("surgepilot/compose/docker-compose.yml")
+        assert compose_member is not None
+        services = yaml.safe_load(compose_member)["services"]
+        assert services["api-migrate"]["command"] == ["uv", "run", "alembic", "upgrade", "head"]
+        for service in ("api", "api-worker", "api-migrate"):
+            assert services[service]["environment"]["UV_NO_SYNC"] == "1"
     assert "surgepilot/.env" not in names
     assert not any(name.startswith("surgepilot/.surgepilot/") for name in names)
     assert not any(name.startswith("surgepilot/apps/") for name in names)

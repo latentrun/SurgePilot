@@ -315,19 +315,22 @@ def test_ssh_credential_encryption_key_is_required_by_api_services() -> None:
 
 
 def test_api_runtime_services_disable_uv_dependency_sync() -> None:
-    for compose_file in COMPOSE_FILES:
+    for compose_file in (*COMPOSE_FILES, ROOT / "infra/release/docker-compose.release.yml"):
         services = yaml.safe_load(compose_file.read_text(encoding="utf-8"))["services"]
 
-        assert services["api"]["environment"]["UV_NO_SYNC"] == "1"
-        assert services["api-worker"]["environment"]["UV_NO_SYNC"] == "1"
-        assert "UV_NO_SYNC" not in services["api-migrate"]["environment"]
+        for service in ("api", "api-worker", "api-migrate"):
+            assert services[service]["environment"]["UV_NO_SYNC"] == "1", compose_file
 
 
 def test_api_migrate_receives_only_migration_required_configuration() -> None:
-    for compose_file in COMPOSE_FILES:
+    for compose_file in (*COMPOSE_FILES, ROOT / "infra/release/docker-compose.release.yml"):
         services = yaml.safe_load(compose_file.read_text(encoding="utf-8"))["services"]
 
-        assert set(services["api-migrate"]["environment"]) == {"APP_ENV", "DATABASE_URL"}
+        assert set(services["api-migrate"]["environment"]) == {
+            "APP_ENV",
+            "DATABASE_URL",
+            "UV_NO_SYNC",
+        }
 
 
 def test_compose_variables_are_documented_in_env_example() -> None:

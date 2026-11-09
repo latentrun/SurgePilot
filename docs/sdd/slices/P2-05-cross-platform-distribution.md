@@ -795,6 +795,11 @@ The P2-05 implementation uses these final repository and release boundaries:
    Demo profile without creating another product mode.
 3. The public image repositories are exactly the ADR-0017 GHCR names. API/api-worker/migration
    share the API image. API, Web, and Demo Dockerfiles accept OCI version/revision/source labels.
+   The API image installs runtime dependencies with `uv sync --no-dev`. Source and release
+   Compose set `UV_NO_SYNC=1` for API, api-worker, and api-migrate so startup uses those installed
+   dependencies without downloading development tools. Migration still runs `alembic upgrade head`,
+   receives only `APP_ENV`, `DATABASE_URL`, and the fixed synchronization setting, and must succeed
+   before API and api-worker start. Configuration and assembled-bundle tests cover this boundary.
    `release-manifest.json` schema version 1 records `version`, full `revision`, each image
    repository plus immutable multi-architecture index digest, and each amd64/arm64 Runtime asset
    name plus whole-archive SHA-256.
